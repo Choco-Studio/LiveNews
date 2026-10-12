@@ -111,6 +111,81 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
 - Each flash steps down over a quarter second and never brightens again.
 
 
+## Round 3 (owner, 12 Oct: "el programa del tiempo necesita mejoras enormes")
+
+The owner also asked that programmes entertain, not only inform: "No solo informativos ya que eso no causa retención".
+
+### What was wrong with round 2 (recorded on air, 12 Oct)
+
+- **One shot for five minutes.** The presenter stood, very large and flat, beside a flat blue map. There was no studio, no depth, no light and no cut.
+- **Nothing moved but the presenter.** The map's colours were fixed for the whole programme. A real bulletin shows the weather moving: cloud drifting and building, rain bands, highs and lows.
+- **A list, not a story.** Every one of 44 cities was read out with its figures: 237 s of numbers. There was no big story, no line for the viewer, no countdown and no outlook beyond tomorrow.
+
+### The new programme (≈ 3.5 min of speech)
+
+Every segment carries `shot`: the camera the weather centre gives it.
+
+| Segment | Shot | What it says (written from the data alone, `server/weatherwriter.js`) |
+|---|---|---|
+| `headline` | `mcu` | The greeting, the day's big weather story (a cyclone, a flood, extreme heat, a deluge, real cold, or the planet's contrast) and what is coming |
+| `world` | `graphic` | The next 24 hours round the planet as a time-lapse: the deepest low near people and where it goes, the strongest high, the wettest area. Each high or low named is a `pin` |
+| `zone` ×6 | `wall` | Two or three standouts per zone (not every city). The rest stay on the map. Then a comparison when a zone has one, and one line for the people who live there: an umbrella, the shade, a coat, a terrace. Odd zones use the short form |
+| `hotcold` | `board` | HOT & COLD: the third, second and hottest place, then the cold side to the coldest, then the gap between the two ends. It draws on the 70 places (the zones' cities and 26 famous hot and cold places, `EXTRA`) |
+| `warning` | `warning` | As round 2: GDACS's orange and red alerts, a serious tone, silence under it |
+| `outlook` | `board` | THE NEXT THREE DAYS for five cities (the most changeable of each zone, west to east): tomorrow, then by the third day, and the high |
+| `outro` | `mcu` | A last line from the day's figures ("I hope you get Tokyo's sunshine, not Mexico City's rain"), then the sign-off |
+
+### The data (server)
+
+- **The moving sky** (`server/weathersky.js`):
+  - Open-Meteo's hourly cloud cover, precipitation, wind and sea-level pressure.
+  - Places: the heat map's 841 land points plus 261 open-sea points every 10 degrees (`config/weather-grid.json` `sea`).
+  - The same requests as the heat map, every 6 hours: about 4,400 calls a day with the cities, within the free tier's 10,000.
+  - It is spread onto a 3-degree grid (120 × 60): 9 frames, one every 3 hours from the next whole UTC hour.
+  - Highs and lows are found in the pressure: a low under 1006 hPa lowest within 12 degrees, a high over 1020 hPa highest within 15.
+  - Offline: a recorded real forecast (`config/fixtures/weather-sky.json`, `tools/weather/record-sky.mjs`).
+- **The forecast:** four days per place (`outlook`), and 70 places (`PLACES` = `CITIES` + `EXTRA`).
+  - The extra places are not on the zone maps. They compete for HOT & COLD (`report.hotCold`: the five highest highs and the five lowest lows).
+  - The city forecast's time to live is now 60 min, to stay in the free tier.
+
+### The contract (what the client receives)
+
+`episode.weather`:
+- `zones`, with each city's `today`, `tomorrow`, `outlook` (3 days), `now`
+- `extra`: the 26 places with `today`
+- `warnings`
+- `hotCold`: `{ hot: [{ id, name, say, lat, lon, value, kind, zone? }], cold }`
+- `field`: the heat map, as round 2
+- `sky`: `{ w: 120, h: 60, lat0: 88.5, lon0: -178.5, step: 3, start, hours: [0, 3, ... 24], cloud: [b64 u8 %], rain: [b64 u8 tenths of mm/h], u: [b64 i8 m/s], v: [b64 i8 m/s], mslp: [b64 u8 hPa − 940], systems: [{ kind: 'H'|'L', lat, lon, hPa, frame }], source, places, demo? }`, or `null`. Rows run north to south.
+
+Each segment adds:
+- `shot`: `'mcu' | 'wall' | 'graphic' | 'board' | 'warning'`
+- `marks`: `[{ char, city }]`. The city is a zone city (the map lights it) or any place on a board (the board lights its row).
+- `pins`: `[{ char, kind, lat, lon }]`. A high or low named at that character.
+- `timelapse`: `{ from, to }` in hours of the sky (the world: 0 to 24; a zone: 0 to 12).
+- `board`:
+  - HOT & COLD: `{ kind: 'hotcold', hot, cold }`
+  - outlook: `{ kind: 'outlook', days: [{ date, name: 'WED' }], cities: [{ id, name, zone, today, days: [3 days] }] }`
+
+### The weather centre (client, `public/js/scenes/weather/`)
+
+- **A studio**, not a map on a blue page:
+  - a curved video wall in a dark set with a floor, edge light on the presenter and the wall's light spilling on him;
+  - the presenter at a natural size.
+- **The shots:**
+  - `mcu`: the presenter waist-up, off-centre, the wall soft behind him.
+  - `wall`: the presenter knee-up beside the wall, which fills most of the frame, the camera tracking along it (round 2's walk and points).
+  - `graphic`: the map full frame, no presenter.
+  - `board`: a full-frame board.
+  - `warning`: round 2's warnings panel.
+- **The moving weather on the map:**
+  - cloud (the cloud layer, time-interpolated, shaped by a noise texture drifting with the wind, white to grey, dithered, never hiding a city's chip);
+  - rain in radar colours under the cloud;
+  - H and L where the pressure has them, moving frame to frame;
+  - isobars on the world view;
+  - a clock while the time-lapse runs.
+- **The boards:** HOT & COLD (two columns, rows revealed as the voice reaches each place) and THE NEXT THREE DAYS (five cities × three days of symbols and highs).
+
 ## 4. Configuration
 
 - `WEATHER`: `auto` (default), `open-meteo`, `fixture` or `off`.

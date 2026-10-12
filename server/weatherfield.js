@@ -16,9 +16,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.js';
 import { OPEN_METEO } from './weather.js';
+import { skyParams, parsePlaceSky, frameTimes, buildSky } from './weathersky.js';
 
 export const GRID_FILE = path.join(ROOT, 'config', 'weather-grid.json');
 export const DEMO_FIELD = path.join(ROOT, 'config', 'fixtures', 'weather-field.json');
+export const DEMO_SKY = path.join(ROOT, 'config', 'fixtures', 'weather-sky.json');
 export const FW = 360, FH = 180, LAT0 = 89.5, LON0 = -179.5, SCALE = 0.5;
 const DEG = Math.PI / 180;
 const BATCH = 120; // places per request
@@ -128,37 +130,49 @@ export function tieToCities(field, cities, day = 'today') {
   return out;
 }
 
-/** The sample places (config/weather-grid.json). */
-export function gridPoints(file = GRID_FILE) {
+/** The sample places (config/weather-grid.json): the land's (heat map and sky), then, with `sea`, the open sea's (sky only). */
+export function gridPoints(file = GRID_FILE, { sea = false } = {}) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')).points.map(([lat, lon]) => ({ lat, lon }));
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const land = doc.points.map(([lat, lon]) => ({ lat, lon }));
+    return sea ? [...land, ...(doc.sea || []).map(([lat, lon]) => ({ lat, lon, sea: true }))] : land;
   } catch {
     return [];
   }
 }
 
-/** One Open-Meteo request for a batch of places: today's and tomorrow's highs. */
-export function gridUrl(batch) {
+/** One Open-Meteo request for a batch of places: today's and tomorrow's highs, and with `sky` the next day's sky hours. */
+export function gridUrl(batch, { sky = false } = {}) {
   const q = new URLSearchParams({
     latitude: batch.map((p) => p.lat).join(','),
     longitude: batch.map((p) => p.lon).join(','),
     daily: 'temperature_2m_max',
     timezone: 'auto',
     forecast_days: '2',
+    ...(sky ? skyParams() : {}),
   });
   return `${OPEN_METEO}?${q}`;
 }
 
-/** The highs of a batch from its response (matched by order and position). */
-export function parseGrid(json, batch) {
+/**
+ * The highs of a batch from its response (matched by order and position), and with `times` (the sky's frame hours,
+ * UTC ms) each place's sky frames.
+ */
+export function parseGrid(json, batch, times = null) {
   const list = Array.isArray(json) ? json : json ? [json] : [];
   const out = [];
   for (let k = 0; k < batch.length && k < list.length; k++) {
     const r = list[k], p = batch[k];
     if (!r || Math.abs(Number(r.latitude) - p.lat) > 1.5 || Math.abs(Number(r.longitude) - p.lon) > 1.5) continue;
     const mx = r.daily?.temperature_2m_max;
-    if (!Array.isArray(mx)) continue;
-    out.push({ lat: p.lat, lon: p.lon, today: Number.isFinite(mx[0]) ? mx[0] : null, tomorrow: Number.isFinite(mx[1]) ? mx[1] : null });
+    const frames = times ? parsePlaceSky(r, times) : null;
+    if (!Array.isArray(mx) && !frames) continue;
+    out.push({
+      lat: p.lat, lon: p.lon, ...(p.sea ? { sea: true } : {}),
+      today: Array.isArray(mx) && Number.isFinite(mx[0]) ? mx[0] : null,
+      tomorrow: Array.isArray(mx) && Number.isFinite(mx[1]) ? mx[1] : null,
+      ...(frames ? { frames } : {}),
+    });
   }
   return out;
 }
@@ -177,7 +191,8 @@ export class FieldDesk {
    *                   allows 600 a minute: 120 places every 15 s stays under it; 0 in tests)
    * @param o.retryMs  the wait before asking a batch again after an HTTP 429 (two more tries)
    */
-  constructor({ source = 'open-meteo', fetchImpl = globalThis.fetch, ttlMs = 3 * 3600_000, timeoutMs = 12_000, pauseMs = 0, retryMs = 0, retryNetMs = 3_000, gridFile = GRID_FILE, demoFile = DEMO_FIELD, log = console, now = () => Date.now() } = {}) {
+  /** @param o.sky  also fetch the moving sky (server/weathersky.js) in the same requests, sea points included */
+  constructor({ source = 'open-meteo', fetchImpl = globalThis.fetch, ttlMs = 6 * 3600_000, timeoutMs = 30_000, pauseMs = 0, retryMs = 0, retryNetMs = 3_000, gridFile = GRID_FILE, demoFile = DEMO_FIELD, skyFile = DEMO_SKY, sky = true, log = console, now = () => Date.now() } = {}) {
     this.sourceOf = typeof source === 'function' ? source : () => source;
     this.fetchImpl = fetchImpl;
     this.pauseMs = pauseMs;
@@ -188,6 +203,8 @@ export class FieldDesk {
     this.timeoutMs = timeoutMs;
     this.gridFile = gridFile;
     this.demoFile = demoFile;
+    this.skyFile = skyFile;
+    this.withSky = sky;
     this.log = log;
     this.now = now;
     this.cached = null; // { at, source, base: { today, tomorrow }, meta }
@@ -235,6 +252,11 @@ export class FieldDesk {
     return base ? this.tie(base, report) : null;
   }
 
+  /** The moving sky from the cached base (no fetch), or null (the map plays without it). */
+  skyFor() {
+    return this.freshBase()?.sky || null;
+  }
+
   tie(base, report) {
     const cities = (report?.zones || []).flatMap((z) => z.cities);
     return {
@@ -261,7 +283,16 @@ export class FieldDesk {
     const f = decodeField(doc.data, doc.scale ?? SCALE);
     if (!f) throw new Error('demo field: bad size');
     // a monthly mean for both days: the tie to the cities turns it into each day's highs
-    return { base: null, today: f, tomorrow: f, meta: { source: `${doc.source} ${doc.period}`, kind: doc.kind } };
+    return { base: null, today: f, tomorrow: f, sky: this.withSky ? this.demoSky() : null, meta: { source: `${doc.source} ${doc.period}`, kind: doc.kind } };
+  }
+
+  /** The recorded sky (a real forecast, aired as demo data), or null when there is none. */
+  demoSky() {
+    try {
+      return { ...JSON.parse(fs.readFileSync(this.skyFile, 'utf8')), demo: true };
+    } catch {
+      return null;
+    }
   }
 
   async getJson(url) {
@@ -293,8 +324,9 @@ export class FieldDesk {
   }
 
   async fromNetwork() {
-    const places = gridPoints(this.gridFile);
+    const places = gridPoints(this.gridFile, { sea: this.withSky });
     if (!places.length) throw new Error('no sample places (config/weather-grid.json)');
+    const times = this.withSky ? frameTimes(this.now()) : null;
     const got = [];
     let lost = 0;
     for (let i = 0; i < places.length; i += BATCH) {
@@ -303,7 +335,7 @@ export class FieldDesk {
       // a batch that never answers is left out: the others still make a map (spread fills the gap), and
       // fewer than 60 % of the places answering is no map at all (below)
       try {
-        got.push(...parseGrid(await this.getJson(gridUrl(batch)), batch));
+        got.push(...parseGrid(await this.getJson(gridUrl(batch, { sky: this.withSky })), batch, times));
       } catch (err) {
         lost++;
         this.log.warn?.(`[weather] heat map: a batch of ${batch.length} places failed (${err.message})`);
@@ -311,8 +343,18 @@ export class FieldDesk {
     }
     if (lost && got.length) this.log.info?.(`[weather] heat map: ${got.length} of ${places.length} places (${lost} batch(es) lost)`);
     if (got.length < places.length * 0.6) throw new Error(`only ${got.length} of ${places.length} places answered`);
-    const today = spread(got.map((p) => ({ lat: p.lat, lon: p.lon, v: p.today })));
-    const tomorrow = spread(got.map((p) => ({ lat: p.lat, lon: p.lon, v: p.tomorrow ?? p.today })));
-    return { today, tomorrow, meta: { source: 'OPEN-METEO', kind: 'daily-max', places: got.length } };
+    // the heat map from the land's highs only (the sea's are the sky's points)
+    const land = got.filter((p) => !p.sea && Number.isFinite(p.today));
+    const today = spread(land.map((p) => ({ lat: p.lat, lon: p.lon, v: p.today })));
+    const tomorrow = spread(land.map((p) => ({ lat: p.lat, lon: p.lon, v: p.tomorrow ?? p.today })));
+    let sky = null;
+    if (times) {
+      try {
+        sky = buildSky(got.filter((p) => p.frames), times);
+      } catch (err) {
+        this.log.warn?.(`[weather] sky: ${err.message}`);
+      }
+    }
+    return { today, tomorrow, sky, meta: { source: 'OPEN-METEO', kind: 'daily-max', places: land.length } };
   }
 }

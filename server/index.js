@@ -42,9 +42,9 @@ const weather = new WeatherDesk({
   offline: () => newsDesk.localOnly,
   warnings: config.weather.warnings,
   ttlMs: config.weather.ttlMinutes * 60_000,
-  // the heat map's grid within Open-Meteo's free tier: 120 places every 15 s, a minute's wait after a 429,
+  // the heat map's grid within Open-Meteo's free tier: 120 places every 20 s (the sky's hours make each answer heavier), a minute's wait after a 429,
   // and the forecast never waits more than 2 s for it (it joins the report when it lands)
-  fieldPauseMs: 15_000,
+  fieldPauseMs: 20_000,
   fieldRetryMs: 65_000,
   fieldWaitMs: 2_000,
 });

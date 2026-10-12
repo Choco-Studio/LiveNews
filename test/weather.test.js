@@ -4,8 +4,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { WeatherDesk, parseOpenMeteo, parseGdacs, conditionOf, stormClass, buildReport, forecastUrl, warningsUrl, CITIES, ZONES, FIXTURE } from '../server/weather.js';
-import { writeWeather, seaOf } from '../server/weatherwriter.js';
+import { WeatherDesk, parseOpenMeteo, parseGdacs, conditionOf, stormClass, buildReport, forecastUrl, warningsUrl, hotColdOf, CITIES, PLACES, EXTRA, ZONES, FIXTURE } from '../server/weather.js';
+import { writeWeather, seaOf, areaOf, deg, aN, weekday } from '../server/weatherwriter.js';
 import { Producer } from '../server/producer.js';
 import { validateChannel, loadChannel } from '../server/channel.js';
 import { isSpoken } from '../server/voice/plan.js';
@@ -33,15 +33,18 @@ describe('weather data', () => {
     assert.ok(conditionOf(63).wet && !conditionOf(0).wet);
   });
 
-  test('Open-Meteo: one entry per city in request order, checked against the coordinates; bad entries are skipped', () => {
+  test('Open-Meteo: one entry per place in request order, checked against the coordinates; bad entries are skipped', () => {
     const raw = fixture().forecast;
-    const byCity = parseOpenMeteo(raw, CITIES);
-    assert.equal(byCity.size, CITIES.length);
+    const byCity = parseOpenMeteo(raw, PLACES);
+    assert.equal(byCity.size, PLACES.length);
+    const i = PLACES.findIndex((c) => c.id === 'madrid');
     const madrid = byCity.get('madrid');
-    assert.deepEqual([madrid.today.max, madrid.today.min, madrid.today.kind], [23, 12, 'clear']);
-    assert.equal(madrid.tomorrow.max, 24);
+    assert.deepEqual([madrid.today.max, madrid.today.min, madrid.today.code], [Math.round(raw[i].daily.temperature_2m_max[0]), Math.round(raw[i].daily.temperature_2m_min[0]), raw[i].daily.weather_code[0]]);
+    assert.equal(madrid.tomorrow.max, Math.round(raw[i].daily.temperature_2m_max[1]));
+    assert.equal(madrid.outlook.length, 3, 'tomorrow and two more days');
+    assert.equal(madrid.outlook[2].date, raw[i].daily.time[3]);
     // a list shifted by one: no city gets another city's weather
-    assert.equal(parseOpenMeteo(raw.slice(1), CITIES).size, 0);
+    assert.equal(parseOpenMeteo(raw.slice(1), PLACES).size, 0);
     assert.equal(parseOpenMeteo(null).size, 0);
     assert.equal(parseOpenMeteo([{ latitude: 51.5, longitude: -0.1, daily: { time: ['x'], temperature_2m_max: [null] } }], CITIES).size, 0);
   });
@@ -68,19 +71,29 @@ describe('weather data', () => {
   test('the requests: every city in one forecast call; warnings for the last week', () => {
     const u = new URL(forecastUrl());
     assert.equal(u.host, 'api.open-meteo.com');
-    assert.equal(u.searchParams.get('latitude').split(',').length, CITIES.length);
+    assert.equal(u.searchParams.get('latitude').split(',').length, PLACES.length);
+    assert.equal(PLACES.length, CITIES.length + EXTRA.length);
     assert.match(u.searchParams.get('daily'), /temperature_2m_max/);
+    assert.equal(u.searchParams.get('forecast_days'), '4');
     const g = new URL(warningsUrl(Date.parse('2026-10-03T00:00:00Z')));
     assert.equal(g.host, 'www.gdacs.org');
     assert.equal(g.searchParams.get('fromDate'), '2026-09-26');
   });
 
-  test('a report needs three zones of three cities; the extremes come from the data', () => {
-    const byCity = parseOpenMeteo(fixture().forecast, CITIES);
+  test('a report needs three zones of three cities; the extremes and HOT & COLD come from the data', () => {
+    const byCity = parseOpenMeteo(fixture().forecast, PLACES);
     const r = buildReport(byCity, [], { at: '2026-10-03T06:00:00Z' });
     assert.equal(r.zones.length, ZONES.length);
-    assert.equal(r.extremes.hottest.id, 'riyadh');
+    const zoned = r.zones.flatMap((z) => z.cities);
+    assert.equal(r.extremes.hottest.value, Math.max(...zoned.map((c) => c.today.max)));
     assert.equal(r.source, 'OPEN-METEO');
+    // HOT & COLD: the five highest highs and lowest lows of every place, the extra places included
+    const all = [...zoned, ...r.extra];
+    assert.equal(r.extra.length, EXTRA.length);
+    assert.deepEqual(r.hotCold.hot.map((c) => c.value), all.map((c) => c.today.max).sort((a, b) => b - a).slice(0, 5));
+    assert.deepEqual(r.hotCold.cold.map((c) => c.value), all.map((c) => c.today.min).sort((a, b) => a - b).slice(0, 5));
+    assert.ok(r.hotCold.hot.some((c) => !c.zone) || r.hotCold.cold.some((c) => !c.zone), 'an extra place makes the board');
+    assert.deepEqual(hotColdOf([]), { hot: [], cold: [] });
     const few = new Map([...byCity].slice(0, 5));
     assert.equal(buildReport(few, []), null);
   });
@@ -120,47 +133,97 @@ describe('weather data', () => {
 });
 
 describe('the script', () => {
-  test('intro, six zones west to east, the warning, tomorrow, the sign-off; all spoken by the presenter', async () => {
-    const ep = writeWeather(await fixtureReport(), { presenter: { name: 'Sam Night' }, channelName: 'GLOBIT 24', seed: 'a' });
-    assert.deepEqual(ep.segments.map((s) => s.kind), ['intro', 'zone', 'zone', 'zone', 'zone', 'zone', 'zone', 'warning', 'tomorrow', 'outro']);
+  test('round 3: headline, the world, six zones west to east, HOT & COLD, the warning, three days, the sign-off', async () => {
+    const report = await fixtureReport();
+    const ep = writeWeather(report, { presenter: { name: 'Sam Night' }, channelName: 'GLOBIT 24', seed: 'a' });
+    assert.deepEqual(ep.segments.map((s) => s.kind), ['headline', 'world', 'zone', 'zone', 'zone', 'zone', 'zone', 'zone', 'hotcold', 'warning', 'outlook', 'outro']);
+    assert.deepEqual(ep.segments.map((s) => s.shot), ['mcu', 'graphic', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'board', 'warning', 'board', 'mcu']);
     assert.deepEqual(ep.segments.filter((s) => s.kind === 'zone').map((s) => s.zone), ZONES.map((z) => z.id));
     for (const s of ep.segments) {
       assert.equal(s.type, 'weather');
       assert.equal(s.anchor, 'A');
       assert.ok(isSpoken(s), 'the voice service voices it');
-      assert.ok(!/undefined|NaN|null/.test(s.text), s.text);
+      assert.ok(!/undefined|NaN|null|\[object/.test(s.text), s.text);
     }
     assert.match(ep.segments[0].text, /I'm Sam Night, and this is WORLD WEATHER/);
     assert.equal(ep.segments.find((s) => s.kind === 'warning').emotion, 'serious');
     assert.match(ep.segments.at(-1).text, /GLOBIT 24/);
     assert.deepEqual(ep.storyIds, []);
-    const chars = ep.segments.reduce((n, s) => n + s.text.length, 0);
-    assert.ok(chars > 3000, `a programme of several minutes (${chars} characters)`);
+    // shorter than round 2's list of every city (about 3.5 minutes of speech), still a programme
+    const words = ep.segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0);
+    assert.ok(words > 380 && words < 640, `${words} words`);
+    for (const z of ep.segments.filter((s) => s.kind === 'zone')) {
+      assert.ok(z.text.split(/\s+/).length <= 75, `a zone is a few standouts, not a list: ${z.text}`);
+      assert.ok(new Set(z.marks.map((m) => m.city)).size >= 2, z.text);
+    }
+    // the boards carry what they show; the time-lapses run over the forecast's frames
+    const hc = ep.segments.find((s) => s.kind === 'hotcold');
+    assert.deepEqual(hc.board.hot, report.hotCold.hot);
+    const ol = ep.segments.find((s) => s.kind === 'outlook');
+    assert.ok(ol.board.cities.length >= 3 && ol.board.cities.length <= 5);
+    assert.equal(ol.board.days.length, 3);
+    for (const c of ol.board.cities) assert.equal(c.days.length, 3);
+    assert.deepEqual(ep.segments.find((s) => s.kind === 'world').timelapse, { from: 0, to: report.sky.hours.at(-1) });
+    assert.equal(ep.weather.sky, report.sky, 'the episode carries the moving sky');
   });
 
-  test('every figure said is a figure of the forecast, and every mark points at the city named there', async () => {
+  test('every figure said is a figure of the forecast, and every mark points at the place named there', async () => {
     const report = await fixtureReport();
-    const cities = new Map(report.zones.flatMap((z) => z.cities).map((c) => [c.id, c]));
+    const places = new Map([...report.zones.flatMap((z) => z.cities), ...report.extra].map((c) => [c.id, c]));
     const allowed = new Set();
-    for (const c of cities.values()) {
-      for (const d of [c.today, c.tomorrow].filter(Boolean)) for (const v of [d.max, d.min, Math.round(d.rain), d.prob, d.gust]) if (v != null) allowed.add(String(v));
+    for (const c of places.values()) {
+      for (const d of [c.today, c.tomorrow, ...(c.outlook || [])].filter(Boolean)) for (const v of [d.max, d.min, Math.round(d.rain), d.prob, d.gust]) if (v != null) allowed.add(String(Math.abs(v)));
     }
     for (const w of report.warnings) allowed.add(String(w.wind)).add(String(w.cat?.cat));
+    const sys0 = report.sky.systems.filter((x) => x.frame === 0);
     for (const seed of ['a', 'b', 'c', 'd']) {
       const ep = writeWeather(report, { seed });
       for (const s of ep.segments) {
-        const nums = s.text.replace(/WORLD WEATHER|GLOBIT 24/g, '').match(/\d+/g) || [];
+        let text = s.text.replace(/WORLD WEATHER|GLOBIT 24|24 hours/g, '');
+        // a difference is checked against its two cities' highs below (the zones' comparisons test)
+        text = text.replace(/ is \d+ degrees warmer than /g, ' ');
+        const between = /That's (\d+) degrees between the two ends/.exec(text);
+        if (between) {
+          assert.equal(Number(between[1]), report.hotCold.hot[0].value - report.hotCold.cold[0].value);
+          text = text.replace(between[0], '');
+        }
+        const nums = text.match(/\d+/g) || [];
         for (const n of nums) assert.ok(allowed.has(n), `${n} in "${s.text}"`);
         for (const m of s.marks) {
-          const c = cities.get(m.city);
+          const c = places.get(m.city);
           assert.ok(c, m.city);
           assert.ok(s.text.startsWith(c.say, m.char), `${c.say} at ${m.char} in "${s.text}"`);
         }
+        for (const p of s.pins || []) assert.ok(sys0.some((x) => x.lat === p.lat && x.lon === p.lon && x.kind === p.kind), 'a pin is a high or low of the forecast');
       }
-      // the zones name most of their cities
-      const zone = ep.segments.find((s) => s.zone === 'europe');
-      assert.ok(new Set(zone.marks.map((m) => m.city)).size >= 6);
     }
+  });
+
+  test('the zones\' comparisons are the two cities\' own highs', async () => {
+    const report = await fixtureReport();
+    const byName = new Map(report.zones.flatMap((z) => z.cities).map((c) => [c.say, c]));
+    let seen = 0;
+    for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      for (const s of writeWeather(report, { seed }).segments) {
+        for (const m of s.text.matchAll(/([A-ZÀ-Ý][\wÀ-ÿ .-]*?) is (\d+) degrees warmer than ([A-ZÀ-Ý][\wÀ-ÿ .-]*?)\./g)) {
+          const hi = byName.get(m[1].replace(/^.*: /, '')), lo = byName.get(m[3]);
+          assert.ok(hi && lo, m[0]);
+          assert.equal(Number(m[2]), hi.today.max - lo.today.max, m[0]);
+          seen++;
+        }
+      }
+    }
+    assert.ok(seen > 0, 'a contrast is said in some editions');
+  });
+
+  test('words: minus temperatures, an 82 percent, weekdays, broad areas', () => {
+    assert.equal(deg(-4), 'minus 4');
+    assert.equal(deg(21), '21');
+    assert.deepEqual([8, 11, 18, 82, 70, 93, 100].map(aN), ['an', 'an', 'an', 'an', 'a', 'a', 'a']);
+    assert.equal(weekday('2026-10-15'), 'Thursday');
+    assert.equal(areaOf(65, 100), 'Siberia');
+    assert.equal(areaOf(45, -30), 'the North Atlantic');
+    assert.equal(areaOf(-60, 0), 'the Southern Ocean');
   });
 
   test('phrasing varies with the seed and is not repeated within a bulletin', async () => {
@@ -217,9 +280,11 @@ describe('the programme on the channel', () => {
 describe('the weather centre (client)', () => {
   test('the temperature field: cities set the colour near them, the climate far away', async () => {
     const report = await fixtureReport();
-    const f = temperatureField(report.zones.flatMap((z) => z.cities), 'today');
-    assert.ok(Math.abs(f.at(24.7, 46.7) - 37) < 2.5, `Riyadh ${f.at(24.7, 46.7)}`);
-    assert.ok(Math.abs(f.at(55.8, 37.6) - 10) < 2.5, `Moscow ${f.at(55.8, 37.6)}`);
+    const cities = report.zones.flatMap((z) => z.cities);
+    const f = temperatureField(cities, 'today');
+    const riyadh = cities.find((c) => c.id === 'riyadh'), moscow = cities.find((c) => c.id === 'moscow');
+    assert.ok(Math.abs(f.at(24.7, 46.7) - riyadh.today.max) < 2.5, `Riyadh ${f.at(24.7, 46.7)}`);
+    assert.ok(Math.abs(f.at(55.8, 37.6) - moscow.today.max) < 2.5, `Moscow ${f.at(55.8, 37.6)}`);
     assert.ok(f.at(-80, 0) < 0, 'Antarctica stays cold');
     assert.ok(f.at(75, 100) < 6, 'the Siberian Arctic stays cold');
     const palette = new Set(Object.values(P).map((c) => c.toLowerCase()));
@@ -262,6 +327,14 @@ describe('the heat map: real temperatures at many places (round 2)', async () =>
     const u = new URL(gridUrl(pts.slice(0, 120)));
     assert.equal(u.searchParams.get('latitude').split(',').length, 120);
     assert.equal(u.searchParams.get('daily'), 'temperature_2m_max');
+    assert.equal(u.searchParams.get('hourly'), null, 'the sky only when asked');
+    // round 3: the sky's hours in the same request, at the land's points and the open sea's
+    const sky = new URL(gridUrl(pts.slice(0, 2), { sky: true }));
+    assert.match(sky.searchParams.get('hourly'), /cloud_cover.*precipitation.*pressure_msl/);
+    const all = gridPoints(undefined, { sea: true });
+    const sea = all.filter((p) => p.sea);
+    assert.ok(sea.length > 150 && sea.length < 400, `${sea.length} sea points`);
+    assert.ok(sea.some((p) => Math.abs(p.lat) < 5 && p.lon > -150 && p.lon < -100), 'the open Pacific has sky points');
   });
 
   test('the field: spread from places, encoded in half degrees, tied to the cities on screen', () => {
@@ -293,7 +366,7 @@ describe('the heat map: real temperatures at many places (round 2)', async () =>
   });
 
   test('live: every batch asked, answers matched by position, a field of daily highs; too few answers is no field', async () => {
-    const pts = gridPoints();
+    const pts = gridPoints(undefined, { sea: true });
     let calls = 0;
     const fetchImpl = async (url) => {
       calls++;
@@ -342,7 +415,7 @@ describe('the heat map: real temperatures at many places (round 2)', async () =>
   });
 
   test('the free tier: a 429 is asked again; the forecast never waits for the grid, which joins it when it lands', async () => {
-    const pts = gridPoints();
+    const pts = gridPoints(undefined, { sea: true });
     const answer = (url) => {
       const q = new URL(url).searchParams;
       const la = q.get('latitude').split(',').map(Number), lo = q.get('longitude').split(',').map(Number);

@@ -69,6 +69,21 @@ export const ZONES = [
 
 export const CITIES = ZONES.flatMap((z) => z.cities.map((c) => ({ ...c, zone: z.id })));
 
+// The world's famous hot and cold places, beyond the zones' cities: they are not on the zone maps, but they compete
+// for HOT & COLD (round 3), the board of the day's highest and lowest temperatures round the planet.
+export const EXTRA = [
+  ['phoenix', 'PHOENIX', 33.45, -112.07], ['las-vegas', 'LAS VEGAS', 36.17, -115.14], ['kuwait-city', 'KUWAIT CITY', 29.38, 47.98],
+  ['baghdad', 'BAGHDAD', 33.31, 44.37], ['doha', 'DOHA', 25.29, 51.53], ['muscat', 'MUSCAT', 23.59, 58.41], ['karachi', 'KARACHI', 24.86, 67.0],
+  ['timbuktu', 'TIMBUKTU', 16.77, -3.0], ['khartoum', 'KHARTOUM', 15.5, 32.56], ['niamey', 'NIAMEY', 13.51, 2.11], ['aswan', 'ASWAN', 24.09, 32.9],
+  ['jeddah', 'JEDDAH', 21.49, 39.19], ['alice-springs', 'ALICE SPRINGS', -23.7, 133.88], ['ahvaz', 'AHVAZ', 31.32, 48.67],
+  ['yakutsk', 'YAKUTSK', 62.03, 129.73], ['norilsk', 'NORILSK', 69.35, 88.2], ['anchorage', 'ANCHORAGE', 61.22, -149.9], ['reykjavik', 'REYKJAVIK', 64.15, -21.94, 'Reykjavík'],
+  ['nuuk', 'NUUK', 64.18, -51.72], ['ulaanbaatar', 'ULAANBAATAR', 47.92, 106.92], ['tromso', 'TROMSO', 69.65, 18.96, 'Tromsø'], ['yellowknife', 'YELLOWKNIFE', 62.45, -114.37],
+  ['ushuaia', 'USHUAIA', -54.8, -68.3], ['la-paz', 'LA PAZ', -16.5, -68.15], ['murmansk', 'MURMANSK', 68.97, 33.08], ['iqaluit', 'IQALUIT', 63.75, -68.52],
+].map(([id, name, lat, lon, say]) => ({ id, name, lat, lon, say: say || titleCase(name), extra: true }));
+
+/** Every place the forecast asks for: the zones' cities, then the extra hot and cold places. */
+export const PLACES = [...CITIES, ...EXTRA];
+
 function titleCase(s) {
   return String(s).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
@@ -132,7 +147,7 @@ const pick = ({ kind, wet }) => ({ kind, wet });
  * Open-Meteo forecast (an array for several locations, an object for one) matched to `cities` by order (the
  * request's order), each checked against its coordinates. -> Map cityId -> { now, today, tomorrow }.
  */
-export function parseOpenMeteo(json, cities = CITIES) {
+export function parseOpenMeteo(json, cities = PLACES) {
   const list = Array.isArray(json) ? json : json ? [json] : [];
   const out = new Map();
   for (let i = 0; i < cities.length && i < list.length; i++) {
@@ -147,6 +162,8 @@ export function parseOpenMeteo(json, cities = CITIES) {
     out.set(c.id, {
       today,
       tomorrow: dayOf(r.daily, 1),
+      // the next three days from tomorrow (as many as the answer has)
+      outlook: [1, 2, 3].map((d) => dayOf(r.daily, d)).filter(Boolean),
       now: Number.isFinite(Number(cur.temperature_2m)) && cur.temperature_2m !== null
         ? { temp: round(cur.temperature_2m), code: nowCode, ...pick(conditionOf(nowCode ?? today.code)), wind: round(cur.wind_speed_10m), day: cur.is_day === undefined ? null : !!cur.is_day }
         : null,
@@ -279,14 +296,15 @@ export function parseGdacs(json, { now = Date.now(), maxAgeDays = null } = {}) {
 }
 
 /** The forecast URL for every city (one request). */
-export function forecastUrl(cities = CITIES) {
+export function forecastUrl(cities = PLACES) {
   const q = new URLSearchParams({
     latitude: cities.map((c) => c.lat).join(','),
     longitude: cities.map((c) => c.lon).join(','),
     current: 'temperature_2m,weather_code,wind_speed_10m,is_day',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max',
     timezone: 'auto',
-    forecast_days: '2',
+    // today, tomorrow and two more days (THE NEXT THREE DAYS board)
+    forecast_days: '4',
   });
   return `${OPEN_METEO}?${q}`;
 }
@@ -329,6 +347,20 @@ export function buildReport(byCity, warnings, { at = new Date().toISOString(), d
     zones,
     warnings,
     extremes: extremesOf(zones),
+    // the extra hot and cold places with their day, and HOT & COLD: the day's five highest highs and five lowest
+    // lows round the planet, the zones' cities and the extra places together
+    extra: EXTRA.filter((c) => byCity.has(c.id)).map((c) => ({ ...c, today: byCity.get(c.id).today })),
+    hotCold: hotColdOf([...zones.flatMap((z) => z.cities), ...EXTRA.filter((c) => byCity.has(c.id)).map((c) => ({ ...c, ...byCity.get(c.id) }))]),
+  };
+}
+
+/** HOT & COLD: the five highest highs and the five lowest lows (the hottest and coldest first), one entry per place. */
+export function hotColdOf(places, n = 5) {
+  const ok = places.filter((c) => c?.today && Number.isFinite(c.today.max) && Number.isFinite(c.today.min));
+  const ref = (c, v) => ({ id: c.id, name: c.name, say: c.say, lat: c.lat, lon: c.lon, value: v, kind: c.today.kind, ...(c.zone ? { zone: c.zone } : {}) });
+  return {
+    hot: [...ok].sort((a, b) => b.today.max - a.today.max).slice(0, n).map((c) => ref(c, c.today.max)),
+    cold: [...ok].sort((a, b) => a.today.min - b.today.min).slice(0, n).map((c) => ref(c, c.today.min)),
   };
 }
 
@@ -338,7 +370,7 @@ export class WeatherDesk {
    *                 fixture while the news desk is the offline fixture desk, `offline()`, else live)
    * @param o.warnings 'gdacs' | 'off'
    */
-  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 8_000, field = true, fieldTtlMs = 3 * 3600_000, fieldPauseMs = 0, fieldRetryMs = 0, fieldWaitMs = Infinity, retryNetMs = 3_000, log = console, now = () => Date.now() } = {}) {
+  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 8_000, field = true, fieldTtlMs = 6 * 3600_000, fieldPauseMs = 0, fieldRetryMs = 0, fieldWaitMs = Infinity, retryNetMs = 3_000, log = console, now = () => Date.now() } = {}) {
     this.mode = source;
     this.offline = offline;
     this.warningsSource = warnings;
@@ -387,6 +419,7 @@ export class WeatherDesk {
       // a heat map that landed after the report was made joins it
       const r = this.cached.report;
       if (!r.field && this.fields?.ready()) r.field = this.fields.fieldFor(r);
+      if (!r.sky && this.fields?.ready()) r.sky = this.fields.skyFor();
       return r;
     }
     this.inflight ??= this.load().finally(() => (this.inflight = null));
@@ -398,6 +431,8 @@ export class WeatherDesk {
       const report = this.source === 'fixture' ? this.fromFixture() : await this.fromNetwork();
       // the heat map never holds the forecast back: without it the map is coloured from the cities alone
       if (report && this.fields) report.field = await this.fields.field(report, { waitMs: this.fieldWaitMs });
+      // the moving sky comes with the heat map (the same requests); without it the map plays still
+      if (report && this.fields) report.sky = this.fields.skyFor();
       if (report) {
         this.cached = { at: this.now(), report };
         this.lastError = null;
@@ -418,7 +453,7 @@ export class WeatherDesk {
 
   fromFixture() {
     const raw = JSON.parse(fs.readFileSync(this.fixtureFile, 'utf8'));
-    const byCity = parseOpenMeteo(raw.forecast, CITIES);
+    const byCity = parseOpenMeteo(raw.forecast, raw.forecast.length > CITIES.length ? PLACES : CITIES);
     const warnings = parseGdacs(raw.warnings, { now: Date.parse(raw.at) || this.now() });
     return buildReport(byCity, warnings, { at: raw.at || new Date(this.now()).toISOString(), demo: true });
   }
@@ -453,7 +488,7 @@ export class WeatherDesk {
 
   async fromNetwork() {
     const [forecast, warnings] = await Promise.all([
-      this.getJson(forecastUrl(CITIES)),
+      this.getJson(forecastUrl(PLACES)),
       this.warningsSource === 'gdacs'
         ? this.getJson(warningsUrl(this.now())).catch((err) => {
           // no warnings feed is not no forecast: the programme airs without the warnings panel
@@ -462,6 +497,6 @@ export class WeatherDesk {
         })
         : null,
     ]);
-    return buildReport(parseOpenMeteo(forecast, CITIES), parseGdacs(warnings, { now: this.now() }), { at: new Date(this.now()).toISOString() });
+    return buildReport(parseOpenMeteo(forecast, PLACES), parseGdacs(warnings, { now: this.now() }), { at: new Date(this.now()).toISOString() });
   }
 }

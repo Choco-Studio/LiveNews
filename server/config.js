@@ -119,7 +119,8 @@ export const config = {
   weather: {
     source: ((v) => (['auto', 'open-meteo', 'fixture', 'off'].includes(v) ? v : 'auto'))(env('WEATHER', 'auto').trim().toLowerCase()),
     warnings: env('WEATHER_WARNINGS', 'gdacs').trim().toLowerCase() === 'off' ? 'off' : 'gdacs',
-    ttlMinutes: bounded('WEATHER_TTL_MIN', 30, 5, 360),
+    // an hour: 70 places a call, within Open-Meteo's free tier with the heat map and the sky (server/weatherfield.js)
+    ttlMinutes: bounded('WEATHER_TTL_MIN', 60, 5, 360),
   },
   // Footage of a correspondent link's place (server/footage.js): Wikimedia Commons clips, FILE-credited, kept in
   // data/footage. 'auto' = on while the desk reads live feeds (off on the offline fixture feeds), 'on', 'off'.
