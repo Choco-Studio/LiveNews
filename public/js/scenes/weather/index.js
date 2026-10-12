@@ -880,7 +880,7 @@ export function drawWeather(ctx, t, scene, audio) {
 
   if (shot === 'graphic') drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK);
   else if (shot === 'board') drawBoard(ctx, t, data, seg, since, layers);
-  else if (shot === 'mcu') drawCloseup(ctx, t, rt, data, seg, tgt, layers);
+  else if (shot === 'mcu') drawCloseup(ctx, t, rt, data, seg, tgt, layers, W8);
   else drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8);
 
   // the wipe: the old shot's last frame slides off behind an accent bar
@@ -1065,23 +1065,86 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
 }
 
 // ------------------------------------------------------------------------------------------- the close-up
-/** The close-up's small gestures: an open hand on a few sentences (not the first, never two in a row too close). */
-function beatsFor(seg, since, dur) {
+/**
+ * The close-up's small beats between his gestures. A script with gestures on its words (seg.gestures: presenter.js,
+ * the writer's cues) keeps a beat only at a sentence's end in a long quiet stretch (3.6 s clear of any gesture on both
+ * sides), a palm lifting beside the body, the hands taking turns; an older script without them gets an open hand on
+ * every other sentence, as before.
+ */
+export function beatsFor(seg, since, dur) {
   const text = String(seg.text || '');
   const len = Math.max(1, text.length);
   const out = [];
   const re = /[.!?]\s+/g;
   let m, n = 0;
+  const cued = Array.isArray(seg.gestures) && seg.gestures.length > 0;
+  if (cued) {
+    const at = seg.gestures.filter((g) => g.kind !== 'nod').map((g) => since + (g.char / len) * dur);
+    const names = [['raise_hand', 'lift'], ['raise_hand', 'lift_far'], ['raise_hand', 'offer']];
+    let k = 0;
+    while ((m = re.exec(text))) {
+      const t = since + ((m.index + m[0].length) / len) * dur + 0.15;
+      if (t > since + dur - 1.6 || at.some((a) => Math.abs(a - t) < 3.6)) continue;
+      const [name, variant] = names[k++ % names.length];
+      out.push({ at: t, name, variant });
+    }
+    return out;
+  }
   const names = [['raise_hand', 'offer'], ['raise_hand', 'lift'], ['point_screen', 'open'], ['raise_hand', 'box']];
   while ((m = re.exec(text))) {
     const at = since + ((m.index + m[0].length) / len) * dur + 0.15;
-    if (n % 2 === 0 && at < since + dur - 1.5) out.push({ at, name: names[(n >> 1) % names.length][0], variant: names[(n >> 1) % names.length][1] });
+    if (n % 2 === 0 && at < since + dur - 1.6) out.push({ at, name: names[(n >> 1) % names.length][0], variant: names[(n >> 1) % names.length][1] });
     n++;
   }
   return out;
 }
 
-function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
+/**
+ * Where a close-up gesture's place is on screen: on the out-of-focus wall behind him (the small picture `v` shown 6x),
+ * kept on the open side of the frame, the side he faces into (a place behind him or past the wall's far end is shown
+ * at the open side's height for it). -> { x, y }
+ */
+export function closeupTarget(v, lat, lon, px, side) {
+  let x = px + side * 150, y = 112;
+  if (v && Number.isFinite(lat) && Number.isFinite(lon)) {
+    x = (SW / 2 + wrap(lon - v.clon) * v.s * v.kx) * 6;
+    y = (SH / 2 + (v.clat - lat) * v.s) * 6;
+  }
+  const lo = side > 0 ? px + 70 : 40, hi = side > 0 ? W - 42 : px - 70;
+  if (!(x >= lo && x <= hi)) x = Math.max(lo, Math.min(hi, px + side * 150));
+  return { x, y: Math.max(64, Math.min(160, y)) };
+}
+
+/** A gesture cue (seg.gestures) as the voice reaches it: the presenter's own gesture for it (presenter.js). */
+function playCue(pm, g, rt, v) {
+  const perf = ST.standing.actor.perf;
+  const side = perf.side || 1;
+  if (g.kind === 'nod') {
+    // a small nod with his name (a head gesture: the hands are free)
+    perf.gestures = [...(perf.gestures || []).filter((e) => rt - e.t0 < 3).slice(-2), { name: 'nod', variant: 'single', t0: rt }];
+    return true;
+  }
+  if (g.kind === 'place') {
+    const p = closeupTarget(v, g.lat, g.lon, pm.x, side);
+    return pm.gesture('place', rt, { tx: p.x, ty: p.y, gap: 1.6 });
+  }
+  if (g.kind === 'world') return pm.gesture('world', rt, { variant: g.variant, gap: 1.6 });
+  if (g.kind === 'sweep') {
+    // toward the wall's open side, a little rising (the trip round the world); or from one place to the other as
+    // they lie on the wall (a contrast)
+    let dx = side, dy = -0.12;
+    if (g.from && g.to && v) {
+      const at = (p) => ({ x: (SW / 2 + wrap(p.lon - v.clon) * v.s * v.kx) * 6, y: (SH / 2 + (v.clat - p.lat) * v.s) * 6 });
+      const a = at(g.from), b = at(g.to);
+      if (Math.hypot(b.x - a.x, b.y - a.y) > 4) [dx, dy] = [b.x - a.x, b.y - a.y];
+    }
+    return pm.gesture('sweep', rt, { dx, dy, gap: 1.6 });
+  }
+  if (g.kind === 'count') return pm.gesture('count', rt, { n: g.n, gap: 1.6 });
+  return false;
+}
+
+function drawCloseup(ctx, t, rt, data, seg, tgt, layers, W8) {
   const pm = ST.closeup;
   const perf = ST.standing.actor.perf;
   // the wall behind him, out of focus: a small picture of the world (the big story's place for the opening)
@@ -1089,7 +1152,7 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
   const w0 = data.warnings?.[0];
   const right = tgt.side === 'right';
   const view = seg.kind === 'headline' && w0 ? { lat: w0.lat + 6, lon: w0.lon + (right ? 40 : -40), zoom: 2.2 } : { lat: 22, lon: right ? -20 : 40, zoom: 1.6 };
-  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4, stormMin: STORM_MIN.soft }, t);
+  const v = wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4, stormMin: STORM_MIN.soft }, t);
   let t0 = now();
   softWall(FB, SB, SW, SH, { k: 6, dim: 0 });
   ST.fbFor = 'mcu';
@@ -1107,7 +1170,11 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
       else FB[o] = i >= 19 && i <= 21 ? (i === 20 ? PK.blue : PK.navy) : i === 18 || i === 22 ? (0.5 > bay ? PK.navy : PK.ink) : PK.ink;
     }
   }
-  // small open-hand beats on his sentences
+  // his gestures on their words as the voice reaches them (seg.gestures), and the small beats between
+  if (W8?.gesture && W8.gestureAt !== ST.lastGestureAt) {
+    ST.lastGestureAt = W8.gestureAt;
+    if (seg.gestures?.includes(W8.gesture)) playCue(pm, W8.gesture, rt, v);
+  }
   for (const b of ST.beats) {
     if (!b.done && t >= b.at) {
       b.done = true;
@@ -1162,4 +1229,4 @@ function currentHot() {
   return last;
 }
 
-export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK };
+export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK, beatsFor, closeupTarget };

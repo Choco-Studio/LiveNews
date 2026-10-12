@@ -971,4 +971,99 @@ describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s 
     for (let i = 0; i < w * 60; i++) assert.equal(rained[i], packed(P.cyan));
     assert.equal(storm.drawStormCloud(base.slice(), base, w, h, view, { lat: -30, lon: 100, cat: 3 }, 0), null, 'out of view: nothing');
   });
+
+  test('the close-up\'s gestures are on the words: the big story\'s place, the trip round the world, the viewers', async () => {
+    const places = [...report.zones.flatMap((z) => z.cities), ...(report.extra || []), ...report.warnings];
+    const KINDS = new Set(['place', 'world', 'sweep', 'count', 'nod']);
+    for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      const ep = writeWeather(report, { seed });
+      for (const s of ep.segments) {
+        if (s.shot !== 'mcu') {
+          assert.equal(s.gestures, undefined, 'only the close-up gestures on its words');
+          continue;
+        }
+        assert.ok(s.gestures?.length >= 2, `${s.kind}: gestures`);
+        let last = -1;
+        for (const g of s.gestures) {
+          assert.ok(KINDS.has(g.kind) && g.char >= 0 && g.char < s.text.length && g.char >= last, JSON.stringify(g));
+          last = g.char;
+          if (g.kind === 'place') assert.ok(places.some((p) => p.lat === g.lat && p.lon === g.lon), 'a place the report has');
+          if (g.kind === 'sweep') assert.ok(g.toward === 'wall' || (g.from && g.to));
+          if (g.kind === 'count') assert.ok(g.n >= 2 && g.n <= 5);
+        }
+      }
+      const head = ep.segments[0], tail = ep.segments.at(-1);
+      // the storm is presented as it is named; what is coming gets its own gesture; his name a nod
+      const storm = head.gestures.find((g) => g.kind === 'place');
+      assert.ok(storm && head.text.slice(storm.char).startsWith('Tropical Cyclone'), head.text);
+      assert.ok(head.gestures.some((g) => ['world', 'sweep', 'count'].includes(g.kind)));
+      assert.ok(head.text.slice(head.gestures.find((g) => g.kind === 'nod').char).startsWith("I'm"));
+      assert.ok(tail.text.slice(tail.gestures.find((g) => g.kind === 'nod').char).startsWith("I'm"));
+      for (const g of tail.gestures.filter((x) => x.kind === 'place')) {
+        const city = places.find((p) => p.lat === g.lat && p.lon === g.lon);
+        assert.ok(tail.marks.some((m) => m.char === g.char && m.city === city.id), 'the open hand on the city\'s name');
+      }
+    }
+  });
+
+  test('the close-up\'s gestures in the rig: an open hand out toward the place, both palms out, a sweep along its way', async () => {
+    const { Standing } = await import('../public/js/v2/canvas25d/runtime/standing.js');
+    const { Presenter, aimedOpen, bothPalms, sweepAlong } = await import('../public/js/scenes/weather/presenter.js');
+    const { evaluate } = await import('../public/js/v2/canvas25d/rig.js');
+    const { lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
+    const { GESTURES } = await import('../public/js/v2/canvas25d/gestures/index.js');
+    const L = lookFor('sam');
+    const pose = (ev, t) => evaluate(L, { side: 1, gestures: [{ t0: 0, ...ev }], emotions: [], look: [] }, t);
+    // the open hand: well out from the body (not a hand at the waist), higher for a place higher on the wall, open
+    const level = pose({ name: aimedOpen(60, 0) }, 1.0), high = pose({ name: aimedOpen(60, -30) }, 1.0), low = pose({ name: aimedOpen(60, 25) }, 1.0);
+    assert.ok(level.wrist[0] > 15, `out to the side (${level.wrist[0].toFixed(1)})`);
+    assert.ok(high.wrist[1] < level.wrist[1] - 4 && low.wrist[1] > level.wrist[1] + 4, 'aimed in height');
+    assert.ok(Math.max(...level.curl) < 0.2, 'an open hand');
+    // both palms: out on both sides at chest height, open
+    const world = pose({ name: bothPalms('wide') }, 1.0);
+    assert.ok(world.wrist[0] > 8 && world.wristF[0] < -8, `both out (${world.wrist[0].toFixed(1)}, ${world.wristF[0].toFixed(1)})`);
+    assert.ok(world.wrist[1] < 8 && world.wristF[1] < 8, 'at chest height, not the waist');
+    assert.ok(GESTURES[bothPalms('near')], 'a nearer variant');
+    // the sweep: the hand travels along the movement between the set and the end (north-east: out and up)
+    const ne = sweepAlong(0.7, -0.7);
+    const a = pose({ name: ne.name }, 0.54).wrist, b = pose({ name: ne.name }, 1.24).wrist;
+    assert.ok(b[0] - a[0] > 12 && a[1] - b[1] > 12, `out and up (${(b[0] - a[0]).toFixed(1)}, ${(a[1] - b[1]).toFixed(1)})`);
+    // a movement away from the wall's side is the far hand sweeping out on its own side
+    const back = sweepAlong(-1, 0);
+    assert.ok(back.far);
+    const fa = pose({ name: back.name }, 0.54).wristF, fb = pose({ name: back.name }, 1.24).wristF;
+    assert.ok(fa[0] - fb[0] > 15, 'the far hand sweeps out');
+    // the presenter: the close-up's kinds, spaced, each a touch faster or slower than the last
+    const p = new Presenter(new Standing('sam'), { scale: 1.9, neckY: 101, seed: 3 });
+    p.place(112);
+    p.perf.side = 1;
+    assert.ok(p.gesture('place', 10, { tx: 270, ty: 122 }));
+    assert.match(p.perf.gestures.at(-1).name, /^wx_open_/);
+    assert.equal(p.gesture('world', 11, {}), false, 'not on top of the last one');
+    assert.ok(p.gesture('world', 11.8, { variant: 'near' }));
+    assert.ok(p.gesture('sweep', 14, { dx: 1, dy: 0 }));
+    assert.ok(p.gesture('count', 16, { n: 2 }));
+    assert.equal(p.perf.gestures.at(-1).n, 2);
+    const speeds = p.perf.gestures.filter((g) => g.speed).map((g) => g.speed);
+    assert.ok(speeds.every((s) => s >= 0.92 && s <= 1.08) && new Set(speeds).size === speeds.length);
+  });
+
+  test('the close-up: a place on the wall behind him is kept on the side he faces into; beats only in long quiet stretches', async () => {
+    const centre = await import('../public/js/scenes/weather/index.js');
+    const { closeupTarget, beatsFor } = centre.__test;
+    const v = { clon: -102, clat: 30.6, s: (64 / 360) * 2.2, kx: 0.86 };
+    const storm = closeupTarget(v, 24.6, -62.4, 112, 1);
+    assert.ok(storm.x > 112 + 70 && storm.x < 384 - 40 && storm.y > 100 && storm.y < 140, JSON.stringify(storm));
+    const behind = closeupTarget(v, 30, -150, 112, 1); // west of him on the wall: shown on his open side
+    assert.ok(behind.x >= 182);
+    const left = closeupTarget(v, 24.6, -62.4, 272, -1); // the sign-off: the open side is the left
+    assert.ok(left.x <= 272 - 70 && left.x >= 40);
+    const ep = writeWeather(report, { seed: 'beats' });
+    const head = ep.segments[0];
+    const dur = head.text.length / 15;
+    const beats = beatsFor(head, 0, dur);
+    const cueAt = head.gestures.filter((g) => g.kind !== 'nod').map((g) => (g.char / head.text.length) * dur);
+    for (const b of beats) assert.ok(cueAt.every((c) => Math.abs(c - b.at) >= 3.6), 'a beat never crowds a gesture');
+    assert.ok(beatsFor({ text: 'One. Two. Three. Four. Five.' }, 0, 20).length >= 2, 'an older script still gets its beats');
+  });
 });
