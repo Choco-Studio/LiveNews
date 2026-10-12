@@ -75,6 +75,15 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
     - ✅ Repaso del 10 oct (dos pasadas con todos los programas y noticias de ese día, redactor sin IA): los **titulares** ya no se cortan a media frase ni cambian el sentido (antes salía "Ex-Deutsche Bank trader jailed" cuando le anulaban la condena; "…deals may not"; comillas abiertas; nombres partidos como "Nikon Small World"; "…advocates say" quitado de una opinión); si no hay un corte limpio, el titular va entero en dos líneas. Fuera **frases sin sujeto o sin verbo principal** ("Documented how…", "But criticised…", "A man who lives in a log cabin."), frases recortadas que dejaban colgando "possibly", "let alone figuring out" o media lista; la misma cifra dicha dos veces seguidas; respuestas de corresponsal que empezaban por "Instead,"; aperturas que dependían del titular ("…said the tip was…"). **Una noticia, un hueco**: el mismo huracán contado por varios medios o actualizaciones del mismo medio, y el movimiento "Cockroach" de India (salía 3 veces en WORLD NOW), ya cuentan como una. Tablero WHAT WE KNOW sin rangos partidos ("entre 50 y 100"), sin cifras rotas ("30 -ERA MAC MINIS"), páginas de programas de la BBC (Money Box, Tech Now) y listas de productos fuera, y el resumen de la NASA que se quedaba en "11." arreglado.
 
+    - ✅ Repaso del 12 oct (los cinco programas con las noticias de ese día, tres pasadas):
+      - una noticia contada por dos medios con la misma expresión entre comillas ("energy ceasefire") ya sale una sola vez;
+      - se corrige la errata de un medio en un nombre del titular ("Woodfood" pasa a "Woodford");
+      - fuera las frases de relleno de los medios ("Elitsa Gadeva explica…", "The BBC has not seen the letter", el subtítulo del Guardian sin punto);
+      - ninguna frase cortada antes de su verbo o a mitad de expresión ("…likelihood of wetter.", "Ticket sales for the satirical black comedy.");
+      - si la primera frase del resumen es de fondo o habla de otra cosa ("The facility…", "Bergs had lost…"), la noticia empieza por el titular dicho como frase ("A Saudi minister has vowed…", "Thales is to open…");
+      - en la cifra del día, primero la frase con la cifra; ninguna noticia empieza por "it"/"they".
+    - ✅ NEWS IN 60 (12 oct): cada noticia empieza por lo que ha pasado, y la línea amarilla del rótulo por fin avanza con el minuto (antes estaba siempre llena).
+
     Falta: más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
 ## E. Plató, gráficos y cámara
