@@ -1,7 +1,7 @@
 // SEVEN DAYS open: the week's card. A split-flap card, lit from above like the real thing (the upper flap a step
 // lighter than the lower, a black hinge gap across its middle, the axle's two steel pins either side, a lit top
 // edge), showing a coral 7; behind it the other days, a stack of cards whose edges show under it. The same
-// package and clock as every open: the card flips in from blank at centre stage, the stack settles under it,
+// package and clock as every open: the stack settles in at centre stage, its top card turns from blank to the 7,
 // and it glides to its slot beside the plate. Accent: coral (the flagship's red, softened for the weekend).
 //
 // The cards are drawn pixel by pixel from their true shapes at any centre and size (paintCard), so SEVEN DAYS's

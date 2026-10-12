@@ -834,6 +834,7 @@ const PENDANT = {
     '.yccccwwwccccy.',
   ],
 };
+const PENDANT_C = { k: C.black, c: C.cream, t: C.tan, s: C.tanShade, b: C.brown, y: C.yellow, w: C.white };
 function pendants(fr, cam, soft) {
   const k = kAt(cam, SET.wallZ);
   const s = Math.max(1, Math.round(k * 1.4));
@@ -854,7 +855,7 @@ function pendants(fr, cam, soft) {
       for (let i = 0; i < rows[j].length; i++) {
         const ch = rows[j][i];
         if (ch === '.') continue;
-        const c = { k: C.black, c: C.cream, t: C.tan, s: C.tanShade, b: C.brown, y: C.yellow, w: C.white }[ch];
+        const c = PENDANT_C[ch];
         fr.span(x0 + i * s, y0 + j * s, x0 + (i + 1) * s, y0 + (j + 1) * s, c);
       }
     }

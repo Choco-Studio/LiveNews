@@ -5,7 +5,7 @@
 //                              each card flutters through two letters and lands on its day on the beat as it
 //                              reaches the centre (Monday to Sunday: a big initial, its name under it); the light
 //                              round the row warms from a cool weekday navy to the weekend's dark red as the week
-//                              goes by; the camera slows onto Sunday
+//                              goes by; the camera drifts past Sunday and stops
 //   THE WEEKEND   7.4-9.5      the camera pulls back over the whole week, M T W T F S S, the weekend in coral; a
 //                              glint runs along the cards' top edges; the light gives way to the open's field
 //   THE STACK     9.5-10.5     the days gather into one stack behind Thursday's card, closing in to the emblem's size
