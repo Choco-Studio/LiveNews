@@ -325,6 +325,19 @@ export function parseFeed(xml, feed, { baseDir = null, now = Date.now(), log = n
   return stories;
 }
 
+/**
+ * An outlet's standfirst, its second headline, goes when its own paragraphs follow: a first paragraph with no full stop
+ * ("President Zardari suspends provincial government in escalation of tensions as Khan supporters march to Islamabad",
+ * Guardian 12 Oct, aired as a sentence). The story's paragraphs say it in sentences.
+ */
+export function dropStandfirst(html) {
+  const m = String(html ?? '').match(/^\s*<p[^>]*>([\s\S]{10,400}?)<\/p>\s*(?=<p[\s>])/i);
+  if (!m) return html;
+  const first = cleanHtml(m[1]);
+  const rest = cleanHtml(String(html).slice(m[0].length));
+  return /[.!?…]["”’)]*$/.test(first) || rest.length < 80 ? html : String(html).slice(m[0].length);
+}
+
 // A date a little ahead (a time-zone slip) is "now"; this far ahead it is a broken clock or a hostile feed: the
 // item is ranked as if it were half a day old (after every fresh story, out of the ticker's head) and expires
 // like any other, instead of topping the desk for ever.
@@ -340,7 +353,7 @@ function parseItem(item, index, feed, { baseDir, now }) {
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
     // (a broadcaster's own video script in its summary, "Here's Jennie Shin with more", hands over to no one here)
     // (and page furniture a scraper left in it: a menu, a site's tagline, a teaser cut off with "[…]")
-    const summary = dropPageFurniture(dropTranscriptLines(onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))))).slice(0, 900);
+    const summary = dropPageFurniture(dropTranscriptLines(onAirText(stripBoilerplate(cleanHtml(dropStandfirst(rawSummary.slice(0, MAX_RAW_HTML))))))).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     // Undated items: "now", one second older per position (feeds list the newest first),
     // so the desk ranks them the same way on every run. A date in the future is never later than now (it
@@ -452,7 +465,8 @@ const NEWSLETTER = /^\s*(?:(?:hi|hey|hello)(?:,|!|\s+(?:there|all|everyone|every
 const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:best|top) \d+\b|^\d+ (?:best|top)\b|\beverything (?:you need|to know)\b|^what to know\b|\bwhat you need to know\b|^(?:the|a|an|your) (?:[\w’'-]+\s+){0,2}guide to\b/i;
 // (a broadcaster's programme or show page is not a report: "Gaza: Still Reporting", an Al Jazeera documentary, aired on
 // NEWS IN 60 on 12 Oct)
-const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\/|^https?:\/\/[^/]+\/(?:[a-z]{2}\/)?(?:programs?|programmes|tv-shows|shows|podcasts?|documentaries)\//i;
+// (and Al Jazeera's programmes filed under its videos: "Gaza: Still Reporting", /video/witness/, 12 Oct, aired on NEWS IN 60)
+const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\/|^https?:\/\/[^/]+\/(?:[a-z]{2}\/)?(?:programs?|programmes|tv-shows|shows|podcasts?|documentaries)\/|^https?:\/\/(?:www\.)?aljazeera\.com\/video\/(?:witness|the-stream|inside-story|101-east|people-power|fault-lines|al-jazeera-world|talk-to-al-jazeera|the-listening-post|counting-the-cost|upfront|the-bottom-line|featured-documentaries|al-jazeera-investigations|the-take|the-cure|earthrise|rewind|my-lebanon)\//i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
   return PROGRAMME_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));

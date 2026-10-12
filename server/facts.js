@@ -86,7 +86,9 @@ export const notForFeatures = (text) => isGrave(text) || harmlessIncident(text) 
 // A sentence that leans on the one before it: a pronoun ("It runs along the river."), or a definite common
 // noun that points back ("The canal authority says...", "Astronomers say the shadow will cross..."). Such a
 // sentence never opens a story or a round-up item, and the sentence it leans on is never dropped before it.
-const PRONOUN_OPENING = /^(?:It|Its|They|Their|Them|This|These|Those|He|She|His|Her|Such)\b/;
+// (and after a short opening phrase: "Once completed, it will house…", "Together, they offer…", The Verge and TechCrunch
+// 12 Oct, both opened stories)
+const PRONOUN_OPENING = /^(?:It|Its|They|Their|Them|This|These|Those|He|She|His|Her|Such)\b|^(?:[\p{L}’'-]+\s+){0,3}[\p{L}’'-]+,\s+(?:it|its|they|their|them|he|she|his|her)\b/u;
 const DEFINITE_OPENING = /^The (?!(?:[a-z][\w-]*\s+)?of\s+\p{Lu})[a-z][\w-]*/u;
 const SAYS_THE = /^(?:[\p{L}'’-]+\s+){1,4}(?:say|says|said|believe|believes|expect|expects|think|thinks|warn|warns)\s+(?:that\s+)?(?:the|its|their)\s+[a-z]/u;
 // "Adults and children walked there together": a "there" that points at a place said before (not the

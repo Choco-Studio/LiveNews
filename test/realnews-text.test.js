@@ -298,3 +298,27 @@ test('real news of 12 Oct, all five programmes: one story per coined phrase, nam
   ]) assert.equal(trimClause(t, max), null, t);
   assert.equal(trimClause('Oil prices in Asia rose sharply on Monday, after the announcement of a ceasefire.', 12), 'Oil prices in Asia rose sharply on Monday.');
 });
+
+test('real news of 12 Oct, second pass: headlines said as sentences, no standfirst, nothing leaning on what was not said', async () => {
+  const { spokenTitle, sentenceCase } = await import('../server/providers/mock.js');
+  const { dropStandfirst } = await import('../server/news.js');
+  const { leansOnPrevious } = await import('../server/facts.js');
+  const I = (summary) => ({ s: { summary } });
+  // a headline's future and passive, said as a sentence; a noun at its end is no verb
+  assert.equal(spokenTitle('Thales to open what could be Japan’s first foreign-run defence maintenance base', I('The facility could be the first in Japan, Thales said.')), 'Thales is to open what could be Japan’s first foreign-run defence maintenance base');
+  assert.equal(spokenTitle('Workers to strike over pay', I('Workers at the plant said.')), 'Workers are to strike over pay');
+  assert.equal(spokenTitle('Fed set to raise rates again', I('The Fed meets.')), 'Fed is set to raise rates again');
+  assert.equal(spokenTitle('Endangered orangutans released back into the wild after Borneo fires', I('The apes were rescued.')), 'Endangered orangutans have been released back into the wild after Borneo fires');
+  assert.equal(spokenTitle('Man arrested after attack on mosque', I('A man was arrested on Sunday.')), 'A man has been arrested after attack on mosque');
+  for (const t of ['Plans to build a bridge are rejected', 'Company founded in 1990 closes its doors', 'Trump faces growing backlash over plans to import diesel from Russia']) assert.equal(spokenTitle(t, I('x')), t, t);
+  assert.equal(spokenTitle('Pope Leo XIV resigns', I('x')), 'Pope Leo XIV has resigned', 'a verb that ends the headline after its subject');
+  // Title Case with short words
+  assert.equal(sentenceCase('Antarctic Sea Ice Grows to Its 2026 Maximum', I('The sea ice around Antarctica reached its annual maximum. The ice grows each winter.')), 'Antarctic sea ice grows to its 2026 maximum');
+  // a standfirst without a full stop goes when the story's own paragraphs follow
+  const lede = '<p>Politicians from the party of Imran Khan have been detained after the suspension of the provincial government.</p>';
+  assert.equal(dropStandfirst(`<p>President Zardari suspends provincial government in escalation of tensions</p>${lede}`), lede);
+  assert.equal(dropStandfirst(`<p>The minister resigned on Monday.</p>${lede}`), `<p>The minister resigned on Monday.</p>${lede}`);
+  // a pronoun after a short opening phrase leans on what came before
+  for (const t of ['Once completed, it will house GM’s new Battery Cell Development Center.', 'Together, they offer an unprecedented view.']) assert.ok(leansOnPrevious(t), t);
+  assert.ok(!leansOnPrevious('On Monday, the minister resigned.'));
+});

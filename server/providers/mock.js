@@ -63,7 +63,9 @@ const HEADLINE_PERFECT_PLURAL = {
 const TITLE_SMALL = /^(?:A|An|The|To|Of|In|On|At|For|By|And|Or|But|As|With|From|Into|Over|Up)$/;
 export function sentenceCase(title, info) {
   const words = String(title || '').split(/\s+/);
-  const long = words.slice(1).filter((w) => /^\p{L}[\p{L}’'-]{3,}/u.test(w));
+  // (words of three letters count: "Antarctic Sea Ice Grows to Its 2026 Maximum", NASA 12 Oct, aired as "…has grown to Its 2026
+  // Maximum")
+  const long = words.slice(1).filter((w) => /^\p{L}[\p{L}’'-]{2,}/u.test(w) && !TITLE_SMALL.test(w.replace(/[^\p{L}]/gu, '')));
   if (long.length < 3 || long.filter((w) => /^\p{Lu}/u.test(w)).length / long.length < 0.7) return String(title || '');
   const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
   return words
@@ -90,8 +92,12 @@ export function spokenTitle(title, info) {
   const words = t.split(/\s+/);
   const key = (w) => w.toLowerCase().replace(/[^a-z]/g, '');
   const plural = (k) => HEADLINE_PERFECT_PLURAL[key(words[k])] && (/\band\b/.test(words.slice(0, k).join(' ')) || /[^s]s$/i.test(key(words[k - 1])));
-  const i = words.findIndex((w, k) => k > 0 && (HEADLINE_PERFECT[key(w)] || plural(k)));
-  if (i < 1 || i > 12) return t;
+  // (the last word only when no phrase comes before it: "Pope Leo XIV resigns", but "…released back into the wild after
+  // Borneo fires" ends on a noun, BBC 12 Oct)
+  const inPhrase = (k) => k === words.length - 1 && words.slice(1, k).some((w) => /^(?:in|after|over|from|into|at|on|with|for|by|of|amid|about|across|near|back|to)$/i.test(w));
+  const i = words.findIndex((w, k) => k > 0 && !inPhrase(k) && (HEADLINE_PERFECT[key(w)] || plural(k)));
+  if (i < 1) return headlineFuture(t, words, info) || headlinePassive(t, words, info) || t;
+  if (i > 12) return t;
   const many = !HEADLINE_PERFECT[key(words[i])];
   const rest = words.slice(i + 1).join(' ');
   // a second verb after a comma ("Amazon responds to data center backlash, says it...") keeps the headline
@@ -114,6 +120,51 @@ export function spokenTitle(title, info) {
     else if (!named) return t;
   }
   return `${subject} ${verb}${rest ? ` ${rest}` : ''}`;
+}
+// A headline's subject: plural when it ends on a common noun in -s or joins two ("Endangered orangutans", "Workers", "Hall
+// and Woodford"); a singular common noun takes the outlet's own article ("Man arrested…" -> "A man…"), else the headline
+// stays as it is (null). The first word's capital proves nothing: a name is written so by the outlet mid-sentence, is
+// shaped like one ("OpenAI") or is a known place.
+function headlineSubject(subject, info) {
+  const ws = subject.split(/\s+/);
+  if (ws.length > 4) return null;
+  const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = (w, k) => {
+    const core = w.replace(/[^\p{L}-]/gu, '');
+    if (!/^\p{Lu}/u.test(core)) return false;
+    if (k > 0 || /\p{Lu}/u.test(core.slice(1)) || lookupPlace(core)) return true;
+    return new RegExp(`[\\p{Ll},;]\\s+${esc(core)}\\b`, 'u').test(text);
+  };
+  const last = ws[ws.length - 1];
+  const plural = (!named(last, ws.length - 1) && /[^s'’]s$/i.test(last)) || /\band\b/.test(subject);
+  if (plural || /^(?:The|A|An|This|Its|His|Her|Their)$/.test(ws[0]) || named(last, ws.length - 1)) return { subject, plural };
+  const det = text.match(new RegExp(`\\b(a|an|the)\\s+${esc(subject.toLowerCase())}\\b`, 'i'));
+  return det ? { subject: `${det[1][0].toUpperCase()}${det[1].slice(1).toLowerCase()} ${subject[0].toLowerCase()}${subject.slice(1)}`, plural } : null;
+}
+// a finite verb later in the headline: the "to" or the participle belongs to the subject ("Plans to build a bridge are
+// rejected", "Company founded in 1990 closes its doors"); a noun at the very end is no verb ("…after Borneo fires")
+const laterVerb = (rest) => rest.slice(0, -1).some((w) => /^(?:is|are|was|were|has|have|had)$/i.test(w) || HEADLINE_PERFECT[w.toLowerCase().replace(/[^a-z]/g, '')]);
+const SET_TO = /^(?:set|due|poised|expected|likely|about|going|ready|able|unlikely|forced|told|ordered|allowed)$/;
+/** "Thales to open what could be Japan's first…" -> "Thales is to open…"; "Fed set to raise rates" -> "Fed is set to raise rates". */
+function headlineFuture(t, words, info) {
+  const k = words.findIndex((w, j) => j > 0 && j <= 4 && w === 'to' && /^\p{Ll}+$/u.test(words[j + 1] || ''));
+  if (k < 1) return null;
+  const at = SET_TO.test(words[k - 1]) ? k - 1 : k;
+  if (at < 1 || words.slice(0, at).some((w) => /[,:;]$/.test(w)) || laterVerb(words.slice(k + 2))) return null;
+  const head = headlineSubject(words.slice(0, at).join(' '), info);
+  return head ? `${head.subject} ${head.plural ? 'are' : 'is'} ${words.slice(at).join(' ')}` : null;
+}
+// A participle a headline uses for a passive, and what follows it there ("orangutans released back into the wild", "man
+// arrested after…", "hundreds detained in…")
+const HEAD_PARTICIPLE = /^(?:[a-z]{3,}ed|held|found|shot|hit|taken|given|seen|sold|built|caught|freed|hurt|struck|stolen|sent|kept|left|told|brought|thrown|beaten|bitten|spent|won|lost|made|paid|sworn)$/;
+const AFTER_PARTICIPLE = /^(?:back|after|in|for|over|from|by|as|at|on|to|into|amid|following|near|during|with|without|under|off|out|up|down|across|outside|inside|before|despite)$/;
+/** "Endangered orangutans released back into the wild after Borneo fires" -> "… have been released back …". */
+function headlinePassive(t, words, info) {
+  const k = words.findIndex((w, j) => j > 0 && j <= 4 && HEAD_PARTICIPLE.test(w) && AFTER_PARTICIPLE.test(words[j + 1] || ''));
+  if (k < 1 || words.slice(0, k).some((w) => /[,:;]$/.test(w)) || laterVerb(words.slice(k + 1))) return null;
+  const head = headlineSubject(words.slice(0, k).join(' '), info);
+  return head ? `${head.subject} ${head.plural ? 'have' : 'has'} been ${words.slice(k).join(' ')}` : null;
 }
 // The outlet's own voice, outside quotation marks ("We don't know a ton about the Fitbit Edge", The Verge, 4 Oct):
 // never our presenters' words.
@@ -656,7 +707,9 @@ function unheardPronoun(t, told) {
   return PRONOUN_SETS.some((re) => {
     const m = String(t).match(re);
     if (!m) return false;
-    const before = t.slice(0, m.index);
+    // (a name inside the quotation is not who speaks: '"…would make the Budget a work of fiction," she added.', BBC 12 Oct,
+    // aired with no woman named before it)
+    const before = t.slice(0, m.index).replace(/[“"][^”"]*[”"]/g, ' ');
     return !re.test(told) && !/(?<=\S\s+)\p{Lu}\p{Ll}+/u.test(before);
   });
 }
@@ -706,6 +759,11 @@ const SAID_BY = /\b(?:said|says|told|added|according to|warned|wrote|explained)\
 const leansOnHeadline = (info, t) => {
   // ("The other firms being suspended from the program include...", under "US bars Microsoft, Adobe...", TechCrunch 9 Oct)
   if (/^(?:The\s+)?[Oo]ther\s+[a-z]/.test(String(t).trim())) return true;
+  // (a definite description of what the headline names, without the headline's subject: "The facility could be the first in
+  // Japan…" under "Thales to open…", "The critically endangered apes were rescued…" under "Endangered orangutans released…",
+  // "Both Republican and Democratic lawmakers have criticised the deal…" under "Trump faces growing backlash…", 12 Oct)
+  const subject = String(info.s.title || '').replace(/^[\p{L}\s]{1,20}:\s+/u, '').split(/\s+/)[0]?.replace(/[^\p{L}\d-]/gu, '') || '';
+  if (/^(?:The|Both)\s+\S/.test(String(t).trim()) && subject.length >= 3 && !new RegExp(`(?<![\\p{L}])${subject.slice(0, Math.max(3, subject.length - 2))}`, 'iu').test(t)) return true;
   const m = String(t).trim().match(/^The\s+([a-z][a-z-]{2,})\b/);
   if (!!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title)) return true;
   // ("Philadelphia police said the tip was “flagged as spam”…" under "Rogue Anthropic AI agent gave police fake tip in
@@ -865,8 +923,11 @@ function study(story) {
   const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
   // already says, at most 9 in all (depth for programmes of 8-10 minutes, never padding)
-  const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
-  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
+  // (one sentence in both, its quotes curly in one and straight in the other, is one: "…that’s still in progress" read in
+  // the story and again in THE CATCH, The Verge and TechCrunch 12 Oct)
+  const sameKey = (x) => unstop(x).toLowerCase().replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
+  const seen = new Set(fromSummary.map(sameKey));
+  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && !seen.has(sameKey(x)) && sameKey(x) !== sameKey(title) && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
   const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(9, fromSummary.length));
   // each sentence's predecessor as the outlet wrote it (a sentence that follows on is told only after it)
   const raw = [...sentencesOf(s.summary), ...(s.body ? sentencesOf(s.body) : [])];
@@ -1541,7 +1602,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // Only when the summary has no sentence to tell it with: the headline, never with "In X," put in front of a
         // subject that is not there ("In Brazil, coffee futures reach...") nor a "Now to X." before it.
         fromHeadline = true;
-        line = pictureItems ? spokenTitle(s.title, info) : early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
+        // (told as a sentence too: "Endangered orangutans have been released back into the wild after Borneo fires")
+        const said = spokenTitle(s.title, info);
+        line = pictureItems ? said : early(said) ? said : movePlaceFront(said, info) || said;
       }
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
       const where = pictureItems || early(line) || fromHeadline ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
@@ -1637,6 +1700,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         const raw = numbersIn(f.said)[0]?.raw || f.value;
         if (!skipHeadline && info.sentences.length) opener = pickSentence(() => true);
         if (!opener.includes(raw)) figureLine = pickSentence((t) => t.includes(raw));
+        // (the figure's own sentence first when it stands alone: "Tom Cruise's latest film Digger is expected to lose around
+        // $245m" before "The film dropped by around 60%…", BBC 12 Oct, aired the other way round)
+        if (figureLine && !PRONOUN_START.test(figureLine) && !leansOnPrevious(figureLine) && !CONNECTIVE_START.test(figureLine)) [opener, figureLine] = [figureLine, opener];
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
       const body = [];
@@ -1828,7 +1894,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
               echoed ? echoed.replace(/^\w/, (c) => c.toUpperCase()) : null,
               f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : null,
               info.loc ? spokenPlace(info.loc.entry).replace(/^\w/, (ch) => ch.toUpperCase()) : null,
-            ].filter(Boolean);
+              // (a figure with a unit, never one that ends on a joining word or stands bare: "16 when." aired, from "was 16 when
+              // Nasa picked him", BBC 12 Oct)
+            ].filter((o) => o && !/\b(?:when|as|and|or|after|before|while|but|than|to|of|in|on|at|for|with|by|from|that|which|who|if|so)$/i.test(o) && !/^[\d.,]+$/.test(o));
             const restated = options.find((o) => !airedBefore(`${o}.`, aired)) || null;
             const shapes = UNIT8_RESTATE.filter((x) => !unitShapes.has(x));
             const shape = shapes.length ? pickLine(shapes, `${key}~u8n`, info) : UNIT8_RESTATE[0];
