@@ -792,7 +792,7 @@ function weekTimelineLayout(steps) {
       const when = ellipsis(String(p.when).toUpperCase().trim(), dateW, 2);
       return { when, what: ellipsis(String(p.what).trim(), tw, 1) };
     });
-    const top = 22, pitch = 16;
+    const top = 22, pitch = rows.length <= 3 ? 20 : 16; // a short week breathes; five days still fit over the captions
     const h = top + (rows.length - 1) * pitch + 14 + 6;
     const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
     return { PX, PW, PH: h, PY, rows, top, pitch, railX, textX, dateW };
