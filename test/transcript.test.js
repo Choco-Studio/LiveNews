@@ -60,6 +60,11 @@ test('page furniture in a summary goes: a menu run, a site tagline, a teaser cut
   assert.equal(dropPageFurniture(apod), '');
   for (const s of ['The UN Security Council met on Monday.', 'NATO, EU and G7 leaders issued a joint statement.', 'New York Yankees beat Boston Red Sox in the Bronx.']) assert.ok(!isNavRun(s), s);
   assert.equal(dropPageFurniture('Floods hit the valley. Hundreds were evacuated.'), 'Floods hit the valley. Hundreds were evacuated.');
+  // a live page's link line goes; a line that says where and who stays
+  assert.equal(dropPageFurniture('Shares fell in Tokyo. Business live – latest updates'), 'Shares fell in Tokyo.');
+  assert.equal(dropPageFurniture('Shares fell in Tokyo. Follow our live coverage.'), 'Shares fell in Tokyo.');
+  const talks = 'Follow the latest from the climate talks in Nairobi, where ministers from 40 countries are meeting this week.';
+  assert.equal(dropPageFurniture(talks), talks);
 });
 
 test('kickers from the first live run: a bridge hit in Kyiv, forces seizing a city, a university president, gadgets', () => {

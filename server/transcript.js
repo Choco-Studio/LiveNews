@@ -53,8 +53,9 @@ export function dropTranscriptLines(text) {
 // Day Discover the cosmos!"): a run of capitalised menu words is not a sentence, a site's standing tagline is not
 // news, and a teaser cut off mid-phrase ("Supernumerary Rainbows over […]") says nothing.
 const FUNCTION_WORDS = /^(?:a|an|the|of|in|on|at|to|for|and|or|but|is|are|was|were|has|have|had|will|would|said|says|with|from|by|as|that|this|it|its|their|after|before|over|into)$/i;
-// (and a live page's link line: "Business live – latest updates", Guardian 12 Oct, aired as a story's last sentence)
-const TAGLINES = /^(?:each day a different image|discover the cosmos|astronomy picture of the day)\b|^(?:[\w-]+\s+){0,3}live\s*[–—-]\s*(?:latest|all the latest|live)\s+(?:updates|news)\b|^(?:follow|read) (?:our|the) (?:live|latest)\b/i;
+// (and a live page's link line: "Business live – latest updates", Guardian 12 Oct, aired as a story's last sentence;
+// "Follow our live coverage." alone, never a line with news in it: "Follow the latest from the talks, where…")
+const TAGLINES = /^(?:each day a different image|discover the cosmos|astronomy picture of the day)\b|^(?:[\w-]+\s+){0,3}live\s*[–—-]\s*(?:latest|all the latest|live)\s+(?:updates|news)\b|^(?:follow|read) (?:our|the) (?:latest|live)(?: live)? (?:coverage|updates|news|blog|page)(?: here)?\W*$/i;
 
 /** Is this sentence a run of menu words (most words capitalised, almost no function words)? */
 export function isNavRun(sentence) {
