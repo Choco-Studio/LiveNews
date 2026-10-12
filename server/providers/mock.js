@@ -40,6 +40,16 @@ const HEADLINE_PERFECT = {
   signs: 'signed', expands: 'expanded', acquires: 'acquired', invests: 'invested', joins: 'joined', leaves: 'left',
   quits: 'quit', hires: 'hired', fires: 'fired', settles: 'settled',
 };
+// The same verbs after a plural subject ("Americans Hall and Woodford win Nobel Prize in economics", Euronews 12 Oct ->
+// "... have won ..."): only after "X and Y" or a plural noun ("Tokyo stocks close..."), and never a verb that is as often
+// a noun in a headline's subject ("Price cut hits sales" keeps looking for its verb)
+const HEADLINE_PERFECT_PLURAL = {
+  unveil: 'unveiled', launch: 'launched', win: 'won', warn: 'warned', raise: 'raised', buy: 'bought', sell: 'sold', ban: 'banned',
+  sue: 'sued', find: 'found', reveal: 'revealed', announce: 'announced', confirm: 'confirmed', approve: 'approved', reject: 'rejected',
+  block: 'blocked', delay: 'delayed', pause: 'paused', add: 'added', lose: 'lost', build: 'built', sign: 'signed', expand: 'expanded',
+  acquire: 'acquired', join: 'joined', leave: 'left', quit: 'quit', hire: 'hired', settle: 'settled', resign: 'resigned', die: 'died',
+  open: 'opened', close: 'closed', agree: 'agreed', reach: 'reached', vote: 'voted', deny: 'denied', urge: 'urged', claim: 'claimed',
+};
 // A headline in Title Case ("NASA’s SSPICY Mission to Demonstrate In-Space Inspection Technologies", NASA 9 Oct) is said
 // in sentence case: a word the story itself writes in lower case is a common word; a name keeps its capital.
 const TITLE_SMALL = /^(?:A|An|The|To|Of|In|On|At|For|By|And|Or|But|As|With|From|Into|Over|Up)$/;
@@ -71,15 +81,18 @@ export function spokenTitle(title, info) {
   if (!t || /^["“‘']|:|\?$/.test(t)) return t;
   const words = t.split(/\s+/);
   const key = (w) => w.toLowerCase().replace(/[^a-z]/g, '');
-  const i = words.findIndex((w, k) => k > 0 && HEADLINE_PERFECT[key(w)]);
+  const plural = (k) => HEADLINE_PERFECT_PLURAL[key(words[k])] && (/\band\b/.test(words.slice(0, k).join(' ')) || /[^s]s$/i.test(key(words[k - 1])));
+  const i = words.findIndex((w, k) => k > 0 && (HEADLINE_PERFECT[key(w)] || plural(k)));
   if (i < 1 || i > 12) return t;
+  const many = !HEADLINE_PERFECT[key(words[i])];
   const rest = words.slice(i + 1).join(' ');
   // a second verb after a comma ("Amazon responds to data center backlash, says it...") keeps the headline
   const after = [...rest.matchAll(/,\s*([a-z]+)/g)].map((m) => m[1]);
-  if (after.some((w) => HEADLINE_PERFECT[w] || /^(?:says?|said)$/.test(w))) return t;
+  if (after.some((w) => HEADLINE_PERFECT[w] || HEADLINE_PERFECT_PLURAL[w] || /^(?:says?|said)$/.test(w))) return t;
   let subject = words.slice(0, i).join(' ');
-  const verb = `has ${HEADLINE_PERFECT[key(words[i])]}${words[i].match(/[,;]$/)?.[0] || ''}`;
-  if (!/^(?:The|A|An|This|Its|His|Her|Their)\b/.test(subject) && !/['’]s$/.test(words[0])) {
+  const verb = many ? `have ${HEADLINE_PERFECT_PLURAL[key(words[i])]}${words[i].match(/[,;]$/)?.[0] || ''}` : `has ${HEADLINE_PERFECT[key(words[i])]}${words[i].match(/[,;]$/)?.[0] || ''}`;
+  // (a plural subject needs no article: "Doctors have warned...")
+  if (!many && !/^(?:The|A|An|This|Its|His|Her|Their)\b/.test(subject) && !/['’]s$/.test(words[0])) {
     // a name stays as it is; a common noun takes the outlet's own article, else the headline stays
     const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
     const first = words[0].replace(/[^\p{L}-]/gu, '');

@@ -256,7 +256,11 @@ test('a headline opening a story is told as a sentence: present perfect, the out
   assert.equal(spokenTitle('Federal judge calls Flock ‘indiscriminate mass surveillance’', I('A federal judge ruled that a deputy violated her rights.')), 'A federal judge has called Flock ‘indiscriminate mass surveillance’');
   assert.equal(spokenTitle('OpenAI safety employee resigns, claiming the company’s ‘culture is broken’', I('An OpenAI safety employee has resigned.')), 'An OpenAI safety employee has resigned, claiming the company’s ‘culture is broken’');
   assert.equal(spokenTitle('Kenya opens its largest solar farm', I('Kenya has opened a solar farm.')), 'Kenya has opened its largest solar farm');
-  for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Scientists find water on a distant planet', 'Google froze its bug bounty program', 'Can AI fix it?', 'Federal judge calls Flock a threat']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
+  // a plural subject (12 Oct: "Americans Hall and Woodford win Nobel Prize..." read as a headline on air): have + participle
+  assert.equal(spokenTitle('Scientists find water on a distant planet', I('Someone said something.')), 'Scientists have found water on a distant planet');
+  assert.equal(spokenTitle('Americans Hall and Woodford win Nobel Prize in economics', I('Someone said something.')), 'Americans Hall and Woodford have won Nobel Prize in economics');
+  assert.equal(spokenTitle('Price cut hits sales', I('Someone said something.')), 'Price cut hits sales', 'a noun-verb after a singular noun is not the verb');
+  for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Google froze its bug bounty program', 'Can AI fix it?', 'Federal judge calls Flock a threat']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
 });
 
 test('COSMOS on real news (5 Oct): a launch, deep time, a mission blog, a profile and NASA’s picture of the day', async () => {
