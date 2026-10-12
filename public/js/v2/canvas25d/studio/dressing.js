@@ -16,6 +16,8 @@
 //   NEWS IN 60    a flash studio: a broadcast studio clock (sixty second-LEDs, the first quarter lit yellow,
 //                 "60" at its heart) on the left, the rundown board (RUNDOWN, five numbered beats, the one on
 //                 air marked yellow) on the right, a thin yellow band on the desk
+//   SEVEN DAYS    the weekend edition of WORLD NOW's room: the same glass, the city held at the golden hour, the
+//                 week bar over the screen (MON to SUN, the weekend lit), coral light lines and desk slits
 // Everything is drawn in world units (the back wall Z = SET.wallZ, the pillars SET.flatsZ, WORLD NOW's city its
 // own far plane), so the camera's moves and zooms carry it; every pixel is a palette colour; out of focus
 // (cam.soft) lights turn to bokeh. What moves (windows, beacons, pulses, stars, the cursor, the desk line's
@@ -28,12 +30,12 @@ import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
 import { drawCity, GLASS_COL } from './city.js';
-import { DESK_SWEEP, livePoint, BLINK, liveArm } from './live.js';
+import { DESK_SWEEP, livePoint, BLINK, liveArm, LIVE_DRAW } from './live.js';
 import { pcbWall } from './lab.js';
 import { drawSpace, SKY } from './space.js';
 import { moneyWall } from './money.js';
 import { flashWall, CLOCK } from './flash.js';
-import { glowH, glowV, RAMPS } from './light.js';
+import { glowH, glowV, RAMPS, bokeh } from './light.js';
 
 const W = 384, H = 216;
 const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
@@ -174,6 +176,15 @@ function ribbon(fr, cam, X, Y0, Y1, c, soft) {
 }
 
 function worldNow(fr, cam, style, soft) {
+  glassRoom(fr, cam, soft, RAMPS.red, clockBar);
+}
+
+/**
+ * The flagship's room (WORLD NOW, and SEVEN DAYS at the weekend): the city behind the glass at the frame's phase
+ * (set.js: WORLD NOW's by the hour, SEVEN DAYS's golden hour), the mullions, the screen's mount and its stem, the
+ * programme's bar over the screen, the soffit's cove in the programme's light.
+ */
+function glassRoom(fr, cam, soft, ramp, bar) {
   const k = kAt(cam, SET.wallZ);
   const box = {
     x0: Math.round(sxOf(cam, k, -GLASS.X)), x1: Math.round(sxOf(cam, k, GLASS.X)),
@@ -197,9 +208,9 @@ function worldNow(fr, cam, style, soft) {
   if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
   // a slim stem from the mount to the soffit (it hangs from the grid)
   rectW(fr, cam, -2, GLASS.top - 4, 2, S.y0 - m, C.black);
-  clockBar(fr, cam, soft);
-  // the soffit along the top, the network's red cove under it throwing light down the glass
-  soffit(fr, cam, RAMPS.red, soft);
+  bar(fr, cam, soft);
+  // the soffit along the top, the programme's cove under it throwing light down the glass
+  soffit(fr, cam, ramp, soft);
 }
 
 /** The soffit along the top of the set: black, its lip lit, the programme's LED cove under it glowing down. */
@@ -773,15 +784,101 @@ function news60(fr, cam, style, soft) {
   rundownBoard(fr, cam, 146, -112, 224, -34, soft);
   soffit(fr, cam, RAMPS.amber, soft);
 }
+// --------------------------------------------------------------------------- SEVEN DAYS: the weekend edition
+// WORLD NOW's room at the weekend (seven-days.md): the glass, the mullions and the mount are the flagship's, the city
+// behind them held at the golden hour (styles.js `sky`), the week winding down; in place of the world clocks a week
+// bar over the screen: the seven days in micro type, the weekdays dim, the weekend lit in the programme's coral; the
+// cove, the pillars' inlays and the desk's slits in coral (the flagship's red, softened).
+const WEEK = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+let WEEK_GLYPHS = null;
+function weekBar(fr, cam, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.25));
+  // as wide as the screen's frame (as WORLD NOW's clock bar)
+  const b = Math.max(1, Math.round(2 * k));
+  const x0 = Math.round(sxOf(cam, k, SET.screen.x0)) - b, x1 = Math.round(sxOf(cam, k, SET.screen.x1)) + b;
+  const yc = Math.round(syOf(cam, k, -121));
+  const bh = 9 * s, y0 = yc - (bh >> 1);
+  if (y0 + bh <= 0 || y0 >= H) return;
+  fr.span(x0, y0, x1, y0 + bh, C.black);
+  fr.span(x0, y0, x1, y0 + 1, C.ink);
+  WEEK_GLYPHS ??= WEEK.map((d) => textPixels(d, 'micro'));
+  // the seven names spread evenly in whole pixels, centred: one gap for every pair
+  const names = WEEK_GLYPHS.reduce((a, g) => a + g.width * s, 0);
+  const gap = Math.max(s, Math.floor((x1 - x0 - 4 * s - names) / 6));
+  let x = x0 + Math.round((x1 - x0 - names - 6 * gap) / 2);
+  const ty = yc - Math.floor((5 * s) / 2);
+  WEEK_GLYPHS.forEach((g, i) => {
+    const c = i >= 5 ? C.pink : C.steel;
+    for (const [gx, gy] of g.pixels) fr.span(x + gx * s, ty + gy * s, x + (gx + 1) * s, ty + (gy + 1) * s, c);
+    x += g.width * s + gap;
+  });
+}
+
+// the weekend's softer light: a pair of brass pendant lamps hung from the soffit either side of the screen, clear of
+// the heads, each a dome lit from camera-left with its warm opening under it (hand-pixelled at the wide's pixel size,
+// scaled by whole pixels closer in); out of focus each is a warm bokeh disc behind the presenter
+//   k black, c cream, t tan, s tanShade, b brown, y yellow, w white
+const PENDANT = {
+  X: 194, // in the outer panes, between a pillar and a head (wide: x 54 / 330)
+  Y: -96, // the dome's foot (its opening)
+  rows: [
+    '......kkk......',
+    '....kkcttkk....',
+    '...kcttttttk...',
+    '..kctttttttsk..',
+    '.kcttttttttssk.',
+    'kctttttttttsssk',
+    'kbbbbbbbbbbbbbk',
+    '.yccccwwwccccy.',
+  ],
+};
+const PENDANT_C = { k: C.black, c: C.cream, t: C.tan, s: C.tanShade, b: C.brown, y: C.yellow, w: C.white };
+function pendants(fr, cam, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.4));
+  const rows = PENDANT.rows, w = rows[0].length * s, h = rows.length * s;
+  const yTop = Math.round(syOf(cam, k, GLASS.top));
+  for (const sx of [-1, 1]) {
+    const cx = sxOf(cam, k, sx * PENDANT.X), yFoot = Math.round(syOf(cam, k, PENDANT.Y));
+    if (soft) {
+      // out of focus: the lamp is its light, a warm disc with a brighter rim
+      bokeh(fr, cx, yFoot - h * 0.4, Math.max(3, 4.5 * k), RAMPS.warm, { fill: C.tanShade, rim: C.tan });
+      continue;
+    }
+    const x0 = Math.round(cx - w / 2), y0 = yFoot - h;
+    // the cord from the soffit to the dome's cap
+    const xc = Math.round(cx - s / 2);
+    if (y0 > yTop) fr.span(xc, Math.max(0, yTop), xc + s, y0, C.black);
+    for (let j = 0; j < rows.length; j++) {
+      for (let i = 0; i < rows[j].length; i++) {
+        const ch = rows[j][i];
+        if (ch === '.') continue;
+        const c = PENDANT_C[ch];
+        fr.span(x0 + i * s, y0 + j * s, x0 + (i + 1) * s, y0 + (j + 1) * s, c);
+      }
+    }
+  }
+}
+
+function sevenDays(fr, cam, style, soft) {
+  glassRoom(fr, cam, soft, RAMPS.coral, weekBar);
+  pendants(fr, cam, soft);
+}
+// what moves is the flagship's: a plane crossing the sky, cars on the avenues (city.js)
+LIVE_DRAW['seven-days'] = LIVE_DRAW['world-now'];
+
 // --------------------------------------------------------------------------- entry points
 /** The dressing switch (tests of the bare architecture; labs): set.js setDressing() also clears its caches. */
 export const DRESSING = { on: true };
 
-const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60 };
+const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60, 'seven-days': sevenDays };
 // the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
 DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
 DESK_SWEEP['tech-bytes'] = { line: C.cyan, hot: C.white, warm: C.silver, every: 18, cross: 2.2 };
 DESK_SWEEP.cosmos = { line: C.magenta, hot: C.pink, every: 30, cross: 3.2 };
+DESK_SWEEP['seven-days'] = { line: C.pink, hot: C.cream, warm: C.skin, every: 28, cross: 3.4 }; // unhurried
 
 /** A programme's own set flats (pillars), drawn instead of the network's black flats (set.js drawFlats). */
 export const FLATS = {
@@ -790,6 +887,7 @@ export const FLATS = {
   cosmos: (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.magenta),
   'money-minute': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.warm), // walnut columns, a brass inlay
   'news-60': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.amber),
+  'seven-days': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.coral),
 };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
@@ -816,4 +914,7 @@ export const DESK_FRONTS = {
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade', sheen: true, base: 'warm', zone: 'black', slab: 2.4 },
   // black under a slab, the yellow band, orange slits, the line's light and an orange foot light
   'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange', glow: 'amber', sheen: true, base: 'amber', zone: 'black', slab: 2.4 },
+  // the flagship's black glass desk at the weekend: coral slits in its seams, the coral line's light on its front, a
+  // coral light at its foot
+  'seven-days': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'pink', glow: 'coral', sheen: true, base: 'coral', zone: 'black', slab: 2.4 },
 };

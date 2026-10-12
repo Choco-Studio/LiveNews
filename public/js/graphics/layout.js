@@ -49,7 +49,7 @@ export const CAPTION = {
 };
 
 // Light accents carry black text, dark ones white (legibility beats elegance).
-const DARK_INK = new Set([P.yellow, P.cyan, P.green, P.cream, P.white, P.silver, P.orange]);
+const DARK_INK = new Set([P.yellow, P.cyan, P.green, P.cream, P.white, P.silver, P.orange, P.pink]); // (pink: SEVEN DAYS's coral)
 /** Text colour that reads on a flat block of `color`. */
 export const inkOn = (color) => (DARK_INK.has(color) ? P.black : P.white);
 

@@ -24,6 +24,7 @@ import {
   estimateAir,
   paceTrace,
   wordCount,
+  timelineBoard,
 } from '../public/js/pace.js';
 import { STINGER_DURATION } from '../public/js/scenes/cards.js';
 import { BREAK_BLACK } from '../public/js/ads/index.js';
@@ -86,6 +87,20 @@ test('pace: the owner\'s 24/7 floor holds in every profile (shots >= 4 s, median
   assert.equal(paceFor('cosmos').moves.max, 0, 'COSMOS: the set camera never moves');
   assert.equal(paceFor('money-minute').moves.max, 0, 'MONEY MINUTE: the camera never moves');
   assert.equal(paceFor('news-60').moves.max, 0, 'NEWS IN 60: locked off');
+});
+
+test('pace: SEVEN DAYS is calmer than WORLD NOW, with room to read its boards and a picture for each day of its minute', () => {
+  const week = paceFor('seven-days'), world = paceFor('world-now');
+  assert.ok(week.gaps.story > world.gaps.story && week.gaps.handover > world.gaps.handover && week.gaps.block > world.gaps.block, 'more air between stories');
+  assert.ok(week.shots.median[0] > world.shots.median[0] && week.moves.max < world.moves.max && week.shots.cutsPerMinMax < world.shots.cutsPerMinMax, 'fewer cuts, fewer moves');
+  assert.ok(week.gestures.perMin < world.gestures.perMin && week.holds.signoff > world.holds.signoff);
+  // the week in sixty seconds: seven one-sentence days, each on its picture, in about a minute
+  assert.ok(week.gaps.roundupItem <= 0.75 && week.shots.picture[1] >= 9);
+  assert.ok(week.shots.factMax >= 10, 'HOW THE WEEK UNFOLDED is read twice');
+  // HOW THE WEEK UNFOLDED carries up to five days; HOW WE GOT HERE three steps
+  const steps = ['MON', 'TUE', 'WED', 'FRI', 'SAT', 'SUN'].map((when) => ({ when, what: `The story on ${when}` }));
+  assert.equal(timelineBoard({ timeline: steps }, 'seven-days').length, 5);
+  assert.equal(timelineBoard({ timeline: steps }, 'world-now').length, 3);
 });
 
 test('pace: config/channel.json targetSeconds mirrors each profile\'s length target', () => {

@@ -80,6 +80,8 @@ export const SHOT_STYLES = {
   // MONEY MINUTE and NEWS IN 60 keep their own per-story plans (no single splitting)
   'money-minute': { ...fromPace('money-minute'), singleSoft: undefined, shotMax: PACE['money-minute'].shots.studioMax, numberGap: 1.2, pauseCuts: true },
   'news-60': { ...fromPace('news-60'), singleSoft: undefined, fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
+  // SEVEN DAYS: WORLD NOW's grammar at its own, calmer pace (sevenDays below)
+  'seven-days': { ...fromPace('seven-days'), moves: true },
 };
 
 const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');
@@ -116,6 +118,9 @@ export function planShots(ctx) {
       break;
     case 'news-60':
       out = news60(ctx, tl);
+      break;
+    case 'seven-days':
+      out = sevenDays(ctx, tl);
       break;
     default:
       out = worldNow(ctx, tl);
@@ -556,7 +561,7 @@ function noMapEnd(ctx, tl, out) {
 // WORLD NOW
 
 function worldNow(ctx, tl) {
-  const S = SHOT_STYLES['world-now'];
+  const S = SHOT_STYLES[styleOf(ctx.programId)]; // (SEVEN DAYS plays this grammar on its own windows)
   const me = ctx.speaker;
   const seg = ctx.seg;
   if (ctx.type === 'intro') {
@@ -605,6 +610,15 @@ function worldNow(ctx, tl) {
     if (m) out[0].move = m;
   }
   return out;
+}
+
+/**
+ * SEVEN DAYS (seven-days.md): the flagship's grammar at the weekend's pace; THE WEEK IN 60 SECONDS reads each day over
+ * its own picture (the weekly writer's shot: 'full'), as QUICK BYTES does, never a run of maps.
+ */
+function sevenDays(ctx, tl) {
+  if (ctx.type === 'story' && ctx.seg.feature === 'roundup') return quickBytes(ctx);
+  return worldNow(ctx, tl);
 }
 
 /** The fact card's hold: read twice, within the programme's factMin..factMax (pace.js factHold; world-now.md words ÷ 3 + 2). */

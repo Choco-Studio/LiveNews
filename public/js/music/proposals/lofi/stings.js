@@ -221,7 +221,7 @@ export const STINGS = {
     const spb = 60 / (day ? 100 : 88);
     const dest = bus(eng, 0.35); // >= 18 LU under the continuity voice
     const lead = bus(eng, 0.35, { echo: 0.45, time: spb * 0.75 });
-    const I = { 'tech-bytes': 'Am9', cosmos: 'Emaj9', 'money-minute': 'Fmaj9', 'world-weather': 'Cmaj9' }[programme] || 'Dmaj9';
+    const I = { 'tech-bytes': 'Am9', cosmos: 'Emaj9', 'money-minute': 'Fmaj9', 'world-weather': 'Cmaj9', 'seven-days': 'Bbmaj9' }[programme] || 'Dmaj9';
     const align = t + spb * 12;
     const holdEnd = align + 5.2;
     const sig = sombre ? null : motifMidis('statement', prog.tonic, prog.scale, prog.colour);

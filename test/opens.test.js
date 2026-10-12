@@ -58,6 +58,7 @@ const INFO = {
   cosmos: { title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET', presenters: ['DR NOVA REYES', 'UNIT-8'] },
   'money-minute': { title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', presenters: ['PENNY STERLING'] },
   'news-60': { title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', presenters: ['SAM NIGHT'] },
+  'seven-days': { title: 'SEVEN DAYS', tagline: 'THE WEEK ON GLOBIT 24', presenters: ['PACO PIXEL', 'LOLA BYTE'] },
   'weekend-review': { title: 'WEEKEND REVIEW', tagline: 'THE WEEK THAT WAS', presenters: ['PACO PIXEL'] },
 };
 

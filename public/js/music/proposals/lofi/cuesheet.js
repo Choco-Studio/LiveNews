@@ -142,7 +142,32 @@ const WEATHER = (m, o) => {
   }
 };
 
-const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER };
+// SEVEN DAYS (seven-days.md): its own song in the open's key under the headlines and the greeting; story copy dry
+// (the owner's soft switch: the song's barely-there moment); the week in sixty seconds over its brushes; And finally
+// and its chat light; the sign-off on the keys, out on the end card
+const WEEK = (m, o, c) => {
+  const song = 'seven-days';
+  if (c.afterGrave && SEGMENT_MOMENTS.has(m)) return silence();
+  switch (m) {
+    case 'openTail':
+    case 'headlines': return bed(song, 'headlines');
+    case 'greeting': return bed(song, 'headlines');
+    case 'story':
+      if (o.breaking) return sting('breaking', { stopBed: true, hard: true });
+      return softStory(o, c) ? bed(song, 'story') : silence(0.8);
+    case 'roundup':
+    case 'map': return bed(song, 'roundup');
+    case 'finally': return bed(song, 'finally');
+    case 'chat': return c.current === song ? bed(song, 'chat') : silence();
+    case 'outro': return bed(song, 'signoff');
+    case 'signoffEnd': return silence(1.5, { atBar: true });
+    case 'endcard': return silence(0.6);
+    case 'breaking': return sting('breaking', { stopBed: true, hard: true });
+    default: return silence();
+  }
+};
+
+const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER, 'seven-days': WEEK };
 
 // ------------------------------------------------------------------ channel
 
@@ -184,7 +209,7 @@ export function resolveCue(moment, opts = {}, ctx = {}) {
 }
 
 function gravePadSong(pid) {
-  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather' }[pid] || 'cosmos';
+  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather', 'seven-days': 'seven-days' }[pid] || 'cosmos';
 }
 
 export const SONGS = Object.keys(PALETTES);
@@ -219,6 +244,11 @@ export const CUE_SHEET = [
   ['WORLD WEATHER', 'tomorrow', 'the same song a little brighter'],
   ['WORLD WEATHER', 'warnings', 'silence (a storm is not a jingle)'],
   ['WORLD WEATHER', 'sign-off', 'keys, pad and bass, then out on the end card'],
+  ['SEVEN DAYS', 'headlines, greeting', '84 BPM in B-flat: long Rhodes chords leaning on IV over a triangle bass (root, fifth) and a warm pad'],
+  ['SEVEN DAYS', 'story of the week, desks, numbers, words', 'silence (owner switch soft: pad, triangle and slow Rhodes below 1.3 kHz)'],
+  ['SEVEN DAYS', 'the week in sixty seconds', 'the same song a little brighter, brushes in half time, a sparse pluck'],
+  ['SEVEN DAYS', 'and finally + chat', 'Rhodes and a sparse soft triangle'],
+  ['SEVEN DAYS', 'sign-off', 'keys, pad and bass, then out on the end card'],
   ['ALL (owner switch soft)', 'light / neutral stories', 'WORLD NOW 76 BPM pad + triangle + slow Rhodes (D); TECH pad + half-time triangle on Am9/D9; COSMOS pad + sub on every shot; MONEY the 800 Hz drone; all below 1.3 kHz, >= 24 LU under the voice'],
   ['ALL', 'grave story', 'silence (opt-in: a near-inaudible low pad), and no bed in the segment after it'],
   ['CHANNEL', 'lead-in WORLD NOW / NEWS IN 60', 'countdown 10.5 s: a quiet bell tick every second, triangle eighths at 120 BPM, a pad minor -> major at 0:00 (sombre: pad only)'],

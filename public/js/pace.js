@@ -6,7 +6,7 @@
 // boundaries. Each programme has its own personality inside one network
 // rhythm (docs/programmes/*.md): NEWS IN 60 brisk but readable, WORLD NOW
 // measured, COSMOS slow and contemplative, TECH BYTES lively but never
-// frantic, MONEY MINUTE crisp.
+// frantic, MONEY MINUTE crisp, SEVEN DAYS unhurried and warm.
 //
 // Who reads it (docs/PACING.md has the full map):
 //   director.js            segment gaps, holds (sign-off, end card, breaking card,
@@ -239,6 +239,27 @@ const PROGRAMMES = {
     moves: { max: 0, minGap: Infinity }, // no camera moves of the studio kind: the weather centre tracks him itself
     music: { minBed: 40, maxChangesPerMin: 1 },
   },
+  'seven-days': {
+    label: 'unhurried, warm',
+    // seven-days.md: the week at the weekend, retold from the archive (server/weeklywriter.js): calmer than WORLD NOW,
+    // room to read HOW THE WEEK UNFOLDED and the week's numbers, and a minute for the seven days in sixty seconds
+    length: {
+      target: [330, 480],
+      blocks: ['headlines', 'greeting', 'story-of-the-week', 'coverage', 'latest', 'expert', 'week-in-60', 'desks', 'numbers', 'words', 'finally', 'signoff'],
+    },
+    open: { firstWord: 0.6 },
+    // a little more air than WORLD NOW between stories; the round-up's days keep their own brisk step so the
+    // seven days fit their minute
+    gaps: { story: 1.15, handover: 0.95, chatTurn: 0.55, intoChat: 0.7, outOfChat: 0.95, roundupItem: 0.7, beforeFinally: 1.4, afterIntro: 0.85, beforeOutro: 1.1, block: 1.5 },
+    holds: { signoff: 1.8, endcard: 3.4 }, // the week's last word lingers on the wide before the end card
+    // a day of the round-up stays on its picture for its whole sentence (shot: 'full'); the boards are read twice:
+    // HOW THE WEEK UNFOLDED carries up to five days (timelineSteps)
+    shots: { median: [5.5, 8], studioMax: 15, singleSoft: 11, picture: [4.5, 9], map: [5, 10], factMin: 4.5, factMax: 10, cutsPerMinMax: 7, staticMax: 13, quoteCard: true, numbers: true, known: true, timeline: true, timelineSteps: 5, change: true },
+    moves: { max: 3, minGap: 45 },
+    gestures: { perMin: 4.5, minGap: 6, beatsPerMin: 6, rest: 0.66, grave: 1.5, floor: 2 },
+    listener: { reactionGap: 9, nodsPerMin: [0.8, 5] },
+    music: { minBed: 30, fadeIn: 1.6, fadeOut: 2.2, maxChangesPerMin: 1.2 },
+  },
   'news-60': {
     label: 'brisk but readable',
     // news-60.md: 55-65 s of air ("NEWS IN 60"); up to 70 s when the six items run long, never two minutes
@@ -390,12 +411,13 @@ export function knownBoard(seg, programId) {
 
 /**
  * HOW WE GOT HERE (pace shots.timeline): a story's dated steps as a board (seg.timeline: two or three
- * { when, what } in order, the writer's, grounded); null otherwise, or when the story has a WHAT WE KNOW board
- * (one card a story).
+ * { when, what } in order, the writer's, grounded; SEVEN DAYS's HOW THE WEEK UNFOLDED up to shots.timelineSteps,
+ * a day each); null otherwise, or when the story has a WHAT WE KNOW board (one card a story).
  */
 export function timelineBoard(seg, programId) {
-  if (!paceFor(programId).shots.timeline || !Array.isArray(seg?.timeline) || knownBoard(seg, programId)) return null;
-  const steps = seg.timeline.filter((p) => p && typeof p.when === 'string' && p.when.trim() && typeof p.what === 'string' && p.what.trim()).slice(0, 3);
+  const S = paceFor(programId).shots;
+  if (!S.timeline || !Array.isArray(seg?.timeline) || knownBoard(seg, programId)) return null;
+  const steps = seg.timeline.filter((p) => p && typeof p.when === 'string' && p.when.trim() && typeof p.what === 'string' && p.what.trim()).slice(0, S.timelineSteps || 3);
   return steps.length >= 2 ? steps : null;
 }
 

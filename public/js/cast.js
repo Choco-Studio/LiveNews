@@ -41,4 +41,5 @@ export const THEME_ACCENT = {
   money: P.green,
   flash: P.yellow,
   weather: P.blue,
+  week: P.pink, // SEVEN DAYS: coral, the flagship's red softened for the weekend
 };

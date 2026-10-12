@@ -26,6 +26,7 @@ export const PROGRAMMES = {
   'money-minute': { title: 'MONEY MINUTE', tonic: 65, scale: 'major', colour: COLOUR.money, bpm: 114 },
   'news-60': { title: 'NEWS IN 60', tonic: 67, scale: 'major', colour: COLOUR.sixty, bpm: 120 },
   'world-weather': { title: 'WORLD WEATHER', tonic: 60, scale: 'major', colour: COLOUR.weather, bpm: 92 },
+  'seven-days': { title: 'SEVEN DAYS', tonic: 58, scale: 'major', colour: COLOUR.week, bpm: 84 },
   channel: { title: 'GLOBIT 24', tonic: 62, scale: 'major', colour: COLOUR.home, bpm: 84 },
 };
 
@@ -249,6 +250,37 @@ export const PALETTES = {
     moments: {
       forecast: { energy: 0.45, gain: -5.5, lp: 2400, pocket: 0, bright: 1, comp: 'float', layers: { pad: 0.6, keys: 0.55, arp: 0.85, lead: 0.6, bass: 0.6 }, lead: 'sparse' },
       tomorrow: { energy: 0.5, gain: -5, lp: 2600, pocket: 0, bright: 1.05, comp: 'float', layers: { pad: 0.6, keys: 0.6, arp: 0.95, lead: 0.75, bass: 0.6 }, lead: 'sparse' },
+      signoff: { energy: 0.4, gain: -6.5, lp: 2200, pocket: 0, bright: 0.95, comp: 'long', layers: { pad: 0.7, keys: 0.6, bass: 0.6 } },
+    },
+  },
+
+  // -------------------------------------------------------- SEVEN DAYS (B-flat major)
+  // The week at the weekend, in the open's key (B-flat major, the 4th its colour: the plagal "amen" of a Sunday):
+  // Sunday soul, unhurried. Long Rhodes chords that lean on IV over a triangle bass (root and fifth), a pad, brushes in half
+  // time for the round-up's minute only. Under the headlines and the greeting; the week in sixty seconds a little
+  // brighter (it carries seven pictures in a row); And finally and its chat light; the sign-off on the keys.
+  'seven-days': {
+    programme: 'seven-days', title: 'SEVEN DAYS', key: 'B-flat major', tonic: 58, scale: 'major', bpm: 84, swing: 0.55, trim: 0,
+    mood: 'Sunday soul: long Rhodes chords leaning on IV, a triangle bass on root and fifth, a warm pad; brushes only under the week in sixty seconds',
+    sections: { A: ['Bbmaj9', 'Ebmaj9/Bb', 'Gm9', 'Cm9'], A2: ['Ebmaj9', 'Dm7', 'Cm9', 'F9sus'] },
+    form: ['A', 'A2'],
+    colour: COLOUR.week,
+    keys: { inst: 'ep', lo: 53, vel: 0.62, index: 0.7 },
+    pad: { wave: 'pulse25', lo: 50, lpTo: 950, attack: 1.0 },
+    bass: { style: 'half', wave: 'triangle', lp: 520 },
+    drums: 'halftime',
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'up', oct: 12, wave: 'pulse25', decay: 0.15, bright: 1400, vel: 0.55, sparse: 0.4 },
+    lead: { inst: 'softtri', oct: 12, mode: 'sparse', maxNotes: 2 },
+    perc: 'none', tex: 0,
+    fx: { reverb: 0.22, echo: 0.1, tremolo: 0.18 },
+    duckDb: -6,
+    duck: { melody: 0.28 }, // the triangle sits nearest the voice
+    moments: {
+      headlines: { energy: 0.5, gain: -6, lp: 2400, pocket: 0, bright: 1, comp: 'long', layers: { pad: 0.7, keys: 0.7, bass: 0.6 }, entry: 'instant' },
+      roundup: { energy: 0.6, gain: -6, lp: 2600, pocket: 0, bright: 1.05, comp: 'lofi', layers: { keys: 0.75, bass: 0.65, kick: 0.45, snare: 0.35, hat: 0.4, arp: 0.7 } },
+      story: { energy: 0.25, gain: -11, lp: 1300, pocket: 0, bright: 0.8, comp: 'float', layers: { pad: 0.75, bass: 0.55, keys: 0.4 } }, // owner switch 'soft' only
+      finally: { energy: 0.45, gain: -5.5, lp: 2500, pocket: 0, bright: 1, comp: 'lofi', layers: { keys: 0.7, bass: 0.6, lead: 0.6 }, lead: 'sparse' },
+      chat: { energy: 0.4, gain: -6, lp: 2400, pocket: 0, bright: 1, comp: 'long', layers: { keys: 0.65, bass: 0.6, lead: 0.5 }, lead: 'sparse' },
       signoff: { energy: 0.4, gain: -6.5, lp: 2200, pocket: 0, bright: 0.95, comp: 'long', layers: { pad: 0.7, keys: 0.6, bass: 0.6 } },
     },
   },

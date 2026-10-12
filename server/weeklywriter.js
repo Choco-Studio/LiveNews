@@ -65,6 +65,7 @@ export function relabelTime(text, weekday) {
 // A programme's own furniture in its aired words, which a weekly never repeats: the number of the day's opener, "And
 // finally", round-up and signpost openers, hand-overs and thanks, an expert's introduction and the questions to them
 const FURNITURE = [
+  /^breaking news[.:!]?$/i, // the flash that opened a breaking story (a week later it is not breaking)
   /^(?:our |the )?number of the day\b/i,
   /^(?:now,\s*)?(?:around the world|quick bytes|in brief|the markets|still to come|coming up|after the break)\b/i,
   /^let'?s (?:bring in|hear from|go to|cross to|turn to|talk to)\b/i,
@@ -76,7 +77,7 @@ const FURNITURE = [
 /** The aired words without the furniture, "And finally" taken off the front. */
 export function cleanAired(text) {
   return sentencesOf(String(text ?? '').replace(/^\s*(?:and )?finally[,:]?\s*/i, ''))
-    .map((t) => t.replace(/^(?:and )?finally[,:]\s*/i, ''))
+    .map((t) => t.replace(/^(?:and )?finally[,:]\s*/i, '').replace(/^breaking news[:,]\s*/i, ''))
     .filter((t) => !FURNITURE.some((re) => re.test(t.trim())))
     .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
     .join(' ');
@@ -86,7 +87,7 @@ const sentencesOf = (t) => String(t ?? '').split(/(?<=[.!?…]["”’]?)\s+(?=[
 const words = (t) => String(t ?? '').split(/\s+/).filter(Boolean).length;
 // Words a sentence starts with only because they start it (they lose the capital after "On Monday, "); any other
 // capital word is taken for a name and kept ("Tokyo's main index...", "NASA says...")
-const COMMON_START = new RegExp(`^(?:${['The', 'A', 'An', 'It', 'This', 'That', 'These', 'Those', 'Its', 'Their', 'Our', 'New', 'More', 'Some', 'Most', 'Many', 'Few', 'Several', 'Two', 'Three', 'Four', 'Five', 'Ten', 'Thousands', 'Hundreds', 'Millions', 'Officials', 'Police', 'Scientists', 'Researchers', 'Astronomers', 'Archaeologists', 'Rangers', 'Hospitals', 'Doctors', 'Nurses', 'Hotels', 'Shipping', 'Engineers', 'Workers', 'Farmers', 'Pilots', 'Teachers', 'Students', 'Residents', 'Voters', 'Lawmakers', 'Ministers', 'Leaders', 'Talks', 'Plans', 'Storms', 'Floods', 'Fires', 'Wildfires', 'Rain', 'Snow', 'Fog', 'Heat', 'Temperatures', 'Traffic', 'Trains', 'Flights', 'Airlines', 'Banks', 'Markets', 'Shares', 'Stocks', 'Prices', 'Oil', 'Gold', 'Investors', 'Analysts', 'Experts', 'Volunteers', 'Fans', 'Divers', 'Firefighters', 'Rescuers', 'Authorities', 'Regulators', 'Governments', 'Companies', 'Firms', 'Carmakers', 'Chipmakers', 'Global', 'World', 'European', 'Asian', 'African', 'In', 'On', 'At', 'For', 'After', 'Before', 'With', 'From', 'Across', 'Over', 'Under', 'During', 'Thick', 'Heavy', 'Strong', 'Hurricane', 'Tropical', 'Typhoon', 'Cyclone'].join('|')})\\b`);
+const COMMON_START = new RegExp(`^(?:${['The', 'A', 'An', 'It', 'This', 'That', 'These', 'Those', 'Its', 'Their', 'Our', 'New', 'More', 'Some', 'Most', 'Many', 'Few', 'Several', 'Two', 'Three', 'Four', 'Five', 'Ten', 'Thousands', 'Hundreds', 'Millions', 'Officials', 'Police', 'Scientists', 'Researchers', 'Astronomers', 'Archaeologists', 'Biologists', 'Geologists', 'Physicists', 'Economists', 'Historians', 'Surgeons', 'Rangers', 'Hospitals', 'Doctors', 'Nurses', 'Hotels', 'Shipping', 'Engineers', 'Workers', 'Farmers', 'Pilots', 'Teachers', 'Students', 'Residents', 'Voters', 'Lawmakers', 'Ministers', 'Leaders', 'Talks', 'Plans', 'Storms', 'Floods', 'Fires', 'Wildfires', 'Rain', 'Snow', 'Fog', 'Heat', 'Temperatures', 'Traffic', 'Trains', 'Flights', 'Airlines', 'Banks', 'Markets', 'Shares', 'Stocks', 'Prices', 'Oil', 'Gold', 'Investors', 'Analysts', 'Experts', 'Volunteers', 'Fans', 'Divers', 'Firefighters', 'Rescuers', 'Authorities', 'Regulators', 'Governments', 'Companies', 'Firms', 'Carmakers', 'Chipmakers', 'Global', 'World', 'European', 'Asian', 'African', 'In', 'On', 'At', 'For', 'After', 'Before', 'With', 'From', 'Across', 'Over', 'Under', 'During', 'Thick', 'Heavy', 'Strong', 'Hurricane', 'Tropical', 'Typhoon', 'Cyclone'].join('|')})\\b`);
 const lowerUnlessName = (s) => (COMMON_START.test(s) && !/^(?:Hurricane|Tropical|Typhoon|Cyclone) [A-Z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 /** At most `max` sentences of an aired text, the time words relabelled to the day it aired. */
@@ -277,7 +278,16 @@ export function writeWeekly(week, { presenters = { A: { name: 'Paco Pixel' }, B:
   }
   if (figures.length >= 2) {
     const first = figures[0].c.best;
-    segments.push(story(figures[0].c, first, 'A', `${pick(['The week in numbers.', 'Now, the week in numbers.', 'Our numbers of the week.'])} ${figures.map((f) => f.sentence).join(' ')}`, { kicker: 'THE WEEK IN NUMBERS', numbers: figures.map((f) => f.n) }));
+    // several stories in one segment: no one story's place or picture (a map of Tokyo under a wildfire in Provence),
+    // a headline that says what the strap is over, and every source (the channel's own name past two)
+    const sources = [...new Set(figures.map((f) => f.c.best.source).filter(Boolean))];
+    const seg = story(figures[0].c, first, 'A', `${pick(['The week in numbers.', 'Now, the week in numbers.', 'Our numbers of the week.'])} ${figures.map((f) => f.sentence).join(' ')}`, {
+      kicker: 'THE WEEK IN NUMBERS', numbers: figures.map((f) => f.n), hasImage: false,
+      headline: `${COUNT[figures.length].replace(/^./, (x) => x.toUpperCase())} figures from the week`,
+      source: sources.length && sources.length <= 2 ? sources.join(' / ') : channelName,
+    });
+    delete seg.location;
+    segments.push(seg);
   }
 
   // ---- the quote of the week (the guests stage may re-stage it: the person says the words)
