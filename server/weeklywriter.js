@@ -278,7 +278,16 @@ export function writeWeekly(week, { presenters = { A: { name: 'Paco Pixel' }, B:
   }
   if (figures.length >= 2) {
     const first = figures[0].c.best;
-    segments.push(story(figures[0].c, first, 'A', `${pick(['The week in numbers.', 'Now, the week in numbers.', 'Our numbers of the week.'])} ${figures.map((f) => f.sentence).join(' ')}`, { kicker: 'THE WEEK IN NUMBERS', numbers: figures.map((f) => f.n) }));
+    // several stories in one segment: no one story's place or picture (a map of Tokyo under a wildfire in Provence),
+    // a headline that says what the strap is over, and every source (the channel's own name past two)
+    const sources = [...new Set(figures.map((f) => f.c.best.source).filter(Boolean))];
+    const seg = story(figures[0].c, first, 'A', `${pick(['The week in numbers.', 'Now, the week in numbers.', 'Our numbers of the week.'])} ${figures.map((f) => f.sentence).join(' ')}`, {
+      kicker: 'THE WEEK IN NUMBERS', numbers: figures.map((f) => f.n), hasImage: false,
+      headline: `${COUNT[figures.length].replace(/^./, (x) => x.toUpperCase())} figures from the week`,
+      source: sources.length && sources.length <= 2 ? sources.join(' / ') : channelName,
+    });
+    delete seg.location;
+    segments.push(seg);
   }
 
   // ---- the quote of the week (the guests stage may re-stage it: the person says the words)

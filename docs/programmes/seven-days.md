@@ -97,12 +97,13 @@ SEVEN DAYS is in the line-up (`config/channel.json`): kind `weekly`, Paco and Lo
 
 - **Coral is the programme's accent** (`THEME_ACCENT.week`), with dark type on it. The strap's tag carries the weekly's kickers: STORY OF THE WEEK, THE LATEST, THE WEEK IN NUMBERS and WORDS OF THE WEEK, and the day on each item of the week in sixty seconds (MONDAY to SUNDAY).
 - **HOW THE WEEK UNFOLDED** (`scenes/cards.js` `drawWeekTimeline`, `boardTitle`): the story of the week as a diary. Each row is a day its headline moved on: the day at 2x, a coral node on a rail that draws down the days, and the day's headline at 1x. There is no source line (the strap carries it), so five rows fit between the top row and the captions.
-- **THE WEEK IN NUMBERS** keeps its name on the figures board.
+- **THE WEEK IN NUMBERS** keeps its name on the figures board. The reader reads the title line and the first figure; the board comes up on the next and holds all three. The segment strings several stories together, so it carries no one story's map or picture, and its strap reads "Three figures from the week" over every source (the channel's name past two).
 - **The week in sixty seconds** reads each day over its own picture from its first word (`direction/shots.js` `sevenDays`, and the default director's `storyBeats`). The reader is in vision only when a picture failed, never a run of maps.
 - The planner plays the flagship's grammar at the weekly's own pace (`SHOT_STYLES['seven-days']`). The expert's re-aired answer joins from their own studio, after the presenter's one-line introduction.
 
 Fixed along the way:
 - The full-screen fact card now receives a story's timeline and FROM → TO boards (`studio.js`). Until now it dropped them, so HOW WE GOT HERE and FROM → TO aired as an empty KEY FACT card in every programme.
+- A story's BY THE NUMBERS board no longer needs a lone fact beside it to reach the director (`runtime/direction.js` `cuesFromPlan`). Until now the planner's board was dropped when the segment had no `fact`, so THE WEEK IN NUMBERS aired without its board.
 - The weekly writer never retells "Breaking news" a week later.
 - It lowers a few more common openers after a day ("Saturday: biologists have described...").
 

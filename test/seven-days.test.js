@@ -13,6 +13,8 @@ import { measureText } from '../public/js/font.js';
 import { boardTitle } from '../public/js/scenes/cards.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 import { planShots } from '../public/js/v2/canvas25d/direction/shots.js';
+import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
+import { cuesFromPlan } from '../public/js/v2/canvas25d/runtime/direction.js';
 import { resolveCue } from '../public/js/music/proposals/lofi/cuesheet.js';
 import { PALETTES, PROGRAMMES } from '../public/js/music/proposals/lofi/palettes.js';
 import { themeFor } from '../public/js/audio/themes.js';
@@ -96,6 +98,19 @@ test('the week in sixty seconds: each day over its own picture from its first wo
   const blind = planShots(segmentContext(ep, 3, {}));
   assert.equal(blind[0].shot, 'close', 'a day without a picture: its reader in vision');
   assert.ok(!blind.some((e) => e.shot === 'map'));
+});
+
+test('THE WEEK IN NUMBERS airs its board: the planned figures card survives to the director without a lone fact, never a map', () => {
+  const ep = weekly();
+  ep.segments.splice(4, 0, {
+    type: 'story', anchor: 'A', emotion: 'neutral', storyId: 's9', headline: 'Three figures from the week', source: 'GLOBIT 24', category: 'business', hasImage: false, cues: [],
+    kicker: 'THE WEEK IN NUMBERS', numbers: [{ value: '21%', label: 'INDEX UP' }, { value: '3,000', label: 'PEOPLE', qualifier: 'ABOUT' }, { value: '27', label: 'KILOMETRE ROAD TUNNEL' }],
+    text: 'Our numbers of the week. The index has gained 21 percent since January, according to Ledger Line. A wildfire north of Marseille has forced about 3,000 people to leave three hill villages, officials say. A 27 kilometre road tunnel under a fjord has opened on the west coast of Norway.',
+  });
+  const cues = cuesFromPlan(planSegment(ep, 4, {}), { hasImg: false });
+  assert.ok(cues.some((c) => c.shot === 'fact'), `the board airs: ${cues.map((c) => c.shot).join(' ')}`);
+  assert.ok(!cues.some((c) => c.shot === 'map'));
+  assert.equal(boardTitle('numbers', ep.segments[4]), 'THE WEEK IN NUMBERS');
 });
 
 test('its bed is in its open\'s key, B-flat major with the 4th: under the headlines, the minute and And finally; story copy dry', () => {

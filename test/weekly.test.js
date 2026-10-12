@@ -116,6 +116,10 @@ test('SEVEN DAYS: the story of the week and how it unfolded, the week in a minut
   // the numbers: every figure on the board is said
   const nums = ep.segments.find((s) => s.kicker === 'THE WEEK IN NUMBERS');
   for (const n of nums.numbers) assert.ok(nums.text.replace(/,/g, '').includes(String(n.value).replace(/[^\d.]/g, '')), n.value);
+  // several stories on one board: no one story's place or picture, a strap that says what it is over
+  assert.equal(nums.location, undefined, 'no map of the first figure\'s place under the others');
+  assert.equal(nums.hasImage, false);
+  assert.match(nums.headline, /^(Two|Three) figures from the week$/);
   // nothing said twice
   const sentences = ep.segments.flatMap((s) => s.text.split(/(?<=[.!?])\s+/));
   const counts = new Map();
