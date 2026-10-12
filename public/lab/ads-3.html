@@ -274,11 +274,12 @@
       window.__lab = { render, set, infoAt, opaque, perf, get ad() { return ad; } };
       // Offline render of an ad's music bed for tools/render-audio.mjs:
       //   --opts '{"ad":"serene"}' -> { sampleRate, channels } (looped like the director plays it)
+      //   optional "duck": [[from, to], ...] seconds where the voice-over speaks (the bed dips as on air)
       window.__audio = {
-        async render({ ad: id = ad.id, seconds = null } = {}) {
+        async render({ ad: id = ad.id, seconds = null, duck = null } = {}) {
           const { renderTune } = await import('../js/audio/synth.js');
           const a = ADS.find((x) => x.id === id) || ad;
-          const res = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45 });
+          const res = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45, ...(duck ? { duck } : {}) });
           if (!res) throw new Error('no OfflineAudioContext');
           const b = res.buffer;
           return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
