@@ -109,6 +109,13 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 35. 🟡 Conectar gpt6luna como orquestador real y medir su coste y lo que tarda en responder.
     - Listo (12 oct): el canal ya sabe usarlo (elige las noticias y escribe; si falla, entra el redactor de respaldo) y hay una herramienta que lo mide de verdad: coste por programa, por hora, por día y por mes, y cuánto tarda (`tools/ai-bench.mjs`).
     - Falta: la clave `OPENAI_API_KEY` guardada en la configuración del entorno (nunca en el chat ni en el repositorio).
+36. ✅ **SEVEN DAYS, el resumen de la semana (12 oct, tú: "sí, pero cúrratelo").** Sale los sábados y domingos con Paco y Lola. Cuenta solo lo que el canal ya contó esa semana, con las palabras ya comprobadas y el día en que salieron (sin IA y sin inventar nada):
+    - la historia de la semana con su tablero HOW THE WEEK UNFOLDED (cómo avanzó día a día) y lo último;
+    - el análisis de un experto, otra vez en su estudio;
+    - THE WEEK IN 60 SECONDS (una noticia por día, de lunes a domingo);
+    - las secciones de la semana, las cifras de la semana, las palabras de la semana y el AND FINALLY.
+
+    Tiene su propio plató (el de WORLD NOW con luz cálida de fin de semana, color coral, lámparas y la barra de los siete días), su ritmo tranquilo, su cabecera (los días de la semana en tarjetas que giran hasta quedar en un 7) y su música. Falta pulir: con una semana floja dura unos 4 minutos (el objetivo es 5,5–8) y la cabecera es más sencilla que la de WORLD NOW.
 
 ## No tocar (te gusta así)
 - El mapa que señala dónde ocurren las noticias.
@@ -128,7 +135,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 7. ✅ Respiraciones NO; risas SÍ y naturales. (12 oct: las tres risas probadas sonaban mal; quitadas hasta tener una natural.)
 8. ✅ Datos: los mejores (mercados, tiempo, espacio), todo preparado para poner las claves.
 9. ✅ Voces en tu ordenador y prueba de 6 horas (12 oct): a mi criterio, solo si no es una pérdida de tiempo.
-10. ✅ Resumen semanal (12 oct): sí, muy trabajado.
+10. ✅ Resumen semanal (12 oct): sí, muy trabajado. Hecho: SEVEN DAYS (punto 36).
 11. ✅ Idioma en pantalla: inglés.
 12. Presentador del tiempo: sin respuesta (sigue Sam); pulido extremo hasta nota > 9,7.
 13. ✅ Red: abierta en este entorno (4 oct).
