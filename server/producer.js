@@ -8,6 +8,7 @@ import { pictureCredit } from './news.js';
 import { isGrave } from './facts.js';
 import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
+import { restageCheck, bookGuest, provenanceLine } from './guests/restage.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -92,8 +93,12 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, log = console }) {
     this.config = config;
+    // IN THEIR WORDS, re-staged (server/guests/restage.js): who a named speaker is (server/guests/identity.js) and
+    // where every re-staged line is logged (data/guests/audit.jsonl), both optional
+    this.identity = identity;
+    this.audit = audit;
     this.footageDesk = footage; // server/footage FootageDesk: moving pictures of a correspondent link's place, optional
     this.news = newsDesk;
     this.weather = weather; // server/weather WeatherDesk: WORLD WEATHER's data (kind 'weather' programmes)
@@ -122,6 +127,9 @@ export class Producer {
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
       { name: 'write', run: (ctx) => this.write(ctx) },
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
+      // IN THEIR WORDS, re-staged: a story's sourced quote said by the person themselves, a labelled recreation (after
+      // the review: the editor checks the words where the presenter reads them, the recreation adds none of its own)
+      { name: 'guests', run: (ctx) => this.guests(ctx), enabled: (ctx) => (Number(ctx.program.restage) || 0) > 0 && this.config.restage !== false && !!ctx.episode?.segments },
       // IN PLAIN ENGLISH (server/glossary.js): the programme's explainer translates a story's jargon from our fixed
       // glossary (never the model's words), a term once in the hours of recent lines
       { name: 'terms', run: (ctx) => this.terms(ctx), enabled: (ctx) => !!ctx.program.terms && !!ctx.episode?.segments },
@@ -321,6 +329,76 @@ export class Producer {
       const p = ctx.channelPresenters?.[id];
       if (p) ctx.presenters[slot] = { id, ...p };
     }
+  }
+
+  /**
+   * IN THEIR WORDS, re-staged (owner 12 Oct; server/guests/restage.js, WAVE3 §6): after a story that carries a quote
+   * its source attributes to a person in a public role, that person appears in a press room and says those words
+   * (a `cross` of kind 'restage': a recreation, labelled, in a generic voice). The presenter's sentence that read the
+   * quote becomes the hand-over that says where the words come from, at the story's end; at most `program.restage`
+   * an episode (two at most), the first stories first. Never a grave story, a round-up item, breaking news or a story
+   * with a link of its own.
+   */
+  async guests(ctx) {
+    const max = Math.min(Number(ctx.program.restage) || 0, 2);
+    const segs = ctx.episode.segments;
+    const taken = new Set(Object.keys(ctx.episode.correspondents || {}));
+    const nextSlot = () => {
+      let n = 1;
+      while (taken.has(`R${n}`)) n++;
+      taken.add(`R${n}`);
+      return `R${n}`;
+    };
+    const restaged = [];
+    const declined = [];
+    for (let i = 0; i < segs.length && restaged.length < max; i++) {
+      const seg = segs[i];
+      if (seg.type !== 'story' || !seg.quote?.text || !seg.quote.by || seg.link || seg.roundup || seg.breaking || seg.feature || seg.emotion === 'sad') continue;
+      const story = this.news.get(seg.storyId);
+      if (!story) continue;
+      const source = story.body ? `${story.summary || ''} ${story.body}` : story.summary || '';
+      const check = restageCheck({ quote: seg.quote, source, story });
+      if (!check.ok) {
+        declined.push({ storyId: seg.storyId, reasons: check.reasons });
+        continue;
+      }
+      // a named person is checked (an adult, alive, a public figure); one the check rules out keeps the quote card
+      const identity = check.speaker.name && this.identity ? await this.identity.lookup(check.speaker.name, { role: check.speaker.role }) : null;
+      if (identity?.refused) {
+        declined.push({ storyId: seg.storyId, reasons: [identity.refused] });
+        continue;
+      }
+      const booking = bookGuest(check.speaker, { outlet: seg.source, identity });
+      const slot = nextSlot();
+      // the presenter no longer reads the words the person is about to say: that sentence (never the story's first)
+      // goes, and the hand-over ends the story
+      const sentences = String(seg.text).split(/(?<=[.!?…]["”’]?)\s+(?=["“‘]?[A-Z0-9])/);
+      const head = squashWords(seg.quote.text).split(' ').slice(0, 5).join(' ');
+      const k = sentences.findIndex((t, j) => j > 0 && head.length >= 12 && squashWords(t).includes(head));
+      if (k > 0) sentences.splice(k, 1);
+      sentences.push(provenanceLine(booking, seg.source, seg.storyId));
+      seg.text = sentences.join(' ');
+      seg.link = slot;
+      seg.linkKind = 'restage';
+      const words = String(seg.quote.text).trim();
+      const piece = {
+        type: 'cross', part: 'piece', kind: 'restage', anchor: slot, reporter: booking.id, emotion: 'neutral', cues: [],
+        text: /[.!?…]["”’]?$/.test(words) ? words : `${words}.`,
+        recreation: true,
+        quoteRef: { outlet: seg.source || null, by: seg.quote.by },
+        storyId: seg.storyId, headline: seg.headline, source: seg.source, category: seg.category, hasImage: seg.hasImage,
+        backdrop: 'press', place: '', desk: booking.strap.role || booking.strap.name,
+      };
+      segs.splice(i + 1, 0, piece);
+      i++;
+      ctx.episode.correspondents = { ...(ctx.episode.correspondents || {}), [slot]: booking.id };
+      ctx.episode.guests = { ...(ctx.episode.guests || {}), [booking.id]: booking };
+      // the voice service casts the slot from the booking (a generic blend, never an imitation)
+      ctx.presenters[slot] = { id: booking.id, name: booking.name || booking.role, voice: { gender: booking.presentation === 'woman' ? 'female' : 'male', lang: 'en-gb' }, cast: booking.voice };
+      restaged.push(booking.id);
+      this.audit?.({ at: new Date().toISOString(), program: ctx.program.id, storyId: seg.storyId, outlet: seg.source || null, link: story.link || null, guest: booking.id, name: booking.name, role: booking.role, words: piece.text });
+    }
+    return { restaged: restaged.length, ...(declined.length ? { declined: declined.length } : {}) };
   }
 
   /** IN PLAIN ENGLISH lines after the stories that use a glossary term (server/glossary.js). */
@@ -576,4 +654,9 @@ export class Producer {
     clearTimeout(timer);
     return { verified: stories.filter((s) => s.image).length, ...(dropped ? { dropped } : {}) };
   }
+}
+
+/** Words of a text, folded: lower case, no accents, no punctuation (to find a quote's sentence). */
+function squashWords(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }

@@ -14,6 +14,7 @@ import { ImageSearch } from './imagesearch.js';
 import { WeatherDesk } from './weather.js';
 import { writeWeather } from './weatherwriter.js';
 import { FootageDesk } from './footage.js';
+import { IdentityDesk } from './guests/identity.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -54,7 +55,15 @@ const footage = new FootageDesk({
   maxCacheBytes: config.footage.cacheMb * 1024 * 1024,
   enabled: config.footage.mode === 'on' || (config.footage.mode === 'auto' && !/feeds\.fixture\.json$/.test(config.feedsFile)),
 });
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage });
+// IN THEIR WORDS, re-staged: who a named speaker is (Wikidata, cached), and the audit of every re-staged line
+const identity = new IdentityDesk({ dir: path.join(config.dataDir, 'guests', 'identity') });
+const audit = (entry) => {
+  try {
+    fs.mkdirSync(path.join(config.dataDir, 'guests'), { recursive: true });
+    fs.appendFileSync(path.join(config.dataDir, 'guests', 'audit.jsonl'), `${JSON.stringify(entry)}\n`);
+  } catch { /* the audit never stops the show */ }
+};
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {

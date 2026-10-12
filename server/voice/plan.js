@@ -65,6 +65,8 @@ export function plannerLang(lang) {
 export function castFor(presenterId, presenter, casting) {
   const own = casting?.[presenterId];
   if (own?.voice) return own;
+  // a re-staged person's booked voice (server/guests/restage.js: a generic blend, never an imitation)
+  if (presenter?.cast?.voice) return presenter.cast;
   const v = presenter?.voice || {};
   const gb = /gb/i.test(v.lang || '');
   if (v.gender === 'robot') return { voice: 'am_echo:0.7+am_fenrir:0.3', speed: 0.85, lang: 'en-us', effect: 'robot-soft' }; // the owner's pick (3 Oct)

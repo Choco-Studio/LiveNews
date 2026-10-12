@@ -76,6 +76,8 @@ export const config = {
   candidatePool: num('CANDIDATE_POOL', 12),
   // Second AI pass: a standards editor checks each script against its sources
   reviewPass: !/^(0|false|no|off)$/i.test(env('REVIEW_PASS', '1')),
+  // IN THEIR WORDS, re-staged (server/guests/restage.js): RESTAGE=0 turns every recreation back into quote cards
+  restage: !/^(0|false|no|off)$/i.test(env('RESTAGE', '1')),
   minNewStories: num('MIN_NEW_STORIES', 3),
   maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
