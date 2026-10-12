@@ -26,8 +26,8 @@ import { isGrave } from '../facts.js';
 // Public roles (title words, a name may follow or precede them). A role names the kind; the order matters: the first
 // match wins ("former prime minister" is a politician, "health minister" too).
 const ROLES = [
-  ['politician', /\b(?:president|vice[- ]president|prime minister|premier|chancellor|minister|secretary of state|foreign secretary|home secretary|senator|congress(?:wo)?man|representative|mp|member of parliament|lawmaker|governor|mayor|leader of the opposition|opposition leader|party leader|king|queen|emir|sultan|monarch|head of state|first minister|deputy prime minister)\b/i],
-  ['official', /\b(?:spokes(?:wo)?man|spokesperson|official|commissioner|secretary[- ]general|director[- ]general|director|ambassador|envoy|police chief|chief constable|commander|general|admiral|regulator|chair(?:wo)?man of the (?:federal reserve|central bank)|central bank governor|head of the [a-z ]+(?:agency|authority|bank|service|organisation|organization)|chief medical officer|attorney general|prosecutor)\b/i],
+  ['politician', /\b(?:president|vice[- ]president|prime minister|premier|chancellor|minister|pope|secretary of state|foreign secretary|home secretary|senator|congress(?:wo)?man|representative|mp|member of parliament|lawmaker|governor|mayor|leader of the opposition|opposition leader|party leader|king|queen|emir|sultan|monarch|head of state|first minister|deputy prime minister)\b/i],
+  ['official', /\b(?:spokes(?:wo)?man|spokesperson|official|commissioner|archbishop|cardinal|bishop|chief rabbi|grand mufti|secretary[- ]general|director[- ]general|director|ambassador|envoy|police chief|chief constable|commander|general|admiral|regulator|chair(?:wo)?man of the (?:federal reserve|central bank)|central bank governor|head of the [a-z ]+(?:agency|authority|bank|service|organisation|organization)|chief medical officer|attorney general|prosecutor)\b/i],
   ['executive', /\b(?:chief executive|ceo|chief financial officer|cfo|chief technology officer|cto|founder|co-founder|chair(?:wo)?man|chairperson|managing director|executive|boss)\b/i],
   ['scientist', /\b(?:scientist|researcher|astronomer|physicist|biologist|ecologist|climatologist|professor|lead author|lead researcher|study author|engineer|doctor|dr)\b/i],
 ];
@@ -41,6 +41,7 @@ const SIDES = [
   /\b(?:liberal democrats?|lib dems?)\b/i, /\breform uk\b/i, /\bsnp\b/i, /\b(?:social democrats?|spd)\b/i, /\b(?:christian democrats?|cdu)\b/i,
   /\b(?:greens?|green party)\b/i, /\b(?:afd)\b/i, /\b(?:psoe|socialists?)\b/i, /\b(?:partido popular|pp)\b/i, /\bvox\b/i, /\b(?:bjp)\b/i, /\b(?:congress party)\b/i,
   /\b(?:opposition)\b/i, /\b(?:ruling (?:party|coalition))\b/i, /\b(?:rebels?)\b/i, /\b(?:hamas)\b/i, /\b(?:israel(?:i)? government)\b/i,
+  /\b(?:PTI|Tehreek-e-Insaf)\b/, /\b(?:PML-?N|Muslim League)\b/, /\b(?:PPP|Pakistan Peoples Party)\b/, /\b(?:Rassemblement National|National Rally)\b/i, /\b(?:Fidesz|Law and Justice|PiS)\b/,
 ];
 const PRONOUN_SHE = /\b(?:she|her|hers|herself|Mrs|Ms|Miss|Madam)\b/;
 const PRONOUN_HE = /\b(?:he|him|his|himself|Mr|Sir)\b/;
@@ -56,10 +57,24 @@ const kindOf = (text) => ROLES.find(([, re]) => re.test(text))?.[0] || null;
  * the title the source uses for them ('neutral' when it never says).
  */
 export function speakerProfile(by, source = '') {
-  const said = String(by ?? '').trim().replace(/[.,;:]+$/, '');
-  if (!said) return null;
+  let said = String(by ?? '').trim().replace(/[.,;:]+$/, '');
+  // (a pronoun is no one the source names: "He", "She", "They")
+  if (!said || /^(?:he|she|they|it|we|i|you|him|her|them)$/i.test(said)) return null;
   const src = String(source ?? '');
-  const named = isName(said) && !kindOf(said);
+  // a surname alone ("Zelenskyy", "Bas", "Leo": how outlets attribute after the first mention) is the full name the
+  // source gives it ("Volodymyr Zelenskyy", "Bärbel Bas", "Pope Leo XIV" keeps "Leo" with its title)
+  if (/^\p{Lu}[\p{L}'’-]{1,}$/u.test(said) && !kindOf(said) && !BODIES.test(said)) {
+    const esc1 = said.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const full = new RegExp(`((?:\\p{Lu}[\\p{L}'’.-]+ ){1,3})${esc1}(?![\\p{L}])`, 'u').exec(src);
+    // (a title before the name is the role, not the name: "President Volodymyr Zelenskyy", "Pope Leo XIV")
+    const first = full ? full[1].trim().split(/\s+/).filter((w) => !kindOf(w) && !/^(?:Mr|Mrs|Ms|Dr|Sir|Dame|Prof|Pope|Saint|St)\.?$/.test(w)) : [];
+    const lastTitle = full ? full[1].trim().split(/\s+/).findLastIndex((w) => kindOf(w) || /^(?:Pope)$/.test(w)) : -1;
+    const keep = lastTitle >= 0 ? full[1].trim().split(/\s+/).slice(lastTitle + 1) : first;
+    if (keep.length && isName(`${keep.join(' ')} ${said}`)) said = `${keep.join(' ')} ${said}`;
+  }
+  // (a surname the source gives no first name keeps its title for its role: "Pope Leo")
+  const single = /^\p{Lu}[\p{L}'’-]+$/u.test(said) && !kindOf(said) && !BODIES.test(said);
+  const named = (isName(said) || single) && !kindOf(said);
   let role = named ? null : said.replace(/^(?:the|a|an)\s+/i, '');
   let org = null;
   if (named) {
@@ -67,8 +82,14 @@ export function speakerProfile(by, source = '') {
     // "Ana Silva, the mayor of Lisbon," / "Ana Silva, Lisbon's mayor," / "Lisbon mayor Ana Silva" / "Prime Minister Ana Silva"
     const after = new RegExp(`${esc},\\s+((?:the |a |an )?[^,.;]{3,60}?)(?:,|\\.|;| said| told)`).exec(src);
     const before = new RegExp(`((?:[A-Z][\\w'’.-]+ )?(?:[a-z][\\w'’-]+ ){0,3}(?:[A-Z][a-z]+ )?)${esc}`).exec(src);
+    // ("Germany’s labour minister and co-leader of the Social Democrats, Bärbel Bas, has quit": the role before, by comma)
+    const lead = new RegExp(`([^.;:,]{3,90}),\\s+${esc},`).exec(src);
+    // ("Ukrainian President Volodymyr Zelenskyy said": a title of two or three words right before the name)
+    const title = new RegExp(`((?:\\p{Lu}[\\p{L}'’-]+ ){0,2}(?:[A-Z][a-z]+|[a-z]+) )${esc}`, 'u').exec(src);
     if (after && kindOf(after[1])) role = after[1].replace(/^(?:the|a|an)\s+/i, '');
     else if (before && kindOf(before[1])) role = before[1].trim();
+    else if (lead && kindOf(lead[1])) role = lead[1].trim().replace(/^(?:the|a|an)\s+/i, '');
+    else if (title && kindOf(title[1])) role = title[1].trim();
     const of = role && /\bof (?:the )?([A-Z][\w'’ -]{2,40})$/.exec(role);
     if (of) org = of[1].trim();
   }
@@ -99,6 +120,13 @@ export function restageCheck({ quote, source = '', story = null, grave = false }
   if (!quote?.text) reasons.push('no quote');
   else if (words < 5) reasons.push('too short to stand alone');
   else if (words > 60) reasons.push('longer than a re-staged line (60 words)');
+  // (a whole sentence of theirs: never a fragment the outlet quotes inside its own, "apparently caused the perpetrators to
+  // panic", ABC 12 Oct)
+  if (quote?.text && !/^["“‘']?[\p{Lu}\d]/u.test(String(quote.text).trim())) reasons.push('a fragment of a sentence, not their whole words');
+  if (/(?:…|\.\.\.)["”’]?$/.test(String(quote?.text ?? '').trim())) reasons.push('cut short (…): not their whole words');
+  // (a person's own family or grief is never re-staged, whoever they are: "After my stepdaughter’s death, I realised…",
+  // a minister resigning, Guardian 12 Oct; their role is not what they speak in)
+  if (/\b(?:my|our) (?:late |own )?(?:son|daughter|stepdaughter|stepson|step-daughter|step-son|wife|husband|mother|father|mum|dad|child|children|kids|family|brother|sister|partner|grandson|granddaughter|baby)\b/i.test(String(quote?.text ?? ''))) reasons.push('personal words (family, grief): never re-staged');
   const speaker = speakerProfile(quote?.by, source);
   if (!speaker) reasons.push('no speaker the source names for these words');
   else if (speaker.kind === 'private') reasons.push('a private person, a victim, a witness or someone accused: never re-staged');
@@ -107,7 +135,14 @@ export function restageCheck({ quote, source = '', story = null, grave = false }
   const text = `${story?.title || ''} ${source}`;
   const sombre = grave || isGrave(`${story?.title || ''}. ${story?.summary || ''}`);
   if (sombre && speaker && !['politician', 'official'].includes(speaker.kind)) reasons.push('a grave story: only officials speaking in their role');
-  if (speaker?.kind === 'politician' && politicalSides(text) >= 2) reasons.push('two political sides and one side\'s words: the quote card stays (balance)');
+  // (a partisan voice, a politician or someone's or a party's spokesperson, in a story naming any political side is one
+  // side's case: "Khan’s spokesperson, Zulfiquar Bukhari, condemned the suspension…", ABC 12 Oct)
+  const partisan = speaker && (speaker.kind === 'politician' || /\b(?:party|campaign)\b/i.test(speaker.role || '') || /\p{Lu}[\p{L}'’-]+['’]s spokes/u.test(speaker.role || ''));
+  const sides = politicalSides(text);
+  if (partisan && sides >= 2) reasons.push('two political sides and one side\'s words: the quote card stays (balance)');
+  else if (partisan && sides === 1 && speaker.kind !== 'politician') reasons.push('a partisan voice on a political story: the quote card stays (balance)');
+  // (a politician's words about another side are one side's case: "…the AfD are clearly linked to Russia…", ABC 12 Oct)
+  else if ((speaker?.kind === 'politician' || (speaker?.role && politicalSides(speaker.role))) && politicalSides(String(quote?.text ?? '')) >= 1) reasons.push('a politician on another side: the quote card stays (balance)');
   return { ok: !reasons.length, reasons, speaker, grave: sombre };
 }
 
@@ -218,7 +253,9 @@ function capFirst(s) {
 /** The presenter's hand-over to the recreation, stating where the words come from (WAVE3 §6.3). */
 export function provenanceLine(booking, outlet, seed = '') {
   const role = String(booking.role || 'speaker').replace(/^(?:the|a|an)\s+/i, '');
-  const end = booking.name ? (booking.role ? `${booking.name}, the ${role}` : booking.name) : `the ${role}`;
+  // (a role that has its own determiner keeps it: "Elgin’s President", "Ukrainian President" takes "the")
+  const det = /^[\p{L}.-]+['’]s\s/u.test(role) ? '' : 'the ';
+  const end = booking.name ? (booking.role ? `${booking.name}, ${det}${role}` : booking.name) : `${det}${role}`;
   const mid = booking.name && booking.role ? `${end},` : end;
   const f = PROVENANCE[parseInt(hash(`prov|${seed}|${booking.id}`).slice(0, 6), 16) % PROVENANCE.length];
   return f(mid, end, outlet || 'the source');

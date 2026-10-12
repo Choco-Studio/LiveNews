@@ -984,7 +984,12 @@ function study(story) {
     sentences,
     prevOf,
     // (someone's words, whole: never an unattributed fragment like "...we were making history.", Ars Technica 4 Oct)
-    quote: quotesIn(s.summary || '').find((q) => q.by && q.text.split(/\s+/).length >= 4 && !/^(?:…|\.\.\.)/.test(q.text)) || null,
+    // (and the article's, when the summary quotes no one: IN THEIR WORDS needs a named speaker's whole sentence, 12 Oct;
+    // never a pronoun for who said it, never a fragment)
+    quote:
+      quotesIn(s.summary || '').find((q) => q.by && q.text.split(/\s+/).length >= 4 && !/^(?:…|\.\.\.)/.test(q.text)) ||
+      quotesIn(String(s.body || '').slice(0, 2500)).find((q) => q.by && !/^(?:he|she|they|it|we|i|you)$/i.test(q.by) && q.text.split(/\s+/).length >= 6 && /^["“‘']?[\p{Lu}\d]/u.test(q.text)) ||
+      null,
     kicker: kickerFor(s),
     // the names the headline is about: a sentence cut to length keeps them
     keep: headlineNames(title, `${s.summary || ''} ${s.body || ''}`),

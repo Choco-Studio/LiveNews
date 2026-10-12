@@ -177,3 +177,20 @@ test('the producer: the person says the words after the story, the presenter han
   const refusing = new Producer({ config: {}, newsDesk: { get: (id) => stories.get(id) }, chain: null, identity: { lookup: async () => ({ refused: 'deceased' }) }, log: { info() {}, warn() {} } });
   assert.equal((await refusing.guests({ program: { id: 'world-now', restage: 1 }, presenters: {}, episode: named })).restaged, 0);
 });
+
+test('real quotes of 12 Oct: the full name and role behind a surname; refused: pronouns, fragments, family grief, partisan voices, cut quotes', () => {
+  // a surname alone is the full name the source gives, its title the role
+  const z = speakerProfile('Zelenskyy', 'Ukrainian President Volodymyr Zelenskyy said the attacks continued.');
+  assert.deepEqual([z.name, z.role, z.kind], ['Volodymyr Zelenskyy', 'Ukrainian President', 'politician']);
+  const b = speakerProfile('Bas', 'Germany’s labour minister and co-leader of the Social Democrats, Bärbel Bas, has quit both posts.');
+  assert.deepEqual([b.name, b.kind], ['Bärbel Bas', 'politician']);
+  assert.equal(speakerProfile('He', 'He said so.'), null, 'a pronoun is no one');
+  const why = (quote, source, story = { title: 'A story' }) => restageCheck({ quote, source, story }).reasons.join(' | ');
+  assert.match(why({ text: 'apparently caused the perpetrators to panic', by: 'Mayor Ana Silva' }, 'Mayor Ana Silva said.'), /fragment/);
+  assert.match(why({ text: 'After my stepdaughter’s death, I realised that I need time to come to terms with it.', by: 'Bas' }, 'Labour minister Bärbel Bas said.'), /personal words/);
+  assert.match(why({ text: 'Now that little bit of democracy is also gone, and we will fight.', by: 'Bukhari' }, 'Khan’s spokesperson, Zulfiquar Bukhari, condemned the move by the PTI’s rivals.'), /partisan/);
+  assert.match(why({ text: 'You know he was saying to me that the AfD are clearly linked to Russia.', by: 'Burnham' }, 'Manchester mayor Andy Burnham said.'), /another side/);
+  assert.match(why({ text: 'New Keynesian models allow us to explain and quantify how policy affects business cycles and…', by: 'John Hassler' }, 'John Hassler, the chair of the committee, said.'), /cut short/);
+  // a role with its own possessive keeps it in the hand-over
+  assert.match(provenanceLine({ id: 'rp_x', name: 'Peggy Heinrich', role: 'Elgin’s President' }, 'The Verge', 's'), /Peggy Heinrich, Elgin’s President/);
+});
