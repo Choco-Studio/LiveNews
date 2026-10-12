@@ -240,6 +240,8 @@ Las cifras son **estimaciones**, no mediciones.
   - Un boletín de 5 noticias ronda unos 2.500 tokens de entrada y 1.500 de salida (más si el modelo razona), es decir, del orden de **0,001 $ por boletín**.
   - Con noticias frescas se genera un boletín cada pocos minutos (lo que dura en antena el anterior). Como techo, con boletines continuos las 24 horas, saldrían unos 0,4 $ al día, del orden de **10 $ al mes**. Si hay menos noticias nuevas y se repiten boletines, baja.
 
+Para medirlo antes de emitir, `PROVIDERS=openai,mock node tools/ai-bench.mjs` escribe un programa de cada tipo con la IA (con la revisión incluida) y dice lo que tarda cada uno y lo que costaría por hora, día y mes; pasa los precios vigentes con `--price-in`, `--price-out` y `--price-cached` (dólares por millón de tokens).
+
 Para ver el gasto real, abre el panel `D` («Uso este mes») o consulta `data/usage.json`, que guarda por proveedor y día las llamadas, errores y tokens (de entrada, de salida y en caché) de los últimos ~60 días.
 
 ## Arquitectura
