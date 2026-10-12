@@ -1896,12 +1896,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         [`That's ${title}. [wave] From ${partnerName} and from me, thanks for watching. Stay with us here on ${channelName}.`, `And that's ${title}. [wave] Thanks for your company. There's more news around the clock here on ${channelName}.`],
         seed
       );
-  let closer = closers[pid] ? closers[pid]() : generic;
-  // a soft chuckle at the partner's dry last word on the AND FINALLY (owner decision 7: laughs, natural), in about
-  // half the episodes; never in COSMOS, NEWS IN 60 or MONEY MINUTE, never after a grave story
-  const prev = segments.at(-1);
-  const chuckles = !solo && ['world-now', 'tech-bytes'].includes(pid) && !last?.grave && prev?.type === 'chat' && prev.anchor === other(outroAnchor) && prev.emotion === 'happy';
-  if (chuckles && choose([true, false], `${seed}~chuckle`)) closer = `[chuckle] ${closer}`;
+  const closer = closers[pid] ? closers[pid]() : generic;
   segments.push({
     type: 'outro',
     anchor: outroAnchor,

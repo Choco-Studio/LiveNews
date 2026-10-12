@@ -21,7 +21,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 ## C. Voces
 14. 🟡 Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. (Respiraciones quitadas, decisión 7.)
-    - ✅ Risas (10 oct): una risita suave con la propia voz del presentador, antes de la frase y por debajo de su volumen, con sonrisa de boca cerrada y un pequeño movimiento de hombros. Una como máximo por programa, solo en charla ligera (WORLD NOW y TECH BYTES, también los expertos); nunca en COSMOS, NEWS IN 60 ni MONEY MINUTE, nunca UNIT-8 ni tras una noticia grave. Hay muestra con tres sonidos (A, B y C) para que elijas; ahora suena la A.
+    - ❌ Risas (12 oct): probé tres risitas hechas con la voz del presentador (A, B y C) y las tres sonaban mal; quitadas del canal. Nadie se ríe en antena hasta tener un sonido de verdad natural (la voz que usamos no sabe reír).
     - ✅ Voces más naturales, tipo presentador real (10 oct): cada noticia empieza arriba, baja frase a frase y cierra abajo; las preguntas suben; "según fuentes…" va más bajo y suave; las cifras y los "no" se marcan; el ritmo también cambia (el arranque algo más pausado). Cada presentador con su estilo (Max y Lola más vivos, Paco más sobrio, UNIT-8 plano porque es una máquina; noticias graves más contenidas). Medido: la melodía entre frases ahora sigue el plan y se mueve el doble o el triple; la voz, la duración y el volumen no cambian. Hay muestra antes/después. Se quita con una línea (`MELODY` en server/voice/plan.js).
 15. ✅ UNIT-8: voz de robot más suave (elegiste la A, ya puesta).
 
@@ -36,7 +36,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - salen en WORLD NOW, TECH BYTES, COSMOS DESK y MONEY MINUTE;
     - pulido (10 oct): un experto descansa 2 h antes de volver al mismo programa (salvo el fijo de MONEY MINUTE, TECH BYTES y COSMOS DESK); las frases del presentador van rotando sin repetirse; la pantalla partida entra con la presentación y la respuesta va a pantalla completa; ya no se corta el pelo en las cajas; con las noticias de prueba salen los 8.
 
-    Falta: tu visto bueno a nombres, caras y voces (WAVE3 §13). Las risas esperan a la decisión 7. Detalle en docs/programmes/guests-and-experts.md.
+    Falta: tu visto bueno a nombres, caras y voces (WAVE3 §13). Sin risas por ahora (las tres probadas sonaban mal). Detalle en docs/programmes/guests-and-experts.md.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
 20. **Invitados.** Personalización del personaje por IA y cara esculpida preparada con antelación.
 21. ✅ **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:
@@ -101,7 +101,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 4. ✅ Políticos y jefes de Estado: se recrean (con regla de equilibrio).
 5. ✅ Expertos: varios; pueden reírse en las charlas.
 6. Presupuesto de IA: pendiente de medir con gpt-6-luna.
-7. ✅ Respiraciones NO; risas SÍ y naturales.
+7. ✅ Respiraciones NO; risas SÍ y naturales. (12 oct: las tres risas probadas sonaban mal; quitadas hasta tener una natural.)
 8. ✅ Datos: los mejores (mercados, tiempo, espacio), todo preparado para poner las claves.
 9. Voces en tu ordenador: pendiente.
 10. Resumen semanal: pendiente.

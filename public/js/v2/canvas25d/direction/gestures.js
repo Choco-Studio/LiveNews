@@ -84,7 +84,7 @@ import { CAPTION, STRAP, TICKER, W as LAYOUT_W } from '../../../graphics/layout.
 /** config/channel.json programs.<id>.gestures, mirrored for the client (test/v2-hands.test.js checks parity). */
 export const CONFIG_POLICY = {
   'world-now': {
-    allow: ['nod', 'lean_in', 'steeple', 'raise_hand', 'point_screen', 'look_partner', 'point_partner', 'shrug', 'shake_head', 'papers', 'chuckle'],
+    allow: ['nod', 'lean_in', 'steeple', 'raise_hand', 'point_screen', 'look_partner', 'point_partner', 'shrug', 'shake_head', 'papers'],
     listener: ['nod', 'look_partner'],
     grave: ['nod', 'steeple'],
     map: { wave: 'nod', point_camera: 'nod', count: 'steeple', chin: 'steeple' },
@@ -93,8 +93,8 @@ export const CONFIG_POLICY = {
   },
   'tech-bytes': {
     allow: {
-      max: ['lean_in', 'raise_hand', 'point_screen', 'count', 'look_partner', 'nod', 'chuckle'],
-      ada: ['steeple', 'chin', 'glasses', 'shake_head', 'shrug', 'look_partner', 'nod', 'chuckle'],
+      max: ['lean_in', 'raise_hand', 'point_screen', 'count', 'look_partner', 'nod'],
+      ada: ['steeple', 'chin', 'glasses', 'shake_head', 'shrug', 'look_partner', 'nod'],
     },
     listener: ['nod', 'look_partner'],
     grave: ['nod', 'steeple'],
@@ -103,7 +103,7 @@ export const CONFIG_POLICY = {
     defaults: { intro: 'nod', outro: 'nod' },
   },
   cosmos: {
-    deny: ['wave', 'wow', 'fist_pump', 'thumbs_up', 'facepalm', 'laugh', 'point_camera', 'chuckle'],
+    deny: ['wave', 'wow', 'fist_pump', 'thumbs_up', 'facepalm', 'laugh', 'point_camera'],
     listener: ['nod', 'look_partner'],
     grave: ['nod', 'steeple'],
     map: { wave: 'nod' },
@@ -129,7 +129,7 @@ export const CONFIG_POLICY = {
   },
 };
 
-const LIGHT = ['wave', 'thumbs_up', 'wow', 'fist_pump', 'facepalm', 'laugh', 'chuckle'];
+const LIGHT = ['wave', 'thumbs_up', 'wow', 'fist_pump', 'facepalm', 'laugh'];
 
 /**
  * The bibles' rules (what each programme's planner may choose; stricter than or equal to the config).
@@ -140,7 +140,7 @@ const LIGHT = ['wave', 'thumbs_up', 'wow', 'fist_pump', 'facepalm', 'laugh', 'ch
  */
 export const BIBLE = {
   'world-now': {
-    speaker: ['nod', 'lean_in', 'steeple', 'raise_hand', 'point_screen', 'point_partner', 'shrug', 'shake_head', 'papers', 'chuckle'],
+    speaker: ['nod', 'lean_in', 'steeple', 'raise_hand', 'point_screen', 'point_partner', 'shrug', 'shake_head', 'papers'],
     banned: ['wave', 'thumbs_up', 'wow', 'fist_pump', 'facepalm', 'laugh', 'point_camera', 'chin', 'glasses', 'count'],
     story: ['nod', 'lean_in', 'steeple', 'raise_hand'],
     chat: ['shrug', 'shake_head'], // chat and AND FINALLY add these
@@ -159,8 +159,8 @@ export const BIBLE = {
   },
   'tech-bytes': {
     speaker: {
-      max: ['lean_in', 'raise_hand', 'point_screen', 'count', 'chuckle'],
-      ada: ['steeple', 'chin', 'glasses', 'shake_head', 'shrug', 'chuckle'],
+      max: ['lean_in', 'raise_hand', 'point_screen', 'count'],
+      ada: ['steeple', 'chin', 'glasses', 'shake_head', 'shrug'],
     },
     banned: ['wave', 'wow', 'fist_pump', 'thumbs_up', 'facepalm', 'point_camera', 'point_partner', 'papers', 'laugh'],
     defaultsOnly: ['nod'], // the speaker's nod is only the intro/outro default
@@ -182,7 +182,7 @@ export const BIBLE = {
       nova: ['steeple', 'raise_hand', 'point_screen', 'glasses', 'chin', 'nod'],
       unit8: ['nod', 'lean_in', 'count'],
     },
-    banned: ['wave', 'wow', 'fist_pump', 'thumbs_up', 'facepalm', 'laugh', 'chuckle', 'point_camera'],
+    banned: ['wave', 'wow', 'fist_pump', 'thumbs_up', 'facepalm', 'laugh', 'point_camera'],
     grave: ['nod', 'steeple'],
     cap: 1,
     lead: [0.3, 0.3],

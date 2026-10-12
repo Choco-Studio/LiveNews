@@ -254,8 +254,7 @@
           "point_partner",
           "shrug",
           "shake_head",
-          "papers",
-          "chuckle"
+          "papers"
         ],
         "listener": [
           "nod",
@@ -348,8 +347,7 @@
             "point_screen",
             "count",
             "look_partner",
-            "nod",
-            "chuckle"
+            "nod"
           ],
           "ada": [
             "steeple",
@@ -358,8 +356,7 @@
             "shake_head",
             "shrug",
             "look_partner",
-            "nod",
-            "chuckle"
+            "nod"
           ]
         },
         "listener": [
@@ -458,8 +455,7 @@
           "thumbs_up",
           "facepalm",
           "laugh",
-          "point_camera",
-          "chuckle"
+          "point_camera"
         ],
         "listener": [
           "nod",

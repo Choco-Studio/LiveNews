@@ -116,6 +116,6 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
 ## 8. Open
 
 - The owner's approval of the names, looks and voices (WAVE3 §13).
-- Laughter in the exchanges (LISTA decision 5: "pueden reírse en las charlas") waits for the sounds work (LISTA item 14, decision 7).
+- Laughter in the exchanges (LISTA decision 5: "pueden reírse en las charlas") is off: the three synthetic chuckles were rejected by the owner (12 Oct), so nobody laughs on air until a truly natural sound exists (LISTA item 14).
 - The guests of WAVE3 §3.6 (re-staged public figures, IN THEIR WORDS, AI-built looks) are a separate piece of work. The experts here are the roster only.
 - The demo feeds carry a story for every desk (the Pacific tuna treaty for Clara, the Amsterdam night-flights ruling for Ines, the Cairo boats exhibition and the Seoul drone show for Leo, the probe, the telescope and the rover for Tomas). With the real writer and real news, more stories qualify, and a second analysis can be allowed per programme (`analyses: 2`).
