@@ -211,6 +211,24 @@ Funcionan una vez iniciada la emisión.
 
 ## Emitir en directo (YouTube, Twitch...)
 
+### Sin OBS: `tools/stream.mjs` (servidores, sin pantalla)
+
+Abre el canal en un Chromium sin ventana, graba su imagen y su sonido dentro de la página y se los pasa a ffmpeg. Este escala la imagen de 384x216 a 1920x1080 por vecino más cercano (el pixel art no se emborrona) y emite en H.264 + AAC a 30 fps, con un fotograma clave cada 2 s, como piden YouTube y Twitch.
+
+```bash
+# la clave se lee de una variable de entorno, nunca de la línea de órdenes (no queda en el historial)
+export YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx
+while true; do
+  node tools/stream.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=kokoro" \
+    --rtmp rtmp://a.rtmp.youtube.com/live2 --key-env YOUTUBE_STREAM_KEY
+  sleep 5   # si la página se cae, el bucle vuelve a emitir (YouTube acepta la reconexión)
+done
+```
+
+Para probar antes de emitir: `node tools/stream.mjs --url ... --out prueba.flv --seconds 60` graba un minuto en un archivo. Opciones: `--fps 30`, `--bitrate 4500k`, `--audio-bitrate 160k`, `--size 1920x1080`. Necesita ffmpeg y la misma instalación de Playwright/Chromium que `tools/record.mjs`.
+
+### Con OBS
+
 La forma más sencilla es **OBS** con una fuente de tipo *Navegador* (Browser Source):
 
 1. Deja el servidor en marcha (`npm start`).

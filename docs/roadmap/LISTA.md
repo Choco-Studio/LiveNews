@@ -88,7 +88,9 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 ## H. Tiempo real y 24/7
 33. 🟡 Prueba larga: 2 h seguidas en tiempo real con voces reales (3 oct): 60 fps de mediana (mínimo 57), memoria estable (22→26 MB), 0 errores, el servidor siempre con programas preparados por delante. Las 6 h necesitan tu ordenador: aquí un proceso en segundo plano dura como mucho 2 h (`tools/soak.mjs`).
-34. Emisión a YouTube o Twitch (navegador sin pantalla y un codificador de vídeo funcionando a la vez). Sin probar todavía.
+34. 🟡 Emisión a YouTube o Twitch (navegador sin pantalla y un codificador de vídeo funcionando a la vez).
+    - Hecho (12 oct): `tools/stream.mjs` emite el canal sin OBS ni pantalla, en 1080p a 30 fps con su sonido (probado grabando a un archivo: imagen nítida y sonido a volumen de emisión). La clave se guarda en una variable de entorno, nunca en el repositorio. Instrucciones en el README.
+    - Falta: tu clave de YouTube y un ordenador o servidor que esté encendido siempre (este entorno de trabajo se apaga solo).
 35. 🟡 Conectar gpt6luna como orquestador real y medir su coste y lo que tarda en responder.
     - Listo (12 oct): el canal ya sabe usarlo (elige las noticias y escribe; si falla, entra el redactor de respaldo) y hay una herramienta que lo mide de verdad: coste por programa, por hora, por día y por mes, y cuánto tarda (`tools/ai-bench.mjs`).
     - Falta: la clave `OPENAI_API_KEY` guardada en la configuración del entorno (nunca en el chat ni en el repositorio).
