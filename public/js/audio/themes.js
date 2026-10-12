@@ -9,6 +9,7 @@
 //   COSMOS DESK          -> #4  (E lydian: Emaj9#11)
 //   MONEY MINUTE         -> 6   (F major, F6/9)
 //   NEWS IN 60           -> 8   (G: the octave, "the minute starts")
+//   SEVEN DAYS           -> 4   (B-flat: the plagal colour, the Sunday "amen"; 4 -> 3 on the hit)
 //   BREAKING             -> b3  (the programme's key, minor, low and firm)
 //   UP NEXT promo        -> 2   (three notes, left hanging on 2 over IV add9)
 // Harmony leans on sevenths, ninths and plagal moves (no V-I fanfares, no
@@ -24,7 +25,7 @@ import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
-export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, breaking: 3, next: 2 });
+export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, week: 5, breaking: 3, next: 2 });
 
 const D4 = 62; // channel home key: D major
 
@@ -90,6 +91,7 @@ const LEAD = {
   tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
   halo: { wave: 'pulse12', preset: 'pulse12', a: 0.03, d: 0.4, s: 0.5, r: 0.3, vib: [8, 4.8, 0.3], cutoff: 5000, fenv: [2, 0.2] }, // COSMOS shimmer above the triangle
   breeze: { wave: 'pulse12', preset: 'pulse12', a: 0.02, d: 0.35, s: 0.6, r: 0.28, vib: [9, 5, 0.25], cutoff: 3400, fenv: [2.2, 0.14] }, // WORLD WEATHER, airy
+  flugel: { wave: 'pulse25', preset: 'brass', a: 0.045, d: 0.3, s: 0.72, r: 0.2, vib: [9, 4.8, 0.32], scoop: 20, cutoff: 1900, fenv: [2.2, 0.2] }, // SEVEN DAYS: a mellow flugelhorn
   horn: { wave: 'pulse25', preset: 'brass', cutoff: 3400, fenv: [3, 0.16] }, // the brass octave that carries the melody
   strings: { wave: 'pulse12', preset: 'pad', a: 0.12, d: 0.6, s: 0.85, r: 0.5, vib: [10, 5.2, 0.25], legato: 1, cutoff: 6500 }, // high strings on WORLD NOW's hit
 };
@@ -528,6 +530,96 @@ function techTitles(tempo, H, C) {
 // hat. Sunrise: an air swell crests on it, a bell rings the colour (F#) with B, the strings rise and
 // the timpani rolls into the brass, which states the signature (colour 3 over the D pedal) and
 // lands on D add9 with the lock-up.
+// SEVEN DAYS's title sequence (opens/cues.js): the week turning over. B-flat major, 90 BPM, its colour the 4th (the
+// plagal "amen" of a Sunday), soft soul: Rhodes on every landing, a walking tri bass, brushes. Each day's card
+// flutters (two light ticks) and lands with a clack on its beat, and a mallet climbs the week up the scale, one degree a
+// day: Monday on B-flat, Sunday on A, over Bb add9, Gm7, Cm7, Eb add9 and F6; the octave B-flat comes home as the
+// camera pulls back over the whole week, the strings and an air swell rising under it, a glint of bells; the days
+// gather (soft clacks as the pairs land), Thursday's card turns to the 7 on a felt thump, and the signature sings on a
+// mellow flugelhorn over Bb add9 and Eb/Bb, its colour (E-flat) over the B-flat pedal, falling 4 -> 3 on the hit
+// (Bb6/9). Nothing four-on-the-floor, no whooshes.
+function weekTitles(tempo, H, C) {
+  const k = 70; // B-flat 4
+  const Qc = SEQ_CUES['seven-days'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const days = Qc.days.map(at);
+  const pull = at(Qc.pull);
+  const week = at(Qc.week);
+  const gather = at(Qc.gather);
+  const stack = at(Qc.stack);
+  const seven = at(Qc.seven) + 0.33 * q; // the 7's card lands
+  // the day's chord under each landing (the mallet's note always a chord tone)
+  const ch = {
+    bb: [k - 12, k - 8, k - 5, k + 2], // Bb3 D4 F4 C5: Bb add9
+    gm7: [k - 15, k - 12, k - 8, k - 5], // G3 Bb3 D4 F4
+    cm7: [k - 10, k - 7, k - 3, k], // C4 Eb4 G4 Bb4
+    eb: [k - 7, k - 3, k, k + 7], // Eb4 G4 Bb4 F5: Eb add9
+    eb69: [k - 7, k - 3, k + 2, k + 7], // Eb4 G4 C5 F5
+    f6: [k - 5, k - 1, k + 2, k + 4], // F4 A4 C5 D5
+    ebOverBb: [k - 12, k - 7, k - 3, k], // Bb3 Eb4 G4 Bb4: IV over the pedal
+    colour: [k - 12, k - 7, k - 3, k + 7], // Bb3 Eb4 G4 F5: under the colour
+    hit: [k - 12, k - 8, k - 3, k + 2], // Bb3 D4 G4 C5: Bb6/9
+  };
+  const dayChords = [ch.bb, ch.bb, ch.gm7, ch.cm7, ch.eb, ch.eb69, ch.f6];
+  const scale = [0, 2, 4, 5, 7, 9, 11]; // the week up the scale: Monday B-flat .. Sunday A
+  // the Rhodes: a chord on each landing, a lighter push on the "and" before the next
+  const keys = [];
+  days.forEach((b, i) => {
+    keys.push([b, dayChords[i], 0.75, 0.5 + 0.02 * i]);
+    if (i < 6) keys.push([b + 0.75, dayChords[i].slice(1), 0.25, 0.32]);
+  });
+  keys.push([at(8), ch.bb, gather - at(8), 0.5], [gather, ch.ebOverBb, m0 - gather, 0.48]);
+  keys.push([m0, ch.bb, 1.5, 0.5], [m0 + 1.5, ch.ebOverBb, 1, 0.52], [m0 + 2.5, ch.colour, 1.5, 0.54], [H, ch.hit, total - H, 0.62]);
+  // the flutters and the landings: two light ticks before each day, the clack on its beat; the stack's pairs; the 7
+  const ticks = [];
+  for (const b of days) ticks.push([b - 0.77 * q, 'X', 0.16], [b - 0.55 * q, 'X', 0.2], [b, 'X', 0.44]);
+  ticks.push([gather + 0.5 * q, 'X', 0.22], [gather + 0.75 * q, 'X', 0.26], [stack, 'X', 0.34], [seven - 0.33 * q, 'X', 0.2], [seven, 'X', 0.5]);
+  // the walking bass: the day's root on each landing
+  const roots = [k - 24, k - 24, k - 27, k - 22, k - 19, k - 19, k - 29];
+  const bass = [[days[0] - 0.5, k - 29, 0.5, 0.5], ...days.map((b, i) => [b, roots[i], i === 6 ? at(8) - b : 0.9, 0.72])];
+  bass.push([at(8), k - 24, gather - at(8), 0.7], [gather, k - 24, m0 - gather, 0.66], [m0, k - 24, H - m0, 0.75], [H, k - 24, total - H, 0.85]);
+  // brushes: a soft swung hat between the landings
+  const hats = range(days[0], days[6], 0.5).map((b, i) => [b + (i % 2 ? 0.08 : 0), 'H', i % 2 ? 0.12 : 0.18]);
+  return {
+    bpm: tempo,
+    room: 0.28,
+    hall: 0.28,
+    echo: { amount: 0.8, beats: 0.75, feedback: 0.3 },
+    fadeOut: 0.8,
+    tracks: [
+      // the signature first (the lead's first five notes, as in every open), the colour falling 4 -> 3 on the hit
+      { kind: 'lead', inst: LEAD.flugel, notes: part([...motif(k, COLOURS.week, m0), [H, k + 4, C - H - 0.25, 0.85]], total), gain: 1.05 },
+      // the week up the scale on the mallet, one degree a day; the octave as the whole week comes into view
+      { kind: 'harmony', inst: 'mallet', notes: part([
+        ...days.map((b, i) => [b, k + 12 + scale[i], 0.9, 0.42 + 0.03 * i]),
+        [week, k + 24, 1.5, 0.6],
+        [seven, [k + 19, k + 24], 1, 0.4], // the 7: F and B-flat
+        [H, [k + 16, k + 21], total - H, 0.42], // D and G over the hit
+      ], total), gain: 1.25, echo: 0.45, pan: 0.28 },
+      { kind: 'harmony', inst: 'keys', notes: part(keys, total), gain: 0.95, pan: -0.22, echo: 0.2 },
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [pull, [k + 2, k + 7, k + 14], gather - pull, 0.4], // C5 F5 C6: the week complete
+        [gather, [k + 2, k + 7, k + 12], m0 + 1.5 - gather, 0.46], // C5 F5 Bb5
+        [m0 + 1.5, [k + 7, k + 12], 2.5, 0.5], // F5 Bb5 over the colour
+        [H, [k + 4, k + 9, k + 14], total - H, 0.56], // D5 G5 C6
+      ], total), gain: 1, pan: 0.12 },
+      // a glint of bells as the light runs along the cards
+      { kind: 'harmony', inst: ENS.bell, notes: part([[week - 0.3, k + 26, 0.75, 0.34], [week, k + 31, 1, 0.3]], total), gain: 1.4, echo: 0.6, pan: 0.35 },
+      { kind: 'bass', inst: 'tri', notes: part(bass, total), gain: 0.55 },
+      { kind: 'bass', inst: 'sine', notes: part([[pull, k - 36, H - pull, 0.5], [H, k - 36, total - H, 0.66]], total), gain: 0.4 },
+      stab('keys', [k - 12, k - 8, k - 3], C, total, 0.7, 1.2),
+      { drums: drums(ticks, total), gain: 1.15 },
+      { drums: drums(hats, total) },
+      { drums: `R:${fmt(pull)} A:${fmt(week - pull)}@0.4` }, // the air swell under the pull-back
+      { drums: drums([[days[0], 'K', 0.3], [days[2], 'K', 0.28], [days[4], 'K', 0.3], [days[6], 'K', 0.34], [week, 'F', 0.5], [seven, 'F', 0.6], [H, 'F', 0.65], [C, 'F', 0.5]], total) },
+      { drums: drums([[C, 'T', 0.4]], total) },
+    ],
+  };
+}
+
 function worldNowTitles(tempo, H, C) {
   const k = D4;
   const q = H / WN_CUES.hit; // the cue sheet's beats on this grid (1 at the designed length)
@@ -820,6 +912,40 @@ const OPENS = {
   },
 };
 
+// SEVEN DAYS (seven-days.md): the week at the weekend, 90 BPM, B-flat major, its colour the 4th (the plagal "amen"),
+// falling 4 -> 3 on the hit. Its title sequence (opens/weektitles.js) on its own grid; the 4 s package's version: the
+// signature on a mellow flugelhorn over Bb add9 and Eb/Bb (the colour over the B-flat pedal), a Bb6/9 hit.
+OPENS['seven-days'] = {
+  bpm: 90,
+  key: 70,
+  long: { bpm: SEQ_CUES['seven-days'].bpm, maxDuration: 11 },
+  build(H, C) {
+    if (H >= SEQ_CUES['seven-days'].hit) return weekTitles(this.tempo, H, C);
+    const k = 70; // B-flat 4
+    const m0 = H - 4;
+    const total = C + 2;
+    return {
+      bpm: this.tempo,
+      room: 0.28,
+      echo: { amount: 0.8, beats: 0.75, feedback: 0.3 },
+      fadeOut: 0.8,
+      tracks: [
+        { kind: 'lead', inst: LEAD.flugel, notes: part([...motif(k, COLOURS.week, m0), [H, k + 4, C - H - 0.25, 0.85]], total), gain: 1.05 }, // 4 -> 3 on the hit
+        { kind: 'harmony', inst: 'keys', notes: part([
+          [0, [k - 12, k - 8, k - 5, k + 2], m0 + 1.5, 0.5], // Bb add9
+          [m0 + 1.5, [k - 12, k - 7, k - 3, k], 1, 0.52], // Eb over Bb
+          [m0 + 2.5, [k - 12, k - 7, k - 3, k + 7], 1.5, 0.54], // under the colour
+          [H, [k - 12, k - 8, k - 3, k + 2], total - H, 0.62], // Bb6/9
+        ], total), pan: -0.2 },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H, 0.7], [H, k - 24, total - H, 0.85]], total), gain: 0.55 },
+        stab('keys', [k - 12, k - 8, k - 3], C, total, 0.7, 1.2),
+        { drums: drums([[H, 'F', 0.65], [C, 'F', 0.5]], total) },
+        { drums: drums([[C, 'T', 0.42]], total) },
+      ],
+    };
+  },
+};
+
 // Unknown programmes: the channel signature in C major, sober, all major:
 // Cadd9 -> Dm9/C -> Fmaj7/C over the C pedal, a C6/9 hit (no minor start,
 // unlike WORLD NOW's arc).
@@ -853,7 +979,7 @@ const GENERIC = {
   },
 };
 
-const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather' };
+const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather', 'seven-days': 'week' };
 
 /**
  * Theme tune for a programme's open. The final chord lands on the title
@@ -893,6 +1019,7 @@ const VOICE = {
   'money-minute': { key: 65, lead: LEAD.epiano, pad: 'pad' },
   'news-60': { key: 67, lead: LEAD.darkPulse, pad: 'pad' },
   'world-weather': { key: 60, lead: LEAD.breeze, pad: 'pad' },
+  'seven-days': { key: 70, lead: LEAD.flugel, pad: 'pad' },
   channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
 };
 const keyOf = (programId) => (VOICE[programId] ? programId : 'channel');
@@ -1017,7 +1144,8 @@ function buildOutro(programId) {
   const total = 5.5;
   const pedal = k - 24;
   const tonic = id === 'world-now' ? k - 12 : k; // WORLD NOW: low brass
-  const home = id === 'cosmos' ? [[3.5, k + 7, 0.5, 0.8], [4, k, 1.5, 0.85]] : [[3.5, tonic, 2, 0.85]]; // #4 rises to 5 first
+  // COSMOS: #4 rises to 5 first; SEVEN DAYS: the 4th falls to the 3rd first (the plagal "amen")
+  const home = id === 'cosmos' ? [[3.5, k + 7, 0.5, 0.8], [4, k, 1.5, 0.85]] : id === 'seven-days' ? [[3.5, k + 4, 0.5, 0.8], [4, k, 1.5, 0.85]] : [[3.5, tonic, 2, 0.85]];
   const lead = [...motif(tonic, colour, 0, { colourBeats: 1 }), ...home];
   const padHome = id === 'tech-bytes' ? [k - 12, k - 9, k - 3, k + 2] : id === 'cosmos' ? [k - 12, k - 5, k - 1, k + 2, k + 6] : [k - 12, k - 5, k + 2, k + 4];
   const tracks = [

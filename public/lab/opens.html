@@ -53,6 +53,7 @@
         'money-minute': { title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', presenters: ['PENNY STERLING'] },
         'news-60': { title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', presenters: ['SAM NIGHT'] },
         'world-weather': { title: 'WORLD WEATHER', tagline: 'THE SKIES OVER EVERY CONTINENT', presenters: ['SAM NIGHT'] },
+        'seven-days': { title: 'SEVEN DAYS', tagline: 'THE WEEK ON GLOBIT 24', presenters: ['PACO PIXEL', 'LOLA BYTE'] },
         'weekend-review': { title: 'WEEKEND REVIEW', tagline: 'THE WEEK THAT WAS', presenters: ['PACO PIXEL'] },
       };
 
@@ -160,6 +161,9 @@
         'fact-cosmos-qualifier': fact('cosmos', { fact: 'NEARLY 3 MILLION VISITORS', source: 'Starfield Journal' }),
         'fact-cosmos-text': fact('cosmos', { fact: 'THE PROBE HAS LEFT THE SUN\'S WIND BEHIND', source: 'Starfield Journal' }),
         'fact-world-qualifier': fact('world-now', { fact: 'MORE THAN 62% OF TRADERS', numbers: [{ value: '62%', qualifier: 'MORE THAN', label: 'OF TRADERS' }], label: 'BY THE NUMBERS', source: 'Pixelburg Post' }),
+        'timeline-world': fact('world-now', { timeline: [{ when: 'MARCH 2023', what: 'The canal authority warns of low water' }, { when: 'JUNE 2024', what: 'Transits are cut to 24 a day' }, { when: 'OCT 2026', what: 'Fog closes the canal for a day' }], source: 'Ledger Line' }),
+        'timeline-seven-days': fact('seven-days', { timeline: [{ when: 'MON', what: 'Hurricane Elena hits Mexico’s Yucatán' }, { when: 'WED', what: 'Elena weakens over the peninsula' }, { when: 'FRI', what: 'Power back for half the homes' }, { when: 'SAT', what: 'Hurricane Elena cuts power to 1.2m homes' }, { when: 'SUN', what: 'Clean-up begins on the coast' }], source: 'Pixelburg Post' }),
+        'numbers-seven-days': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: [{ value: '21%', label: 'INDEX UP' }, { value: '3,000', qualifier: 'ABOUT', label: 'PEOPLE' }, { value: '27', label: 'KILOMETRE ROAD TUNNEL' }], label: 'THE WEEK IN NUMBERS', programId: 'seven-days', source: 'Ledger Line' }),
         'numbers-world-qual': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: [{ value: '1.2 MILLION', qualifier: 'ABOUT', label: 'HOMES WITHOUT POWER' }, { value: '30', qualifier: 'UP TO', label: 'SHIPS HELD IN PORT' }], programId: 'world-now', source: 'Pixelburg Post' }),
         'numbers-tech-qual': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: [{ value: '300,000', qualifier: 'ABOUT', label: 'HOMES CONNECTED' }, { value: '12 TONNES', qualifier: 'UP TO', label: 'COPPER RECOVERED' }], programId: 'tech-bytes', source: 'Bitport Herald' }),
         'quote-world': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'We will rebuild every bridge the river took, and we will start on Monday', by: 'the mayor', programId: 'world-now', image: photo().card }),

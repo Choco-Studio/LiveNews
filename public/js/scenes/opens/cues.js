@@ -59,6 +59,19 @@ export const CUES = Object.freeze({
     settle: 10.6, // ...and settles in front of the sun
     hit: 14,
   }),
+  // SEVEN DAYS: the week turning over. The camera travels along a row of seven split-flap cards, each turning to its
+  // day as it passes (Monday to Sunday), pulls back over the whole week, gathers the days into one stack, and the
+  // top card turns to the coral 7: the emblem
+  'seven-days': Object.freeze({
+    bpm: 90,
+    days: Object.freeze([1, 2, 3, 4, 5, 6, 7]), // a day's card turns on each beat, Monday to Sunday
+    pull: 7.4, // the camera pulls back over the whole week
+    week: 9, // the seven cards stand in a row at the emblem's size; a glint runs along them
+    gather: 9.5, // the days gather into one stack behind Thursday...
+    stack: 10.5, // ...and settle
+    seven: 11, // the top card turns to the 7
+    hit: 14,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

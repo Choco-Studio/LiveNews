@@ -273,3 +273,89 @@ test('WORLD WEATHER: through the cloud the camera rises at most 3 px a frame, an
   // the highest bank of the sea, at the slowest depth, is below the frame when the package takes over
   assert.ok(wt.weatherSeaTop(wt.WEATHER_SEQ.revealAt / beat) > 216, 'no cloud left under the lock-up');
 });
+
+test('SEVEN DAYS: a card a beat, each landing on its day as the camera brings it to the centre; the run slides in whole pixels', async () => {
+  const wt = await import('../public/js/scenes/opens/weektitles.js');
+  const Q = cues.CUES['seven-days'];
+  const beat = 60 / Q.bpm;
+  const names = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  for (let i = 0; i < 7; i++) {
+    const land = Q.days[i];
+    // the card is mid-turn just before its beat and shows its day from the beat on, at the centre of the frame
+    assert.ok(wt.weekCard(i, land - 0.05).flip, `${names[i]}: turning before its beat`);
+    const st = wt.weekCard(i, land + 1e-6);
+    assert.equal(st.flip, null, names[i]);
+    assert.equal(st.face.label, names[i]);
+    assert.equal(st.face.tone, i >= 5 ? 'weekend' : 'day', `${names[i]}: the weekend in coral`);
+    const cam = wt.weekCamera(land);
+    assert.ok(Math.abs(((i - 3) * wt.WEEK_PITCH - cam.x) * cam.k) < 1, `${names[i]} lands at the centre`);
+    // two flutters, then the landing: each turn starts where the last one ended (a turn never goes back)
+    const turns = wt.weekTurns(i);
+    assert.equal(turns.length, 3);
+    for (let k = 1; k < 3; k++) assert.ok(Math.abs(turns[k].at - (turns[k - 1].at + turns[k - 1].dur)) < 1e-9 && turns[k].from === turns[k - 1].to);
+    assert.ok(Math.abs(turns[2].at + turns[2].dur - land) < 1e-9);
+    // every half of a turn stays on screen at least two frames at 30 fps
+    for (const t of turns) assert.ok((t.dur * beat) / 2 >= 2 / 30 - 1e-9, `${names[i]}: a ${(t.dur * beat).toFixed(3)} s turn`);
+  }
+  // while the camera travels it moves whole pixels, 4 px a frame at 30 fps (5 at most as it eases off), never back
+  const f = 1 / 30 / beat;
+  const steps = [];
+  for (let b = 0; b < Q.pull - f; b += f) {
+    const a = wt.weekCamera(b), c = wt.weekCamera(b + f);
+    const px = Math.round((c.x - a.x) * a.k);
+    assert.ok(Math.abs(a.x * a.k - Math.round(a.x * a.k)) < 1e-6, `beat ${b.toFixed(2)}: whole pixels`);
+    assert.ok(px >= 0 && px <= 5, `beat ${b.toFixed(2)}: ${px} px a frame`);
+    steps.push(px);
+  }
+  assert.equal(steps.sort((x, y) => x - y)[steps.length >> 1], 4, 'the run: 4 px a frame');
+  // the light warms once (Monday cool, Sunday warm) and the week's field has given way to the open's by the gather
+  for (let b = 0; b < Q.gather; b += 0.25) assert.ok(wt.weekWarmth(b + 0.25) >= wt.weekWarmth(b));
+  assert.equal(wt.weekWarmth(Q.days[0]), 0);
+  assert.equal(wt.weekWarmth(Q.days[6]), 1);
+  assert.equal(wt.weekField(Q.gather), 1);
+});
+
+test('SEVEN DAYS: at the hand-over the stack and the 7 are the emblem\'s own pixels (no pop), the bit on its corner', async () => {
+  const wt = await import('../public/js/scenes/opens/weektitles.js');
+  const wk = await import('../public/js/scenes/opens/week.js');
+  const kit = await import('../public/js/scenes/opens/kit.js');
+  const Q = cues.CUES['seven-days'];
+  const beat = 60 / Q.bpm;
+  const frame = () => ({ d: new Uint32Array(384 * 216), w: 384, h: 216, ox: 0, oy: 0 });
+  const at = wt.WEEK_SEQ.revealAt / beat;
+  assert.ok(at > Q.seven + 0.33, 'the 7 has landed before the package takes over');
+  const seq = frame(), emb = frame();
+  wt.paintBoard(seq, at - 1e-6);
+  wk.paintEmblem(emb, kit.CENTRE.x, kit.CENTRE.y, kit.ZOOM, kit.TL.glide);
+  let n = 0, diff = 0;
+  for (let i = 0; i < seq.d.length; i++) {
+    if (seq.d[i] || emb.d[i]) n++;
+    if (seq.d[i] !== emb.d[i]) diff++;
+  }
+  assert.ok(n > 2000, `${n} emblem pixels`);
+  assert.equal(diff, 0, `${diff} pixels differ at the hand-over`);
+  // the bit pops after the 7 has landed, before the package's glide
+  const popBeat = (wt.WEEK_SEQ.shift + wk.WEEK_OPEN.popAt) / beat;
+  assert.ok(popBeat > Q.seven + 0.33 && popBeat < at, `the bit pops on beat ${popBeat.toFixed(2)}`);
+  // the stack's three layers show under the card in the lock-up, each a whole number of pixels lower
+  for (let k = 1; k <= 3; k++) assert.equal(wk.layerDrop(k, 1), Math.round(k * wk.LAYER));
+});
+
+test('SEVEN DAYS: the theme climbs the week on its landings and falls 4 -> 3 on the hit', () => {
+  const Q = cues.CUES['seven-days'];
+  const song = tune.parseTune(opens.openFor('seven-days').tune);
+  const lead = song.tracks[0].events;
+  const tonic = lead[1].midis[0];
+  assert.equal(lead[4].midis[0] - tonic, 5, 'the colour: the 4th');
+  assert.equal(lead[5].at, Q.hit);
+  assert.equal(lead[5].midis[0] - tonic, 4, '...falling to the 3rd on the hit');
+  // the mallet: a note on each day's landing, one degree of B-flat major higher every day
+  const mallet = song.tracks.find((t) => t.kind === 'harmony' && t.events.length >= 7 && t.events.some((e) => Math.abs(e.at - Q.days[6]) < 1e-6));
+  assert.ok(mallet, 'a melodic part lands on the days');
+  const notes = Q.days.map((b) => mallet.events.find((e) => Math.abs(e.at - b) < 1e-6)?.midis[0]);
+  assert.deepEqual(notes.map((m) => m - notes[0]), [0, 2, 4, 5, 7, 9, 11], 'Monday to Sunday up the scale');
+  assert.equal(notes[0] % 12, tonic % 12, 'from the tonic');
+  // a clack on every landing (the flap's tick)
+  const ticks = song.tracks.filter((t) => t.kind === 'drums').flatMap((t) => t.events.filter((e) => e.drum === 'x').map((e) => e.at));
+  for (const b of Q.days) assert.ok(ticks.some((t) => Math.abs(t - b) < 1e-6), `a clack on beat ${b}`);
+});

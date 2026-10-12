@@ -26,6 +26,7 @@ import { MONEY_TITLES, drawMoneyTitles } from './opens/moneytitles.js';
 import { NEWS_TITLES, drawNewsTitles } from './opens/newstitles.js';
 import { GENERIC, drawGeneric } from './opens/generic.js';
 import { WEATHER_TITLES, drawWeatherTitles } from './opens/weathertitles.js';
+import { WEEK_TITLES, drawWeekTitles } from './opens/weektitles.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
@@ -38,6 +39,7 @@ export const OPENS = {
   'money-minute': open(drawMoneyTitles, MONEY_TITLES, TUNES['money-minute'], durationOf('money-minute'), hitOf('money-minute')),
   'news-60': open(drawNewsTitles, NEWS_TITLES, TUNES['news-60'], durationOf('news-60'), hitOf('news-60')),
   'world-weather': open(drawWeatherTitles, WEATHER_TITLES, TUNES.generic, durationOf('world-weather'), hitOf('world-weather')),
+  'seven-days': open(drawWeekTitles, WEEK_TITLES, TUNES.generic, durationOf('seven-days'), hitOf('seven-days')),
 };
 const FALLBACK = open(drawGeneric, GENERIC, TUNES.generic);
 /** The open for a programme id (own keys only: 'constructor' or '__proto__' get the generic open). */
@@ -126,7 +128,7 @@ export function drawProgrammeLockup(ctx, programId, info) {
 // timer slice (globe tables, sprites, backdrops), then one hidden lock-up frame of each open,
 // which also warms the top row and the text caches.
 if (HAS_DOM && typeof setTimeout === 'function') {
-  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS_TITLES, MONEY_TITLES, NEWS_TITLES, WEATHER_TITLES, GENERIC];
+  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS_TITLES, MONEY_TITLES, NEWS_TITLES, WEATHER_TITLES, WEEK_TITLES, GENERIC];
   const jobs = [];
   for (const p of progs) jobs.push(p.background);
   for (const p of progs) if (p.warmJobs) jobs.push(...p.warmJobs());
