@@ -333,7 +333,7 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase, area }) {
  * The cities on the wall or the graphic: `proj(lat, lon)` -> screen { x, y } | null. A zone shows all its cities
  * with their names; the world shows the ones the voice has named (and, with `all`, every city that has room).
  */
-function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false }) {
+function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false, reveal = null }) {
   const where = new Map();
   const list = [];
   const zoneIds = zone ? new Set(zone.cities.map((c) => c.id)) : null;
@@ -361,7 +361,20 @@ function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avo
   shown.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
   for (const it of shown) BOX.push([it.x - 8, it.y - 7, it.x + 8, it.y + 7]);
   // a zone names all its cities; the world names the places the voice has named (who knows where Nuuk is)
-  shown.forEach((it, i) => drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds || !!named?.has(it.c.id), hot: it.c.id === hotId, hotK, phase: i * 0.37, area }));
+  // reveal(i): how far in (0..1) the i-th city from the west is; one partly in is wiped down from the top
+  const west = reveal ? new Map([...shown].sort((a, b) => a.x - b.x).map((it, i) => [it, i])) : null;
+  shown.forEach((it, i) => {
+    const r = reveal ? reveal(west.get(it)) : 1;
+    if (r <= 0) return;
+    if (r < 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(it.x - 70, it.y - 32, 140, Math.round(64 * easeOut(r)));
+      ctx.clip();
+    }
+    drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds || !!named?.has(it.c.id), hot: it.c.id === hotId, hotK, phase: i * 0.37, area });
+    if (r < 1) ctx.restore();
+  });
   return where;
 }
 
@@ -999,8 +1012,8 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
     BOX.push(drawSource(ctx, data, Math.round(fx1 - pan), topY + 16));
   }
   const area = { x0: 4, x1: W - 4, y0: glassTop + 4, y1: CAM.yB - 4 };
-  // the cities (a zone once the camera is nearly there), the highs and lows in view
-  const zoneOn = tgt.zone && k > 0.55;
+  // the cities (a zone once he has arrived beside them), the highs and lows in view
+  const zoneOn = tgt.zone && (ST.chipsFor === seg || (k >= 1 && !walking)); // (once in, they stay for his steps)
   let where = new Map();
   let stormXY = null;
   const panel = warning ? ease((t - ST.moveAt - 0.3) / 0.9) : 0;
@@ -1013,7 +1026,13 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   if (k >= 1 || warning) claimStorms(proj, rOf);
   // the highs and lows once the wall has arrived (in the move they would flicker past at every zoom), rising in
   if (k >= 1) drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { x0: 4, x1: panelRect ? panelRect[0] - 4 : W - 4, y0: area.y0, y1: area.y1 }, { avoid: nearHim, reveal: (t - ST.moveAt - ST.moveDur) / 0.3 });
-  if (zoneOn) where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area });
+  if (zoneOn) {
+    // the zone's cities come in once he has arrived beside them (walking over from the last zone he would cross
+    // their chips), wiped down one after another from west to east as the cards come in
+    if (ST.chipsFor !== seg) [ST.chipsFor, ST.chipsAt] = [seg, t];
+    const t0c = ST.chipsAt;
+    where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area, reveal: (i) => (t - t0c - i * 0.06) / 0.24 });
+  }
   if (zoneOn && k >= 1) drawStormTags(ctx, proj, { ...area, x1: W - 4 }, rOf);
   if (warning && tgt.warning) {
     const w = tgt.warning;
@@ -1057,7 +1076,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   pr.draw(ctx, rt, (px) => {
     prof('rig', t0);
     const t1 = now();
-    lightFigure(px, { rim, spill: 2, both: 0, from: pr.x - 80, to: pr.x + 80 });
+    lightFigure(px, { rim, spill: 2, both: 0, from: pr.x - 80, to: pr.x + 80, litTo: CAM.bot[Math.max(0, Math.min(W - 1, Math.round(pr.x)))] });
     prof('light', t1);
     t0 = now();
   });

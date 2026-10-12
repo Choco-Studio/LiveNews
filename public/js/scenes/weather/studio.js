@@ -281,10 +281,12 @@ let SOFT_TU = null;
  * The light on the presenter (his frame: Uint32, 0 = clear). The wall behind him rims his silhouette: an edge
  * pixel whose neighbour above or to the side is clear goes one step up its ramp (the side in `rim` fully, the
  * other side in a dither, the top fully); then the wall's cool spill lifts dark cloth one step in a dither that
- * thins over `spill` pixels in from the rimmed side. `from`..`to` limit the columns looked at. Returns his box
+ * thins over `spill` pixels in from the rimmed side. `from`..`to` limit the columns looked at. `litTo` (a row): the
+ * wall lights him only where it is behind him; below its foot (the plinth, the black floor) the rim and the spill
+ * thin out over 4 px, so his legs stand in front of the dark plinth instead of glowing against it. Returns his box
  * [x0, y0, x1, y1] (inclusive), or null.
  */
-export function lightFigure(px, { rim = 1, spill = 3, top = true, both = 0.5, from = 0, to = W } = {}) {
+export function lightFigure(px, { rim = 1, spill = 3, top = true, both = 0.5, from = 0, to = W, litTo = H } = {}) {
   let x0 = W, x1 = -1, y0 = H, y1 = -1;
   const c0 = Math.max(0, from | 0), c1 = Math.min(W, to | 0);
   for (let y = 0; y < H; y++) {
@@ -303,11 +305,15 @@ export function lightFigure(px, { rim = 1, spill = 3, top = true, both = 0.5, fr
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out[y * W + x] = px[y * W + x];
   for (let y = y0; y <= y1; y++) {
     const by = (y & 3) << 2;
+    // how much of the wall is behind this row: all of it above its foot, nothing 4 px below it
+    const lit = y < litTo ? 1 : 1 - (y - litTo + 1) / 5;
+    if (lit <= 0) continue;
     for (let x = x0; x <= x1; x++) {
       const i = y * W + x;
       const c = px[i];
       if (!c) continue;
       const bay = B4[by | (x & 3)];
+      if (lit < 1 && lit <= bay) continue;
       const L = x > 0 ? px[i - 1] : 0, R = x < W - 1 ? px[i + 1] : 0, U = y > 0 ? px[i - W] : 0;
       // distance in from the rimmed side (1 = the edge pixel)
       let din = 99;

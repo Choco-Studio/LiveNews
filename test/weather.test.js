@@ -1048,6 +1048,15 @@ describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s 
     assert.ok(speeds.every((s) => s >= 0.92 && s <= 1.08) && new Set(speeds).size === speeds.length);
   });
 
+  test('the wall lights him only where it is behind him: below its foot his legs keep their own colours', async () => {
+    const studio = await import('../public/js/scenes/weather/studio.js');
+    const fig = new Uint32Array(384 * 216);
+    for (let y = 60; y < 216; y++) for (let x = 100; x < 120; x++) fig[y * 384 + x] = packed(P.slate);
+    studio.lightFigure(fig, { rim: 1, spill: 3, litTo: 160 });
+    assert.equal(fig[120 * 384 + 119], packed(P.steel), 'the rim where the wall is behind him');
+    for (let y = 165; y < 216; y++) for (let x = 100; x < 120; x++) assert.equal(fig[y * 384 + x], packed(P.slate), 'no rim or spill against the plinth and the floor');
+  });
+
   test('the close-up: a place on the wall behind him is kept on the side he faces into; beats only in long quiet stretches', async () => {
     const centre = await import('../public/js/scenes/weather/index.js');
     const { closeupTarget, beatsFor } = centre.__test;
