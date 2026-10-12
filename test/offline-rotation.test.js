@@ -125,7 +125,7 @@ test('recycle: oldest first, never a story of the last `gap` episodes, and a re-
   assert.equal(desk.recycle(5, { gap: 3, filter: (s) => s.id !== 'c' }), 1, 'b only: c is filtered out');
 });
 
-test('live desks never recycle by default; with recycle "all" only stories aired long enough ago come back', async () => {
+test('a live desk recycles only with recycle "all" (the channel\'s default since 12 Oct, server/config.js), and then only stories aired long enough ago', async () => {
   const desk = new NewsDesk({ log: silent, fetchImpl: async () => { throw new Error('no network'); } });
   const titles = ['Oil prices slide on weak demand', 'Retailer posts record holiday sales', 'Airline orders new jets', 'Coffee futures reach a high'];
   for (let i = 0; i < 4; i++) desk.stories.set(`s${i}`, { id: `s${i}`, title: titles[i], summary: 'x'.repeat(100), link: `https://e.test/${i}`, source: `O${i}`, category: 'business', weight: 1, published: Date.now() - i * 60_000, image: null });
@@ -134,7 +134,7 @@ test('live desks never recycle by default; with recycle "all" only stories aired
   const channel = loadChannel();
   const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silent });
   const live = new Producer({ config: { candidatePool: 12, minNewStories: 3 }, newsDesk: desk, chain, log: silent });
-  assert.equal(live.canProduce(channel, 'money-minute'), false, 'a live desk does not re-run its stories by default');
+  assert.equal(live.canProduce(channel, 'money-minute'), false, 'without the setting a live desk does not re-run its stories');
   const all = new Producer({ config: { candidatePool: 12, minNewStories: 3, recycle: 'all', recycleAfterHours: 4 }, newsDesk: desk, chain, log: silent });
   assert.equal(all.canProduce(channel, 'money-minute'), false, 'aired minutes ago: too recent to re-run');
   for (const id of desk.covered.keys()) desk.covered.set(id, Date.now() - 5 * 3600_000);

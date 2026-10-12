@@ -226,7 +226,7 @@ describe('.env.example', () => {
     const c = await loadConfig({ RECYCLE_GAP: '-5', PICTURE_BUDGET_MS: '-1', RECYCLE_AFTER_HOURS: '-3', RECENT_LINES_HOURS: '1000' });
     assert.equal(c.recycleGap, 6);
     assert.equal(c.pictureBudgetMs, 6000);
-    assert.equal(c.recycleAfterHours, 4);
+    assert.equal(c.recycleAfterHours, 2);
     assert.equal(c.recentLinesHours, 6);
     const ok = await loadConfig({ RECYCLE_GAP: '8', PICTURE_BUDGET_MS: '2500' });
     assert.equal(ok.recycleGap, 8);

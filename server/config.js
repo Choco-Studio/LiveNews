@@ -88,8 +88,10 @@ export const config = {
   // When the desk runs short of new stories, those aired longest ago come back in new bulletins:
   // 'local' (default: the offline fixture desk only), 'all' (live feeds too, only stories aired at least
   // RECYCLE_AFTER_HOURS ago), 'off'. Never a story of the last RECYCLE_GAP episodes.
-  recycle: ((v) => (['all', 'off', 'local'].includes(v) ? v : 'local'))(env('RECYCLE_STORIES', 'local').trim().toLowerCase()),
-  recycleAfterHours: bounded('RECYCLE_AFTER_HOURS', 4, 0, 168),
+  // (all by default, 12 Oct soak: on live feeds the desk ran out of new stories after two hours and the channel aired
+  // breaks and reruns; a rolling news channel tells its stories again through the day, here two hours on at the earliest)
+  recycle: ((v) => (['all', 'off', 'local'].includes(v) ? v : 'all'))(env('RECYCLE_STORIES', 'all').trim().toLowerCase()),
+  recycleAfterHours: bounded('RECYCLE_AFTER_HOURS', 2, 0, 168),
   recycleGap: bounded('RECYCLE_GAP', 6, 1, 50),
   // The station's memory of presenter lines and features aired (no line twice within it)
   recentLinesHours: bounded('RECENT_LINES_HOURS', 6, 0, 48),
