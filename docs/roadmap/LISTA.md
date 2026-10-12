@@ -66,7 +66,9 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
       - tableros nuevos: HOT & COLD (cuenta atrás de los lugares más calurosos y más fríos del planeta) y THE NEXT THREE DAYS (tres días de cinco ciudades);
       - el panel de avisos con el mapa al lado.
 
-      Falta pulir: las nubes se estiran en franjas al final del día en algunas zonas, la tormenta de demostración (ORLA) no tiene nubes alrededor y los gestos de Sam en primer plano son pequeños.
+    - ✅ **Ronda 4 (12 oct):** las nubes conservan su forma las 24 horas (antes se estiraban en franjas), las tormentas tropicales tienen su espiral de nubes en el mapa con su nombre, Sam hace gestos de presentador del tiempo en el primer plano (mano abierta hacia la pared, las dos palmas para "todo el mundo", un barrido para el movimiento) sobre las palabras, y las ciudades de cada zona aparecen cuando él llega.
+
+      Falta pulir: la tormenta no se desplaza durante las 24 horas (no hay previsión de su trayectoria) y algunos bordes de nubes muy densas salen escalonados.
 22. **Ritmo.** Transiciones, pausas entre bloques y tiempos de espera (el equipo de ritmo estaba a mitad).
 23. 🟡 **Textos.** Hecho (4 oct, con noticias reales):
     - las frases de transcripción de los vídeos de los medios ("Here's Jennie Shin with more…", saludos, despedidas) ya no llegan al guion;
