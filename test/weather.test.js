@@ -498,3 +498,257 @@ describe('the weather presenter (round 2): planted steps, aimed points', async (
     assert.ok(p.pointAt(100, 120, 3.5));
   });
 });
+
+describe('the weather centre, round 3: shots, the moving sky, the studio, the boards', async () => {
+  const sky = await import('../public/js/scenes/weather/sky.js');
+  const studio = await import('../public/js/scenes/weather/studio.js');
+  const boards = await import('../public/js/scenes/weather/boards.js');
+  const centre = await import('../public/js/scenes/weather/index.js');
+  const packed = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0xff000000 | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0;
+  };
+  const PALETTE = new Set(Object.values(P).map(packed));
+  const onlyPalette = (px, what) => {
+    for (let i = 0; i < px.length; i++) if (px[i] && !PALETTE.has(px[i] >>> 0)) assert.fail(`${what}: pixel ${i} is ${(px[i] >>> 0).toString(16)}, not a palette colour`);
+  };
+  const report = await fixtureReport();
+  const S = sky.decodeSky(report.sky);
+
+  test('the sky decodes from the episode (null-safe), each layer in its own unit', () => {
+    assert.ok(S, 'the recorded sky decodes');
+    assert.equal(S.frames, report.sky.hours.length);
+    assert.equal(S.cloud[0].length, S.w * S.h);
+    const range = (a) => a.reduce(([lo, hi], v) => [Math.min(lo, v), Math.max(hi, v)], [Infinity, -Infinity]);
+    const [c0, c1] = range(S.cloud[0]), [r0] = range(S.rain[0]), [p0, p1] = range(S.mslp[0]);
+    assert.ok(c0 >= 0 && c1 <= 100, 'cloud cover in %');
+    assert.ok(r0 >= 0, 'rain never negative');
+    assert.ok(p0 > 940 && p1 < 1061, 'pressure in hPa');
+    assert.equal(sky.decodeSky(report.sky), S, 'decoded once per sky');
+    assert.equal(sky.decodeSky(null), null);
+    assert.equal(sky.decodeSky({ ...report.sky, cloud: ['nonsense'] }), null, 'a broken layer: no sky (the map plays still)');
+    assert.equal(sky.decodeSky({ ...report.sky, hours: [0] }), null, 'one frame is no time-lapse');
+  });
+
+  test('the layers between frames: a smooth tween through the frames, in range; bilinear in space, longitude wrapping', () => {
+    const clock = new sky.SkyClock(S);
+    const at3 = Float32Array.from(clock.at(3).mslp);
+    assert.deepEqual(at3, S.mslp[1], 'on a frame: the frame');
+    const mid = clock.at(4.5).cloud;
+    for (let i = 0; i < mid.length; i++) assert.ok(mid[i] >= 0 && mid[i] <= 100);
+    // no kink at a frame: the step before a frame matches the step after it (Catmull-Rom is C1)
+    const c = new sky.SkyClock(S);
+    const k = 1234;
+    const v = (h) => c.at(h).mslp[k];
+    const before = v(3) - v(2.9), after = v(3.1) - v(3);
+    assert.ok(Math.abs(before - after) < 0.25, `${before} vs ${after}`);
+    assert.equal(sky.frameOf(S, 0), 0);
+    assert.equal(sky.frameOf(S, 13.5), 4.5);
+    assert.equal(sky.frameOf(S, 99), S.frames - 1);
+    // a cell's centre reads the cell; the date line wraps
+    const g = S.mslp[0];
+    const j = 20, i = 7;
+    assert.ok(Math.abs(sky.sampleLayer(S, g, S.lat0 - j * S.step, S.lon0 + i * S.step) - g[j * S.w + i]) < 1e-3);
+    assert.ok(Math.abs(sky.sampleLayer(S, g, 10, 179.9) - sky.sampleLayer(S, g, 10, -180.1)) < 1e-3);
+  });
+
+  test('the highs and lows: matched frame to frame, refined between cells, moving smoothly; a named one is held', () => {
+    assert.ok(S.tracks.length > 0);
+    const long = S.tracks.filter((t) => t.pts.length >= 4);
+    assert.ok(long.length >= 4, 'most systems last through several frames');
+    for (const t of long) {
+      for (let q = 1; q < t.pts.length; q++) {
+        const a = t.pts[q - 1], b = t.pts[q];
+        assert.equal(b.frame, a.frame + 1);
+        const d = Math.hypot((((b.lon - a.lon + 540) % 360) - 180) * Math.cos((a.lat * Math.PI) / 180), b.lat - a.lat);
+        assert.ok(d <= 12.5, `a track jumps ${d} degrees`);
+      }
+    }
+    // the centre to a fraction of a cell: never more than half a cell from the grid's own
+    for (const s of S.systems.slice(0, 20)) {
+      const r = sky.refineCentre(S, s);
+      assert.ok(Math.abs(r.lat - s.lat) <= S.step / 2 + 1e-9 && Math.abs(r.lon - s.lon) <= S.step / 2 + 1e-9);
+    }
+    // between two frames a system sits between its two places
+    const t = long[0];
+    const [a, b] = t.pts;
+    const m = sky.systemsAt(S.tracks, a.frame + 0.5).find((x) => x.id === t.id);
+    assert.ok(m && m.lat >= Math.min(a.lat, b.lat) - 1e-9 && m.lat <= Math.max(a.lat, b.lat) + 1e-9);
+    // a track that has ended shows only while it is being named
+    const ended = S.tracks.find((x) => x.pts.at(-1).frame < S.frames - 2);
+    if (ended) {
+      const f = S.frames - 1;
+      assert.ok(!sky.systemsAt(S.tracks, f).some((x) => x.id === ended.id));
+      assert.ok(sky.systemsAt(S.tracks, f, [], ended.id).some((x) => x.id === ended.id));
+    }
+  });
+
+  test('isobars: marching squares find the contour where the field crosses the level', () => {
+    const w = 40, h = 30, f = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) f[y * w + x] = 1000 + Math.hypot(x - 20, y - 15);
+    const segs = sky.isobarSegments(f, w, h, 1008);
+    assert.ok(segs.length >= 4 * 20, 'a closed ring of segments');
+    for (let q = 0; q < segs.length; q += 2) {
+      const r = Math.hypot(segs[q] - 20, segs[q + 1] - 15);
+      assert.ok(Math.abs(r - 8) < 0.6, `a point at radius ${r}`);
+    }
+    assert.equal(sky.isobarSegments(f, w, h, 900).length, 0, 'a level the field never reaches: nothing');
+  });
+
+  test('the cloud texture: tileable fBm, equalised at every mip (a cover of 40 % leaves 40 % of the area cloud)', () => {
+    const T = sky.cloudTexture();
+    assert.deepEqual(T.map((l) => l.size), [256, 128, 64, 32]);
+    for (const { data } of T) {
+      const above = data.filter((v) => v / 255 > 1 - 0.4).length / data.length;
+      assert.ok(Math.abs(above - 0.4) < 0.02, `${above}`);
+    }
+    // tileable: the last column runs on into the first as smoothly as any two neighbours do
+    const d = T[0].data, n = 256;
+    let seam = 0, inner = 0;
+    for (let y = 0; y < n; y++) {
+      seam += Math.abs(d[y * n + n - 1] - d[y * n]);
+      inner += Math.abs(d[y * n + 100] - d[y * n + 101]);
+    }
+    assert.ok(seam < inner * 2.5, `seam ${seam} vs ${inner}`);
+  });
+
+  test('the compositor: palette colours only; cloud where the cover is, rain in radar colours, isobars', () => {
+    const w = 96, h = 54;
+    const base = new Uint32Array(w * h).fill(packed(P.navy));
+    const dst = new Uint32Array(w * h);
+    const view = { clon: 0, clat: 0, s: w / 360, kx: 1 };
+    const flat = (cloud, rain = 0, mslp = 1013) => ({ cloud: new Float32Array(S.n).fill(cloud), rain: new Float32Array(S.n).fill(rain), u: new Float32Array(S.n), v: new Float32Array(S.n), mslp: new Float32Array(S.n).fill(mslp) });
+    sky.composeSky(dst, base, w, h, view, S, flat(0));
+    assert.ok(dst.every((c) => c === packed(P.navy)), 'no cover: the map untouched');
+    sky.composeSky(dst, base, w, h, view, S, flat(100));
+    const veiled = dst.filter((c) => c !== packed(P.navy)).length / dst.length;
+    assert.ok(veiled > 0.85, `a full cover veils the map (${veiled})`);
+    onlyPalette(dst, 'cloud');
+    sky.composeSky(dst, base, w, h, view, S, flat(90, 6));
+    const radar = new Set(sky.RADAR.map((r) => r.c));
+    assert.ok(dst.some((c) => radar.has(c)), 'heavy rain draws radar colours');
+    onlyPalette(dst, 'rain');
+    // the real sky at a real moment, isobars on
+    sky.composeSky(dst, base, w, h, view, S, new sky.SkyClock(S).at(7), { tau: 7, isobars: true, isoColor: packed(P.fog) });
+    onlyPalette(dst, 'the sky');
+    assert.ok(dst.some((c) => c === packed(P.fog)), 'isobars are drawn');
+    // the veil: palette colours, lighter at each level (never darker than the colour under it)
+    const L = (c) => 0.2126 * (c & 255) + 0.7152 * ((c >>> 8) & 255) + 0.0722 * ((c >>> 16) & 255);
+    for (const c of PALETTE) {
+      let last = L(c);
+      for (const m of sky.VEIL) {
+        const v = m.get(c);
+        assert.ok(PALETTE.has(v));
+        assert.ok(L(v) >= last - 18, 'a thicker veil is not darker');
+        last = Math.max(last, L(v));
+      }
+    }
+    assert.deepEqual([0.2, 0.35, 0.9, 2, 4, 9].map(sky.radarBand), [-1, 0, 1, 2, 3, 4]);
+  });
+
+  test('the studio: the curved wall bows outward, maps both ways, and draws palette colours only; the light on him', () => {
+    const cam = new studio.WallCam().set(0);
+    assert.ok(cam.top[0] < cam.top[192] && cam.bot[0] > cam.bot[192], 'a concave wall: its ends nearer the lens, taller');
+    for (const [x, y] of [[40, 60], [192, 100], [350, 150]]) {
+      const w = cam.toWall(x, y), s = cam.toScreen(w.u, w.v);
+      assert.ok(Math.abs(s.x - x) < 1.01 && Math.abs(s.y - y) < 1.01, `${x},${y} -> ${s.x},${s.y}`);
+    }
+    const panned = new studio.WallCam().set(12);
+    assert.ok(panned.toWall(192, 100).u > cam.toWall(192, 100).u, 'a camera panned right sees further along the wall');
+    const wb = new Uint32Array(cam.wbw * cam.wbh);
+    for (let i = 0; i < wb.length; i++) wb[i] = [...PALETTE][i % PALETTE.size];
+    const fb = new Uint32Array(384 * 216);
+    studio.drawSet(fb, cam, wb, {});
+    assert.ok(fb.every((c) => PALETTE.has(c)), 'the set and the wall');
+    studio.drawSet(fb, cam, wb, { led: 'orange' });
+    assert.ok(fb.includes(packed(P.orange)), 'a warning turns the LED line orange');
+    const small = new Uint32Array(64 * 36);
+    for (let i = 0; i < small.length; i++) small[i] = (i >> 3) % 2 ? packed(P.navy) : packed(P.tan);
+    studio.softWall(fb, small, 64, 36, { k: 6, dim: 1 });
+    assert.ok(fb.every((c) => PALETTE.has(c)), 'the out-of-focus wall');
+    // the light on a figure: only its own pixels change, to palette colours, the rim side lit
+    const fig = new Uint32Array(384 * 216);
+    for (let y = 50; y < 150; y++) for (let x = 100; x < 140; x++) fig[y * 384 + x] = packed(P.slate);
+    const box = studio.lightFigure(fig, { rim: 1, spill: 3 });
+    assert.deepEqual(box, [100, 50, 139, 149]);
+    assert.equal(fig[100 * 384 + 139], packed(P.steel), 'the edge facing the wall goes a step up');
+    assert.equal(fig[100 * 384 + 99], 0, 'nothing drawn outside him');
+    onlyPalette(fig, 'his light');
+  });
+
+  test('the shots: each segment of the script gets its shot; an older script still plays', async () => {
+    const ep = writeWeather(report, { seed: 'shots' });
+    const shots = ep.segments.map(centre.shotOf);
+    assert.equal(shots[0], 'mcu');
+    assert.equal(shots.at(-1), 'mcu');
+    assert.ok(shots.includes('graphic') && shots.includes('wall') && shots.includes('board'));
+    for (const seg of ep.segments) assert.ok(centre.SHOTS.includes(centre.shotOf(seg)));
+    assert.equal(centre.shotOf({ kind: 'zone' }), 'wall', 'round 2 kinds');
+    assert.equal(centre.shotOf({ kind: 'intro' }), 'mcu');
+    assert.equal(centre.shotOf({ kind: 'warning', shot: 'nonsense' }), 'warning');
+    // the camera's targets: a zone on its side of the wall, the warning on the storm, the boards full frame
+    const { targetOf } = centre.__test;
+    for (const seg of ep.segments) {
+      const t = targetOf(ep.weather, seg, 0);
+      assert.equal(t.shot, centre.shotOf(seg));
+      if (seg.kind === 'zone') assert.ok(t.zone && (t.side === 'left' || t.side === 'right'));
+      if (seg.kind === 'warning') assert.ok(t.warning);
+    }
+  });
+
+  test('the time-lapse: the world plays 24 hours over most of its segment; a zone plays 12 then settles on now', () => {
+    const world = { kind: 'world', shot: 'graphic', timelapse: { from: 0, to: 24 } };
+    const at = (t) => centre.skyMoment(world, t, { since: 0, dur: 25 });
+    assert.equal(at(0).hour, 0);
+    assert.ok(at(10).hour > 4 && at(10).hour < 20);
+    assert.equal(at(24).hour, 24);
+    assert.ok(at(1).clock && at(10).clock);
+    let last = -1;
+    for (let t = 0; t <= 25; t += 0.25) {
+      const h = at(t).hour;
+      assert.ok(h >= last, 'the clock never runs back');
+      last = h;
+    }
+    const zone = { kind: 'zone', shot: 'wall', timelapse: { from: 0, to: 12 } };
+    const z = (t) => centre.skyMoment(zone, t, { since: 0, dur: 20, arrive: 2 });
+    assert.equal(z(1).hour, 0);
+    assert.ok(z(4).hour > 0 && z(4).clock);
+    assert.equal(z(7).hour, 12);
+    assert.equal(z(12).back, 1, 'settled back on now');
+    assert.equal(z(12).clock, false);
+    assert.equal(centre.skyMoment({ kind: 'headline', shot: 'mcu' }, 5).hour, 0, 'no time-lapse: now');
+    assert.match(centre.clockLabel(Date.parse('2026-10-13T13:00:00Z')), /^TUE 14:00$/, 'the studio clock (London)');
+  });
+
+  test('the boards: palette colours only; HOT & COLD counts down 3, 2, 1, the places not said wait dimmed', () => {
+    const ep = writeWeather(report, { seed: 'boards' });
+    const hc = ep.segments.find((s) => s.kind === 'hotcold').board, ol = ep.segments.find((s) => s.kind === 'outlook').board;
+    const rows = boards.hotColdRows(hc.hot);
+    assert.deepEqual(rows.map((r) => r.rank), [1, 2, 3, 4, 5]);
+    assert.deepEqual(rows.map((r) => r.said), [true, true, true, false, false]);
+    // a canvas that records every colour it is given
+    const used = new Set();
+    const ctx2d = () => ({
+      _f: '#000000',
+      set fillStyle(v) { used.add(String(v).toLowerCase()); this._f = v; },
+      get fillStyle() { return this._f; },
+      fillRect() {}, drawImage() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
+    });
+    const had = globalThis.document;
+    globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d() }) };
+    try {
+      const ctx = ctx2d();
+      const spoken = new Map();
+      for (const t of [0.1, 0.5, 1, 3]) boards.drawHotCold(ctx, t, hc, { since: 0, spoken, hot: null, hotAt: 0, done: null });
+      [...hc.hot.slice(0, 3), ...hc.cold.slice(0, 3)].forEach((p, i) => spoken.set(p.id, 2 + i));
+      for (const t of [2.2, 5, 9, 10]) boards.drawHotCold(ctx, t, hc, { since: 0, spoken, hot: hc.cold[0].id, hotAt: 7, done: 8.6 });
+      for (const t of [0.2, 1, 4]) boards.drawOutlook(ctx, t, ol, { since: 0, spoken: new Map([[ol.cities[0].id, 2]]), hot: ol.cities[0].id, hotAt: 2, anySaid: true });
+    } finally {
+      if (had === undefined) delete globalThis.document;
+      else globalThis.document = had;
+    }
+    const pal = new Set(Object.values(P).map((c) => c.toLowerCase()));
+    for (const c of used) assert.ok(pal.has(c), `the boards use ${c}`);
+    assert.ok(used.has(tempColor(hc.hot[0].value).toLowerCase()), 'a temperature on a chip of its colour');
+  });
+});

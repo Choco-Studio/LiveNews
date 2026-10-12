@@ -774,6 +774,16 @@ export class Director {
     s.lowerThird = null;
     if (s.shot !== 'weather') this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
     s.weather = { data: this.episode?.weather || null, seg, index, since: now(), dur: estimateSeg(seg), hot: null, hotAt: 0, pin: null, pinAt: 0 };
+    // the opening close-up names the presenter (the strap enters a beat after the cut and leaves after a few
+    // seconds, as a name super does)
+    if (seg.kind === 'headline' && seg.shot === 'mcu') {
+      const since = now() + pace(s).strap.inAfterCut;
+      s.lowerThird = { headline: presenterName(s.cast[seg.anchor]), source: this.channel.name || '', anchorName: presenterName(s.cast[seg.anchor]), showName: false, breaking: false, kicker: 'WEATHER', category: '', since };
+      const strap = s.lowerThird;
+      setTimeout(() => {
+        if (s.lowerThird === strap) s.lowerThird = null;
+      }, (pace(s).strap.inAfterCut + 6) * 1000);
+    }
     // the places and the highs and lows in the order the voice reaches them
     const cues = [
       ...(Array.isArray(seg.marks) ? seg.marks : []).map((m) => ({ char: m.char, city: m.city })),

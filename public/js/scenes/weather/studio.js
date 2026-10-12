@@ -158,17 +158,22 @@ export function drawSet(fb, cam, wb, { led = 'cyan', t = 0 } = {}) {
     if (y < H) fb[y * W + x] = ledCore, y++;
     if (y < H) fb[y * W + x] = ledHalo, y++;
     const floor0 = y;
-    // the floor: black, the LED's glow on its first rows, the wall mirrored in it (darker, thinning with distance)
+    // the floor: black, the LED's glow on its first rows, the wall mirrored in its polish (two steps darker, in
+    // streaks along the floor's grain, thinning with distance; three steps down past the first rows)
     for (; y < H; y++) {
       const i = y * W + x;
       const dy = y - floor0;
       const bay = B4[((y & 3) << 2) | (x & 3)];
       let c = PK.black;
       const ry = ledY - 4 - Math.round(dy * 1.3 * d[x]); // the reflected row of the glass
-      const k = 0.62 - dy * 0.022;
-      if (ry >= tp && ry < bt && k > bay) {
+      const streak = dy % 3 !== 2;
+      const k = 0.9 - dy * 0.03;
+      if (streak && ry >= tp && ry < bt && k > bay) {
         const m = map[ry * W + x];
-        if (m >= 0) c = DOWN_T[H8(DOWN_T[H8(wb[m])])];
+        if (m >= 0) {
+          c = DOWN_T[H8(DOWN_T[H8(wb[m])])];
+          if (dy > 5) c = DOWN_T[H8(c)];
+        }
       }
       if (c === PK.black && dy < 3 && (dy === 0 || 0.5 - dy * 0.17 > bay)) c = ledGlow;
       fb[i] = c;
@@ -270,20 +275,6 @@ export function softWall(fb, src, sw, sh, { k = 4, ox = 0, oy = 0, y0 = 0, y1 = 
   }
 }
 let SOFT_TU = null;
-
-/** Out-of-focus lights on the dark set (discs, a brighter rim on the upper left), over darker pixels only. */
-export function bokehDisc(fb, cx, cy, r, fill, rim) {
-  const r2 = r * r, ri = (r - 1.05) * (r - 1.05);
-  for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(H, Math.ceil(cy + r + 1)); y++) {
-    for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(W, Math.ceil(cx + r + 1)); x++) {
-      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, dd = dx * dx + dy * dy;
-      if (dd > r2) continue;
-      const i = y * W + x;
-      if (fb[i] !== PK.black && fb[i] !== PK.ink) continue;
-      fb[i] = dd > ri && dx + dy < r * 0.3 ? rim : fill;
-    }
-  }
-}
 
 // ------------------------------------------------------------------------------------------- light on him
 /**

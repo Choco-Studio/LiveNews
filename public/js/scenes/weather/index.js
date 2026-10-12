@@ -360,33 +360,48 @@ const OUTLINE = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [
  * The highs and lows at the sky's moment: a blue H, a red L at 2x, the pressure small under it; the one the voice
  * names (ST.pinId) rings twice and is framed while it is said.
  */
-function drawSystems(ctx, t, S, hour, proj, area, { small = false } = {}) {
+function drawSystems(ctx, t, S, hour, proj, area, { small = false, avoid = null, reveal = 1 } = {}) {
+  if (reveal <= 0) return;
   if (!S?.tracks?.length) return;
   const f = frameOf(S, hour);
-  const list = systemsAt(S.tracks, f, SYS);
+  const held = ST.pinId != null && t - ST.pinAt < 2.8 ? ST.pinId : null;
+  const list = systemsAt(S.tracks, f, SYS, held);
+  // the one being named last, on top
+  list.sort((a, b) => (a.id === held) - (b.id === held));
   for (const s of list) {
     const p = proj(s.lat, s.lon);
     if (!p || p.x < area.x0 + 6 || p.x > area.x1 - 6 || p.y < area.y0 + 8 || p.y > area.y1 - 10) continue;
     const x = Math.round(p.x), y = Math.round(p.y);
     const col = s.kind === 'H' ? P.blue : P.red;
     const lit = s.id === ST.pinId && t - ST.pinAt < 2.8;
-    // never under the wall's graphics or another system's letters (the one named always shows)
-    if (!lit && overlapArea(x - 7, y - 8, x + 7, y + 13) > 0) continue;
+    // never under the wall's graphics or another system's letters, nor at the presenter (the one named always shows)
+    if (!lit && (overlapArea(x - 7, y - 8, x + 7, y + 13) > 0 || (avoid && avoid(x, y)))) continue;
     if (lit) {
-      // two rings out from it, then the frame
-      for (const off of [0, 0.5]) {
+      // two rings out from it, then it sits on a black plate in brackets while it is said (it reads over any cloud)
+      for (const off of [0, 0.45]) {
         const u = (t - ST.pinAt - off) / 0.8;
         if (u <= 0 || u >= 1) continue;
-        ring(ctx, x, y, 6 + 16 * easeOut(u), u < 0.5 ? P.white : col);
+        ring(ctx, x, y, 7 + 16 * easeOut(u), u < 0.55 ? P.yellow : col);
       }
-      brackets(ctx, x - 9, y - 10, x + 9, y + 14, P.white);
+      ctx.fillStyle = P.black;
+      ctx.fillRect(x - 8, y - 9, 17, 24);
+      brackets(ctx, x - 10, y - 11, x + 10, y + 16, P.white);
     }
     BOX.push([x - 7, y - 8, x + 7, y + 13]);
-    if (small) outlined(ctx, s.kind, x - 2, y - 3, lit ? P.white : col);
-    else {
-      outlined(ctx, s.kind, x - 4, y - 7, lit ? P.white : col, 2);
-      outlined(ctx, `${s.hPa}`, x - Math.round(measureText(`${s.hPa}`, 1, 'micro') / 2), y + 8, lit ? P.yellow : P.white, 1, 'micro');
+    // a reveal: the letter rises into its place inside its own box (the cards' motion)
+    const rise = reveal < 1 ? Math.round((1 - easeOut(reveal)) * 10) : 0;
+    if (rise) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x - 9, y - 10, 19, 25);
+      ctx.clip();
     }
+    if (small) outlined(ctx, s.kind, x - 2, y - 3 + rise, col);
+    else {
+      outlined(ctx, s.kind, x - 4, y - 7 + rise, col, 2);
+      outlined(ctx, `${s.hPa}`, x - Math.round(measureText(`${s.hPa}`, 1, 'micro') / 2), y + 8 + rise, lit ? P.yellow : P.white, 1, 'micro');
+    }
+    if (rise) ctx.restore();
   }
 }
 const SYS = [];
@@ -716,6 +731,7 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.from = { ...ST.view };
     ST.to = tgt.view;
     ST.moveAt = since;
+    ST.prevTarget = cut ? null : ST.target;
     ST.target = tgt;
     ST.seg = seg;
     ST.shot = tgt.shot;
@@ -742,6 +758,13 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.presented = false;
     ST.spoken = new Map();
     ST.pinId = null;
+    // the cloud texture's wind clock starts again with each segment (a long run would shear it into streaks): at
+    // the cut, or halfway along the wall's flight to the next zone, where the move hides the change
+    ST.tauReset = cut ? since : since + ST.moveDur / 2;
+  }
+  if (ST.tauReset != null && t >= ST.tauReset) {
+    ST.tau = 0;
+    ST.tauReset = null;
   }
   // the places and the highs and lows the voice has reached
   if (W8.hot && W8.hotAt !== ST.lastHotAt) {
@@ -815,9 +838,9 @@ function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   BOX.length = 0;
   // the graphics first (the labels avoid them): the time-lapse's clock (or the tab), the source; the map itself
   // carries the rest (the highs and lows, the rain's colours are the bulletins' own)
-  if (mo.clock && ST.sky && seg.timelapse) {
+  if (ST.sky && seg.timelapse) {
     const r = drawClock(ctx, clockLabel(ST.sky.start + mo.hour * 3600_000), mo.prog, 13, 26, (t - ST.cutAt - 0.3) / 0.35, 'THE NEXT 24 HOURS');
-    if (r) BOX.push(r);
+    BOX.push(r || [12, 25, 88, 50]); // its place is kept while it wipes in
   } else {
     const tab = seg.kind === 'tomorrow' ? ['TOMORROW', 'HIGHS'] : ['WORLD WEATHER', 'TODAY · HIGHS'];
     BOX.push(drawTab(ctx, tab[0], tab[1], 13, 26));
@@ -862,12 +885,14 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   const proj = (lat, lon) => CAM.toScreen(CAM.wbw / 2 + wrap(lon - v.clon) * v.s * v.kx, CAM.wbh / 2 + (v.clat - lat) * v.s);
   const glassTop = CAM.top[Math.round(CAM.xc)] ?? CAM.yT;
   BOX.length = 0;
-  // the wall's graphics on the free side (they ride with the wall): the tab, the clock, the scale, the source
-  const side = tgt.side;
-  const fx0 = side === 'left' ? FREE.left[0] : FREE.right[0], fx1 = side === 'left' ? FREE.left[1] : FREE.right[1];
+  // the wall's graphics on the free side (they ride with the wall): the tab, the clock, the scale, the source; the
+  // last zone's layout holds while the wall leaves it, the new one comes with the new zone
+  const lay = k < 0.5 && ST.prevTarget?.zone ? ST.prevTarget : tgt;
+  const side = tgt.side, lside = lay.side;
+  const fx0 = lside === 'left' ? FREE.left[0] : FREE.right[0], fx1 = lside === 'left' ? FREE.left[1] : FREE.right[1];
   const pan = CAM.pan;
   const tabX = Math.round(fx0 - pan), topY = glassTop + 5;
-  if (tgt.zone) BOX.push(drawTab(ctx, tgt.zone.name, 'TODAY · HIGHS', tabX, topY));
+  if (lay.zone) BOX.push(drawTab(ctx, lay.zone.name, 'TODAY · HIGHS', tabX, topY));
   else if (warning) BOX.push(drawTab(ctx, 'WARNINGS', 'GDACS ALERTS', 14, topY, P.orange));
   if (mo.clock && ST.sky && !warning) {
     const r = drawClock(ctx, clockLabel(ST.sky.start + mo.hour * 3600_000), mo.prog, tabX, topY + 14, (t - (ST.moveAt + ST.moveDur) + 0.2) / 0.35);
@@ -886,7 +911,9 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   let panelRect = null;
   if (warning && tgt.warning) panelRect = drawWarningPanel(ctx, t, panel, tgt.warning, data, Math.round(W - 18 - pan), glassTop + 8);
   if (panelRect) BOX.push(panelRect);
-  drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { x0: 4, x1: panelRect ? panelRect[0] - 4 : W - 4, y0: area.y0, y1: area.y1 });
+  const nearHim = (x, y) => Math.abs(x - pr.x) < 36 && y > WALLP.neckY - 40;
+  // the highs and lows once the wall has arrived (in the move they would flicker past at every zoom), rising in
+  if (k >= 1) drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { x0: 4, x1: panelRect ? panelRect[0] - 4 : W - 4, y0: area.y0, y1: area.y1 }, { avoid: nearHim, reveal: (t - ST.moveAt - ST.moveDur) / 0.3 });
   if (zoneOn) where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area });
   if (warning && tgt.warning) {
     const w = tgt.warning;
@@ -930,7 +957,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   pr.draw(ctx, rt, (px) => {
     prof('rig', t0);
     const t1 = now();
-    lightFigure(px, { rim, spill: 2, both: 0.35, from: pr.x - 80, to: pr.x + 80 });
+    lightFigure(px, { rim, spill: 2, both: 0, from: pr.x - 80, to: pr.x + 80 });
     prof('light', t1);
     t0 = now();
   });
@@ -962,9 +989,9 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
   const w0 = data.warnings?.[0];
   const right = tgt.side === 'right';
   const view = seg.kind === 'headline' && w0 ? { lat: w0.lat + 6, lon: w0.lon + (right ? 40 : -40), zoom: 2.2 } : { lat: 22, lon: right ? -20 : 40, zoom: 1.6 };
-  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.6 }, t);
+  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4 }, t);
   let t0 = now();
-  softWall(FB, SB, SW, SH, { k: 6, dim: 1 });
+  softWall(FB, SB, SW, SH, { k: 6, dim: 0 });
   ST.fbFor = 'mcu';
   prof('soft', t0);
   // the wall's far end curving away into the dark set: its edge, an LED strip out of focus beyond it
@@ -993,7 +1020,7 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
   pm.update(rt);
   // he goes into the frame's own pixels (nothing is drawn over him in a close-up): one picture to the canvas
   t0 = now();
-  const box = pm.render(rt, (px) => lightFigure(px, { rim: right ? -1 : 1, spill: 3, both: 0.4, from: pm.x - 140, to: pm.x + 140 }));
+  const box = pm.render(rt, (px) => lightFigure(px, { rim: right ? -1 : 1, spill: 3, both: 0, from: pm.x - 140, to: pm.x + 140 }));
   if (box) {
     const px = ST.standing.frame.px;
     for (let y = box[1]; y <= box[3]; y++) {

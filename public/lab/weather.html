@@ -110,7 +110,7 @@
         const base = (window.__labBase = (window.__labBase || 1000) + 100);
         if (from != null) {
           setSeg(from, base - 20);
-          drawWeather(ctx, base - 1, scene, null);
+          for (let k = 12; k >= 1; k--) drawWeather(ctx, base - k / 30, scene, null); // the old shot's last frames (the wipe takes its picture)
         }
         setSeg(index, base);
         const seg = ep.segments[index];
@@ -154,6 +154,39 @@
         ms.sort((a, b) => a - b);
         const trim = ms.slice(0, Math.floor(n * 0.9));
         return { mean: ms.reduce((a, b) => a + b, 0) / n, median: ms[n >> 1], trimmed: trim.reduce((a, b) => a + b, 0) / trim.length, p95: ms[Math.floor(n * 0.95)], max: ms[n - 1] };
+      };
+      // flicker: n consecutive frames at 30 fps of segment `index` from `seconds` on (weather layer only): how many
+      // pixels change per frame, and how many flip A -> B -> A within two frames (the dither boiling); per region
+      window.flickerWeather = (index, seconds = 6, n = 60) => {
+        live = false;
+        const base = (window.__labBase = (window.__labBase || 1000) + 100);
+        setSeg(index, base);
+        const seg = ep.segments[index];
+        for (let k = 0; k <= Math.ceil(seconds * 30); k++) {
+          const el = Math.min(seconds, k / 30);
+          for (const m of seg.marks || []) if (el >= m.char / SPEAK && scene.weather.hotAt < base + m.char / SPEAK) Object.assign(scene.weather, { hot: m.city, hotAt: base + m.char / SPEAK });
+          drawWeather(ctx, base + el, scene, null);
+        }
+        const N = 384 * 216;
+        let a = null, b = null, changed = 0, flips = 0;
+        const flipMap = new Uint16Array(N);
+        for (let i = 0; i < n; i++) {
+          drawWeather(ctx, base + seconds + (i + 1) / 30, scene, null);
+          const px = new Uint32Array(ctx.getImageData(0, 0, 384, 216).data.buffer);
+          if (b) for (let p = 0; p < N; p++) if (px[p] !== b[p]) changed++;
+          if (a) for (let p = 0; p < N; p++) if (px[p] === a[p] && px[p] !== b[p]) { flips++; flipMap[p]++; }
+          a = b;
+          b = px;
+        }
+        // where the flips are: the 8 x 6 cells with the most
+        const cells = [];
+        for (let cy = 0; cy < 6; cy++) for (let cx = 0; cx < 8; cx++) {
+          let s = 0;
+          for (let y = cy * 36; y < cy * 36 + 36; y++) for (let x = cx * 48; x < cx * 48 + 48; x++) s += flipMap[y * 384 + x];
+          cells.push([s, cx, cy]);
+        }
+        cells.sort((p, q) => q[0] - p[0]);
+        return { changedPerFrame: Math.round(changed / (n - 1)), flipsPerFrame: Math.round(flips / (n - 2)), worst: cells.slice(0, 4) };
       };
       window.weatherReady = true;
       document.getElementById('info').textContent = `${body.source} · ${ep.segments.length} segments · ${ep.weather.source}`;

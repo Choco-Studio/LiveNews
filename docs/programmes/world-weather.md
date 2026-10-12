@@ -51,6 +51,8 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
 
 ## 3. The weather centre (`public/js/scenes/weather/`)
 
+Round 2 as built. Round 3 (below) replaces the single shot with a studio and its shots; the walk, the points, the city markers and the warnings panel carry over.
+
 - **One continuous shot. The camera follows the presenter along the wall.**
   - A new segment sends him to his mark (left or right of the zone, alternating) over 2.1 s with a side-step.
   - The map slides and zooms under him at the same time. A long hop pulls out a little on the way, as the news locator's pans do.
@@ -169,22 +171,47 @@ Each segment adds:
 
 ### The weather centre (client, `public/js/scenes/weather/`)
 
-- **A studio**, not a map on a blue page:
-  - a curved video wall in a dark set with a floor, edge light on the presenter and the wall's light spilling on him;
-  - the presenter at a natural size.
-- **The shots:**
-  - `mcu`: the presenter waist-up, off-centre, the wall soft behind him.
-  - `wall`: the presenter knee-up beside the wall, which fills most of the frame, the camera tracking along it (round 2's walk and points).
-  - `graphic`: the map full frame, no presenter.
-  - `board`: a full-frame board.
-  - `warning`: round 2's warnings panel.
-- **The moving weather on the map:**
-  - cloud (the cloud layer, time-interpolated, shaped by a noise texture drifting with the wind, white to grey, dithered, never hiding a city's chip);
-  - rain in radar colours under the cloud;
-  - H and L where the pressure has them, moving frame to frame;
-  - isobars on the world view;
-  - a clock while the time-lapse runs.
-- **The boards:** HOT & COLD (two columns, rows revealed as the voice reaches each place) and THE NEXT THREE DAYS (five cities × three days of symbols and highs).
+The picture is built in the frame's own pixels (palette colours only, Bayer 4×4 dither, no blends), then the text and the presenter go on top.
+
+- **The studio** (`studio.js`):
+  - A curved LED wall in a dark set. The wall is concave, so its ends are nearer the lens: its top edge bows up from y 28 at the centre to about y 22 at the frame's edges, and its foot bows down the same way. The picture is mapped onto the curve column by column, one step darker in a dither toward the ends (an LED wall seen off axis).
+  - Above the wall: a lighting rig with six lamps, their light falling down the backdrop between the top row's graphics.
+  - Below it: the bezel, a plinth with a cyan LED line (orange under a warning), then a black glossy floor that mirrors the wall: two steps darker, in streaks along the floor's grain, thinning with distance.
+  - **The light on the presenter** (`lightFigure`): the wall behind him rims his silhouette (the edge facing the wall and the top go one step up their ramp), and its cool light lifts dark cloth one step in a dither that thins over 2–3 px in from that edge. Skin keeps its warmth.
+- **The shots** (`seg.shot`; an older script's kinds map to them):
+
+  | Shot | Picture |
+  |---|---|
+  | `mcu` | The presenter waist-up (1.9 px/cm), a third in from the side (left for the opening, right for the sign-off), talking to camera. Behind him the wall out of focus: a 64 × 36 picture of the map with its sky, blurred and enlarged 6× with an ordered dither between texels, so the map's colours are big soft shapes and the clouds still drift. On the far side the wall's end turns away into the dark set, with an LED strip out of focus. Small open-hand beats on alternate sentences. The opening names him with a WEATHER strap for a few seconds |
+  | `graphic` | The wall's picture full frame: the world with the heat map, isobars, the highs and lows, cloud and rain playing the next 24 hours, the time-lapse's clock top left, the source under the channel's clock. A city lights up (chip and brackets) when the voice names it |
+  | `wall` | The presenter knee-up (1.0 px/cm) beside the wall, which fills most of the frame. Round 2's walk and aimed points stay. The camera follows a tenth of his walk, so the wall slides the other way behind him. From the world graphic the wall flies in from a wider view of the zone. Along the zones he side-steps across while the wall flies to the next zone; the last zone's tab, scale and source hold until the wall is halfway there |
+  | `board` | HOT & COLD or THE NEXT THREE DAYS full frame, over the wall's picture out of focus and two steps darker |
+  | `warning` | The wall shot held on the storm: the presenter still beside it (one aimed point at the storm, then nothing), the cyclone turning at its place, the warnings panel on the wall's free side, the LED line orange |
+
+  - A new shot cuts on the segment's first word.
+  - Into a board, and from the opening close-up to the world, the old picture wipes off behind an accent bar (0.42 s).
+- **The moving sky** (`sky.js`, null-safe: without a sky the map plays still, as in round 2):
+  - **Time:** the layers between frames are tweened with Catmull-Rom (no kink at each frame), and clamped to each layer's range.
+  - **Cloud:** the cover says how much of a place is cloud; a texture says where.
+    - The texture is a tileable fBm (six octaves, lightly domain-warped so the heads round off), equalised so that a 60 % cover leaves 60 % of the area cloud, with equalised mips for every zoom.
+    - It is anchored to the Earth and advected by the forecast's wind (1.8× the 10 m wind, as cloud rides the flow aloft). A feature therefore travels downwind through the time-lapse while the cover builds and clears it, and around a deep low the shear winds it into a spiral.
+    - Cover under 32 % is left clear.
+    - Thickness comes in four veils: each palette colour mixed toward white in linear light and snapped to the nearest palette colour (navy → steel → fog → silver → white). Thin cloud therefore dithers between two close colours instead of spattering white dots, and it is lit from the west along each row.
+    - The chips and labels are drawn over it.
+  - **Rain** is drawn over the cloud in radar colours by intensity: cyan from 0.35 mm/h, blue 0.8, green 1.6, yellow 3, red 5.5. The bands are crisp, with a short dithered edge, and the layer's mean is shaped into cells by the same texture at twice the frequency (0.35–1.85×).
+  - **Isobars:** every 4 hPa, 1 px of fog, on the world graphic, under the cloud.
+  - **Highs and lows:** a blue H and a red L at 2×, the hPa small under them.
+    - Each centre is refined to a fraction of a cell with a parabola through the pressure, matched frame to frame (the nearest of its kind within 12 degrees), smoothed 1-2-1 along its track and moved on an eased line between frames.
+    - They never sit under the wall's graphics or at the presenter.
+    - A pin (`seg.pins`, delivered by the director like the marks) rings twice in yellow, and the system then sits on a black plate in brackets while it is said. One that has dissolved by then is held at its last place.
+  - **The time-lapse:** the world plays its 24 hours over 84 % of the segment (eased). A zone plays its 12 hours in 4.6 s once the wall has arrived, holds 0.7 s, then settles back on now over 1 s: the layers morph while the texture keeps drifting forward, so nothing runs backwards. The clock ("TUE 14:00", London time, with a small turning dial and a progress rule) shows while it runs.
+  - The sky is recomposed 15 times a second while the view holds still. The set is redrawn only when the wall's picture or the camera changed.
+- **The boards** (`boards.js`, the cards' language: black plates, 2× white figures, eased wipes, nothing counts up):
+  - **HOT & COLD:** two columns under their colour plates, HOT (highest highs) and COLD (lowest lows), with five rows each: rank, place, symbol, and the temperature at 2× on a chip of its colour.
+    - The voice counts down 3, 2, 1 on each side. A row wipes in when its place is named, and it is framed (its rank in the side's accent, its plate lit) while it is said.
+    - Ranks 4 and 5 are not said: they wait dimmed from the start and light up when the last place has been said, with the gap between the two ends ("53° BETWEEN THE TWO ENDS") in the title row.
+  - **THE NEXT THREE DAYS:** five cities by three weekday columns. Each cell has the animated symbol, the high on its chip and the low. The city being said is lit and framed; a city already said keeps an accent edge.
+- **Cost** (the lab's `perfWeather`, headless Chromium with software GL on a loaded 4-core machine, mean over 240 frames): COST_TABLE
 
 ## 4. Configuration
 

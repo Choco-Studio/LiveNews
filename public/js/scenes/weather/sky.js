@@ -118,6 +118,9 @@ export function decodeSky(sky) {
     }
     if (ok) {
       S.frames = frames;
+      // the wind that carries the cloud texture, smoothed over about 9 degrees: the texture then travels with the
+      // flow instead of being sheared into streaks by every local gust
+      for (const k of ['u', 'v']) for (const f of S[k]) smoothGrid(f, w, h, 1, 2);
       S.systems = (Array.isArray(sky.systems) ? sky.systems : []).filter((s) => (s?.kind === 'H' || s?.kind === 'L') && Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.frame >= 0 && s.frame < frames);
       S.tracks = trackSystems(S);
       out = S;
@@ -125,6 +128,29 @@ export function decodeSky(sky) {
   }
   DECODED.set(sky, out);
   return out;
+}
+
+/** A box blur of a grid in place (radius r cells, `passes` times; rows clamp, longitude wraps). */
+export function smoothGrid(f, w, h, r = 1, passes = 1) {
+  const tmp = new Float32Array(f.length);
+  const n = 2 * r + 1;
+  for (let p = 0; p < passes; p++) {
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        let s = 0;
+        for (let d = -r; d <= r; d++) s += f[j * w + ((((i + d) % w) + w) % w)];
+        tmp[j * w + i] = s / n;
+      }
+    }
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        let s = 0;
+        for (let d = -r; d <= r; d++) s += tmp[Math.max(0, Math.min(h - 1, j + d)) * w + i];
+        f[j * w + i] = s / n;
+      }
+    }
+  }
+  return f;
 }
 
 /** The fractional frame of an hour of the sky (its hours need not be evenly spaced). */
@@ -191,8 +217,28 @@ function apart(a, b) {
 }
 
 /**
+ * A system's centre to a fraction of a cell: a parabola through the pressure of the cell and its neighbours along
+ * each axis (the server finds them on the 3-degree grid; a centre that sits between two cells would otherwise hop
+ * back and forth between them from frame to frame).
+ */
+export function refineCentre(S, s) {
+  const f = S.mslp?.[s.frame];
+  if (!f) return { lat: s.lat, lon: s.lon };
+  const i = Math.round((s.lon - S.lon0) / S.step), j = Math.round((S.lat0 - s.lat) / S.step);
+  if (j < 1 || j > S.h - 2) return { lat: s.lat, lon: s.lon };
+  const at = (ii, jj) => f[jj * S.w + ((((ii % S.w) + S.w) % S.w))];
+  const off = (a, b, c) => {
+    const den = a - 2 * b + c;
+    return Math.abs(den) < 1e-6 ? 0 : Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / den));
+  };
+  const dx = off(at(i - 1, j), at(i, j), at(i + 1, j)), dy = off(at(i, j - 1), at(i, j), at(i, j + 1));
+  return { lat: S.lat0 - (j + dy) * S.step, lon: S.lon0 + (i + dx) * S.step };
+}
+
+/**
  * The highs and lows as tracks: each system of a frame continues as the nearest system of the same kind in the next
- * frame within 12 degrees (the nearest pairs first, each used once); one not matched ends, a new one starts.
+ * frame within 12 degrees (the nearest pairs first, each used once); one not matched ends, a new one starts. Each
+ * centre is refined to a fraction of a cell, then each track is smoothed over its neighbouring frames (1-2-1).
  * -> [{ id, kind, pts: [{ frame, lat, lon, hPa }] }]
  */
 export function trackSystems(S) {
@@ -234,20 +280,29 @@ export function trackSystems(S) {
     });
     open = still;
   }
+  for (const t of tracks) {
+    const raw = t.pts.map((p) => ({ ...p, ...refineCentre(S, p) }));
+    t.pts = raw.map((p, i) => {
+      if (i === 0 || i === raw.length - 1) return p;
+      const a = raw[i - 1], b = raw[i + 1];
+      return { ...p, lat: (a.lat + 2 * p.lat + b.lat) / 4, lon: p.lon + (wrapD(a.lon - p.lon) + wrapD(b.lon - p.lon)) / 4 };
+    });
+  }
   return tracks;
 }
 
 /**
  * Where each high and low is at a fractional frame: between two matched frames on the line between them (eased,
  * the longitude the short way round); a system is shown from half a frame before its first point to half a frame
- * after its last. -> [{ id, kind, lat, lon, hPa }]
+ * after its last, except `hold` (the one the voice is naming), shown at its nearest point.
+ * -> [{ id, kind, lat, lon, hPa }]
  */
-export function systemsAt(tracks, f, out = []) {
+export function systemsAt(tracks, f, out = [], hold = null) {
   out.length = 0;
   for (const t of tracks) {
     const p = t.pts;
     const first = p[0].frame, last = p[p.length - 1].frame;
-    if (f < first - 0.5 || f > last + 0.5) continue;
+    if ((f < first - 0.5 || f > last + 0.5) && t.id !== hold) continue;
     let a = p[0], b = p[0], u = 0;
     if (f >= last) a = b = p[p.length - 1];
     else if (f > first) {
@@ -530,6 +585,8 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
     }
     const by = (y & 3) << 2;
     const vy = v0[y];
+    // no isobars poleward of 72 degrees (sea-level pressure over the ice caps is an extrapolation, its contours noise)
+    const isoRow = isobars && Math.abs(view.clat - (y + 0.5 - halfH) / sy) < 72;
     let o = y * w;
     let nPrev = -1;
     // node span by node span: the layers step linearly across each 4-pixel span
@@ -544,7 +601,7 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
         // the isobars are drawn on the map, under the rain and the cloud (seen through the veil)
         if (isobars) {
           const bnd = (p * 0.25) | 0;
-          if ((x > 0 && bnd !== band[x - 1]) || (y > y0 && bnd !== bandUp[x])) col = isoColor;
+          if (isoRow && ((x > 0 && bnd !== band[x - 1]) || (y > y0 && bnd !== bandUp[x]))) col = isoColor;
           band[x] = bnd;
         }
         if (clear) {
