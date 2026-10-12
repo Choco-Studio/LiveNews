@@ -6,7 +6,7 @@ Un informativo en directo 24/7 generado por IA, hecho entero en pixel art. Un se
 
 - **Dos presentadores dibujados por código**: Paco Píxel (veterano, sereno, humor seco) y Lola Byte (enérgica y curiosa). Parpadean, gesticulan, cambian de expresión según el guion y mueven la boca al ritmo de la voz.
 - **Guion escrito por IA, pegado al texto de los feeds**: el modelo solo puede usar el titular y el resumen de cada noticia, y debe citar la fuente.
-- **Voz y sonido**: síntesis de voz del navegador en español (`tts`), voces de bips al estilo de los videojuegos (`blips`) o silencio (`mute`, sin sonido alguno, aunque los presentadores siguen moviendo los labios). Si el navegador no tiene voces en español, `tts` cae solo a `blips`. Cabecera, despedida, cortes de plano y alertas llevan jingles y efectos generados con WebAudio.
+- **Voz y sonido**: voces neuronales generadas en tu propio ordenador (Kokoro, cada presentador con la suya; ver «Verlo en tu ordenador con las voces de verdad»), o la voz del navegador si no están instaladas. Cabeceras, sintonías, música de fondo por programa y efectos se generan con WebAudio.
 - **Realización completa**: planos `wide`, `close` y `full` (con paneo lento sobre la foto), rótulos con fuente y titular, subtítulos, teletipo «AL MINUTO», banners de **ÚLTIMA HORA**, reloj con la hora de Madrid y una ciudad al fondo que cambia entre día, atardecer y noche.
 - **Fotos de las noticias en pixel art**: el navegador las convierte con una paleta adaptativa (k-means) y tramado ordenado Bayer. Si una noticia no tiene imagen, el videowall muestra una tarjeta con la fuente y la sección.
 - **Boletines preparados por adelantado**: hay una cola de boletines ya escritos. Si no hay noticias frescas, se repite uno reciente marcado como **REPETICIÓN**.
@@ -44,6 +44,27 @@ Abre <http://127.0.0.1:8080> y **haz clic** en la pantalla (o pulsa `Enter`) par
 Si no has configurado nada, `npm start` también funciona: Codex fallará por no estar instalado, OpenAI y DeepSeek se omiten por no tener clave, y el boletín lo genera `mock`.
 
 > En Windows (PowerShell o cmd) la sintaxis `PROVIDERS=mock node ...` de `npm run demo` no funciona. Pon `PROVIDERS=mock` en tu `.env` y usa `npm start`.
+
+### Verlo en tu ordenador con las voces de verdad
+
+Paso a paso, en Windows, Mac o Linux (la primera vez, unos 15 minutos):
+
+1. Instala **Node.js 22** (<https://nodejs.org>) y **Python 3.11 o superior** (<https://www.python.org>).
+2. Descarga el proyecto desde GitHub (botón **Code → Download ZIP**) y descomprímelo, o haz `git clone`.
+3. Abre una terminal dentro de la carpeta del proyecto y escribe:
+
+   ```bash
+   npm install
+   pip install kokoro-onnx numpy
+   ```
+
+4. Descarga las voces (unos 350 MB):
+   - **Mac o Linux:** `bash tools/voice/fetch-models.sh`
+   - **Windows:** descarga [`kokoro-v1.0.onnx`](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx) y [`voices-v1.0.bin`](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin) y guárdalos en la carpeta `data/models/` del proyecto (créala si no existe).
+5. Copia la configuración de ejemplo: `cp .env.example .env` (en Windows: `copy .env.example .env`). Ya trae `VOICE_ENGINE=kokoro`. Si no tienes claves de IA, añade la línea `PROVIDERS=mock` (el redactor de respaldo escribe los programas sin IA).
+6. Arranca el canal con `npm start` y abre <http://127.0.0.1:8080/?voice=kokoro>. Haz clic en la pantalla para que suene.
+
+El primer programa tarda unos minutos en salir: el ordenador está grabando las voces de los presentadores. Después se preparan por adelantado mientras se emite el anterior. Si las voces no están bien instaladas, el canal lo dice una vez en la terminal y usa la voz del navegador.
 
 ### Scripts
 
@@ -357,9 +378,7 @@ Los tests (con el ejecutor integrado de Node, sin dependencias extra) cubren por
 
 ## Ideas siguientes
 
-- Voz generada en el servidor (Piper, Kokoro...) para tener voces reales también dentro de OBS.
 - Más presentadores y más decorados.
-- Sección del tiempo con datos de una API real.
 - Traducciones a otros idiomas.
 - Un ajuste por fuente para desactivar sus imágenes.
 
