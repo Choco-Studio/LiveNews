@@ -153,7 +153,7 @@ export const isBreaking = (title) => {
 // are flagged so the writer can call them developing stories, but they never
 // trigger the BREAKING banner.
 const LIVE_RES = [
-  /[-–—]\s*(?:[\w-]+\s+)?live\b(?![-'’])/i, // "Election night – live", "UK inflation – business live"
+  /[-–—]\s*(?:[\w-]+\s+){0,3}live\b(?![-'’])/i, // "Election night – live", "UK inflation – business live", "… – UK politics live"
   /\blive updates?\b/i,
   /\blive blog\b/i,
   /^\s*live\s*[:|]/i,
