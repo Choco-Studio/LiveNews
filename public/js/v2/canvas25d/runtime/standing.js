@@ -6,8 +6,9 @@
 // side-step (the way weather presenters move while facing the camera), the body bobs a little on each step.
 //
 //   const st = new Standing(id, info)         st.actor (scene.js actor: perf.speech / gestures / side)
-//   st.draw(ctx, t, { x, y, s, walk })        x, y: neck base on screen; s: px per cm; walk: phase (radians)
-//                                             or null when standing still
+//   st.draw(ctx, t, { x, y, s, walk, post })  x, y: neck base on screen; s: px per cm; walk: phase (radians)
+//                                             or null when standing still; post(px): relight the figure's
+//                                             pixels before they are drawn (the weather centre's wall light)
 // The figure is resolved into its own transparent frame and drawn over whatever is on the canvas.
 import { Frame, PartBuffer, material } from '../pixbuf.js';
 import { drawCharacter, GROUPS } from '../character.js';
@@ -59,9 +60,10 @@ export class Standing {
     return this.mats;
   }
 
-  /** Draw the figure over the canvas (see render). */
+  /** Draw the figure over the canvas (see render); opts.post(px), when given, may relight its pixels first. */
   draw(ctx, t, opts) {
     const head = this.render(t, opts);
+    if (typeof opts.post === 'function') opts.post(this.frame.px);
     if (!this.canvas) {
       this.canvas = document.createElement('canvas');
       this.canvas.width = this.frame.w;

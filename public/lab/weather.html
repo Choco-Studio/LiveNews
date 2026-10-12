@@ -27,7 +27,8 @@
     <script type="module">
       // The weather centre without the playout: the server's weather script (/api/tools/weather, the same desk and
       // writer as on air), each segment on its own clock; marks fire spread over the segment as a voice would reach
-      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots).
+      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots);
+      // window.perfWeather(index, seconds) the weather frame's cost, window.flickerWeather(index, seconds) its flicker.
       import { drawWeather, WALK } from '/js/scenes/weather/index.js';
       import { warmMapData } from '/js/scenes/worldmap.js';
       import { Graphics } from '/js/graphics/index.js';
@@ -50,7 +51,7 @@
       let clock = null; // { t0, index }
       function setSeg(index, since) {
         const seg = ep.segments[index];
-        scene.weather = { data: ep.weather, seg, index, since, hot: null, hotAt: 0 };
+        scene.weather = { data: ep.weather, seg, index, since, dur: seg.text.length / SPEAK, hot: null, hotAt: 0, pin: null, pinAt: 0 };
         document.getElementById('text').textContent = seg.text;
       }
       function frame(t) {
@@ -63,6 +64,13 @@
             if (el >= at && scene.weather.hotAt < clock.t0 + at) {
               scene.weather.hot = m.city;
               scene.weather.hotAt = clock.t0 + at;
+            }
+          }
+          for (const p of seg.pins || []) {
+            const at = p.char / SPEAK;
+            if (el >= at && scene.weather.pinAt < clock.t0 + at) {
+              scene.weather.pin = p;
+              scene.weather.pinAt = clock.t0 + at;
             }
           }
           scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
@@ -103,17 +111,83 @@
         const base = (window.__labBase = (window.__labBase || 1000) + 100);
         if (from != null) {
           setSeg(from, base - 20);
-          drawWeather(ctx, base - 1, scene, null);
+          for (let k = 12; k >= 1; k--) drawWeather(ctx, base - k / 30, scene, null); // the old shot's last frames (the wipe takes its picture)
         }
         setSeg(index, base);
+        const seg = ep.segments[index];
+        // the marks and pins fire as a voice at SPEAK characters a second reaches them (hot: one place lit at the end)
+        const fire = (el) => {
+          if (hot) return;
+          for (const m of seg.marks || []) if (el >= m.char / SPEAK && scene.weather.hotAt < base + m.char / SPEAK) Object.assign(scene.weather, { hot: m.city, hotAt: base + m.char / SPEAK });
+          for (const p of seg.pins || []) if (el >= p.char / SPEAK && scene.weather.pinAt < base + p.char / SPEAK) Object.assign(scene.weather, { pin: p, pinAt: base + p.char / SPEAK });
+        };
         if (hot) {
           scene.weather.hot = hot;
           scene.weather.hotAt = base + seconds - 0.4;
         }
         // walk through the move at 30 fps so the step phase accumulates as on air
-        for (let k = 0; k <= Math.ceil(seconds * 30); k++) drawWeather(ctx, base + Math.min(seconds, k / 30), scene, null);
-        frame(base + seconds);
+        for (let k = 0; k <= Math.ceil(seconds * 30); k++) {
+          const el = Math.min(seconds, k / 30);
+          fire(el);
+          drawWeather(ctx, base + el, scene, null);
+          // the captions page as on air (they never drop a line)
+          scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
+          if (gfx && k % 3 === 0) graphics.draw(ctx, base + el, scene);
+        }
+        const el = seconds;
+        scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
+        if (gfx) graphics.draw(ctx, base + seconds, scene);
         return { kind: scene.weather.seg.kind, walk: WALK };
+      };
+      // the weather frame's cost: n frames of segment `index` from `seconds` on (ms per frame: mean, p95, max)
+      window.perfWeather = (index, seconds = 2, n = 300) => {
+        live = false;
+        const base = (window.__labBase = (window.__labBase || 1000) + 100);
+        setSeg(index, base);
+        for (let k = 0; k <= Math.ceil(seconds * 30); k++) drawWeather(ctx, base + Math.min(seconds, k / 30), scene, null);
+        const ms = [];
+        if (globalThis.__wxProf) globalThis.__wxProf = {}; // the breakdown counts the timed frames only
+        for (let i = 0; i < n; i++) {
+          const t0 = performance.now();
+          drawWeather(ctx, base + seconds + i / 30, scene, null);
+          ms.push(performance.now() - t0);
+        }
+        ms.sort((a, b) => a - b);
+        const trim = ms.slice(0, Math.floor(n * 0.9));
+        return { mean: ms.reduce((a, b) => a + b, 0) / n, median: ms[n >> 1], trimmed: trim.reduce((a, b) => a + b, 0) / trim.length, p95: ms[Math.floor(n * 0.95)], max: ms[n - 1] };
+      };
+      // flicker: n consecutive frames at 30 fps of segment `index` from `seconds` on (weather layer only): how many
+      // pixels change per frame, and how many flip A -> B -> A within two frames (the dither boiling); per region
+      window.flickerWeather = (index, seconds = 6, n = 60) => {
+        live = false;
+        const base = (window.__labBase = (window.__labBase || 1000) + 100);
+        setSeg(index, base);
+        const seg = ep.segments[index];
+        for (let k = 0; k <= Math.ceil(seconds * 30); k++) {
+          const el = Math.min(seconds, k / 30);
+          for (const m of seg.marks || []) if (el >= m.char / SPEAK && scene.weather.hotAt < base + m.char / SPEAK) Object.assign(scene.weather, { hot: m.city, hotAt: base + m.char / SPEAK });
+          drawWeather(ctx, base + el, scene, null);
+        }
+        const N = 384 * 216;
+        let a = null, b = null, changed = 0, flips = 0;
+        const flipMap = new Uint16Array(N);
+        for (let i = 0; i < n; i++) {
+          drawWeather(ctx, base + seconds + (i + 1) / 30, scene, null);
+          const px = new Uint32Array(ctx.getImageData(0, 0, 384, 216).data.buffer);
+          if (b) for (let p = 0; p < N; p++) if (px[p] !== b[p]) changed++;
+          if (a) for (let p = 0; p < N; p++) if (px[p] === a[p] && px[p] !== b[p]) { flips++; flipMap[p]++; }
+          a = b;
+          b = px;
+        }
+        // where the flips are: the 8 x 6 cells with the most
+        const cells = [];
+        for (let cy = 0; cy < 6; cy++) for (let cx = 0; cx < 8; cx++) {
+          let s = 0;
+          for (let y = cy * 36; y < cy * 36 + 36; y++) for (let x = cx * 48; x < cx * 48 + 48; x++) s += flipMap[y * 384 + x];
+          cells.push([s, cx, cy]);
+        }
+        cells.sort((p, q) => q[0] - p[0]);
+        return { changedPerFrame: Math.round(changed / (n - 1)), flipsPerFrame: Math.round(flips / (n - 2)), worst: cells.slice(0, 4) };
       };
       window.weatherReady = true;
       document.getElementById('info').textContent = `${body.source} · ${ep.segments.length} segments · ${ep.weather.source}`;
