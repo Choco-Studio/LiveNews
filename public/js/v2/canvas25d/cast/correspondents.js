@@ -1,25 +1,29 @@
 // The correspondents (owner 4 Oct: WORLD NOW's links, "poner un reportero hablando sobre ello";
 // server/correspondents.js). Three of the channel's own characters, seen in a medium close-up in front of
-// pictures of the place (studio/remote.js), never at the desk. Each is built on a presenter's proven parts
-// (hair drawers, wardrobe) with a design of their own, distinct from every presenter at 1x:
+// pictures of the place (studio/remote.js), never at the desk. Each is built on the presenters' proven parts
+// (wardrobe; Rhea on Penny's hair drawers, while Vic and Mika have hair of their own since the owner's 12 Oct note
+// that the crop and the bob read as Sam's and Lola's) with a design of their own, distinct from every presenter at 1x:
 //   Rhea Raster  EUROPE & AFRICA  black hair pulled back sleek into a low chignon, warm brown skin, a black
 //                                 jacket over a white top, small silver studs (nothing like Penny's honey
 //                                 chignon and burgundy blazer)
-//   Vic Vector   AMERICAS         a short black crop, deep brown skin, a steel-blue jacket with an open-collar
+//   Vic Vector   AMERICAS         a black wave crop lying close to the skull with a crisp line-up (his own:
+//                                 Sam's crop stands up), deep brown skin, a steel-blue jacket with an open-collar
 //                                 white shirt (cool cloth against warm skin: the face stays the warmest thing)
-//   Mika Voxel   ASIA & MID-EAST  a sleek black bob, light warm skin, a pale grey blazer over a black top,
-//                                 silver drops (Lola's bob in another colour, cut and setting)
+//   Mika Voxel   ASIA & MID-EAST  a sleek black bob with a blunt fringe just above the brows (Lola's bob has a
+//                                 side part and a sweep), light warm skin, a pale grey blazer over a black top,
+//                                 silver drops
 // What makes them correspondents at a glance: an earpiece in the visible ear with its clear tube running
 // down into the collar (the classic remote look) and a small lapel microphone on a clip.
 import { P } from '../../../palette.js';
-import { material, line } from '../pixbuf.js';
+import { material, line, toneN } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { GROUPS } from '../character.js';
 import { deriveLook, SKIN_LIGHT, SKIN_TAN } from './base.js';
 import { OUTFITS, registerOutfit } from './outfit.js';
+import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
 import { penny, drawSleek, drawChignon } from './penny.js';
-import { sam, drawCrop } from './sam.js';
-import { lola, drawBob, drawBobBack, drawEarrings } from './lola.js';
+import { sam } from './sam.js';
+import { lola, drawBobBack, drawEarrings } from './lola.js';
 
 const BUD = material('remote:earpiece', { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, decal: true });
 const TUBE = material('remote:tube', { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true });
@@ -120,7 +124,7 @@ export const vic = deriveLook(sam, {
   mouth: { y: 5.8, w: 3.7, lip: P.maroon, lipHi: P.tanShade, upper: P.brown, inner: P.black, teeth: P.silver, tongue: P.darkRed },
   skin: [P.tan, P.tanShade, P.brown, P.maroon],
   skinLine: P.maroon,
-  hair: { style: 'crop', ramp: [P.slate, P.ink, P.black, P.black], line: P.black, edge: P.ink, rimTop: false },
+  hair: { style: 'wavecrop', ramp: [P.slate, P.ink, P.black, P.black], line: P.black, edge: P.ink, rimTop: false },
   outfit: 'correspondent',
   wear: 'suit',
   collar: 'open',
@@ -131,7 +135,7 @@ export const vic = deriveLook(sam, {
   cuff: P.white,
   persona: { sway: 0.75, headMotion: 0.95, blinkMin: 2.4, blinkMax: 5.6, energy: 0.95, smile: 0.16 },
   mats: { hairD: { ramp: [P.slate, P.ink, P.black, P.black], decal: true } },
-  parts: { hair: drawCrop, over: drawEarpiece },
+  parts: { hair: drawWaveCrop, over: drawEarpiece },
 });
 
 export const mika = deriveLook(lola, {
@@ -156,8 +160,147 @@ export const mika = deriveLook(lola, {
   parts: { hairBack: drawBobBack, hair: drawMikaHair, over: drawEarpiece, coversEars: true },
 });
 function drawMikaHair(buf, L, m, head, s, sk) {
-  drawBob(buf, L, m, head, s, sk.hairLag || 0);
+  drawFringeBob(buf, L, m, head, s, sk);
   if (L.earrings) drawEarrings(buf, L, head, s, sk.hairLag || 0);
+}
+
+// ---------------------------------------------------------------------------
+// Hair of their own for Vic and Mika (owner 12 Oct: Vic's crop read as Sam's, Mika's bob as Lola's)
+
+const LXY = new LocalXY();
+const HWL = new HeadWidthLUT();
+const CO_FRINGE = { cw: 1.5, s: 1, seed: 113, sep: true, hiLo: 5.2, hiHi: 8.6, hiW: 0.42, gap: 4.6, keepLit: true };
+
+/**
+ * Vic's wave crop: short hair brushed flat into waves, lying on the skull (no volume: Sam's textured top stands up),
+ * a crisp line-up straight across the forehead with square temples and short square sideburns. The waves are
+ * ripples round the crown, each a lit crest toward the key and a dark trough (close-ups; mediums keep broad
+ * ripples, the wide the silhouette and two tones). The hairline is an ink sel-out line, the hair light upper right.
+ */
+export function drawWaveCrop(buf, L, m, head, s) {
+  const H = L.head, E = L.ears;
+  const tr = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
+  const cyc = H.craniumY - 0.2;
+  const RV = H.R + 0.35;
+  const yawX = Math.sin(head.yaw) * H.R * 0.85;
+  const pitchShift = Math.sin(head.pitch) * 2.0;
+  const earTop = E.y - E.h * 0.5;
+  const hl = H.top + 3.75 + pitchShift; // the line-up
+  const lineX = 4.8; // its half-width across the forehead; outside it the temple drops square to the sideburn
+  const per = tr === 2 ? (s >= 3 ? 0.95 : 1.1) : 1.6; // the ripples' spacing (units)
+  const px1 = 1 / s;
+  const [x0, y0, x1, y1] = localBox(head, -RV - 0.6, H.top - 1.0, RV + 0.6, E.y + 0.6);
+  const q = LXY.set(head);
+  const HW = HWL.set(H, 0);
+  const cx = 0.8, cy = H.top + 2.2; // the crown the waves turn round (feature space)
+  buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
+    q.at(px, py);
+    const x = q.x, y = q.y;
+    if (y > E.y - 0.3) return -1;
+    const ax = Math.abs(x);
+    const hw = HW.at(y);
+    const dy = y - cyc;
+    if (y < cyc) {
+      if (x * x + dy * dy > RV * RV) return -1;
+    } else if (ax > hw + 0.3) return -1;
+    const fx = x - yawX;
+    const sideburn = ax > hw - 0.65 && y < E.y - 0.4;
+    if (y > earTop + 0.15 && !sideburn) return -1;
+    // the line-up: straight across, square at the temples, then a band down the side to the sideburn
+    if (y > hl - 0.05 && Math.abs(fx) < lineX && ax < hw - 0.05) return -1;
+    if (y > hl && ax < hw - 0.75 && !sideburn) return -1;
+    let t = toneN(m.hair, (x / RV) * 0.95, (dy / RV) * 0.95);
+    if (y > hl) t = Math.max(t, x > 0 ? 2 : 1); // the sides a step down
+    if (tr === 0) return t === 0 ? 0 : t >= 2 ? 2 : 1;
+    if (x * x + dy * dy > (RV - px1) * (RV - px1) && y < cyc) return t; // a clean outer edge for the hair light
+    if (y > hl - px1 * 1.1 && ax < hw) return Math.max(t, 2);
+    // the waves: ripples round the crown, a little uneven, the crest lit on the side toward the key
+    const rx = fx - cx, ry = (y - cy) * 1.15;
+    const rho = Math.sqrt(rx * rx + ry * ry) + 0.18 * Math.sin(Math.atan2(rx, ry) * 3);
+    const f = rho / per - Math.floor(rho / per);
+    let tt = t;
+    if (f < 0.28 && t <= 2) tt = Math.max(0, t - 1);
+    else if (f > 0.62 && f < 0.86) tt = Math.min(3, t + 1);
+    if (tr === 1 && tt < t && x > 0) tt = t; // mediums: crests only on the lit side
+    return tt === t ? t : (m.hairD << 4) | tt;
+  });
+  const g = head.gb + GROUPS.hair;
+  selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);
+  if (s >= 1.35) hairLight(buf, head, g, rimMat(P.silver), H.R * 0.1, RV + 1, H.top - 1, cyc + 1, Math.max(2, Math.round(s * 1.2)));
+}
+
+/**
+ * Mika's bob with a blunt fringe: no parting, the fringe cut straight across just above the brows from temple to
+ * temple (its corners rounding into the sides), the sides falling straight to the chin and tucking under. Clumps
+ * fall straight from the crown; the sheen is a band of strokes round the dome; the fringe's cut edge sits a step
+ * down, the curtains by the face in shade. The ends swing after the head.
+ */
+export function drawFringeBob(buf, L, m, head, s, sk) {
+  const H = L.head;
+  const lag = sk.hairLag || 0;
+  const tr = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
+  const cyc = H.craniumY - 0.3;
+  const RV = H.R + 1.35;
+  const yawX = Math.sin(head.yaw) * H.R * 0.8;
+  const pitchShift = Math.sin(head.pitch) * 2.0;
+  const bottom = H.chinY - 1.4;
+  const fringeY = L.brows.y - 0.55 + pitchShift; // the blunt cut, just above the brows
+  const px1 = 1 / s;
+  const [x0, y0, x1, y1] = localBox(head, -RV - 1.4, H.top - 1.8, RV + 1.4, bottom + 1);
+  const q = LXY.set(head);
+  const HW = HWL.set(H, head.jaw || 0);
+  CO_FRINGE.s = s;
+  CO_FRINGE.sep = tr === 2;
+  CO_FRINGE.cw = s >= 3 ? 1.5 : 1.8;
+  buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
+    q.at(px, py);
+    const y = q.y;
+    const swing = y > 0 ? lag * Math.min(1, y / bottom) ** 2 : 0;
+    const x = q.x - swing;
+    // close-ups: the blunt ends still break into strand tips
+    if (y > bottom + 0.4 - (tr === 2 ? 0.24 * Math.abs((((x * 1.45) % 2) + 2) % 2 - 1) : 0)) return -1;
+    const ax = Math.abs(x);
+    let inMass;
+    if (y < cyc) inMass = x * x + (y - cyc) * (y - cyc) <= RV * RV;
+    else {
+      // straight sides, the ends tucking under over the last ~1 u
+      let hwHair = RV + 0.2 * (y - cyc) / (bottom - cyc);
+      const e = (y - (bottom - 1.0)) / 1.0;
+      if (e > 0) hwHair -= 1.1 * (1 - Math.sqrt(Math.max(0, 1 - e * e)));
+      inMass = ax <= hwHair;
+    }
+    if (!inMass) return -1;
+    const fx = x - yawX;
+    const hw = HW.at(y);
+    // the face window: under the blunt fringe (a straight cut whose corners round down into the curtains), the
+    // curtains framing the cheeks to the chin
+    const corner = Math.max(0, Math.abs(fx) - (hw - 2.2));
+    const cut = fringeY + corner * corner * 0.35 + (tr === 2 ? 0.16 * Math.abs((((fx * 1.6) % 2) + 2) % 2 - 1) : 0);
+    if (y > cut && ax < hw - 0.8 && y < H.chinY + 2) return -1;
+    if (y > H.chinY - 1.5 && ax < hw + 0.5) return -1;
+    let t = toneN(m.hair, (x / RV) * 0.9, Math.max(-1, Math.min(1, (y - cyc) / (RV * 1.2))) * 0.9);
+    const fringe = y > H.top + 3.0 && y < cut + 0.1 && ax < hw - 0.6;
+    const nearFace = y > cut - 0.2 && ax < hw + 1.0;
+    if (tr === 0) {
+      if (t === 0) {
+        const d = Math.sqrt(x * x + (y - cyc) * (y - cyc));
+        if (d < RV * 0.45 || d > RV * 0.93) t = 1;
+      }
+      if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
+      return t;
+    }
+    if (nearFace && !fringe) return Math.max(t, 2);
+    if (fringe && y > cut - 1.2 * px1) return Math.max(t, 2); // the cut edge
+    const d2 = x * x + (y - cyc) * (y - cyc);
+    if (d2 > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // a clean outer edge for the hair light
+    // straight clumps from the crown (the fringe combed forward, the rest down), the sheen a band round the dome
+    const v = fx * (1 + Math.max(0, y - H.top) * 0.02) + 30;
+    const ct = clumpTone(t, v, Math.sqrt(d2), CO_FRINGE);
+    return ct === t ? t : (m.hairD << 4) | ct;
+  });
+  const g = head.gb + GROUPS.hair;
+  selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);
+  if (s >= 1.35) hairLight(buf, head, g, rimMat(P.silver), H.R * 0.1, RV + 1.4, H.top - 1.8, cyc + 1, Math.max(2, Math.round(s * 1.2)));
 }
 
 export const CORRESPONDENTS = { rhea, vic, mika };

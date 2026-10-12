@@ -8,14 +8,14 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 Â
 
 | Expert | Title (strap) | Desk | Programmes | Studio | Look | Voice (Kokoro) |
 |---|---|---|---|---|---|---|
-| Omar Ledger | Economics Editor | economics | WORLD NOW, MONEY MINUTE | markets | salt-and-pepper side parting, trimmed grey beard, dark rectangular glasses, midnight suit, burgundy tie | am_adam 60% + am_onyx 40%, en-GB, 0.96 |
-| Clara Meridian | Diplomatic Correspondent | diplomacy | WORLD NOW | bureau | silver hair to the shoulder, pearl studs, royal-blue blazer, white blouse, silver brooch | ff_siwis 50% + af_sky 50%, en-GB, 0.95 |
-| Dev Isobar | Climate Correspondent | climate | WORLD NOW, COSMOS DESK | field | black textured crop, clean-shaven, deep brown skin, forest-green blazer over a cream knit | am_liam, en-US, 1.03 |
-| Dr Tomas Albedo | Planetary Scientist | planetary | COSMOS DESK | observatory | wild halo of white hair, white moustache, round glasses, brown cardigan, pale shirt | am_santa 60% + am_onyx 40%, en-US, 0.94 |
-| June Kernel | Security & Hardware Analyst | tech | TECH BYTES | lab | magenta bob, black roll-neck | af_jessica, en-US, 1.06 |
-| Dr Amara Pulse | Health Correspondent | health | WORLD NOW | clinic | close natural crop, deep brown skin, gold hoops, white jacket over a navy top | hf_alpha 50% + af_river 50%, en-GB, 0.98 |
-| Leo Sepia | Culture Correspondent | culture | WORLD NOW | gallery | ginger side parting, short ginger beard, charcoal blazer over a mustard knit | am_liam 60% + im_nicola 40%, en-GB, 1.04 |
-| Ines Clause | Legal Affairs Correspondent | legal | WORLD NOW | chambers | long chestnut hair, tan skin, charcoal tailored jacket, white blouse, fine gold chain | ef_dora 55% + af_sky 45%, en-US, 1.02 |
+| Omar Ledger | Economics Editor | economics | WORLD NOW, MONEY MINUTE | markets | receding hairline with a thin salt-and-pepper crop, trimmed grey beard, dark rectangular glasses, near-black charcoal suit, blue tie | am_adam 60% + am_onyx 40%, en-GB, 0.96 |
+| Clara Meridian | Diplomatic Correspondent | diplomacy | WORLD NOW | bureau | short silver pixie with a side-swept fringe, pearl studs, royal-blue blazer, white blouse, silver brooch | ff_siwis 50% + af_sky 50%, en-GB, 0.95 |
+| Dev Isobar | Climate Correspondent | climate | WORLD NOW, COSMOS DESK | field | high-top of short twists over faded sides, clean-shaven, deep brown skin, forest-green blazer over a cream knit | am_liam, en-US, 1.03 |
+| Dr Tomas Albedo | Planetary Scientist | planetary | COSMOS DESK | observatory | bald crown with wild white tufts above and behind the ears, white moustache, round glasses, brown cardigan, pale shirt | am_santa 60% + am_onyx 40%, en-US, 0.94 |
+| June Kernel | Security & Hardware Analyst | tech | TECH BYTES | lab | asymmetric magenta undercut (one side shaved, the long top swept to the jaw), black roll-neck | af_jessica, en-US, 1.06 |
+| Dr Amara Pulse | Health Correspondent | health | WORLD NOW | clinic | shoulder-length box braids (two gold cuffs), deep brown skin, gold hoops, white jacket over a navy top | hf_alpha 50% + af_river 50%, en-GB, 0.98 |
+| Leo Sepia | Culture Correspondent | culture | WORLD NOW | gallery | ginger curly mop, short ginger beard, charcoal blazer over a mustard knit | am_liam 60% + im_nicola 40%, en-GB, 1.04 |
+| Ines Clause | Legal Affairs Correspondent | legal | WORLD NOW | chambers | long chestnut waves from a centre parting, tan skin, plum tailored jacket, white blouse, fine gold chain | ef_dora 55% + af_sky 45%, en-US, 1.02 |
 
 - **Config:** each is a presenter in `config/channel.json` with `role`, `personality`, `voice` and `expert: { desk, backdrop }`. A programme lists its experts (`experts`, its own speciality first: ties go to that order) and how many analyses it airs (`analyses`, 0 to 2; WORLD NOW, TECH BYTES, COSMOS DESK and MONEY MINUTE air 1 each today, NEWS IN 60 and WORLD WEATHER none). A programme may name a `resident` among its experts: part of its format, booked whenever a story fits (MONEY MINUTE's Omar, TECH BYTES' June, COSMOS DESK's Tomas). `server/channel.js` refuses an unknown expert, a presenter without a known desk or a backdrop, `analyses` out of range, or a resident who is not one of the programme's experts; the tests check that every backdrop is a drawn studio.
 - **Desks:** `server/experts.js` `EXPERT_DESKS`: what each covers, the feed categories that lean its way, the words of its field, and the presenter's stock questions.
@@ -48,7 +48,7 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 Â
   - **TWO-WAY:** the presenter's single and the expert side by side, for the questions. It comes up with the introduction (the story's line before the question): the story is marked `linkKind: 'expert'`, and the v2 shot plan leaves both lines to the hand-over, so the two-way has held the floor when the expert starts.
   - **LOCATION:** the expert in a medium close-up on the left third, in front of their studio, for each answer (from the first words; without pictures to cut to, by their second sentence at the latest).
   - Never B-roll or FILE: an expert has no place.
-  - In the two-way each box keeps 3 px above the crown of the hair (Tomas's halo, Leo's quiff, Nova's coils on the presenter's side): the box rises when the head would be cut.
+  - In the two-way each box keeps 3 px above the crown of the hair (Dev's high-top, Leo's curls, Nova's coils on the presenter's side): the box rises when the head would be cut.
 - **Graphics** (`public/js/graphics/remote.js`):
   - **ANALYSIS** where a link's place tag would be;
   - the expert's title on their box in the two-way;
@@ -57,10 +57,12 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 Â
 
 ## 4. Looks (`public/js/v2/canvas25d/cast/experts.js`)
 
-- **Built on proven parts:** the presenters' hair drawers (Paco's short cut, Lola's bob, Ada's straight cut, Max's textured cut, Nova's coils, which now take a look's own `halo`), Max's beard, Paco's moustache, Ada's glasses and stud (`drawSpecs`, `drawStud`), and the wardrobe outfits. The presenters render pixel-identical after the refactor.
+- **Hair of their own** (`cast/hair-experts.js`; owner 12 Oct: "el pelo de algunos es muy parecido con los de otros presentadores"): the experts first borrowed the presenters' hair drawers in other colours and read as their twins (Omar as Paco, Tomas as Nova's halo in white). Each now has a drawer of their own, following the presenters' craft (head-local units, yaw and pitch, the three LOD tiers, a clean outer edge for a painted hair light, follow-through on what hangs): Omar's receding crop, Clara's pixie, Dev's high-top of twists, Tomas's bald crown and professor's ring, June's asymmetric undercut, Amara's box braids (the scalp in front, the hanging braids behind the ears and the neck), Leo's curly mop, Ines's waves (with the hair behind the neck). `test/experts.test.js` checks no expert draws hair with a presenter's, a correspondent's or another expert's drawer.
+- **Built on proven parts otherwise:** Max's beard, Paco's moustache, Ada's glasses and stud (`drawSpecs`, `drawStud`), and the wardrobe outfits.
+- **Outfits apart too** (owner 12 Oct): Omar's suit is a near-black charcoal with a blue tie and no pocket square (it was Paco's navy and red); Ines's jacket is plum, its shade cooled to ink (her charcoal was Rhea's on the same tan skin, and Nova's plum knit shades to maroon).
 - **What marks an expert:** the correspondents' earpiece (its tube into the collar) and lapel microphone.
 - **One identity each at 1x:**
-  - a silhouette (the white halo, the magenta bob, the close crop, the silver hair);
+  - a silhouette (the bald crown and white tufts, the high-top, the half-shaved magenta sweep, the braids, the curly mop, the waves, the pixie, the receding crop);
   - a colour (each outfit is its own);
   - a detail (glasses, beard, hoops, brooch, chain).
   - No expert's colour histogram is within 35% of any other face's (`test/experts.test.js`).

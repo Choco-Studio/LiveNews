@@ -1,36 +1,42 @@
 // The channel's experts (owner 23:05: "Don't forget the EXPERTS"; server/experts.js). Eight analysts of the
 // channel's own, all fictional, each joining from a studio of their desk (studio/experts.js) in the
 // correspondents' shots: a medium close-up on the left third, and the two-way's right box. Like the
-// correspondents they wear an earpiece and a lapel microphone (cast/correspondents.js), and each is built on
-// the presenters' proven parts (hair drawers, beards, glasses, wardrobe) with a design of their own, distinct
-// from every presenter and correspondent at 1x:
-//   Omar Ledger      ECONOMICS    salt-and-pepper side parting, a trimmed grey beard, dark rectangular
-//                                 glasses, a midnight suit and a burgundy tie (Paco's cut, darker, bearded)
-//   Clara Meridian   DIPLOMACY    silver hair to the shoulder with a deep side part, pearl studs, a royal
-//                                 blue blazer over a white blouse, a silver brooch
-//   Dev Isobar       CLIMATE      a black textured crop, clean-shaven, deep brown skin, a forest-green
-//                                 blazer over a cream knit (lit like Nova: the planes facing the key in tan)
-//   Tomas Albedo     SPACE        a wild halo of white hair, a white moustache, round glasses, a brown
-//                                 cardigan over a pale shirt: the professor at once
-//   June Kernel      TECHNOLOGY   a magenta bob, light skin, a black roll-neck: the one bright note
-//   Amara Pulse      HEALTH       a close natural crop, deep brown skin, gold hoops, a white jacket over
-//                                 a navy top
-//   Leo Sepia        CULTURE      ginger side-parted hair and a short ginger beard, a charcoal blazer
-//                                 over a mustard knit
-//   Ines Clause      LEGAL        long chestnut hair, tan skin, a charcoal tailored jacket over a white
-//                                 blouse, a fine gold chain
+// correspondents they wear an earpiece and a lapel microphone (cast/correspondents.js). Each has hair of their
+// own (cast/hair-experts.js; owner 12 Oct: borrowed presenters' drawers in another colour read as twins) and is
+// otherwise built on the presenters' proven parts (beards, glasses, wardrobe), distinct from every presenter and
+// correspondent at 1x:
+//   Omar Ledger      ECONOMICS    a receding hairline (high forehead, temples swept back) with a thin
+//                                 salt-and-pepper top cropped short, a trimmed grey beard, dark rectangular
+//                                 glasses, a near-black charcoal suit and a blue tie, no pocket square
+//   Clara Meridian   DIPLOMACY    a short silver pixie, close at the nape and over the ears, a wispy fringe
+//                                 swept to one side, pearl studs, a royal blue blazer over a white blouse, a
+//                                 silver brooch
+//   Dev Isobar       CLIMATE      a high-top of short twists over tight faded sides, clean-shaven, deep brown
+//                                 skin, a forest-green blazer over a cream knit (lit like Nova: the planes
+//                                 facing the key in tan)
+//   Tomas Albedo     SPACE        a bald crown with wild white tufts above and behind the ears (the
+//                                 professor's ring), a white moustache, round glasses, a brown cardigan over a
+//                                 pale shirt: the professor at once
+//   June Kernel      TECHNOLOGY   an asymmetric magenta undercut (one side shaved to a stubble, the long top
+//                                 swept over to the jaw), light skin, a black roll-neck: the one bright note
+//   Amara Pulse      HEALTH       shoulder-length box braids from a parted hairline, two with gold cuffs, deep
+//                                 brown skin, gold hoops, a white jacket over a navy top
+//   Leo Sepia        CULTURE      a ginger curly mop over the forehead and the ears' tops and a short ginger
+//                                 beard, a charcoal blazer over a mustard knit
+//   Ines Clause      LEGAL        long chestnut waves from a centre parting, full over the shoulders, tan
+//                                 skin, a plum tailored jacket over a white blouse, a fine gold chain
 // Colours are the channel palette only; the face stays the warmest, brightest thing in each frame.
 import { P } from '../../../palette.js';
-import { line } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { deriveLook, SKIN_LIGHT, SKIN_TAN } from './base.js';
-import { paco, drawShortHair, drawMustache } from './paco.js';
-import { lola, drawBob, drawBobBack, drawEarrings } from './lola.js';
+import { paco, drawMustache } from './paco.js';
+import { lola } from './lola.js';
 import { penny } from './penny.js';
-import { max, drawTextured, drawBeard } from './max.js';
-import { ada, drawHairBack, drawStraight, drawSpecs, drawStud } from './ada.js';
-import { drawWarmHead, drawHaloBack, drawCoils } from './nova.js';
+import { max, drawBeard } from './max.js';
+import { ada, drawSpecs, drawStud } from './ada.js';
+import { drawWarmHead } from './nova.js';
 import { drawEarpiece } from './correspondents.js';
+import { drawReceding, drawPixie, drawHighTop, drawRing, drawUndercut, drawBraids, drawBraidsBack, drawMop, drawWaves, drawWavesBack } from './hair-experts.js';
 import { dec } from './kit-a.js';
 
 // deep brown skin, lit with Nova's care (drawWarmHead: the planes that face the key turn to tan)
@@ -54,8 +60,13 @@ function tomasOver(buf, L, m, head, s, sk) {
   drawSpecs(buf, L, m, head, s, sk);
   drawEarpiece(buf, L, m, head, s);
 }
-function juneHair(buf, L, m, head, s, sk) {
-  drawBob(buf, L, m, head, s, sk.hairLag || 0);
+// June's earpiece sits under the long side: only its tube shows, out from under the cut (the look as drawEarpiece
+// reads it when the hair covers the ears; her shaved side's ear is drawn)
+const UNDER_HAIR = new WeakMap();
+function juneOver(buf, L, m, head, s) {
+  let c = UNDER_HAIR.get(L);
+  if (!c) UNDER_HAIR.set(L, (c = { ...L, parts: { ...L.parts, coversEars: true } }));
+  drawEarpiece(buf, c, m, head, s);
 }
 function amaraOver(buf, L, m, head, s) {
   drawHoops(buf, L, head, s);
@@ -63,10 +74,6 @@ function amaraOver(buf, L, m, head, s) {
 }
 function leoOver(buf, L, m, head, s) {
   drawBeard(buf, L, m, head, s);
-  drawEarpiece(buf, L, m, head, s);
-}
-function inesOver(buf, L, m, head, s) {
-  drawStud(buf, L, head, s);
   drawEarpiece(buf, L, m, head, s);
 }
 
@@ -108,25 +115,29 @@ export const omar = deriveLook(paco, {
   mouth: { y: 6.1, w: 3.7, lip: P.brown, lipHi: P.tanShade, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_TAN,
   skinLine: P.brown,
-  hair: { style: 'paco', ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink },
+  hair: { style: 'receding', ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink },
   mustache: null,
   beard: { ramp: [P.fog, P.steel, P.slate, P.ink], vol: 0.7 },
   glasses: { style: 'rect', ramp: [P.slate, P.ink, P.black, P.black] },
   outfit: 'correspondent',
   wear: 'suit',
   collar: 'tie',
-  jacket: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+  // owner 12 Oct: no longer Paco's twin. A near-black charcoal (a step darker than Paco's navy-charcoal, its sheen
+  // steel, never blue) and a blue tie, no pocket square: red is WORLD NOW's accent and Paco's tie, green MONEY MINUTE's
+  jacket: { ramp: [P.steel, P.ink, P.black, P.black], line: P.black },
   shirt: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel },
-  tie: { ramp: [P.red, P.darkRed, P.maroon, P.black], line: P.black },
-  pocket: true,
+  tie: { ramp: [P.blue, P.navy, P.ink, P.black], line: P.black },
+  pocket: false,
   cuff: P.silver,
   persona: { sway: 0.55, headMotion: 0.75, blinkMin: 2.6, blinkMax: 5.8, energy: 0.75, smile: 0.16 },
   mats: {
-    hairD: { ramp: [P.fog, P.steel, P.slate, P.ink], decal: true },
     beard: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink },
     beardD: { ramp: [P.fog, P.steel, P.slate, P.ink], decal: true },
+    hx: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.fog, P.steel, P.slate, P.ink], decal: true },
+    hxE: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.steel, th: [0.62, 0.08, -0.42] },
   },
-  parts: { hair: drawShortHair, over: omarOver },
+  parts: { hair: drawReceding, over: omarOver },
 });
 
 export const clara = deriveLook(lola, {
@@ -139,7 +150,7 @@ export const clara = deriveLook(lola, {
   mouth: { y: 5.75, w: 3.4, lip: P.darkRed, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
-  hair: { style: 'straight', ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel },
+  hair: { style: 'pixie', ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel },
   glasses: null,
   earrings: P.white,
   necklace: null,
@@ -150,8 +161,12 @@ export const clara = deriveLook(lola, {
   pin: { at: [5.4, 10.2], ramp: [P.white, P.silver, P.steel] },
   cuff: P.white,
   persona: { sway: 0.55, headMotion: 0.75, blinkMin: 2.6, blinkMax: 5.8, energy: 0.7, smile: 0.14 },
-  mats: { strands: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel, th: [0.62, 0.08, -0.42] } },
-  parts: { hairBack: drawHairBack, hair: drawStraight, over: claraOver, coversEars: false },
+  mats: {
+    hx: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.white, P.silver, P.fog, P.steel], decal: true },
+    hxE: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.fog, th: [0.62, 0.08, -0.42] },
+  },
+  parts: { hairBack: null, hair: drawPixie, over: claraOver, coversEars: false },
 });
 
 export const dev = deriveLook(max, {
@@ -165,7 +180,7 @@ export const dev = deriveLook(max, {
   skin: SKIN_DEEP,
   skinLift: 0.4,
   skinLine: P.maroon,
-  hair: { style: 'textured', ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+  hair: { style: 'hightop', ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   beard: null,
   outfit: 'correspondent',
   wear: 'knitBlazer',
@@ -176,11 +191,11 @@ export const dev = deriveLook(max, {
   mats: {
     lapel: { ramp: [P.steel, P.darkGreen, P.ink, P.black], line: P.ink, rim: P.silver },
     rib: { ramp: [P.white, P.cream, P.fog, P.steel], line: P.steel },
-    tex: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
-    texEdge: { ramp: [P.slate, P.ink, P.black, P.black], line: P.maroon, th: [0.62, 0.08, -0.42] },
-    texD: { ramp: [P.slate, P.ink, P.black, P.black], decal: true },
+    hx: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.slate, P.ink, P.black, P.black], decal: true },
+    hxE: { ramp: [P.slate, P.ink, P.black, P.black], line: P.maroon, th: [0.62, 0.08, -0.42] },
   },
-  parts: { head: drawWarmHead, hair: drawTextured, over: earpieceOnly },
+  parts: { head: drawWarmHead, hair: drawHighTop, over: earpieceOnly },
 });
 
 export const tomas = deriveLook(paco, {
@@ -193,9 +208,7 @@ export const tomas = deriveLook(paco, {
   mouth: { y: 6.15, w: 3.6, lip: P.brown, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
-  hair: { style: 'coily', ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel },
-  // a wild halo, fuller at the sides than on top, with a high forehead
-  halo: { cy: -2.6, rx: 11.8, up: 9.0, down: 8.0, taper: 0.35, brow: 5.6 },
+  hair: { style: 'ring', ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel },
   mustache: { ramp: [P.white, P.silver, P.fog, P.steel], y: 4.4, w: 5.0, h: 1.25 },
   glasses: { style: 'round', ramp: [P.tanShade, P.brown, P.maroon, P.black] },
   outfit: 'correspondent',
@@ -208,9 +221,10 @@ export const tomas = deriveLook(paco, {
   persona: { sway: 0.6, headMotion: 0.95, blinkMin: 2.4, blinkMax: 5.4, energy: 0.85, smile: 0.24 },
   mats: {
     band: { ramp: [P.brown, P.maroon, P.black, P.black], line: P.black, rim: P.silver },
-    coil: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel, th: [0.62, 0.08, -0.42] },
+    hx: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.white, P.silver, P.fog, P.steel], decal: true },
   },
-  parts: { hairBack: drawHaloBack, hair: drawCoils, over: tomasOver, coversEars: true },
+  parts: { hairBack: null, hair: drawRing, over: tomasOver, coversEars: false },
 });
 
 export const june = deriveLook(ada, {
@@ -223,7 +237,7 @@ export const june = deriveLook(ada, {
   mouth: { y: 5.6, w: 3.3, lip: P.darkRed, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
-  hair: { style: 'bob', ramp: [P.pink, P.magenta, P.purple, P.maroon], line: P.maroon, edge: P.purple, rimTop: false },
+  hair: { style: 'undercut', ramp: [P.pink, P.magenta, P.purple, P.maroon], line: P.maroon },
   glasses: null,
   earrings: null,
   outfit: 'correspondent',
@@ -233,11 +247,13 @@ export const june = deriveLook(ada, {
   cuff: P.ink,
   persona: { sway: 0.7, headMotion: 1.05, blinkMin: 2.2, blinkMax: 5.0, energy: 0.95, smile: 0.18 },
   mats: {
-    hairD: { ramp: [P.pink, P.magenta, P.purple, P.maroon], decal: true },
+    hx: { ramp: [P.pink, P.magenta, P.purple, P.maroon], line: P.maroon, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.pink, P.magenta, P.purple, P.maroon], decal: true },
+    hxE: { ramp: [P.pink, P.magenta, P.purple, P.maroon], line: P.purple, th: [0.62, 0.08, -0.42] },
     collar: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, rim: P.silver },
     collarFlat: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   },
-  parts: { hairBack: drawBobBack, hair: juneHair, over: earpieceOnly, coversEars: true },
+  parts: { hairBack: null, hair: drawUndercut, over: juneOver, coversEars: false },
 });
 
 export const amara = deriveLook(lola, {
@@ -251,9 +267,7 @@ export const amara = deriveLook(lola, {
   skin: SKIN_DEEP,
   skinLift: 0.4,
   skinLine: P.maroon,
-  hair: { style: 'coily', ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
-  // a close natural crop: a shell just off the skull, ending above the ears
-  halo: { cy: -3.3, rx: 8.4, up: 8.3, down: 2.9, taper: 0.6, brow: 3.3 },
+  hair: { style: 'braids', ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   earrings: null,
   hoops: [P.yellow, P.orange],
   necklace: null,
@@ -263,8 +277,12 @@ export const amara = deriveLook(lola, {
   shirt: { ramp: [P.blue, P.navy, P.ink, P.black], line: P.black },
   cuff: P.white,
   persona: { sway: 0.7, headMotion: 0.9, blinkMin: 2.4, blinkMax: 5.4, energy: 0.85, smile: 0.24 },
-  mats: { coil: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, th: [0.62, 0.08, -0.42] } },
-  parts: { head: drawWarmHead, hairBack: null, hair: drawCoils, over: amaraOver, coversEars: false },
+  mats: {
+    hx: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.slate, P.ink, P.black, P.black], decal: true },
+    hxE: { ramp: [P.slate, P.ink, P.black, P.black], line: P.maroon, th: [0.62, 0.08, -0.42] },
+  },
+  parts: { head: drawWarmHead, hairBack: drawBraidsBack, hair: drawBraids, over: amaraOver, coversEars: false },
 });
 
 export const leo = deriveLook(max, {
@@ -277,7 +295,7 @@ export const leo = deriveLook(max, {
   mouth: { y: 6.0, w: 3.6, lip: P.brown, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
-  hair: { style: 'paco', ramp: [P.orange, P.rust, P.brown, P.maroon], line: P.maroon },
+  hair: { style: 'mop', ramp: [P.orange, P.rust, P.brown, P.maroon], line: P.maroon },
   beard: { ramp: [P.orange, P.rust, P.brown, P.maroon], vol: 0.6 },
   outfit: 'correspondent',
   wear: 'knitBlazer',
@@ -286,13 +304,15 @@ export const leo = deriveLook(max, {
   cuff: P.slate,
   persona: { sway: 0.7, headMotion: 1.1, blinkMin: 2.2, blinkMax: 4.8, energy: 0.95, smile: 0.28 },
   mats: {
-    hairD: { ramp: [P.orange, P.rust, P.brown, P.maroon], decal: true },
+    hx: { ramp: [P.orange, P.rust, P.brown, P.maroon], line: P.maroon, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.orange, P.rust, P.brown, P.maroon], decal: true },
+    hxE: { ramp: [P.orange, P.rust, P.brown, P.maroon], line: P.brown, th: [0.62, 0.08, -0.42] },
     beard: { ramp: [P.orange, P.rust, P.brown, P.maroon], line: P.maroon },
     beardD: { ramp: [P.orange, P.rust, P.brown, P.maroon], decal: true },
     lapel: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.ink, rim: P.silver },
     rib: { ramp: [P.cream, P.yellow, P.orange, P.rust], line: P.brown },
   },
-  parts: { hair: drawShortHair, over: leoOver },
+  parts: { hair: drawMop, over: leoOver, coversEars: false },
 });
 
 export const ines = deriveLook(penny, {
@@ -305,20 +325,27 @@ export const ines = deriveLook(penny, {
   mouth: { y: 5.75, w: 3.4, lip: P.darkRed, lipHi: P.tan, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_TAN,
   skinLine: P.brown,
-  hair: { style: 'straight', ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.black },
+  hair: { style: 'waves', ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.black },
   pearls: null,
   props: [],
-  earrings: P.yellow,
+  earrings: null,
   necklace: [P.yellow, P.orange],
   outfit: 'correspondent',
   wear: 'tailored',
-  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
+  // owner 12 Oct (no twins): a plum tailored jacket, a colour no other expert or WORLD NOW face wears (the charcoal she
+  // had was Rhea's jacket on the same tan skin), its shade cooled to ink (not the maroon of Nova's plum knit); deep
+  // enough that her face stays the warmest, brightest thing
+  jacket: { ramp: [P.magenta, P.purple, P.ink, P.black], line: P.black },
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel },
   pin: null,
   cuff: P.white,
   persona: { sway: 0.5, headMotion: 0.75, blinkMin: 2.6, blinkMax: 5.8, energy: 0.75, smile: 0.12 },
-  mats: { strands: { ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.black, th: [0.62, 0.08, -0.42] } },
-  parts: { hairBack: drawHairBack, hair: drawStraight, over: inesOver },
+  mats: {
+    hx: { ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
+    hxD: { ramp: [P.tanShade, P.brown, P.maroon, P.black], decal: true },
+    hxE: { ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.maroon, th: [0.62, 0.08, -0.42] },
+  },
+  parts: { hairBack: drawWavesBack, hair: drawWaves, over: earpieceOnly, coversEars: true },
 });
 
 export const EXPERTS = { omar, clara, dev, tomas, june, amara, leo, ines };
