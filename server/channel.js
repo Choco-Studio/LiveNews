@@ -92,6 +92,8 @@ export function validateChannel(ch) {
       }
     }
     if (p.analyses !== undefined && !(Number.isInteger(p.analyses) && p.analyses >= 0 && p.analyses <= 2)) throw new Error(`programme "${id}" has an "analyses" outside 0..2`);
+    // Optional: IN THEIR WORDS, re-staged (server/guests/restage.js): how many quoted people may say their own words
+    if (p.restage !== undefined && !(Number.isInteger(p.restage) && p.restage >= 0 && p.restage <= 2)) throw new Error(`programme "${id}" has a "restage" outside 0..2`);
     // Optional: the programme's resident expert (part of the format: booked whenever a story fits, no rest)
     if (p.resident !== undefined && !(typeof p.resident === 'string' && (p.experts || []).includes(p.resident))) throw new Error(`programme "${id}" has a "resident" who is not one of its experts`);
     // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points; HOW WE GOT
