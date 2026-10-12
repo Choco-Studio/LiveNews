@@ -1,11 +1,10 @@
 // WORLD WEATHER's weather symbols, hand-placed pixel art built from a few shapes (a sun disc and its rays, a
 // cloud of three puffs lit from the top, drops, flakes, a bolt), outlined in the palette's black so they read
 // over any colour of the temperature map, and animated on a few frames: rays that twinkle, rain that falls,
-// a bolt that flashes now and then. The warnings panel's tropical cyclone is a slowly turning two-arm spiral.
+// a bolt that flashes now and then. (A tropical cyclone is a cloud on the wall: storm.js.)
 //
 //   drawIcon(ctx, kind, x, y, t, { night, big })   kind: clear | partly | cloudy | fog | drizzle | rain |
 //                                                  showers | snow | storm   (x, y: the icon's centre)
-//   drawCyclone(ctx, x, y, t, r)                   the panel's storm symbol (r: radius in px)
 // Sprites are baked once per kind and frame (a canvas each); no allocation per frame after that.
 import { P } from '../../palette.js';
 
@@ -192,41 +191,3 @@ export function iconPixels(kind, frame = 0) {
   return build(kind, frame);
 }
 export const ICON_SIZE = { w: IW, h: IH };
-
-// ------------------------------------------------------------------------------------------- cyclone
-const CYC = new Map();
-/** A tropical cyclone's symbol: two spiral arms turning (anticlockwise in the north), an eye, 16 frames a turn. */
-export function drawCyclone(ctx, x, y, t, r = 11, { south = false } = {}) {
-  const n = 16;
-  const f = Math.floor(t * 4) % n;
-  const key = `${r}:${f}:${south ? 1 : 0}`;
-  let c = CYC.get(key);
-  if (!c) {
-    const size = r * 2 + 3;
-    c = document.createElement('canvas');
-    c.width = c.height = size;
-    const g = c.getContext('2d');
-    const rot = (f / n) * Math.PI * 2 * (south ? 1 : -1);
-    const ctr = size / 2;
-    for (let yy = 0; yy < size; yy++) {
-      for (let xx = 0; xx < size; xx++) {
-        const dx = xx + 0.5 - ctr, dy = yy + 0.5 - ctr;
-        const d = Math.hypot(dx, dy);
-        if (d > r + 0.5) continue;
-        const a = Math.atan2(dy, dx) * (south ? -1 : 1);
-        const arm = Math.cos(2 * (a - rot) + d * (5.2 / r));
-        let col = null;
-        if (d < r * 0.18) col = P.slate; // the eye
-        else if (d < r * 0.34) col = P.white; // the eyewall
-        else if (arm > 0.45 - (d / r) * 0.25) col = d < r * 0.6 ? P.white : d < r * 0.85 ? P.silver : P.fog;
-        else if (arm > 0.05 && d < r * 0.8) col = P.steel;
-        if (col) {
-          g.fillStyle = col;
-          g.fillRect(xx, yy, 1, 1);
-        }
-      }
-    }
-    CYC.set(key, c);
-  }
-  ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height / 2));
-}

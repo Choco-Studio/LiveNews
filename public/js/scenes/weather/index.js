@@ -26,7 +26,7 @@ import { drawText, measureText } from '../../font.js';
 import { viewMapPixels } from '../worldmap.js';
 import { temperatureField, tempColor, RAMP } from './field.js';
 import { drawIcon } from './icons.js';
-import { drawStormCloud, stormRadius, REACH } from './storm.js';
+import { drawStormCloud, stormRadius } from './storm.js';
 import { Standing } from '../../v2/canvas25d/runtime/standing.js';
 import { liveSpeech } from '../../v2/canvas25d/speech.js';
 import { Presenter } from './presenter.js';
