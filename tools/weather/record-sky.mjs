@@ -8,7 +8,7 @@ import { FieldDesk, DEMO_SKY } from '../../server/weatherfield.js';
 
 const i = process.argv.indexOf('--out');
 const out = i > 0 ? process.argv[i + 1] : DEMO_SKY;
-const desk = new FieldDesk({ source: 'open-meteo', pauseMs: 15_000, retryMs: 65_000 });
+const desk = new FieldDesk({ source: 'open-meteo', pauseMs: 20_000, retryMs: 65_000 });
 const t0 = Date.now();
 const alive = setInterval(() => {}, 1000); // the desk's waits never hold the process on their own
 const base = await desk.fromNetwork().finally(() => clearInterval(alive));

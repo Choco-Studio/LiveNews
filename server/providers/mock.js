@@ -19,7 +19,9 @@ import { expertFor, answerFrame } from '../experts.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
-const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?|alerts?|jobs? at risk|job (?:cuts|losses)|lay-?offs?|redundanc\w*|rulings?|under pressure|flu|waiting lists?)\b/i;
+// (crime and scandal are hard news, never an "And finally": fraud, tax dodging, arrests, trials, sanctions; a space
+// probe, a clinical trial or a charged battery are not crime)
+const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?|alerts?|jobs? at risk|job (?:cuts|losses)|lay-?offs?|redundanc\w*|rulings?|under pressure|flu|waiting lists?|fraud\w*|tax(?:es)?|falsif\w*|corrupt\w*|brib\w*|scandals?|lawsuits?|sued|su(?:es|ing)|arrest\w*|detain\w*|convict\w*|sentenced|prison|jail\w*|sanctions?|accus\w*|allegations?|launder\w*|tax evasion|embezzl\w*|indict\w*|guilty|(?:criminal|police|corruption|fraud) (?:investigation|probe|trial)|under investigation|on trial)\b/i;
 // The best "and finally" material: curiosities, animals, culture, the sky.
 const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
 // A headline told as a spoken sentence, the way a broadcast writer turns one: its present-tense verb becomes the
