@@ -801,6 +801,15 @@ test('graphics r2: NEWS IN 60 keeps its tag, shows a never-shrinking progress ru
     assert.ok(g.strap.progress >= lastW);
     lastW = g.strap.progress;
   }
+  // the director's plan (12 Oct: nothing set scene.progress, so the rule never moved): a segment's share fills as it airs
+  const g2 = new Graphics({ now: () => 0 });
+  const s2 = { ...scene, progress: undefined, rundown: [], progressPlan: { base: 0.25, span: 0.5, since: 100, dur: 10 } };
+  g2.update(100, s2);
+  assert.equal(g2.strap.progress, 0.25);
+  g2.update(105, s2);
+  assert.equal(g2.strap.progress, 0.5);
+  g2.update(130, s2);
+  assert.equal(g2.strap.progress, 0.75, 'never past its segment');
   assert.equal(g.tagOut, null, 'programme tag held for the whole episode');
   assert.equal(g.tickerList.length, 1);
   assert.equal(g.tickerList[0].label, 'UP NEXT');

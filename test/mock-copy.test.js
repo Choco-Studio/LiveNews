@@ -45,7 +45,8 @@ describe('mock: openings', () => {
   test('when the summary\'s first sentence leans on something, the headline opens instead', async () => {
     const stories = [st('c', 'Startup launches satellite internet service for farms', 'It says the service reaches speeds of 100 megabits per second. Farmers in remote areas can sign up now.', { category: 'tech' })];
     const seg = storySegs(await write(stories, { ...PROGRAM, stories: 1 }))[0];
-    assert.match(spoken(seg.text), /^Startup launches satellite internet service for farms/);
+    // (said as a sentence, 12 Oct: a noun that always counts takes "A")
+    assert.match(spoken(seg.text), /^A startup has launched satellite internet service for farms/);
   });
   test('the lead after the headlines keeps the restating sentence the next one leans on', async () => {
     const stories = [st('p', 'BREAKING: Panama Canal reopens after a day-long closure', 'The Panama Canal has reopened to ships after fog closed it for a day. The canal authority says about 30 ships are waiting to cross.', { category: 'business' })];
@@ -53,6 +54,19 @@ describe('mock: openings', () => {
     const lead = storySegs(script)[0];
     assert.match(spoken(lead.text), /The Panama Canal has reopened/);
     assert.ok(!/^(?:Breaking news\. )?The canal authority/.test(spoken(lead.text)), lead.text);
+  });
+});
+
+describe('mock: NEWS IN 60 items say the news first (12 Oct)', () => {
+  const SOLO = { A: { id: 'sam', name: 'Sam Night' } };
+  const N60 = { id: 'news-60', title: 'NEWS IN 60', stories: 1, maxChats: 0, intro: 'frame' };
+  const first = async (story) => spoken(storySegs(await write([story], N60, SOLO))[0].text).replace(/^Breaking news\. /, '');
+  test('a reply or a backstory never opens: the headline, said as a sentence, does', async () => {
+    assert.match(await first(st('h', "Saudi minister vows 'serious response' to Houthi attacks on airports", 'The Houthis said they launched the attacks in retaliation for Saudi strikes on areas they control in Yemen. Flights were suspended at two airports.')), /^A Saudi minister has vowed 'serious response' to Houthi attacks on airports/);
+    assert.match(await first(st('b', 'Zizou Bergs stuns Alcaraz in Shanghai as Zverev claims year-end top ranking', 'Bergs had lost their only previous meeting, falling to Alcaraz in the last 16 of last year’s Japan Open. The Belgian won in straight sets.', { category: 'sport' })), /^Zizou Bergs has stunned Alcaraz in Shanghai/);
+  });
+  test('a lede that names the headline’s subject stays', async () => {
+    assert.match(await first(st('g', 'German minister quits after death of stepdaughter and political attacks', 'Germany’s labour minister and co-leader of the Social Democrats, Bärbel Bas, has quit both posts. She cited personal reasons.')), /^Germany’s labour minister/);
   });
 });
 

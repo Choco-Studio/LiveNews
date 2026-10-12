@@ -42,6 +42,10 @@ const HEADLINE_PERFECT = {
   builds: 'built', breaks: 'broken', shuts: 'shut', pulls: 'pulled', removes: 'removed', releases: 'released',
   signs: 'signed', expands: 'expanded', acquires: 'acquired', invests: 'invested', joins: 'joined', leaves: 'left',
   quits: 'quit', hires: 'hired', fires: 'fired', settles: 'settled',
+  // ("Fire destroys Marché des Enfants Rouges…", Guardian 12 Oct)
+  destroys: 'destroyed', damages: 'damaged', kills: 'killed', injures: 'injured', rescues: 'rescued', evacuates: 'evacuated',
+  // (sport: "Zizou Bergs stuns Alcaraz in Shanghai…", Guardian 12 Oct)
+  stuns: 'stunned', beats: 'beaten', defeats: 'defeated', thrashes: 'thrashed', routs: 'routed', crushes: 'crushed', overcomes: 'overcome', knocks: 'knocked',
   // (12 Oct: "President Zardari suspends provincial government..." read as a headline; verbs a headline rarely uses as a noun)
   suspends: 'suspended', urges: 'urged', vows: 'vowed', threatens: 'threatened', admits: 'admitted', denies: 'denied',
   accuses: 'accused', detains: 'detained', seeks: 'sought', scraps: 'scrapped', postpones: 'postponed', cancels: 'cancelled',
@@ -111,12 +115,14 @@ export function spokenTitle(title, info) {
     const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
     const first = words[0].replace(/[^\p{L}-]/gu, '');
     const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const det = text.match(new RegExp(`\\b(a|an|the)\\s+${esc(subject.toLowerCase())}\\b`, 'i'));
     // a name: written with a capital mid-sentence by the outlet, shaped like one ("OpenAI", "NASA"), or a first and
     // a last name ("Milt Windler, ...", "Jack Dorsey’s Bitchat")
     const shaped = /\p{Lu}/u.test(first.slice(1));
     const named = shaped || !!lookupPlace(first) || new RegExp(`[\\p{Ll},;]\\s+${esc(first)}\\b`, 'u').test(text) || (/^\p{Lu}/u.test(words[1] || '') && /^\p{Lu}\p{Ll}/u.test(first));
-    if (det) subject = `${det[1][0].toUpperCase()}${det[1].slice(1).toLowerCase()} ${shaped || named ? subject : subject[0].toLowerCase() + subject.slice(1)}`;
+    // (a place before a common noun is no name: "Saudi minister vows…" -> "A Saudi minister has vowed…", BBC 12 Oct)
+    const common = /^\p{Ll}/u.test(words[i - 1] || '') && words.length > 1 && i > 1;
+    const det = articleFor(subject, text, common || !named);
+    if (det) subject = `${det} ${shaped || named || DEMONYM.test(first) ? subject : subject[0].toLowerCase() + subject.slice(1)}`;
     else if (!named) return t;
   }
   return `${subject} ${verb}${rest ? ` ${rest}` : ''}`;
@@ -136,11 +142,30 @@ function headlineSubject(subject, info) {
     if (k > 0 || /\p{Lu}/u.test(core.slice(1)) || lookupPlace(core)) return true;
     return new RegExp(`[\\p{Ll},;]\\s+${esc(core)}\\b`, 'u').test(text);
   };
-  const last = ws[ws.length - 1];
-  const plural = (!named(last, ws.length - 1) && /[^s'’]s$/i.test(last)) || /\band\b/.test(subject);
-  if (plural || /^(?:The|A|An|This|Its|His|Her|Their)$/.test(ws[0]) || named(last, ws.length - 1)) return { subject, plural };
-  const det = text.match(new RegExp(`\\b(a|an|the)\\s+${esc(subject.toLowerCase())}\\b`, 'i'));
-  return det ? { subject: `${det[1][0].toUpperCase()}${det[1].slice(1).toLowerCase()} ${subject[0].toLowerCase()}${subject.slice(1)}`, plural } : null;
+  // (the noun the phrase is about: before its first preposition, "Nobel Prize for economics" is about a prize)
+  const prep = ws.findIndex((w, k) => k > 0 && /^(?:for|of|in|on|at|from|with|over|after)$/i.test(w));
+  const hk = prep > 0 ? prep - 1 : ws.length - 1;
+  const last = ws[hk];
+  const plural = (!named(last, hk) && /[^s'’]s$/i.test(last)) || /\band\b/.test(ws.slice(0, hk + 1).join(' '));
+  if (plural || /^(?:The|A|An|This|Its|His|Her|Their)$/.test(ws[0]) || named(last, hk)) return { subject, plural };
+  const det = articleFor(subject, text, true);
+  return det ? { subject: `${det} ${subject[0].toLowerCase()}${subject.slice(1)}`, plural } : null;
+}
+// Nouns a headline drops the article of that always count ("Fire destroys…", "Man arrested…", "Saudi minister vows…")
+const COUNT_NOUN = /^(?:minister|man|woman|boy|girl|child|teenager|baby|judge|court|firm|company|startup|study|report|survey|fire|blaze|blast|explosion|storm|quake|earthquake|plane|jet|ship|boat|ferry|train|bus|car|lorry|truck|driver|pilot|teacher|doctor|nurse|officer|soldier|student|worker|leader|lawmaker|senator|mayor|councillor|official|spokesperson|spokesman|spokeswoman|group|charity|union|bank|hospital|school|university|museum|zoo|team|club|rocket|probe|satellite|telescope|volcano|tornado|hurricane|cyclone|flood|landslide|bridge|dam|mine|factory|plant|refinery|pipeline)$/;
+/**
+ * The article a headline's common-noun subject takes: the outlet's own ("a fire" before "the fire": a story's first
+ * mention), else, when the subject needs one (`needs`) and its noun always counts, "A"/"An"; else null.
+ */
+function articleFor(subject, text, needs) {
+  const esc = subject.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const indef = String(text).match(new RegExp(`\\b(a|an)\\s+${esc}\\b`, 'i'));
+  const def = indef ? null : String(text).match(new RegExp(`\\bthe\\s+${esc}\\b`, 'i'));
+  if (indef) return indef[1].toLowerCase() === 'an' ? 'An' : 'A';
+  if (def) return 'The';
+  const head = subject.split(/\s+/).pop().toLowerCase();
+  if (!needs || !COUNT_NOUN.test(head)) return null;
+  return /^[aeiou]/i.test(subject) ? 'An' : 'A';
 }
 // a finite verb later in the headline: the "to" or the participle belongs to the subject ("Plans to build a bridge are
 // rejected", "Company founded in 1990 closes its doors"); a noun at the very end is no verb ("…after Borneo fires")
@@ -767,7 +792,8 @@ const leansOnHeadline = (info, t) => {
   // (or whose own noun the headline never says, an adjective they share notwithstanding: "The critically endangered apes
   // were rescued…" under "Endangered orangutans released…", BBC 12 Oct)
   const head = String(t).trim().match(/^(?:The|Both)\s+((?:[\p{L}’'-]+\s+){0,4}?)([a-z][a-z-]{2,})\s+(?:was|were|is|are|has|have|had|will|would|could|can|may|might|must|should|[a-z]{3,}ed|[a-z]{3,}s)\b/u);
-  if (head && !contentWords(info.s.title).some((w) => w.slice(0, 4) === head[2].slice(0, 4))) return true;
+  // ("The city of Paris has announced…" names its subject: never an auxiliary for the noun)
+  if (head && !/^The\s+(?:[a-z][\w-]*\s+)?of\s+\p{Lu}/u.test(String(t).trim()) && !/^(?:has|have|had|was|were|is|are|will|would|could|can|may|might|must|should|been|being|also|now|still|just|not|and|but|who|which|that)$/.test(head[2]) && !contentWords(info.s.title).some((w) => w.slice(0, 4) === head[2].slice(0, 4))) return true;
   const m = String(t).trim().match(/^The\s+([a-z][a-z-]{2,})\b/);
   if (!!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title)) return true;
   // ("Philadelphia police said the tip was “flagged as spam”…" under "Rogue Anthropic AI agent gave police fake tip in
@@ -1577,7 +1603,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // headline; never a sentence that leans on another ("In Sweden, the company wants to process..."), nor
       // a later detail ("In Paris, the city says shade can make streets cooler"). The place comes first as
       // written, moved to the front ("In Sweden, a recycling plant has started...") or put there.
-      const tells = (t, j) => j === 0 || newWords(s.title, t) <= contentWords(s.title).length - 2;
+      // (a later sentence tells it only with most of the headline's words, never with its names alone: "Les Enfants Rouges
+      // reopened as a food court in 2000" under "Fire destroys Marché des Enfants Rouges…", Guardian 12 Oct)
+      const shared = (t) => contentWords(t).filter((w) => contentWords(s.title).some((x) => x.slice(0, 5) === w.slice(0, 5))).length;
+      const tells = (t, j) => j === 0 || (newWords(s.title, t) <= contentWords(s.title).length - 2 && shared(t) >= 3);
       // A sentence a little over the item's length loses a trailing clause (", a record", "where the species..."),
       // never its subject or verb.
       const sized = (t) => (wordCount(t) <= maxW ? t : trimClause(t, maxW, minW - 4, { keep: info.keep }));
@@ -1711,7 +1740,34 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       }
       const body = [];
       if (opener && wordCount(opener) > maxWords + 1) opener = dropAside(opener, maxWords + 1) || trimClause(opener, maxWords + 1, 8, { keep: info.keep }) || (quick ? null : wordCount(opener) <= maxWords + 6 ? opener : trimClause(opener, maxWords + 6, 8, { keep: info.keep })) || opener;
-      let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
+      let headlineOpened = false; // (a headline opening keeps its own words: no "In Yemen," before a Saudi minister)
+      // NEWS IN 60: one or two sentences an item, so its first must be the news. When it names no one the headline is about
+      // ("US economists developed models that help central bankers…" under "Nobel Prize for economics awarded to Hall and
+      // Woodford…", the lede too long for the minute, Guardian 12 Oct), the headline said as a sentence opens
+      // (and, as BBC Three's 60 Seconds read it, a headline that becomes a clean sentence opens the item unless the summary's
+      // sentence already says it: "The Houthis said they launched the attacks…" under "Saudi minister vows 'serious response'
+      // to Houthi attacks on airports", BBC 12 Oct, told the reply before the news)
+      // (only when the summary's sentence names no one the headline is about, or speaks of another subject: "Germany's
+      // labour minister…, Bärbel Bas, has quit both posts" stays before "A German minister has quit after…")
+      if (quick && !isNumber && !isLighter && opener && !restates(opener, s.title)) {
+        const said = spokenTitle(s.title, info);
+        const namesNone = (info.keep || []).length && !info.keep.some((n) => opener.includes(n));
+        const tw = String(s.title).split(/\s+/);
+        const vi = tw.findIndex((w, k) => k > 0 && (HEADLINE_PERFECT[w.toLowerCase().replace(/[^a-z]/g, '')] || w === 'to' || HEAD_PARTICIPLE.test(w)));
+        const subj = vi > 0 ? contentWords(tw.slice(0, vi).join(' ')) : [];
+        const lead = contentWords(String(opener).split(/\s+/).slice(0, 5).join(' '));
+        const otherSubject = subj.length && !subj.some((w) => lead.some((x) => x.slice(0, 5) === w.slice(0, 5)));
+        // (a first clause in the past perfect is the backstory: "Bergs had lost their only previous meeting, falling to
+        // Alcaraz…", Guardian 12 Oct, before the result)
+        const backstory = /^[^,;]{0,60}?\bhad\s+(?:not\s+|never\s+|already\s+)?(?:been\s+)?[a-z]+\b/.test(String(opener));
+        if ((namesNone || otherSubject || backstory) && said !== s.title && !LABEL_TITLE.test(s.title) && wordCount(said) <= maxWords + 4) {
+          used.delete(opener);
+          opener = said;
+          headlineOpened = true;
+        }
+      }
+      if (opener && opener === spokenTitle(s.title, info)) headlineOpened = true;
+      let line = asSentence(isNumber || isLighter || headlineOpened ? opener : placeFirst(opener, info));
       line = withArticle(nameWhole(line, parts.join(' ').replace(/\[[^\]]*\]/g, ' '), info));
       line = introduceNames(line, parts.join(' ').replace(/\[[^\]]*\]/g, ' '), info) || line;
       if (info.breaking && k === 0) line = `Breaking news. ${line}`;

@@ -723,6 +723,7 @@ export class Director {
       s.program = episode.program;
       s.replay = !!episode.replay;
       s.rundown = episode.rundown || [];
+      s.progressPlan = null;
       s.lowerThird = null;
       s.subtitle = null;
       this.setCast(episode);
@@ -737,8 +738,15 @@ export class Director {
     tune?.stop?.();
     s.programTagUntil = now() + CHANNEL.programTag.window;
 
+    // NEWS IN 60's progress rule (graphics: the strap's top line fills as the minute goes, the show's one counter): each
+    // segment's share of the spoken programme, its recorded length or its words', filled while it airs
+    const weights = episode.segments.map((x) => Math.max(0.5, Number(x.audio?.duration) || String(x.text || '').length / 14.5));
+    const total = weights.reduce((a, b) => a + b, 0) || 1;
+    let spoken = 0;
     for (const seg of episode.segments) {
       const index = episode.segments.indexOf(seg);
+      s.progressPlan = { base: spoken / total, span: weights[index] / total, since: now(), dur: weights[index] };
+      spoken += weights[index];
       switch (seg.type) {
         case 'intro':
           await this.playIntro(seg, episode.segments[index + 1]);

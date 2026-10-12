@@ -260,7 +260,12 @@ test('a headline opening a story is told as a sentence: present perfect, the out
   assert.equal(spokenTitle('Scientists find water on a distant planet', I('Someone said something.')), 'Scientists have found water on a distant planet');
   assert.equal(spokenTitle('Americans Hall and Woodford win Nobel Prize in economics', I('Someone said something.')), 'Americans Hall and Woodford have won Nobel Prize in economics');
   assert.equal(spokenTitle('Price cut hits sales', I('Someone said something.')), 'Price cut hits sales', 'a noun-verb after a singular noun is not the verb');
-  for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Google froze its bug bounty program', 'Can AI fix it?', 'Federal judge calls Flock a threat']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
+  for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Google froze its bug bounty program', 'Can AI fix it?']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
+  // (a noun that always counts takes "A" when the outlet gives no article: 12 Oct)
+  assert.equal(spokenTitle('Federal judge calls Flock a threat', I('Someone said something.')), 'A federal judge has called Flock a threat');
+  assert.equal(spokenTitle("Saudi minister vows 'serious response' to Houthi attacks on airports", I('The Houthis said.')), "A Saudi minister has vowed 'serious response' to Houthi attacks on airports");
+  assert.equal(spokenTitle('Fire destroys Marché des Enfants Rouges', I('The fire broke out at night. A fire ripped through the market.')), 'A fire has destroyed Marché des Enfants Rouges', "the outlet's own a before its the");
+  assert.equal(spokenTitle('Rain hits Paris marathon', I('x')), 'Rain hits Paris marathon', 'a mass noun takes no article');
 });
 
 test('COSMOS on real news (5 Oct): a launch, deep time, a mission blog, a profile and NASA’s picture of the day', async () => {

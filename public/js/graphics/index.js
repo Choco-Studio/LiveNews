@@ -221,7 +221,7 @@ export class Graphics {
       this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null, capsBelow ? LIFT : 0);
       this.updateLift(t);
     }
-    this.strap.progress = this.progressOf(scene);
+    this.strap.progress = this.progressOf(scene, t);
 
     let text = mode === 'news' && scene.subtitles !== false && typeof scene.subtitle === 'string' ? scene.subtitle : null;
     if (text && this.repeatsOnAir(text, scene)) text = null;
@@ -258,9 +258,13 @@ export class Graphics {
   }
 
   /** NEWS IN 60 progress rule: whole pixels of a value that never shrinks (null = none). */
-  progressOf(scene) {
-    if (!this.pg.progressRule || !Number.isFinite(scene.progress)) return null;
-    this.progressMax = Math.max(this.progressMax, clamp01(scene.progress));
+  // (scene.progressPlan, the director's: the segment on air's share of the spoken minute, { base, span, since, dur },
+  // filled as its time passes; scene.progress, a value given outright, wins)
+  progressOf(scene, t) {
+    const plan = scene.progressPlan;
+    const value = Number.isFinite(scene.progress) ? scene.progress : plan && Number.isFinite(t) ? plan.base + plan.span * clamp01((t - plan.since) / (plan.dur || 1)) : NaN;
+    if (!this.pg.progressRule || !Number.isFinite(value)) return null;
+    this.progressMax = Math.max(this.progressMax, clamp01(value));
     return this.progressMax;
   }
 
