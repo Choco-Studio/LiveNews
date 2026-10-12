@@ -14,7 +14,7 @@
 //   step to   a step or two toward the part of the map being spoken about, within his side of the frame
 //
 //   const p = new Presenter(standing, { scale, neckY })   p.place(x) / p.walkTo(x, t) / p.pointAt(x, y, t)
-//   p.present(t, side) / p.stepToward(x, t, range) / p.update(t) / p.draw(ctx, t)
+//   p.present(t, side) / p.stepToward(x, t, range) / p.update(t) / p.draw(ctx, t, post) / p.render(t, post)
 import { GESTURES, registerGestures } from '../../v2/canvas25d/gestures/index.js';
 import { LIBRARY } from '../../v2/canvas25d/gestures/library.js';
 
@@ -234,8 +234,16 @@ export class Presenter {
     return this;
   }
 
-  draw(ctx, t) {
+  /** His pixels this frame (the standing rig's frame, Uint32, 0 clear) after post(px), without drawing them. */
+  render(t, post = null) {
     const mid = (this.feet[0].x + this.feet[1].x) / 2;
-    return this.st.draw(ctx, t, { x: mid, y: this.neckY, s: this.s, feet: this.feet, shift: this.weight });
+    this.st.render(t, { x: mid, y: this.neckY, s: this.s, feet: this.feet, shift: this.weight });
+    return post ? post(this.st.frame.px) : null;
+  }
+
+  /** Draw him; post(px) relights his pixels first (the wall's light, studio.js lightFigure). */
+  draw(ctx, t, post = null) {
+    const mid = (this.feet[0].x + this.feet[1].x) / 2;
+    return this.st.draw(ctx, t, { x: mid, y: this.neckY, s: this.s, feet: this.feet, shift: this.weight, post });
   }
 }

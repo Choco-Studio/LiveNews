@@ -1279,6 +1279,25 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
  */
 const VIEW_OUT = { clon: 0, clat: 0, s: 1, kx: 1, w: 384, h: 216 };
 function drawViewMap(ctx, x, y, w, h, v, tint, tintKey) {
+  const rt = composeView(w, h, v, tint, tintKey, true);
+  ctx.drawImage(rt.canvas, x, y);
+  return VIEW_OUT;
+}
+
+/**
+ * WORLD WEATHER round 3: the map of a view as pixels (no canvas drawn), for the weather centre to lay its moving
+ * sky over before it shows the wall. Returns { u32, view } (the instance's own buffer: read it, never keep it
+ * across frames) or null until the map data is ready.
+ */
+export function viewMapPixels(w, h, view, tint = null, tintKey = null) {
+  if (!initWithin(6)) return null;
+  w = clamp(Math.round(finite(w, 384) || 384), 8, MAX_SIZE);
+  h = clamp(Math.round(finite(h, 216) || 216), 8, MAX_SIZE);
+  const rt = composeView(w, h, view || {}, typeof tint === 'function' ? tint : null, tintKey, false);
+  return { u32: rt.u32, view: VIEW_OUT };
+}
+
+function composeView(w, h, v, tint, tintKey, put) {
   const rt = getInstance(w, h);
   const s0 = w / 360;
   const lat0 = clamp(finite(v.lat, 0), -80, 80);
@@ -1313,13 +1332,16 @@ function drawViewMap(ctx, x, y, w, h, v, tint, tintKey) {
         u32[i] = c || PAL[b];
       }
     }
-    rt.cctx.putImageData(rt.img, 0, 0);
+    rt.dirty = true;
     rt.tintKey = tintKey;
     rt.phase = -2; // the locator recomposes its own frame after a weather frame
   }
-  ctx.drawImage(rt.canvas, x, y);
+  if (put && rt.dirty) {
+    rt.cctx.putImageData(rt.img, 0, 0);
+    rt.dirty = false;
+  }
   VIEW_OUT.clon = clon; VIEW_OUT.clat = clat; VIEW_OUT.s = s; VIEW_OUT.kx = kx; VIEW_OUT.w = w; VIEW_OUT.h = h;
-  return VIEW_OUT;
+  return rt;
 }
 
 /** Palette lookup of the base layer; the idle view adds the day/night terminator (Bayer 4x4) and city lights. */

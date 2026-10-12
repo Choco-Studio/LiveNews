@@ -764,22 +764,27 @@ export class Director {
   }
 
   /**
-   * WORLD WEATHER: one segment in the weather centre (scenes/weather). The shot stays on the weather centre for
-   * the whole programme (no cuts: the camera follows the presenter along the wall); a new segment sends him to
-   * its mark. A city lights up, and he points at it, when the voice reaches its name (seg.marks).
+   * WORLD WEATHER: one segment in the weather centre (scenes/weather). The weather centre cuts between its own
+   * shots (seg.shot: the close-up, the world graphic, the wall, the boards, the warning) inside this one director
+   * shot. A city lights up (he points at it, a board lights its row) when the voice reaches its name (seg.marks);
+   * a high or low rings when it is named (seg.pins).
    */
   async playWeather(seg, index) {
     const s = this.scene;
     s.lowerThird = null;
     if (s.shot !== 'weather') this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
-    s.weather = { data: this.episode?.weather || null, seg, index, since: now(), hot: null, hotAt: 0 };
-    const marks = Array.isArray(seg.marks) ? seg.marks : [];
+    s.weather = { data: this.episode?.weather || null, seg, index, since: now(), dur: estimateSeg(seg), hot: null, hotAt: 0, pin: null, pinAt: 0 };
+    // the places and the highs and lows in the order the voice reaches them
+    const cues = [
+      ...(Array.isArray(seg.marks) ? seg.marks : []).map((m) => ({ char: m.char, city: m.city })),
+      ...(Array.isArray(seg.pins) ? seg.pins : []).map((p) => ({ char: p.char, pin: p })),
+    ].sort((a, b) => a.char - b.char);
     await this.say(seg, null, {
-      marks: marks.map((m) => m.char),
+      marks: cues.map((m) => m.char),
       onMark: (i) => {
-        if (s.weather?.seg !== seg) return;
-        s.weather.hot = marks[i]?.city || null;
-        s.weather.hotAt = now();
+        if (s.weather?.seg !== seg || !cues[i]) return;
+        if (cues[i].pin) Object.assign(s.weather, { pin: cues[i].pin, pinAt: now() });
+        else Object.assign(s.weather, { hot: cues[i].city || null, hotAt: now() });
       },
     });
   }
