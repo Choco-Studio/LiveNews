@@ -445,7 +445,9 @@ const NEWSLETTER = /^\s*(?:(?:hi|hey|hello)(?:,|!|\s+(?:there|all|everyone|every
 // a broadcaster's programme page, not an article: "Money Box" (bbc.co.uk/sounds), "Tech Now" (bbc.co.uk/iplayer), BBC
 // feeds 10 Oct, their listing read as a story ("We'll speak to…")
 // a list of products or services, not news: "Here are the top AI agents that can live in your text messages" (TechCrunch 10 Oct)
-const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:best|top) \d+\b|^\d+ (?:best|top)\b/i;
+// (and the guides: "The founder’s guide to TechCrunch Disrupt 2026: Everything you need to know", "What to know about the
+// landmark Warner Bros. Discovery sale", TechCrunch 12 Oct, both aired as TECH BYTES stories, the second as its "And finally")
+const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:best|top) \d+\b|^\d+ (?:best|top)\b|\beverything (?:you need|to know)\b|^what to know\b|\bwhat you need to know\b|^(?:the|a|an|your) (?:[\w’'-]+\s+){0,2}guide to\b/i;
 const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\//i;
 export const notNews = (s) => {
   const t = String(s?.title || '');

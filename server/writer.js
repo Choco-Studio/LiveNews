@@ -916,8 +916,11 @@ export function splitClauses(sentence, max, min = 4) {
     if (nh > max || nt > max || nh < min || nt < min || unbalanced(head) || unbalanced(tail)) continue;
     if (!hasFiniteVerb(head) || !hasFiniteVerb(tail.split(/\b(?:that|which|who|whom|whose|whether)\b/i)[0])) continue;
     // ("...preventing the inflammation, scarring[, and cell damage associated with...]": a list's last item, not a clause)
+    // (an Oxford comma: "…for plastics, medicines, and other products using…", ScienceDaily 12 Oct, once aired as
+    // "…plastics, medicines. Other products using…": a plural item ("medicines") is no verb)
     const lastItem = head.slice(head.lastIndexOf(',') + 1).trim();
-    if (m[1] && head.includes(',') && lastItem.split(/\s+/).length <= 3 && !hasFiniteVerb(`X ${lastItem}`)) continue;
+    const plainVerb = /\b(?:is|are|was|were|has|have|had|said|says|will|would|can|could|did|does|[a-z]{3,}ed)\b/i;
+    if (m[1] && head.includes(',') && lastItem.split(/\s+/).length <= 3 && (!hasFiniteVerb(`X ${lastItem}`) || !plainVerb.test(lastItem))) continue;
     // ("interfering with first responders" is no sentence: a clause starts with its subject)
     // (a name may end in -ing: "and Beijing responded" splits)
     if (/^[a-z]+ing\b/.test(tail) || /^(?:in|on|at|by|for|with|from|to|into|as|than|of|while|when|after|before|then|also)\b/i.test(tail)) continue;
@@ -1065,8 +1068,13 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     const open = head.match(/\b(?:how|why|whether|what|if|that)\s+(\S.*)$/i);
     if (open && !hasFiniteVerb(open[1].replace(/,[^,]*$/, ''))) continue; // (its first word is its subject)
     // ...and what an attribution reports keeps its own verb ("Officials said the bridge[, which...]" is not one)
-    const reported = main.match(/\b(?:say|says|said|warn|warns|warned|believe|believes|expect|expects|think|thinks|reports?|reported|announced|confirmed|added)\s+(?:that\s+)?(\S.*)$/i);
+    const reported = main.match(/\b(?:say|says|said|warn|warns|warned|believe|believes|expect|expects|think|thinks|reports?|reported|announced|confirmed|added|claim|claims|claimed|argue|argues|argued|insist|insists|insisted|suggest|suggests|suggested|fear|fears|feared|predict|predicts|predicted)\s+(?:that\s+)?(\S.*)$/i);
     if (reported && !hasFiniteVerb(`X ${reported[1]}`)) continue;
+    // (a reported clause that opens on a noun keeps its auxiliary: "Opponents claimed the amounts of water needed to
+    // contain such blazes[ would …]", BBC 12 Oct, aired cut there; "needed" is the noun's, not the clause's verb)
+    // (a verb in -ed before "to" or "by" is the noun's: "needed to contain", "caused by"; "the river rose" has its own)
+    const clauseVerb = (x) => /\b(?:is|are|was|were|will|would|could|can|may|might|should|must|has|have|had|did|does|do)\b/i.test(x) || x.split(/\s+/).some((w, k, ws) => PAST_FORM.test(w.toLowerCase()) || (/^[a-z]{3,}ed$/.test(w) && !/^(?:to|by)$/i.test(ws[k + 1] || '')));
+    if (reported && /^(?:the|a|an|its|their|his|her|this|these|those)\s/i.test(reported[1]) && !clauseVerb(reported[1])) continue;
     return `${head}.`;
   }
   return null;

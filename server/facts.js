@@ -15,7 +15,7 @@ export const GRAVE =
 // Lighter material: technology, science, curiosities. A record is a record broken ("a new record", "record high"),
 // never "records suggest" (an Abramovich tax story aired as WORLD NOW's "And finally" on that word, real news 12 Oct).
 export const LIGHT =
-  /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|\b(?:world|new|all-time) record\b|\brecord(?:-breaking| high| low| number| crowds?| year| temperature| attendance)\b|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
+  /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover(?:s|ed|ies)?\b(?!y)|discovery of|study finds|telescope|\bgames?\b|\b(?:world|new|all-time) record\b|\brecord(?:-breaking| high| low| number| crowds?| year| temperature| attendance)\b|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
 
 // Words that look grave but are not, in these senses: a startup "fires its CEO", a manager "was fired", a
 // "fire drill", a government or a deal that "collapses".

@@ -110,7 +110,8 @@ export function spokenTitle(title, info) {
 // The outlet's own voice, outside quotation marks ("We don't know a ton about the Fitbit Edge", The Verge, 4 Oct):
 // never our presenters' words.
 // (and the reader addressed: "You might not have known that it was Hamilton who...", Ars Technica 9 Oct)
-const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me|[Yy]ou(?:['’](?:re|ve|ll|d))?|[Yy]our)\b|(?:^|[^\w.])I (?=[a-z])/;
+// ("Let’s break down exactly what happened", "Learn more about...": the outlet talking to its reader, TechCrunch 12 Oct)
+const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me|[Yy]ou(?:['’](?:re|ve|ll|d))?|[Yy]our|[Ll]et['’]s)\b|(?:^|[^\w.])I (?=[a-z])|^(?:Learn|Find out|Read|Discover|Watch|Subscribe|Sign up|Click|Join us|Don['’]t miss|Check out|Here['’]s)\b/;
 export const ownVoice = (t) => FIRST_PERSON.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
 // A sentence that follows on in time ("He then served...", "The deputy then used...", "Later, ..."): told only
 // after the sentence it follows.
