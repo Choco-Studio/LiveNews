@@ -99,14 +99,14 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 ## Decisiones (respondidas el 5 oct)
 1. ✅ Parrilla por horas: sí, y preparada para programas que no son informativos.
 2. ✅ IN THEIR WORDS: sí.
-3. Noticias graves: sin respuesta; por ahora solo tarjetas con la cita.
+3. ✅ Noticias graves (12 oct): "se presentan con respeto pero bien"; tratamiento completo, no solo tarjetas.
 4. ✅ Políticos y jefes de Estado: se recrean (con regla de equilibrio).
 5. ✅ Expertos: varios; pueden reírse en las charlas.
 6. Presupuesto de IA: pendiente de medir con gpt-6-luna.
 7. ✅ Respiraciones NO; risas SÍ y naturales. (12 oct: las tres risas probadas sonaban mal; quitadas hasta tener una natural.)
 8. ✅ Datos: los mejores (mercados, tiempo, espacio), todo preparado para poner las claves.
-9. Voces en tu ordenador: pendiente.
-10. Resumen semanal: pendiente.
+9. ✅ Voces en tu ordenador y prueba de 6 horas (12 oct): a mi criterio, solo si no es una pérdida de tiempo.
+10. ✅ Resumen semanal (12 oct): sí, muy trabajado.
 11. ✅ Idioma en pantalla: inglés.
 12. Presentador del tiempo: sin respuesta (sigue Sam); pulido extremo hasta nota > 9,7.
 13. ✅ Red: abierta en este entorno (4 oct).
