@@ -25,7 +25,8 @@ import { P } from '../../palette.js';
 import { drawText, measureText } from '../../font.js';
 import { viewMapPixels } from '../worldmap.js';
 import { temperatureField, tempColor, RAMP } from './field.js';
-import { drawIcon, drawCyclone } from './icons.js';
+import { drawIcon } from './icons.js';
+import { drawStormCloud, stormRadius, REACH } from './storm.js';
 import { Standing } from '../../v2/canvas25d/runtime/standing.js';
 import { liveSpeech } from '../../v2/canvas25d/speech.js';
 import { Presenter } from './presenter.js';
@@ -61,6 +62,11 @@ const PAN = 0.1; // the camera follows a tenth of his walk (the wall slides the 
 const MCUP = { scale: 1.9, neckY: 101, left: 112, right: 272 };
 const WORLD = { lat: 14, lon: 12, zoom: 1.12 };
 const SKY_DRIFT = 0.12; // sky hours a second the cloud texture keeps drifting outside a time-lapse
+// the smallest radius (px) of a cyclone's cloud on the world graphic and the wall: a symbol stays legible however
+// far out the view (a category 2 is 6 px at the world's scale)
+const STORM_MIN = { graphic: 10, wall: 9, soft: 3.5 };
+/** A cyclone's radius in a picture's px (its symbol's, storm.js). */
+const stormPx = (s, scale, min) => Math.max(min, stormRadius(s.cat?.cat ?? s.cat) * scale);
 
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
 const easeOut = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : 1 - (1 - u) ** 3);
@@ -662,8 +668,10 @@ function present(ctx) {
 }
 
 /**
- * The wall's picture: the map of the view with the sky over it (the moment `sky`, the texture at opts.tau). While
- * the view holds still the sky is recomposed 15 times a second (the frame between keeps the last picture).
+ * The wall's picture: the map of the view with the sky over it (the moment `sky`, the texture at opts.tau), and the
+ * tropical cyclones of the warnings over that (storm.js: a symbol in the cloud's veils, turning; opts.stormMin its
+ * smallest radius in px). While the view holds still it is recomposed 15 times a second (the frame between keeps the
+ * last picture).
  */
 const PICS = new Map(); // buffer -> { clon, clat, s, kx, step }
 function wallPicture(out, w, h, view, field, sky, opts, t = 0) {
@@ -683,9 +691,50 @@ function wallPicture(out, w, h, view, field, sky, opts, t = 0) {
   t0 = now();
   if (sky) composeSky(out, m.u32, w, h, v, ST.sky, sky, opts);
   else out.set(m.u32);
+  for (const s of cyclones(ST.key)) drawStormCloud(out, m.u32, w, h, v, s, t, { minR: opts.stormMin || 0 });
   prof('sky', t0);
   ST.picN = (ST.picN || 0) + 1; // a new picture (the set redraws the wall from it)
   return v;
+}
+
+/** The report's tropical cyclones (GDACS's, with a place), cached per report. */
+const CYCLONES = new WeakMap();
+function cyclones(data) {
+  if (!data) return [];
+  let c = CYCLONES.get(data);
+  if (!c) CYCLONES.set(data, (c = (data.warnings || []).filter((w) => w.type === 'cyclone' && Number.isFinite(w.lat) && Number.isFinite(w.lon))));
+  return c;
+}
+
+/** Each cyclone's core (screen px, rOf its radius) taken in BOX, so no high, low or chip covers it. */
+function claimStorms(proj, rOf) {
+  for (const s of cyclones(ST.key)) {
+    const p = proj(s.lat, s.lon);
+    if (!p) continue;
+    const r = rOf(s) * 0.55;
+    BOX.push([p.x - r, p.y - r, p.x + r, p.y + r]);
+  }
+}
+
+/**
+ * A storm's name under its cloud on the world and the zones (micro type on a black plate, the cards' language), where
+ * it has room; the warning shot's panel names it there.
+ */
+function drawStormTags(ctx, proj, area, rOf) {
+  for (const s of cyclones(ST.key)) {
+    if (!s.name) continue;
+    const p = proj(s.lat, s.lon);
+    if (!p) continue;
+    const label = s.name.toUpperCase();
+    const tw = measureText(label, 1, 'micro') + 4;
+    const x = Math.round(p.x - tw / 2), y = Math.round(p.y + rOf(s) * 0.85 + 1);
+    if (x < area.x0 || x + tw > area.x1 || y < area.y0 || y + 7 > area.y1) continue;
+    if (overlapArea(x, y, x + tw, y + 7) > 0) continue;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y, tw, 7);
+    drawText(ctx, label, x + 2, y + 1, { color: P.white, font: 'micro' });
+    BOX.push([x - 1, y - 1, x + tw + 1, y + 8]);
+  }
 }
 
 /** The layers at the segment's moment (a zone settling back mixes its last hour with now). */
@@ -867,7 +916,7 @@ export function drawWeather(ctx, t, scene, audio) {
 // ------------------------------------------------------------------------------------------- graphic
 function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   const field = fieldFor(data, tgt.day);
-  const v = wallPicture(GB, W, H, tgt.view, field, layers, { tau: ST.tau, isobars: true, isoColor: PK.fog, opacity: 0.9 }, t);
+  const v = wallPicture(GB, W, H, tgt.view, field, layers, { tau: ST.tau, isobars: true, isoColor: PK.fog, opacity: 0.9, stormMin: STORM_MIN.graphic }, t);
   FB.set(GB);
   ST.fbFor = 'graphic';
   let t0 = now();
@@ -890,9 +939,13 @@ function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   }
   BOX.push(drawSource(ctx, data, W - 13, 25));
   const area = { x0: 4, x1: W - 4, y0: 24, y1: 168 };
+  // a cyclone's core is kept clear of the highs and lows and the chips; its name goes under it once they are placed
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.graphic);
+  claimStorms(proj, rOf);
   drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, area);
   const named = new Set([...ST.spoken.keys()]);
   drawCities(ctx, t, data, seg, { proj, zone: null, day: tgt.day, hotId, hotK, area, named, all: !ST.sky });
+  drawStormTags(ctx, proj, area, rOf);
   prof('overlay', t0);
 }
 
@@ -909,7 +962,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   ST.view = { lat: lerp(ST.from.lat, ST.to.lat, k), lon: ST.from.lon + wrap(ST.to.lon - ST.from.lon) * k, zoom: Math.max(1, zoom) };
   CAM.set((pr.x - W / 2) * PAN);
   const field = fieldFor(data, tgt.day);
-  const v = wallPicture(WB, CAM.wbw, CAM.wbh, ST.view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.8 }, t);
+  const v = wallPicture(WB, CAM.wbw, CAM.wbh, ST.view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.8, stormMin: STORM_MIN.wall }, t);
   const warning = tgt.shot === 'warning';
   let t0 = now();
   // the set and the wall again only when the picture or the camera changed (the frame keeps them otherwise)
@@ -955,14 +1008,18 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   if (warning && tgt.warning) panelRect = drawWarningPanel(ctx, t, panel, tgt.warning, data, Math.round(W - 18 - pan), glassTop + 8);
   if (panelRect) BOX.push(panelRect);
   const nearHim = (x, y) => Math.abs(x - pr.x) < 36 && y > WALLP.neckY - 40;
+  // a cyclone's cloud is in the wall's picture (storm.js); its core is kept clear of the highs, lows and chips
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.wall);
+  if (k >= 1 || warning) claimStorms(proj, rOf);
   // the highs and lows once the wall has arrived (in the move they would flicker past at every zoom), rising in
   if (k >= 1) drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { x0: 4, x1: panelRect ? panelRect[0] - 4 : W - 4, y0: area.y0, y1: area.y1 }, { avoid: nearHim, reveal: (t - ST.moveAt - ST.moveDur) / 0.3 });
   if (zoneOn) where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area });
+  if (zoneOn && k >= 1) drawStormTags(ctx, proj, { ...area, x1: W - 4 }, rOf);
   if (warning && tgt.warning) {
     const w = tgt.warning;
     const p = proj(w.lat, w.lon);
-    if (w.type === 'cyclone') drawCyclone(ctx, p.x, p.y, t, Math.round(lerp(7, 14, panel)), { south: w.lat < 0 });
-    else {
+    // a cyclone is its cloud on the wall; any other hazard a square of its alert colour at its place
+    if (w.type !== 'cyclone') {
       ctx.fillStyle = LEVEL_COLOR[w.level] || P.orange;
       ctx.fillRect(Math.round(p.x) - 3, Math.round(p.y) - 3, 7, 7);
     }
@@ -1032,7 +1089,7 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
   const w0 = data.warnings?.[0];
   const right = tgt.side === 'right';
   const view = seg.kind === 'headline' && w0 ? { lat: w0.lat + 6, lon: w0.lon + (right ? 40 : -40), zoom: 2.2 } : { lat: 22, lon: right ? -20 : 40, zoom: 1.6 };
-  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4 }, t);
+  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4, stormMin: STORM_MIN.soft }, t);
   let t0 = now();
   softWall(FB, SB, SW, SH, { k: 6, dim: 0 });
   ST.fbFor = 'mcu';

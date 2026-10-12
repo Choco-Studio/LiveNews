@@ -913,7 +913,7 @@ describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s 
       for (let y = 10; y < h - 10; y++) for (let x = 12; x < w - 12; x++, n++) if ((a[y * w + x] !== base[0]) === (b[y * w + x + d] !== base[0])) same++;
       return same / n;
     };
-    const ds = [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const ds = [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8]; // (px east)
     const best = ds.reduce((p, d) => (shift(d) > shift(p) ? d : p), 0);
     assert.ok(best >= 3 && best <= 7, `the cloud moved ${best} px (east is positive)`);
     // and across a whole run, a cross-fade included, the clock only carries the texture forward
@@ -924,5 +924,51 @@ describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s 
       if (f.wB > 0 && last.wB > 0 && f.kB === last.kB) assert.ok(f.sB > last.sB);
       last = f;
     }
+  });
+
+  test('the storm\'s cloud: an eye, a dense core, bands that trail its turn (anticlockwise north, clockwise south)', async () => {
+    const storm = await import('../public/js/scenes/weather/storm.js');
+    assert.ok(storm.stormRadius(0) < storm.stormRadius(2) && storm.stormRadius(2) < storm.stormRadius(5), 'sized by category');
+    const d = (r, th, rot = 0, south = false) => storm.stormDensity(r, th, rot, south);
+    assert.equal(d(0.03, 0), 0, 'the eye is clear');
+    assert.equal(d(0.12, 1), 1, 'the eyewall is the densest');
+    assert.equal(d(1.2, 0), 0, 'nothing past the bands');
+    assert.ok(d(0.25, 2) > 0.75, 'the core is dense all round');
+    // the band's spine at r: the angle (north up, anticlockwise from east) where the cloud is densest
+    const spine = (r, rot, south) => {
+      let best = 0, bd = -1;
+      for (let a = -Math.PI; a < Math.PI; a += 0.005) {
+        const v = d(r, a, rot, south);
+        if (v > bd) [bd, best] = [v, a];
+      }
+      return best;
+    };
+    const turn = (a, b) => ((((b - a) % Math.PI) + 1.5 * Math.PI) % Math.PI) - Math.PI / 2; // the bands repeat every half turn
+    assert.ok(turn(spine(0.6, 0, false), spine(0.6, 0.2, false)) > 0.15, 'the north\'s storm turns anticlockwise');
+    assert.ok(turn(spine(0.6, 0, true), spine(0.6, 0.2, true)) < -0.15, 'the south\'s clockwise');
+    assert.ok(turn(spine(0.55, 0, false), spine(0.8, 0, false)) < -0.1, 'the bands trail the turn outward');
+    assert.ok(storm.stormTurn(storm.TURN * 0.25) > storm.stormTurn(0) && storm.TURN >= 15, 'a slow turn');
+  });
+
+  test('the storm\'s cloud on the wall: palette colours only, at its place, larger for a stronger storm, the rain kept', async () => {
+    const storm = await import('../public/js/scenes/weather/storm.js');
+    const w = 200, h = 120, view = { clon: -60, clat: 25, s: 3.78, kx: 0.9 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy));
+    const draw = (cat, sky = null) => {
+      const dst = sky ? sky.slice() : base.slice();
+      const at = storm.drawStormCloud(dst, base, w, h, view, { lat: 24.6, lon: -62.4, cat: { cat } }, 3.3);
+      return { dst, at, n: dst.filter((c, i) => c !== base[i]).length };
+    };
+    const one = draw(1), five = draw(5);
+    assert.ok(one.at && Math.abs(one.at.x - (w / 2 - 2.4 * 3.78 * 0.9)) < 0.01 && Math.abs(one.at.y - (h / 2 + 0.4 * 3.78)) < 0.01);
+    assert.ok(five.n > one.n * 1.5, `a category 5 covers more (${five.n} vs ${one.n})`);
+    for (const c of five.dst) assert.ok(PALETTE.has(c), 'palette colours only');
+    const eye = one.dst[Math.floor(one.at.y) * w + Math.floor(one.at.x)];
+    assert.equal(eye, packed(P.navy), 'the eye shows the sea');
+    // the forecast's rain over it stays; the forecast's cloud in its disc gives way to the symbol
+    const sky = base.slice().fill(packed(P.cyan), 0, w * 60);
+    const rained = draw(2, sky).dst;
+    for (let i = 0; i < w * 60; i++) assert.equal(rained[i], packed(P.cyan));
+    assert.equal(storm.drawStormCloud(base.slice(), base, w, h, view, { lat: -30, lon: 100, cat: 3 }, 0), null, 'out of view: nothing');
   });
 });

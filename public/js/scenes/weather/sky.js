@@ -576,7 +576,8 @@ export const VEIL = CLOUD_MIX.map((k) => {
   }
   return m;
 });
-const VEIL_T = VEIL.map((m) => colourTable((c) => m.get(c >>> 0) ?? c));
+/** VEIL as tables of 256 (indexed by hashOf), for the per-pixel loops. */
+export const VEIL_T = VEIL.map((m) => colourTable((c) => m.get(c >>> 0) ?? c));
 // cover below LOW is left clear: a bulletin draws the cloud that matters (the bands, the storms, the overcast)
 const LOW = 0.32;
 
