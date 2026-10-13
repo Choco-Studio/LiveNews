@@ -173,6 +173,11 @@ export function drawTopRow(ctx, t, v) {
       clipStart(ctx, x, y, vis, h);
       try {
         rect(ctx, x, y, pw, h, v.program.color);
+        // (PAY ATTENTION's purple, 2.0:1 on the dark set, always in a 1 px fog rim: pay-attention.md §6)
+        if (v.program.color === P.purple) {
+          rect(ctx, x, y, pw, h, P.fog);
+          rect(ctx, x + 1, y + 1, pw - 2, h - 2, P.purple);
+        }
         drawText(ctx, v.program.title, x + 4, y + 3, inkStyle(v.program.color));
       } finally {
         clipEnd(ctx);

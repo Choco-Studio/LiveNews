@@ -63,6 +63,9 @@ async function startApp(env = {}) {
   // the client modules the server imports (no imports of their own)
   fs.mkdirSync(path.join(dir, 'public', 'js', 'scenes', 'weather'), { recursive: true });
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'weather', 'tracks.js'), path.join(dir, 'public', 'js', 'scenes', 'weather', 'tracks.js'));
+  // PAY ATTENTION's desk measures its texts with the boards' own fit (and the pixel font it uses)
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'quiz-fit.js'), path.join(dir, 'public', 'js', 'scenes', 'quiz-fit.js'));
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'font.js'), path.join(dir, 'public', 'js', 'font.js'));
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>test page</title>');
   fs.writeFileSync(path.join(dir, 'public', 'js', 'app.js'), 'export const ok = true;');
   fs.mkdirSync(path.join(dir, 'public-evil'));

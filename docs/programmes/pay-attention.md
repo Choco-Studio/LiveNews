@@ -349,6 +349,13 @@ Measured on the development archive, with a model of the planner that counts sto
    read in full; simulated weeks for the scores' variance (§4.2).*
 3. **Graphics**: the question board, the lock-ins, the reveal, PICTURE THIS, LETTER BY LETTER, the map round, HOW MANY?,
    the scores and the table. *Gate: the lab page at 1x and 4x, a hostile critique above 9.7.*
+   - **Built, passed at 9.75 in round 4** (`docs/roadmap/critique/pay-attention-graphics.md`). The boards are in
+     `scenes/cards-quiz.js` and the lab in `public/lab/quiz.html`.
+   - The boards' text fit is in `scenes/quiz-fit.js`. The desk refuses by it whatever would not fit its box: a tile holds
+     three 1x lines of 150 px, and all 41 headlines of the week's pool fit.
+   - Two choices beyond the bible's words:
+     - each board shows the stake beside its countdown ("3 POINTS"; on DOUBLE OR NOTHING "6 FOR PENNY");
+     - a lamp beside a wrong answer goes out at the reveal, so gold only ever means right.
 4. **Director and pace**: the shots, the countdowns timed to the reading rule, the lock-in and buzz beats, the half-note
    ticks.
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
