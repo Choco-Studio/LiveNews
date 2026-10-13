@@ -89,13 +89,19 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
     Falta: más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
-37. 🟡 **Nuevo programa FULL TIME (deportes, 6-7 min, Kai y Rosa).** Aún no está en la parrilla: se construye por pasos y cada paso tiene que pasar la autocrítica con más de 9,7.
-    - ✅ Paso 1, la mesa de deportes (13 oct): lee los medios de deportes, descarta rumores, apuestas, columnas de opinión y vídeos, y lee resultados y fechas solo cuando son seguros.
-    - 🟡 Paso 2, el guion: 9,0. Falta probarlo con noticias de un fin de semana (hay comprobaciones programadas para el 17, 18 y 19 de octubre) y con el redactor con IA (falta tu clave).
+37. 🟡 **Nuevo programa FULL TIME (deportes, 5-7 min, Kai y Rosa).** Hecho de punta a punta. Aún no está en la parrilla: falta tu visto bueno y el paso 2.
+    - ✅ Paso 1, la mesa de deportes: lee los medios de deportes y descarta rumores, apuestas, columnas de opinión y vídeos. Solo lee resultados y fechas cuando son seguros.
+    - 🟡 Paso 2, el guion: 9,0. Le faltan noticias de un fin de semana (hay comprobaciones programadas para el 17, 18 y 19 de octubre) y el redactor con IA (falta tu clave).
     - ✅ Paso 3, los gráficos: 9,8. Marcador del partido, tablero de resultados del estadio, calendario «COMING UP», pizarra con la distancia del gol y 11 iconos de deporte.
-    - ✅ Paso 4, la dirección: 9,8. El tablero de resultados llena la pantalla y cada resultado aparece cuando se lee; el calendario hace lo mismo con cada fecha. Nunca sale el mismo tipo de tablero dos veces seguidas. Dura 6-7 minutos y ningún deporte que no sea el fútbol ocupa más de una cuarta parte del programa.
-    - En marcha: el plató junto al campo, la cabecera y su música, y las caras de Kai y Rosa (necesitan tu visto bueno, igual que sus voces: te he mandado tres voces para cada uno).
-    - Para verlo antes de que entre en la parrilla: modo de prueba `DRAFTS_ON_AIR=full-time@world-weather`.
+    - ✅ Paso 4, la dirección: 9,8. El tablero de resultados crece al ritmo de la voz y nunca se repite el mismo tipo de tablero dos veces seguidas.
+    - ✅ Paso 5, el plató junto al campo (9,8), la cabecera con focos y silbato (9,8) y la música (9,8).
+    - ✅ Paso 6, las caras de Kai y Rosa: 9,75. Hay tres candidatas para cada uno.
+    - ✅ Paso 7, dos ediciones grabadas con sonido (una de jornada y otra de día tranquilo): 9,8 en todo.
+    - **Falta de ti:**
+      - la cara y la voz de cada uno (te las mandé);
+      - el golpe sonoro del resultado: público o metales con timbal;
+      - tu visto bueno para meterlo en la parrilla (después de WORLD WEATHER).
+    - Para verlo antes: modo de prueba `DRAFTS_ON_AIR=full-time@world-weather`.
 
 ## E. Plató, gráficos y cámara
 24. Plató:
