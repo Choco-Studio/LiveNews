@@ -45,6 +45,20 @@ sources do not say, and nothing a viewer sees is a guess.
     grey; silver pixie; high twists; bald with white tufts; magenta undercut; braids; red curls; chestnut waves). No one
     on air has a shaved head with a full beard, nor a ponytail. The guests' look generator (IN THEIR WORDS) adds Kai and
     Rosa to the looks it must not repeat (it has a `bald` and a `ponytail` style).
+  - **Built (cast step)**: both renderers draw them, candidate A on air (critique
+    `docs/roadmap/critique/full-time-cast.md`, 9.75). v2: `public/js/v2/canvas25d/cast/full-time.js` (the six candidate
+    looks, Kai on Max's body, Rosa on Lola's), `cast/hair-sport.js` (hair and beard drawers of their own),
+    `cast/wardrobe-sport.js` (the zip tops; the sleeve stripe through character.js's `sleeves` hook); the old renderer:
+    `anchors.js` and `scenes/portraits.js`. One difference from the design above: Kai's bomber is **midnight navy** (an
+    ink body with a navy sheen over the key-side chest), because a plain navy body measured as a recoloured twin of Lola's
+    blazer. The guests' twin guard knows both (a bald, bearded guest's clipped sides go grey).
+  - **Candidates for the owner** (sheets: `public/lab/full-time-cast.html`, `?sheet=candidates | pairs | onair | legacy`):
+    Kai **A** the bomber (above); **B** a black top knot with faded sides, clean-shaven, brown skin, a rust quarter-zip
+    knit over a white tee; **C** ear-length espresso curtains from a middle part, clean-shaven, light skin, a near-black
+    suit with an open white collar. Rosa **A** the ponytail (above); **B** cornrows straight back to the nape, deep brown
+    skin, a cream roll-neck, gold studs; **C** shoulder-length dark brown curls under a thin orange headband, olive skin,
+    a royal blue track top with a white stripe down each sleeve. **To switch** (both renderers): one letter per presenter
+    in `public/js/full-time-looks.js`; a candidate other than A gets its own critique round before it airs.
 - **Voices**: two new blends unlike the 19 on air.
 - **The owner approves both faces and both voices** (A/B looks, A/B voices, as for the experts) before they are final;
   until then the programme airs with the first choice and the LISTA asks for the decision.
@@ -327,5 +341,7 @@ are different programmes. A shape fixes the order; a segment without material is
    its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.*
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
+   *Looks built (§2): three candidates each, A on air in both renderers; critique in
+   `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*
 7. **On air**: record a matchday edition and a quiet-day edition with sound; critique the whole programme above 9.7
    (`docs/roadmap/critique/full-time.md`).
