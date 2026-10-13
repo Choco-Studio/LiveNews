@@ -4,14 +4,18 @@
 //                           corners, only the board over the far stand alight, its clock (the watch) reading 89:55 and
 //                           running a second every two beats
 //   FLOODS    3-6           the floodlights bang on bank by bank, one a beat (far left, far right, near left, near
-//                           right): each head flashes and settles to a soft halo and its quarter of the pitch and the
-//                           stands comes up, the stripes, the lines, the crowd (a low thunk each: the band's count-in)
-//   SWEEP     6.5-10        the camera sweeps down over the near stand, past the near towers, into the bowl and comes
-//                           to rest low over the centre circle, the board looming over the far stand
-//   WHISTLE   10-14         the clock reaches 90:00 on the first of the referee's three blasts (the brass); the board's
-//                           rim flashes with the short ones and the board flips to FULL TIME on the long one
-//   LIFT      13.5-15.25    the camera pushes in on the board's clock, the watch, as the stadium gives way to the open's
-//                           field: the stopwatch at 90:00 at centre stage, the emblem
+//                           right): each head flashes and settles to a soft halo and its quarter of the pitch comes up
+//                           from dark and deep green to the mown stripes in green and mid green, its stands and crowd
+//                           with it (a low thunk each: the band's count-in)
+//   SWEEP     6.5-10        the camera sweeps down over the near stand, past the near towers, into the bowl and lands on
+//                           the wide over the centre circle on the first blast, the board over the far stand
+//   WHISTLE   10-14         the clock reaches 90:00 on the first of the referee's three blasts (the brass); a cut closer
+//                           on each blast: the wide (where the sweep lands), the mid (the board, the far stand, the
+//                           goal; the board's rim flashing with the short blast), the board's clock (the watch at
+//                           centre stage at the emblem's size, FULL TIME beside it in the board's face at 2x) on the
+//                           long one, when the board flips; half a beat later the far stand holds its scarves up
+//   CUT       15            the stadium drops away round the watch (three frames through the screen's matrix): the
+//                           stopwatch at 90:00 at centre stage on the open's field, the emblem
 //   TITLE     15.7-19       the package's reveal (the plate wipes out of the watch); still for the last 0.8 s
 //
 // The stadium is drawn pixel by pixel: every pixel casts a ray into a simple world (metres; X across the pitch, Y up, Z
@@ -20,9 +24,10 @@
 // drawn on it against the depth of each pixel. Rules learnt on the other sequences: geometry stays fractional until a
 // pixel is plotted; gradients are dithered through the screen's fixed matrix; the pitch's lines and stripes are
 // filtered by each pixel's footprint on the grass (a line far away is a pixel wide and dimmer, never dotted); the
-// crowd's seats and heads fade to the stand's average tone where they would be smaller than a pixel. The watch is the
-// emblem's own drawing (sport.js paintWatch) at its projected place and size, so the push-in lands on the emblem's
-// pixels; the field dissolves in through the screen's matrix before the package takes over.
+// crowd's seats and heads fade to the stand's average tone where they would be smaller than a pixel, and only draw while
+// the camera is at rest. The cut-ins are still framings (no zoom: a pixel picture scaled between frames shimmers). The
+// watch is the emblem's own drawing (sport.js paintWatch) at its projected place and size, so the last cut-in frames the
+// emblem's own pixels; the field comes in round it through the screen's matrix before the package takes over.
 import { P } from '../../palette.js';
 import { textPixels } from '../../font.js';
 import { u32, clamp, seg, smoothstep, easeInOut, easeOutQuint } from '../../gfx/index.js';
@@ -91,15 +96,29 @@ function orient(o, pitch) {
   o.U = [0, cp, sp];
   return o;
 }
+// The whistle's cut-ins: the wide where the sweep lands (on the first blast), a mid on the second, the board's clock on
+// the third (the watch at centre stage at the emblem's size: the package's own frame). A cut-in is a camera on the same
+// axis, a little nearer and on a longer lens, its frame's centre shifted: three still framings, cut on the beat (no zoom,
+// no move: a pixel picture scaled between frames shimmers). FRAMING: each one's share of the way from the wide lens to
+// the clock's (in log focal length);
+// NEARER: how much higher and nearer the far stand its camera stands (m): the clock's camera stands at the halfway line,
+// so the far goal's crossbar falls below its frame (never a sliver of it at the frame's foot).
+const FRAMING = [0, 0.5, 1];
+const NEARER = [[0, 0], [1, 8], [2.4, 20]];
+
+/** Which framing is on air at beat b: 0 (the sweep and the wide), 1 (the mid), 2 (the board's clock). */
+const framingAt = (b) => (b >= Q.whistle[2] ? 2 : b >= Q.whistle[1] ? 1 : 0);
+
 /**
- * The camera at beat b. The push-in is a zoom on the board's clock with the frame panned to it (a lens shift): the camera
- * holds its place and never turns, so nothing moves in depth against anything else and the board stays square to the
- * watch hung on it; the watch arrives at centre stage at the emblem's size. `moving` (0..1): how fast the picture moves
- * (the crowd's fine detail only shows while it is nearly still).
+ * The camera at beat b: the sweep (CAM_Y/Z/P/F) to the wide over the centre circle, then the whistle's cut-ins. A cut-in's
+ * watch lands on whole pixels (the clock's on centre stage). `moving` (0..1): how fast the picture moves (the crowd's
+ * fine detail only shows while it is nearly still; the cut-ins are still).
  */
 function cameraAt(b, o = CAM) {
   const pos = (bb) => [0, CAM_Y(bb), CAM_Z(bb)];
-  const [x, y, z] = pos(b);
+  const [x, y0, z0] = pos(b);
+  const [dy, dz] = NEARER[framingAt(b)];
+  const y = y0 + dy, z = z0 + dz;
   o.x = x;
   o.y = y;
   o.z = z;
@@ -107,8 +126,7 @@ function cameraAt(b, o = CAM) {
   let f = CAM_F(b);
   o.px = CENTRE.x;
   o.py = CENTRE.y;
-  const p = easeInOut(seg(b, Q.lift, Q.settle - Q.lift));
-  let zoomRate = 0;
+  const p = FRAMING[framingAt(b)];
   if (p > 0) {
     // the watch's direction in the camera's frame, and the focal length at which it is the emblem's size
     const dx = WATCH.x - x, dy = WATCH.y - y, dz = WATCH.z - z;
@@ -118,18 +136,18 @@ function cameraAt(b, o = CAM) {
     const f0 = f;
     const fM = (ZOOM * depth) / U;
     f = Math.exp(Math.log(f0) + (Math.log(fM) - Math.log(f0)) * p);
-    // the watch's place on screen eases from where it hangs to centre stage; the frame's centre follows from it
+    // the watch's place on screen: that share of the way from where it hangs in the wide to centre stage, on whole pixels
     const sx0 = CENTRE.x + f0 * xn, sy0 = CENTRE.y - f0 * yn;
-    o.px = sx0 + (CENTRE.x - sx0) * p - f * xn;
-    o.py = sy0 + (CENTRE.y - sy0) * p + f * yn;
-    const dp = easeInOut(seg(b + 0.05, Q.lift, Q.settle - Q.lift)) - p;
-    zoomRate = Math.abs(((Math.log(fM) - Math.log(f0)) * dp) / (0.05 * BEAT));
+    const wx = Math.round(sx0 + (CENTRE.x - sx0) * p), wy = Math.round(sy0 + (CENTRE.y - sy0) * p);
+    o.px = wx - f * xn;
+    o.py = wy + f * yn;
   }
   o.f = f;
-  // how fast the picture moves: the camera's speed (m/s) or the zoom's rate (per second)
-  const [x1, y1, z1] = pos(b - 0.1);
-  const speed = Math.hypot(x - x1, y - y1, z - z1) / (0.1 * BEAT);
-  o.moving = Math.max(smoothstep(2, 10, speed), smoothstep(0.15, 0.6, zoomRate));
+  // how fast the picture moves: the camera's speed (m/s)
+  // (over the last hundredth of a second: the detail draws in on the frame after the camera lands)
+  const [x1, y1, z1] = pos(b - 0.02);
+  const speed = Math.hypot(x - x1, y0 - y1, z0 - z1) / (0.02 * BEAT); // (a cut is no move)
+  o.moving = smoothstep(2, 10, speed);
   return o;
 }
 
@@ -181,7 +199,10 @@ function ramp(colours, v, x, y) {
   const i = v | 0;
   return colours[i + (ditherAt(x, y) < (v - i) * 16 ? 1 : 0)];
 }
-const GRASS = [C.black, C.darkGreen, C.green];
+// the grass's mown stripes in solid bands: green and mid green under the lights, dark and deep green where the light
+// has not come yet (ENDESGA 32's own greens)
+const STRIPE_LIT = [C.green, C.midGreen];
+const STRIPE_DARK = [C.darkGreen, C.deepGreen];
 const LINES = [C.black, C.ink, C.slate, C.steel, C.silver, C.white];
 const SKY = [C.black, C.ink, C.navy];
 const DARK = [C.black, C.ink, C.slate, C.steel];
@@ -269,27 +290,61 @@ const hash2 = (a, b) => {
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return h ^ (h >>> 16);
 };
+// the far stand's build (the end behind the board): a stair (aisle) every 12 m along it, a concourse across it at row 12
+// with three lit exits (vomitories) cut through the rows under it; on the long blast its fifth row holds up its scarves,
+// a band of the channel's orange and white across the stand, held to the end
+const AISLE = 12;
+const AISLE_W = 1.2;
+const CONCOURSE = 12; // its row
+const EXITS = [-24, 0, 24];
+const EXIT = { w: 4.4, r0: 8, r1: 12 }; // its width (m) and rows
+const SCARF_ROW = 4;
 /**
- * A tier at height h above its first row and lateral position l, lit by `lit` (0..1), footprint fp (m a pixel). Three
- * levels of detail, chosen by the footprint with a narrow dithered seam: the heads (a row four pixels or more), the rows
- * alone (three or more), and below that the crowd as a texture: a sparse screen-fixed dither of slate on ink, the
- * stand's average (the heads never shimmer as they shrink).
+ * A tier at height h (m up the slope from its first row) and lateral position lat on stand `who`, lit by `lit` (0..1);
+ * fp and fl a pixel's footprint on the tier (m), up the slope and along the stand. Levels of detail by the footprints,
+ * with a narrow dithered seam: the heads (a row two pixels or more, a seat two or more), the rows alone (a row one and a
+ * half pixels or more), below that the crowd as a texture (a sparse screen-fixed dither, the stand's average); the far
+ * stand's stairs, concourse and exits wherever they are a pixel or more. The heads and the rows only while the picture is
+ * nearly still (they would strobe in a move).
  */
-function tierColour(h, l, lit, fp, X, Y) {
+function tierColour(h, lat, who, lit, fp, fl, X, Y) {
   if (lit < 0.2) return C.black;
+  const r = Math.floor(h / ROW_H);
+  const fr = h / ROW_H - r;
+  const far = who === 1;
+  if (far) {
+    // the exits: an opening through the rows, lit from inside (a black lintel and jambs a quarter metre thick)
+    // (in a move only what is three pixels or more: a finer feature would strobe)
+    const min = 1 + 2 * MOVING;
+    if (r >= EXIT.r0 && r < EXIT.r1 && EXIT.w / fl >= 1 + min) {
+      for (const ex of EXITS) {
+        const u = lat - ex;
+        if (u > -EXIT.w / 2 && u < EXIT.w / 2) {
+          const edge = EXIT.w / 2 - Math.abs(u) < Math.max(0.25, fl * 0.9) || (r === EXIT.r1 - 1 && fr > 1 - Math.max(0.3, fp / ROW_H));
+          return edge ? C.black : r === EXIT.r0 ? C.yellow : C.cream;
+        }
+      }
+    }
+    // the concourse: a walkway across the stand, its front edge catching the light
+    if (r === CONCOURSE && ROW_H / fp >= min) return fr > 0.7 || ROW_H / fp < 2 ? C.slate : C.ink;
+    // the stairs: lighter steps, no seats
+    const ua = ((lat % AISLE) + AISLE * 1.5) % AISLE - AISLE / 2;
+    if (Math.abs(ua) < AISLE_W / 2 && AISLE_W / fl >= min) return fr < 0.3 && ROW_H / fp >= 2 ? C.ink : C.slate;
+  }
+  // the scarves held up on the long blast: a band across the far stand's fifth row
+  if (far && UP >= 0 && r === SCARF_ROW && fr > 0.12 && fr < 0.94) return Math.floor(lat / (2 * SEAT)) % 2 ? C.white : C.orange;
   const flat = ramp(DARK, 0.08 + 1.25 * lit, X, Y);
   const th = ditherAt(X, Y) / 16;
   const level = fp + (th - 0.5) * 0.04; // the seams' dither, two hundredths of a metre a pixel wide
-  // (while the picture moves fast the rows and heads would strobe: the detail draws in as it slows)
-  const most = 0.29 * (1 - MOVING);
-  if (level > most || lit < 0.2) return flat;
-  const r = Math.floor(h / ROW_H);
-  const fr = h / ROW_H - r;
-  if (fr < 0.14) return C.ink; // the riser's lip
-  if (level > most - 0.08) return r % 2 ? C.ink : C.black; // the rows alone
+  const still = 1 - smoothstep(0, 0.15, MOVING); // (the rows and heads draw in only as the camera comes to rest)
+  const rowsMax = 0.6 * still, headsMax = 0.4 * still;
+  if (level > rowsMax) return flat;
+  const heads = level <= headsMax && fl <= 0.31 * still;
+  if (fr < 0.14 && heads) return C.ink; // the riser's lip
+  if (!heads) return r % 2 ? C.ink : C.black; // the rows alone
   // the heads: slate on the ink and black rows, a few steel, a rare muted scarf
-  const s = Math.floor(l / SEAT);
-  const fs = l / SEAT - s;
+  const s = Math.floor((lat + 100 * who) / SEAT);
+  const fs = (lat + 100 * who) / SEAT - s;
   const hh = hash2(r, s);
   if (hh % 10 < 7 && fr > 0.36 && fr < 0.86 && fs > 0.18 && fs < 0.78) {
     const t = (hh >>> 4) % 50;
@@ -310,6 +365,9 @@ const SK = 0, GR = 1, TI = 2, RF = 3, WL = 4, AD = 5, BD = 6;
 
 let BOARD_LIT = 0; // the board's rim flash (the whistle's short blasts)
 let MOVING = 0; // how fast the picture moves (the camera's cameraAt.moving)
+let UP = -1; // beats since the long blast (the far stand's scarves go up on it)
+let TFP = 0; // the footprint of the pixel on the tier it shows, up the slope (m)
+let TFL = 0; // and along the stand (m)
 
 /** The screen rectangle an axis-aligned box covers (1 px margin), or the whole screen when it reaches behind the camera. */
 const BOX = { x0: 0, x1: W - 1, y0: 0, y1: H - 1 };
@@ -386,6 +444,11 @@ function paintWorld(b, cam) {
             const dd = Cd + tt * Dd, ll = Cl + tt * Dl;
             if (dd >= st.front && dd <= st.back && ll <= st.half && ll >= -st.half) {
               t = tt; kind = TI; a = (dd - st.front) * st.slope; s2 = ll; who = st.who; lat = ll; dep = dd;
+              // (a pixel's footprint on the tier: up the slope, the distance over the cosine of the angle it is seen at;
+              // along the stand, stretched where the stand is seen edge on)
+              const dn = Math.sqrt(Dx * Dx + Dy * Dy + Dz * Dz);
+              TFP = (tt * st.slope * dn) / (f * -den);
+              TFL = (tt * dn) / (f * Math.max(0.05, Math.abs(Dd)));
             }
           }
         }
@@ -473,14 +536,20 @@ function shadeGround(gx, gz, ax, az, bx, bz, X, Y, allOn) {
   const ez = Math.abs(az) + Math.abs(bz);
   const m = markings(gx, gz, ex, ez, ax, az, bx, bz);
   const L = Math.min(1.3, lit);
-  if (m >= 0.22) {
-    // the markings: ink in the dark (just made out), white under the lights, a step dimmer where thinner than a pixel
-    const lv = 1 + 4 * Math.min(1, L) + (L > 1 ? 0.6 : 0);
+  if (L < 0.5) {
+    // the markings in the dark: just made out, a solid slate line where it covers most of the pixel (never dotted)
+    if (m >= 0.4) return C.slate;
+  } else if (m >= 0.22) {
+    // the markings under the lights: white, a step dimmer where thinner than a pixel
+    const lv = 2 + 3 * Math.min(1, L) + (L > 1 ? 0.6 : 0);
     return ramp(LINES, m >= 0.5 ? lv : lv - 1.3, X, Y);
   }
+  // the stripe: a solid band while it is three pixels or more deep on screen; where the stripes are finer than that (the
+  // far end from the air) the two tones are dithered by their share of the pixel, a few rows only
   const dark = stripeShare(gz - ez / 2, gz + ez / 2);
-  const v = 2 * Math.min(1, L) - 0.26 * dark * Math.min(1, L * 1.4) + (L > 1 ? 0.5 * (L - 1) : 0);
-  return ramp(GRASS, v, X, Y);
+  const k = ez < 1.75 ? (dark > 0.5 ? 1 : 0) : ditherAt(X, Y) < dark * 16 ? 1 : 0;
+  // the light: its quarter's edge is a few metres of dither, never a wide checkerboard
+  return ditherAt(X, Y) < Math.min(1, L) * 16 ? STRIPE_LIT[k] : STRIPE_DARK[k];
 }
 
 /** The light of a stand's quarter at a point of it (lateral position and depth along the stand, who: which stand). */
@@ -503,7 +572,7 @@ function shade(kind, t, a, s2, who, X, Y, Dy, f, allOn, lat, dep) {
     }
     case TI:
       // the tiers: dark until their quarter's bank comes on, then the crowd
-      return tierColour(a, s2 + 100 * who, standLight(who, lat, dep) * 0.9, t / f, X, Y);
+      return tierColour(a, lat, who, standLight(who, lat, dep) * 0.9, TFP, TFL, X, Y);
     case RF: {
       // the roofs: their tops catch the light dome once their quarter is lit, their undersides stay dark
       const lit = standLight(who, lat, dep);
@@ -617,8 +686,15 @@ function towers(cam, b) {
   }
 }
 
-/** A soft halo round each lit head against the night: cool white, static; larger and whiter during its flash. */
 const HALO = [C.black, C.ink, C.slate, C.steel, C.fog, C.silver, C.white];
+// how bright each of the night's neutral colours is, in the halo's steps (a coloured surface is not in it)
+const RANK = new Map([[C.black, 0], [C.ink, 1], [C.navy, 1], [C.deepGreen, 1], [C.slate, 2], [C.steel, 3], [C.fog, 4], [C.silver, 5], [C.white, 6]]);
+/**
+ * A soft halo round each lit head: cool white, static; larger and whiter during its flash. The tower stands in front of
+ * whatever is behind it, so the glow lies over the sky, the land, the roofs and the stands' dark faces behind the head
+ * wherever it is brighter than they are; whatever stands nearer than the head hides it; a coloured surface (the pitch,
+ * the boards, a scarf) keeps its colour.
+ */
 function halos(cam) {
   for (let i = 0; i < 4; i++) {
     const l = LIGHT[i];
@@ -635,14 +711,15 @@ function halos(cam) {
     for (let Y = y0; Y <= y1; Y++) {
       for (let X = x0; X <= x1; X++) {
         const o = Y * W + X;
-        const kd = KIND[o];
-        // (over the night only: the sky, or the dark land beyond the stadium when the camera looks down on it)
-        if (DEPTH[o] < P0.z || (kd !== SK && LAYER.d[o] !== C.black && LAYER.d[o] !== C.ink)) continue;
+        if (DEPTH[o] < P0.z) continue;
+        const rk = RANK.get(LAYER.d[o]);
+        if (rk === undefined) continue;
         const q = 1 - Math.hypot(X + 0.5 - P0.x, Y + 0.5 - P0.y) / r;
         if (q <= 0) continue;
         const v = band(q * Math.sqrt(q) * (4.6 + 4 * fl));
-        // (the stands round a head are lit by it already; the glow is never darker than the night under it)
-        if (v >= 2) LAYER.d[o] = ramp(HALO, v, X, Y);
+        if (v < 2) continue;
+        const c = ramp(HALO, v, X, Y);
+        if (RANK.get(c) > rk) LAYER.d[o] = c;
       }
     }
   }
@@ -741,6 +818,7 @@ const DISSOLVE = [CUT - 0.1, CUT + 0.1];
 export function paintStadium(b) {
   for (let i = 0; i < 4; i++) LIGHT[i] = bankAt(i, b);
   BOARD_LIT = Q.whistle.slice(0, 2).some((w) => b >= w && b < w + 0.4) ? 1 : 0;
+  UP = b - Q.flip - 0.5; // (half a beat into the long blast, inside the clock's shot)
   const cam = cameraAt(b);
   LAYER.begin(0);
   paintWorld(b, cam);
@@ -792,5 +870,11 @@ export function watchOnScreen(b) {
   return { x: p.x, y: p.y, k: (U * cam.f) / p.z };
 }
 export const fullTimeBank = (i, b) => bankAt(i, b);
+/** For checks: the stadium's pixels at beat b (the layer, before the watch and the dissolve); the framing on air. */
+export function fullTimeFrame(b) {
+  paintStadium(b);
+  return LAYER.d;
+}
+export const fullTimeFraming = (b) => framingAt(b);
 export const fullTimePanel = (b) => panelText(b);
 export { TOWERS as FULLTIME_TOWERS, WATCH as FULLTIME_WATCH, U as FULLTIME_UNIT };

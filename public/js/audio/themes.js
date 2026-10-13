@@ -685,9 +685,10 @@ function worldNowTitles(tempo, H, C) {
 //   sweep     7-10   the groove as the camera sweeps down the pitch: kick, backbeat, eighth hats, the bass in driving
 //                    eighths, guitar chops on the off-beats, brass stabs over Eb, Cm7 and Ab add9 (no V-I fanfare)
 //   whistle   10-14  stop time: the final whistle on the trumpets, three blasts on B-flat (the key's 5th, a pea
-//                    whistle's flutter on the last, long one), the band hitting each blast; the board flips on the
-//                    last over Abmaj9 on the E-flat pedal, with a timpani and a felt thump
-//   lift      13-15  an air swell under the clock lifting out to centre stage, a snare fill over Bb/Eb into...
+//                    whistle's flutter on the last, long one), the band hitting each blast (the picture cuts closer on
+//                    each: wide, mid, the board's clock); the board flips on the last over Abmaj9 on the E-flat
+//                    pedal, with a timpani and a felt thump
+//   lift      13-15  an air swell under the shot of the board's clock (the last cut-in), a snare fill over Bb/Eb into...
 //   signature 15-19  ...the signature on the brass, trumpets an octave up, over the groove: Eb add9, then the colour
 //                    (B) over an augmented chord, all on the E-flat pedal; Eb6/9 on the hit (the brass on C, the 6th)
 // No crash, no whoosh, no crowd: the stadium is in the pictures, the music is the band.
