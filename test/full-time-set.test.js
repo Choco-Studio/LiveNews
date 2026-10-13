@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { C } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, STYLE_IDS } from '../public/js/v2/canvas25d/studio/styles.js';
 import { wallFromScene, setLive, setSkyHour, setSkyClock, wallRect } from '../public/js/v2/canvas25d/studio/set.js';
-import { GROUND, groundKey, banksLit, boardTime, towerHead, TOWER_LIST, PHASE_PALS, PENNANT_FRAMES, pennantFrame, LIVE_STATE } from '../public/js/v2/canvas25d/studio/pitch.js';
+import { GROUND, groundKey, banksLit, boardTime, towerHead, TOWER_LIST, PHASE_PALS, PENNANT_FRAMES, pennantFrame, LIVE_STATE, HALO_OUT } from '../public/js/v2/canvas25d/studio/pitch.js';
 import { skyPhase } from '../public/js/v2/canvas25d/studio/city.js';
 import { isPalette, nameOf, LSTAR } from '../public/js/v2/canvas25d/studio/color.js';
 import { THEME_ACCENT } from '../public/js/cast.js';
@@ -104,7 +104,8 @@ describe('FULL TIME: the ground follows the hour', () => {
       const cam = lab.cameraFor(framing, 'full-time');
       for (const t of TOWER_LIST) {
         const hd = towerHead(cam, t);
-        const r = { x0: Math.min(hd.x0, hd.cx - hd.R), x1: Math.max(hd.x0 + hd.w, hd.cx + hd.R), y0: Math.min(hd.y0, hd.cy - hd.R / 1.15), y1: Math.max(hd.y0 + hd.h, hd.cy + hd.R / 1.15) };
+        const R = hd.R * HALO_OUT; // (the glow's fringe, its outermost pixels)
+        const r = { x0: Math.min(hd.x0, hd.fx - R), x1: Math.max(hd.x0 + hd.w, hd.fx + R), y0: Math.min(hd.y0, hd.fy - R / 1.15), y1: Math.max(hd.y0 + hd.h, hd.fy + R / 1.15) };
         for (const b of boxes) assert.ok(r.x1 <= b.x0 || r.x0 >= b.x1 || r.y1 <= b.y0 || r.y0 >= b.y1, `${framing} ${t.kind} ${t.X}: a light under the top row [${r.x0.toFixed(0)},${r.y0.toFixed(0)}]-[${r.x1.toFixed(0)},${r.y1.toFixed(0)}]`);
       }
     }
@@ -132,21 +133,21 @@ describe('FULL TIME: pixel discipline', () => {
         assert.equal(off, 0, `${h} ${framing}: ${off} off-palette pixels`);
       }
       // the graphics zone: black and ink, but for the one light line (ART_DIRECTION: the desk's foot light; here the
-      // platform's edge, its LED and the light on the riser's top row: two rows a column, never an area)
+      // platform's edge, its LED and its light falling down the riser's top: three rows a column, never an area)
       const px = shot({ framing: 'wide', hour: h });
       let light = 0;
       for (let x = 0; x < W; x++) {
         let lit = 0;
         for (let y = 150; y < H; y++) {
           const c = px[y * W + x];
-          if (c === C.orange || c === C.rust) {
+          if (c === C.orange || c === C.rust || c === C.brown) {
             lit++;
             assert.ok(y >= 170, `${h}: the light line at ${x},${y} sits under the desk's foot`);
             continue;
           }
           assert.ok(c === C.black || c === C.ink, `${h}: ${x},${y} ${nameOf(c)} in the graphics zone`);
         }
-        assert.ok(lit <= 2, `${h}: ${lit} lit rows in column ${x}`);
+        assert.ok(lit <= 3, `${h}: ${lit} lit rows in column ${x}`);
         light += lit;
       }
       assert.ok(light <= 4 * W, `${h}: ${light} light pixels in the graphics zone`);
@@ -333,36 +334,37 @@ describe('FULL TIME: motion, slow and sparse', () => {
 });
 
 describe('FULL TIME: the platform, the scoreboard, the light (the integrator\'s round)', () => {
-  test('the raised platform reads in the wide: the deck under the desk, the edge\'s orange light across the frame, the riser\'s panels under it', () => {
+  test('the raised platform reads in the wide: the deck under the desk, the edge\'s LED strip across the frame with its light falling off, the riser\'s panels under it', () => {
     for (const h of [23, 12.5]) {
       const px = shot({ framing: 'wide', hour: h });
+      const lit = (c) => c === C.orange || c === C.rust;
       const edge = new Int16Array(W).fill(-1);
-      let joints = 0;
+      let joints = 0, diodes = 0;
       for (let x = 0; x < W; x++) {
-        for (let y = 150; y < H; y++) if (px[y * W + x] === C.orange) {
+        for (let y = 150; y < H; y++) if (lit(px[y * W + x])) {
           edge[x] = y;
           break;
         }
         // the strip runs panel by panel: broken for a column at each of the riser's joints
-        if (edge[x] < 0 && x > 0 && edge[x - 1] >= 0) {
-          joints++;
-          edge[x] = edge[x - 1];
-          continue;
-        }
         if (edge[x] < 0) {
-          edge[x] = edge[x + 1 < W ? x + 1 : x - 1];
           joints++;
           continue;
         }
+        if (px[edge[x] * W + x] === C.orange) diodes++;
         // (in the wide's free rows: under the captions and the lower third, which end at y 196, over the ticker at 202)
         assert.ok(edge[x] >= 196 && edge[x] <= 200, `${h}: the platform's edge light in column ${x} (row ${edge[x]})`);
         assert.equal(px[(edge[x] + 1) * W + x], C.rust, `${h}: its light on the riser's top row at ${x}`);
+        assert.equal(px[(edge[x] + 2) * W + x], C.brown, `${h}: the light falling off a step further at ${x}`);
+        assert.ok(edge[x] + 2 < 202, `${h}: the light clear of the ticker's rows at ${x}`);
         for (let y = edge[x] - 16; y < edge[x]; y++) assert.equal(px[y * W + x], C.ink, `${h}: the deck in front of the desk at ${x},${y}`);
-        for (let y = edge[x] + 2; y < H; y++) assert.ok(px[y * W + x] === C.black || px[y * W + x] === C.ink, `${h}: the riser at ${x},${y}`);
+        for (let y = edge[x] + 3; y < H; y++) assert.ok(px[y * W + x] === C.black || px[y * W + x] === C.ink, `${h}: the riser at ${x},${y}`);
       }
       assert.ok(joints >= 3 && joints <= 6, `${h}: the strip broken at the riser's joints (${joints} columns)`);
+      // the diodes: every other pixel orange (a row of lights, not a ruled line)
+      assert.ok(Math.abs(diodes - (W - joints) / 2) <= 4, `${h}: ${diodes} diodes`);
       // the edge runs straight across (one row), and the riser has its seams, mirrored pairs
-      assert.ok(edge.every((y) => y === edge[0]), `${h}: a straight edge`);
+      const rows = new Set([...edge].filter((y) => y >= 0));
+      assert.equal(rows.size, 1, `${h}: a straight edge (${[...rows]})`);
       const seams = [];
       for (let x = 0; x < W; x++) if (px[(H - 4) * W + x] === C.ink) seams.push(x);
       assert.ok(seams.length >= 2 && seams.every((x) => seams.includes(383 - x)), `${h}: the riser's seams ${seams}`);
@@ -424,20 +426,23 @@ describe('FULL TIME: the platform, the scoreboard, the light (the integrator\'s 
       const i = y * W + x;
       if (y >= r.clipRows[x] || bare[i] !== px[i]) continue;
       const nm = nameOf(px[i]);
-      if (!['green', 'darkGreen', 'black'].includes(nm)) continue;
+      if (!['green', 'midGreen', 'darkGreen', 'deepGreen'].includes(nm)) continue;
       n++;
       sum += lin(P[nm]);
     }
     return { L: lOfY(sum / n), n, faces: m.faces };
   };
 
-  test('the day\'s pitch is brighter than the floodlit night\'s, in the wide and in the singles, and stays under every face', { skip: !PRESENTERS && 'presenter modules unavailable' }, () => {
+  test('the day\'s pitch is brighter than the floodlit night\'s, the night\'s than dawn\'s, in the wide and in the singles, and every face over it', { skip: !PRESENTERS && 'presenter modules unavailable' }, () => {
     for (const framing of ['wide', 'two', 'mcu-l', 'mcu-b']) {
       const day = pitchLight(framing, 12.5), night = pitchLight(framing, 23), dawn = pitchLight(framing, 6.5);
       assert.ok(day.L >= night.L + 8, `${framing}: day ${day.L.toFixed(1)} over night ${night.L.toFixed(1)}`);
-      assert.ok(day.L >= dawn.L + 8, `${framing}: day ${day.L.toFixed(1)} over dawn ${dawn.L.toFixed(1)}`);
-      for (const f of day.faces) assert.ok(day.L < f, `${framing}: the day's pitch ${day.L.toFixed(1)} under the face ${f.toFixed(1)}`);
+      assert.ok(night.L >= dawn.L + 2, `${framing}: the floodlit night ${night.L.toFixed(1)} over dawn ${dawn.L.toFixed(1)}`);
+      for (const f of day.faces) assert.ok(day.L + 8 < f, `${framing}: the day's pitch ${day.L.toFixed(1)} well under the face ${f.toFixed(1)}`);
     }
+    // three grounds, three sets of values (ENDESGA 32's four greens, palette.js P_SET)
+    const [night, dawn, day] = PHASE_PALS.map((p) => JSON.stringify(p.pitch));
+    assert.ok(night !== dawn && night !== day && dawn !== day, 'the day, the floodlit night and dawn each their own pitch');
   });
 
   test('the mown stripes: two values, each one colour or a 50 % mix of two adjacent steps (no busy dither); no stripe edge within 6 px of a head in any framing', () => {
@@ -446,13 +451,16 @@ describe('FULL TIME: the platform, the scoreboard, the light (the integrator\'s 
       const la = LSTAR[nameOf(a)], lb = LSTAR[nameOf(b)];
       assert.ok(a === b || Math.abs(la - lb) <= 40, `a mix of neighbours (${nameOf(a)}/${nameOf(b)})`);
     }
-    // in the wide by day: each stripe is one colour or a checker, half and half
-    const px = shot({ framing: 'wide', hour: 12.5 });
-    const y = 100;
-    const runs = {};
-    for (let x = 150; x < 234; x++) runs[nameOf(px[y * W + x])] = (runs[nameOf(px[y * W + x])] || 0) + 1;
-    const g = runs.green || 0, d = runs.darkGreen || 0;
-    assert.ok(g > 10 && Math.abs(g - d) <= 0.2 * (g + d) + 4, `the centre stripe a 50 % checker by day (${JSON.stringify(runs)})`);
+    // no coarse mesh between the presenters: by day and at night every stripe is one solid colour; dawn's one mix is
+    // of two steps 12 L* apart
+    for (const P of PHASE_PALS) for (const [a, b] of P.pitch) assert.ok(a === b || Math.abs(LSTAR[nameOf(a)] - LSTAR[nameOf(b)]) <= 15, `a calm mix (${nameOf(a)}/${nameOf(b)})`);
+    for (const h of [12.5, 23]) {
+      const px = shot({ framing: 'two', hour: h });
+      const seen = new Set();
+      for (let x = 160; x < 224; x++) seen.add(nameOf(px[150 * W + x]));
+      seen.delete(nameOf(PHASE_PALS[groundKey() >> 3].line));
+      assert.equal(seen.size, 1, `${h}: the centre stripe one colour between the presenters (${[...seen]})`);
+    }
     // the edges, from the ground's geometry, against the presenters' heads (crown to shoulders) in every framing
     const edgesX = [0];
     for (let n = 0; n < 8; n++) edgesX.push(GROUND.stripe.centre / 2 + n * GROUND.stripe.width, -(GROUND.stripe.centre / 2 + n * GROUND.stripe.width));
@@ -522,6 +530,16 @@ describe('FULL TIME: the platform, the scoreboard, the light (the integrator\'s 
     // the golden hour: the lit frame (four banks, 18:42) against the same sky with the banks still off (17:03)
     const off = shot({ framing: 'wide', hour: 17.05 }), on = shot({ framing: 'wide', hour: 18.7 });
     const golden = ring((i) => LSTAR[nameOf(on[i])] - LSTAR[nameOf(off[i])]);
+    // a glow, not a plate: two steps of light and a fringe where the sky shows through every other pixel
+    const steps = new Set(), fringe = { lit: 0, sky: 0 };
+    for (let y = Math.floor(hd.cy - 1.1 * hd.R); y <= Math.ceil(hd.cy + 1.1 * hd.R); y++) for (let x = Math.floor(hd.cx - 1.1 * hd.R); x <= Math.ceil(hd.cx + 1.1 * hd.R); x++) {
+      if (x < 0 || y < 0 || (x >= hd.x0 && x < hd.x0 + hd.w && y >= hd.y0 && y < hd.y0 + hd.h)) continue;
+      const d = Math.hypot(x + 0.5 - hd.cx, (y + 0.5 - hd.cy) * 1.15) / hd.R;
+      if (on[y * W + x] !== off[y * W + x]) steps.add(on[y * W + x]);
+      if (d > 0.8 && d < 1.0) on[y * W + x] !== off[y * W + x] ? fringe.lit++ : fringe.sky++;
+    }
+    assert.ok(steps.size >= 2, `two steps of light round a lit head (${[...steps].map(nameOf)})`);
+    assert.ok(fringe.lit > 5 && fringe.sky > 5 && Math.abs(fringe.lit - fringe.sky) < 0.5 * (fringe.lit + fringe.sky), `a fringe, half lit (${fringe.lit} lit, ${fringe.sky} sky)`);
     // the blue hour: the halo's colours over its navy sky
     const blueFrame = shot({ framing: 'wide', hour: 20 });
     const blue = ring((i) => (blueFrame[i] === C.steel || blueFrame[i] === C.fog ? LSTAR[nameOf(blueFrame[i])] - LSTAR.navy : 0));
@@ -595,7 +613,8 @@ describe('FULL TIME: the presenters in the ground', { skip: !PRESENTERS && 'pres
       lab.set({ programme: 'full-time', framing, wall: 'idle', presenters: true, hour: h, move: null });
       lab.reset();
       const { cam, heads } = lab.render(10);
-      const px = lab.frame.px;
+      // the bands are found on the bare set (Kai's collar and Rosa's stripes are orange too), checked against the people
+      const px = shot({ framing, hour: h });
       // find the bands: runs of orange at least 20 px wide on one row (the desk line is on the desk, below them)
       const k = 1000 * cam.zoom / (GROUND.boards.Z - cam.z);
       const y0 = Math.round(cam.hy + (GROUND.boards.top - cam.y) * k), y1 = Math.round(cam.hy + (GROUND.pitchY - cam.y) * k);
