@@ -137,6 +137,8 @@ export function planShots(ctx) {
   // closer than it: the runtime would hold the later one back into the middle of its sentence
   const cool = PACE[id]?.shots?.cooldown ?? MIN_SHOT;
   if (cool > MIN_SHOT + 1e-6) spaceCuts(ctx, tl, out, cool);
+  // a story never opens on the single the previous story ended on (NEWS IN 60 and MONEY MINUTE order their own)
+  if (ctx.type === 'story' && id !== 'news-60' && id !== 'money-minute') openOnNewShot(ctx, out);
   for (let i = 0; i < out.length; i++) out[i].len = round3((i + 1 < out.length ? out[i + 1].at : tl.end) - out[i].at);
   // the sign-off's hold before the end card that this plan assumed (the bible's, unless ctx.gapAfter says otherwise)
   if (ctx.type === 'outro') out[out.length - 1].hold = round3(tl.gap);
@@ -541,6 +543,43 @@ function keepAlternating(ctx, out, k) {
   }
 }
 
+/**
+ * The same presenter reading on: when the previous story ends on the single this one opens on (the same framing, the
+ * same presenter), the opening takes the presenter's other single, and the run after it keeps alternating. Else the
+ * story change is no cut the viewer sees, one long hold (critic, polish round: SEVEN DAYS held an OTS 17.0 s and an
+ * MCU-L 15.9 s where storySingle's alternation met a story that ended on a split or returning single).
+ */
+function openOnNewShot(ctx, out) {
+  const first = out[0];
+  if (!first || first.shot !== 'close' || first.move || first.at > 0.05) return;
+  const end = planEnd(ctx, ctx.index - 1);
+  if (!end || end.shot !== 'close' || end.framing !== first.framing || end.focus !== first.focus) return;
+  const flip = altSingle(ctx, first);
+  if (!flip) return;
+  first.framing = flip.framing;
+  keepAlternating(ctx, out, 0);
+}
+
+// the last planned shot of a neighbouring story, memoised per context (contexts are memoised per episode): each
+// story's plan reads the one before it, so an episode is planned once along the chain, never in a loop
+const PLAN_ENDS = new WeakMap();
+const PLANNING = new WeakSet();
+function planEnd(ctx, j) {
+  const c = neighbour(ctx, j);
+  if (!c || c.type !== 'story' || PLANNING.has(c)) return null;
+  if (PLAN_ENDS.has(c)) return PLAN_ENDS.get(c);
+  PLANNING.add(c);
+  let end = null;
+  try {
+    const e = planShots(c).at(-1);
+    end = e ? { shot: e.shot, framing: e.framing, focus: e.focus } : null;
+  } finally {
+    PLANNING.delete(c);
+  }
+  PLAN_ENDS.set(c, end);
+  return end;
+}
+
 /** And finally (the programme's lighter closer). */
 const isFinally = (ctx) => ctx.feature === 'lighter' || /^\W*and finally\b/i.test(String(ctx.seg?.text || ''));
 
@@ -603,8 +642,17 @@ function capMax(ctx, tl, out) {
     const max = shotMax(ctx.programId, e.shot) + (e.beat === 'roundup-picture' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0) + (zoom ? Math.min(3, zoom.at - e.at) : 0);
     if (t1 - e.at <= max + 0.25) continue;
     // the run's last beat (a round-up pin after its world view) keeps its own MIN_SHOT too
+    // back to the presenter's single on air before it (the programme's single when none)
+    let single = null;
+    for (let i = k - 1; i >= 0 && !single; i--) if (out[i].shot === 'close' && out[i].framing && out[i].framing !== 'ots') single = out[i].framing;
+    const framing = single || singleFraming(ctx);
+    // the planned return to the same single after the run is now this one (one shot, which splitLongSingles may split):
+    // the cut may come as late as the maximum allows, the single then running on to that return's own end (critic,
+    // polish round: a live TECH BYTES picture held 8.9 s, its return 0.9 s too close for the cut to fit before it)
+    const merges = j < out.length && out[j].shot === 'close' && out[j].framing === framing && out[j].focus === ctx.speaker && !out[j].move;
+    const until = merges ? (j + 1 < out.length ? out[j + 1].at : tl.end) : t1;
     const lo = Math.max(e.at + Math.max(MIN_SHOT, lowOf[e.shot] || 0), out[j - 1].at + MIN_SHOT);
-    const hi = Math.min(e.at + max, t1 - MIN_SHOT);
+    const hi = Math.min(e.at + max, until - MIN_SHOT);
     if (hi < lo - 1e-6) continue; // no cut keeps both parts in their windows: the runtime's guard is the net
     let cut = null;
     // MONEY MINUTE cuts only inside the pause before a sentence (money-minute.md §5.8); the others on a sentence start,
@@ -613,12 +661,7 @@ function capMax(ctx, tl, out) {
     for (const b of tl.bounds) if (!b.blocked && b.t >= lo - 1e-6 && b.t <= hi + 1e-6) cut = { t: money ? pauseCut(ctx, b.i) : b.t, char: b.char };
     if (!money) cut ||= wordCut(ctx, lo, hi, 2, hi);
     if (!cut) continue;
-    // back to the presenter's single on air before it (the programme's single when none)
-    let single = null;
-    for (let i = k - 1; i >= 0 && !single; i--) if (out[i].shot === 'close' && out[i].framing && out[i].framing !== 'ots') single = out[i].framing;
-    const framing = single || singleFraming(ctx);
-    // the planned return to the same single after the run is now this one (one shot, which splitLongSingles may split)
-    if (j < out.length && out[j].shot === 'close' && out[j].framing === framing && out[j].focus === ctx.speaker && !out[j].move) out.splice(j, 1);
+    if (merges) out.splice(j, 1);
     // drop the run's later events that the new cut overtakes (a pin of the same map after it)
     for (let i = j - 1; i > k; i--) if (out[i].at >= cut.t - 1e-6) out.splice(i, 1);
     out.splice(k + 1, 0, ev(ctx, cut.t, cut.char, 'close', framing, ctx.speaker, 'single', { capped: CAPPED[e.shot], ...(cut.word ? { place: 'phrase' } : null) }));
@@ -1150,8 +1193,9 @@ function moneyMinute(ctx, tl) {
   const me = ctx.speaker;
   const seg = ctx.seg;
   if (ctx.type !== 'story') {
-    // (a long intro leaves its WIDE at run time: the hold guard cuts to the MCU-R and greets on the WIDE again)
-    return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
+    // (a long intro: WIDE → MCU-R → WIDE for the greeting, planned; else the hold guard's at run time)
+    const long = ctx.type === 'intro' && tl.end > SHOT_STYLES['money-minute'].shotMax ? moneyIntro(ctx, tl, SHOT_STYLES['money-minute'].shotMax) : null;
+    return long || [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
   }
   // IN BRIEF (the format round, config roundup.kind "pictures"): each item over its own picture
   if (ctx.seg.roundup) return quickBytes(ctx);
@@ -1161,6 +1205,53 @@ function moneyMinute(ctx, tl) {
     return ev(ctx, p.at ?? 0, p.char ?? 0, p.shot, p.framing, me, p.beat, p.extra || null);
   });
   capMoneyStudio(ctx, tl, out, SHOT_STYLES['money-minute'].shotMax);
+  return out;
+}
+
+/**
+ * A MONEY MINUTE intro past the studio maximum (its headlines read on the solo WIDE: 26 s live on 13 Oct): WIDE →
+ * MCU-R → WIDE, the greeting on the WIDE, each shot ≥ MIN_SHOT. The guard alone held the last WIDE 15.1 s that day: its
+ * cut to the MCU-R came early, and the MCU-R could not take the rest (the lead story opens on it). The cuts sit in
+ * the pause before a sentence (money-minute.md §5.8), the shots as even as they come; a phrase's own pause (after a
+ * colon, semicolon or comma) only when no two sentence pauses keep all three inside the maximum. Null: no plan fits.
+ */
+function moneyIntro(ctx, tl, max) {
+  const me = ctx.speaker;
+  const greet = ctx.sentences.findIndex((x, i) => i > 0 && GREETING_RE.test(String(x.text || '').trim().toLowerCase()));
+  const last = greet > 0 ? ctx.sentences[greet].t0 : tl.end; // the WIDE is back for the greeting
+  // (a pause that ends just past MIN_SHOT: the cut at MIN_SHOT, still in it)
+  const pauses = tl.bounds.filter((b) => !b.blocked).map((b) => {
+    const t = pauseCut(ctx, b.i);
+    return { t: t < MIN_SHOT && b.t - 0.02 >= MIN_SHOT ? MIN_SHOT : t, char: b.char };
+  });
+  const fits = (a, b) => a.t >= MIN_SHOT - 1e-6 && b.t - a.t >= MIN_SHOT - 1e-6 && tl.end - b.t >= MIN_SHOT - 1e-6 && b.t <= last + 1e-6;
+  let best = null;
+  const consider = (a, b, phrases) => {
+    if (!a || !b || !fits(a, b)) return;
+    const worst = Math.max(a.t, b.t - a.t, tl.end - b.t);
+    const score = (worst > max ? 100 : 0) + worst + phrases;
+    if (!best || score < best.score) best = { a, b, worst, score };
+  };
+  for (let i = 0; i < pauses.length; i++) for (let j = i + 1; j < pauses.length; j++) consider(pauses[i], pauses[j], 0);
+  if (!best || best.worst > max) {
+    // (a colon's or semicolon's pause before a comma's: "Later: Lobbying, lawyers and a media blitz: | the fight…")
+    const phrases = phrasePauses(ctx);
+    for (const a of pauses) for (const b of phrases) consider(a, b, b.strong ? 0.5 : 1.5);
+    for (const a of phrases) for (const b of pauses) consider(a, b, a.strong ? 0.5 : 1.5);
+  }
+  if (!best) return null;
+  return [ev(ctx, 0, 0, 'wide', 'wide', me, 'wide'), ev(ctx, best.a.t, best.a.char, 'close', 'mcu-r', me, 'mcu-r'), ev(ctx, best.b.t, best.b.char, 'wide', 'wide', me, 'greeting')];
+}
+
+/** The words that open a phrase after a comma, colon or semicolon (wordCut's rank 0), not a sentence's first, not on a dry line: [{ t, char, strong }] (strong: after a colon or semicolon). */
+function phrasePauses(ctx) {
+  const text = String(ctx.seg?.text || '');
+  const out = [];
+  for (const w of (ctx.words || []).slice(1)) {
+    if (!Number.isFinite(w.t) || insideDry(ctx, w.t) || (ctx.sentences || []).some((x) => Math.abs(x.start - w.char) <= 2)) continue;
+    const before = text.slice(Math.max(0, w.char - 3), w.char);
+    if (/[,:;]\s*$/.test(before)) out.push({ t: w.t, char: w.char, strong: /[:;]\s*$/.test(before) });
+  }
   return out;
 }
 
@@ -1253,9 +1344,11 @@ function moneyStoryPlan(ctx, tl) {
     return plan;
   }
   // (the shot the previous story did not end on: one too short to cut away stayed on its opening WIDE, and a
-  // WIDE after it once held 16 s across two stories, 9 Oct)
+  // WIDE after it once held 16 s across two stories, 9 Oct; by the previous story's own plan, as one with no
+  // sentence start to cut on stays on its WIDE at any length: 16.5 s live, 13 Oct)
   const prev = ctx.index > 0 ? ctx.contextAt?.(ctx.index - 1) : null;
-  const prevStayedWide = !!prev?.valid && prev.type === 'story' && prev.feature !== 'number' && !prev.seg?.roundup && !prev.isLead && prev.duration < 2 * MIN_SHOT + 0.5;
+  const prevEnd = planEnd(ctx, ctx.index - 1);
+  const prevStayedWide = prevEnd ? prevEnd.shot === 'wide' : !!prev?.valid && prev.type === 'story' && prev.feature !== 'number' && !prev.seg?.roundup && !prev.isLead && prev.duration < 2 * MIN_SHOT + 0.5;
   const open = ctx.isLead || prevStayedWide ? MCU_R : WIDE_M;
   plan.push({ ...open, at: 0 });
   let c = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
@@ -1396,13 +1489,18 @@ function news60PrevEnd(ctx, depth) {
   const p = segs[j];
   if (!p) return null;
   if (p.type !== 'story') return 'wide';
-  if (p.roundup || (p.location && p.chars <= 150 && segs[j - 1]?.type === 'story' && segs[j - 1]?.location)) return 'map';
+  if (p.roundup) return 'map';
+  // the previous item's own plan when its context is at hand: a round-up item by the planner's own test (a short
+  // located item after the round-up that is no round-up item ends on its presenter; critic, polish round: it was
+  // taken for a map, and the next item opened on the same MCU-L, a 16.2 s hold with no visible cut)
   const c = depth < 8 ? neighbour(ctx, j) : null;
   if (c) {
+    if (roundupLike(c)) return 'map';
     const item = news60Item(c, timeline(c), depth + 1);
     return item[item.length - 1].kind;
   }
   // no neighbour context: predict from the summary (two shots for a two-sentence item)
+  if (p.location && p.chars <= 150 && segs[j - 1]?.type === 'story' && segs[j - 1]?.location) return 'map';
   if (!p.hasImage) return 'mcu';
   return p.chars >= 150 ? 'full' : 'mcu-l';
 }
@@ -1415,5 +1513,8 @@ function isLastItem(ctx) {
 
 function afterRoundup(ctx) {
   const prev = ctx.episode?.segments?.[ctx.index - 1];
-  return !!prev && (!!prev.roundup || (prev.type === 'story' && prev.location && prev.chars <= 150));
+  if (!prev || prev.type !== 'story') return false;
+  if (prev.roundup) return true;
+  const c = neighbour(ctx, ctx.index - 1);
+  return c ? !!c.seg.roundup || roundupLike(c) : !!(prev.location && prev.chars <= 150);
 }

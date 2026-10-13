@@ -1110,14 +1110,16 @@ export class Director {
     let sentAt = null; // when the sentence on air started
     // seconds until the next segment's cut, from now: the sentences left at the voice's own pace so far, less what
     // the sentence on air has already spoken (a cut the cooldown delayed comes in mid-sentence)
-    const left = () => {
-      if (spoke == null) return est + after;
+    // `untilChar(c)`: seconds from now until the voice reaches character c of the segment (the same estimate)
+    const untilChar = (c) => {
+      if (spoke == null) return (c / Math.max(1, chars)) * est;
       const done = starts[sentence] ?? chars;
       const span = sentAt - spoke;
       // (a short first sentence and its pause say little about the pace: the voice's own rate only past 2.5 s / 30 chars)
       const rate = span > 2.5 && done > 30 ? done / span : chars / Math.max(0.5, est);
-      return Math.max(0, (chars - done) / rate - (now() - sentAt)) + after;
+      return Math.max(0, (c - done) / rate - (now() - sentAt));
     };
+    const left = () => untilChar(chars) + after;
     // (beats spaced by the median band's lower bound: the cooldown is a floor, not the rhythm; owner 18:52 median 5-7 s.
     // The band's middle was tried: it dropped the map of every short COSMOS story, so the lower bound stays)
     const spacing = Math.max(P.shots.cooldown, P.shots.median[0]);
@@ -1197,10 +1199,16 @@ export class Director {
     // (seg.quote, grounded by the validator) goes to the quote card, held the minimum like any beat
     // (never before a re-staging: the person says those words themselves next)
     const quoteAt = P.shots.quoteCard && seg.quote?.text && !seg.roundup && !restage ? lines.findIndex((l, k) => k > 0 && quoteIn(l, seg.quote.text)) : -1;
-    const cutQuote = () => {
+    const cutQuote = (cue = null) => {
       const wait = cutWait(s.program?.id, s.shotSince, now());
       // only with room for the card to air the minimum before the next segment's cut (as any later beat)
       if (left() - wait < P.shots.min + 1) return false;
+      // v2: the card holds until the plan's next cue (else the next segment's cut): never past a fact card's maximum
+      // (critic, polish round: a live COSMOS quote read as the story's long last sentence held its card 10.7 s; the
+      // plan's own shot carries that sentence instead)
+      const next = cue && v2cues ? v2cues.find((c) => c.k > cue.k) : null;
+      const run = next ? untilChar(Math.min(chars, next.char)) : left();
+      if (cue && run - wait > P.shots.factMax + 0.5) return false;
       stopCut(pending);
       const go = () => this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall, card: { quote: seg.quote, source: seg.source, headline: seg.headline } });
       if (wait > 0.05) pending = this.cutWhenClear(wait, go);
@@ -1210,7 +1218,7 @@ export class Director {
     const shotFor = (i, cue = null) => {
       if (thrown) return 0;
       // the quote's sentence belongs to the quote card, whatever beat the plan had for it
-      if (cue && quoteAt > 0 && cue.sentence === quoteAt && !cue.mid && cutQuote()) return 0;
+      if (cue && quoteAt > 0 && cue.sentence === quoteAt && !cue.mid && cutQuote(cue)) return 0;
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
       if (i === 0 && cue.keep && STUDIO.has(s.shot)) return 0; // v2: a short pickup ("Thanks, Ada.") stays on the studio shot on air; the card comes with its line
       const beat = cue.shot;

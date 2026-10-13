@@ -195,7 +195,11 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   // expert's hand-over is two sentences, the introduction and the question (shots.js `hand`). Counting from the
   // question made a 7 s picture look 11 s long: the guard cut it back to the reader mid-sentence 1.7 s before the
   // two-way, which then waited the cooldown and came in mid-word (critic, polish round: a 21.8 s two-way after it))
-  const hand = ctx.seg?.link ? (ctx.seg.linkKind === 'expert' && ctx.sentences?.length > 2 ? 2 : 1) : 0;
+  // A re-staged quote's hand-over stays on the presenter instead (throwTo keeps a studio shot on air): a studio shot
+  // carries it to the segment's end, and the hand-over's start is a cut between the two studio shots like any other
+  // (critic, polish round: a live MONEY MINUTE held its MCU-R 14.9 s into the guest's words)
+  const restaged = ctx.seg?.linkKind === 'restage' && STUDIO.has(onAir.shot);
+  const hand = ctx.seg?.link && !restaged ? (ctx.seg.linkKind === 'expert' && ctx.sentences?.length > 2 ? 2 : 1) : 0;
   const throwAt = hand && ctx.sentences?.length > hand ? ctx.sentences[ctx.sentences.length - hand].t0 : null;
   const end = Number.isFinite(throwAt) ? throwAt : (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
   let next = end;

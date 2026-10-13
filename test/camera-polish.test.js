@@ -146,6 +146,64 @@ test('director: the first word is heard a breath after the open, the voice start
   assert.equal(mute.openBreath(), paceFor('world-now').open.firstWord, 'no voice, no start-up to take off');
 });
 
+// IN THEIR WORDS on the v2 plan: the card holds from its sentence to the plan's next cue (else the next segment's cut)
+async function quoteRun(quoteLine) {
+  const clock = fakeClock();
+  try {
+    const lines = ['The probe reached the tail of the comet on Monday after a journey of ten years.', 'Its camera sent back the first pictures of the ice within hours of the pass.', quoteLine];
+    const text = lines.join(' ');
+    const seg = { type: 'story', anchor: 'A', emotion: 'neutral', storyId: 'q1', headline: 'A probe in the tail', source: 'Orbit Daily', category: 'science', hasImage: false, cues: [], text, quote: { text: quoteLine.split(': ')[1], by: 'Mira Holt' } };
+    const next = { type: 'story', anchor: 'A', emotion: 'neutral', storyId: 'q2', headline: 'Next', source: 'X', category: 'science', hasImage: false, cues: [], text: 'Next story.' };
+    const ep = { id: 'epQ', program: { id: 'cosmos', title: 'COSMOS DESK', theme: 'cosmos' }, cast: { A: 'paco' }, segments: [seg, next], rundown: [] };
+    const shots = [];
+    let at = 0;
+    const cues = lines.map((l, k) => {
+      const cue = { k, char: at, at: null, sentence: k, mid: false, shot: k === 1 ? 'full' : 'close', framing: k === 1 ? null : 'mcu', focus: 'A', move: null, card: null, minLen: null, beat: null };
+      at += l.length + 1;
+      return cue;
+    });
+    let handler = null;
+    const audio = {
+      async speak(t, slot, opts) {
+        // the voice at the estimate's own pace (14.5 characters a second)
+        for (const [i, l] of splitLines(t).entries()) {
+          opts?.onSentence?.(l, i);
+          await new Promise((r) => setTimeout(r, (l.length / 14.5) * 1000));
+        }
+      },
+    };
+    const d = director(audio);
+    d.voices = { audioFor: async () => null, episode() {}, refreshAds() {}, prepareAd() {}, adLine: () => null };
+    d.v2 = { episode() {}, planAt: () => null, shots: (sg, hasImg, h) => ((handler = h), cues), begin: () => ({ speak: null, sentence: (i) => cues.filter((c) => c.k > 0 && c.sentence === i).forEach((c) => handler(c)), end() {} }) };
+    d.episode = ep;
+    d.scene.program = ep.program;
+    d.scene.cast = ep.cast;
+    d.scene.anchors = {};
+    d.scene.shotSince = clock.now() - 30;
+    const setShot = d.setShot.bind(d);
+    d.setShot = (shot, extra = {}) => {
+      setShot(shot, extra);
+      shots.push({ t: clock.now(), shot, quote: !!extra.card?.quote });
+    };
+    await clock.run(d.playStory(seg));
+    return shots;
+  } finally {
+    clock.restore();
+  }
+}
+const splitLines = (t) => t.split(/(?<=[.!?])\s+/);
+
+test('director: the quote card never holds past a fact card\'s maximum (a long quote sentence keeps the plan\'s shot)', async () => {
+  const factMax = paceFor('cosmos').shots.factMax;
+  // a quote read as the story's last sentence, 6.6 s: the card carries it
+  const short = await quoteRun('As Mira Holt put it: "We have never seen ice this old so close to the sun."');
+  assert.ok(short.some((s) => s.quote), `the card airs: ${JSON.stringify(short)}`);
+  // a quote sentence of ~11 s (over COSMOS's 9 s card maximum with the pause after it): the plan's own close instead
+  const long = await quoteRun('As Mira Holt put it: "We have never seen ice this old so close to the sun, and every picture we get back from the tail tells us more about the first days of the solar system."');
+  assert.ok(!long.some((s) => s.quote), `no quote card past ${factMax} s: ${JSON.stringify(long)}`);
+  assert.equal(long.at(-1).shot, 'close', 'the plan\'s close carries the long quote');
+});
+
 // ------------------------------------------------------------------ the runtime guard
 
 function storyPlan(sentences, seg, { duration, events = [] } = {}) {
@@ -174,6 +232,27 @@ test('guard: an expert\'s two-sentence hand-over is the limit (never a cut back 
   // an expert's: the introduction (11.2 s) is the limit, 4.2 s away: no new shot that short
   const expert = storyPlan(lines, { link: 'R3', linkKind: 'expert' }, { duration: 15.5 });
   assert.equal(holdCut(expert, 1, onAir, { programId: 'world-now', gap: 0.85, cues: [], closeFraming: 'mcu-r', point }), null);
+});
+
+test('guard: a re-staged quote\'s hand-over stays on the presenter, so a long single gives way to the wide there', () => {
+  const lines = [
+    [0, 'A secondhand store in Leeds opened its doors to families who cannot afford new clothes this winter.'],
+    [6.0, 'The founder said the couple behind it struggled for years before the idea took off.'],
+    [12.4, 'In the words of Thomas Cliffe, the founder, as reported by BBC Business:'],
+  ];
+  const onAir = { shot: 'close', framing: 'mcu-r', focus: 'A', held: 10.4 };
+  const opts = { programId: 'money-minute', gap: 0.6, cues: [], closeFraming: 'mcu-r', wideFraming: 'wide' };
+  // the hand-over (12.4-16.3 s) is the presenter's: the MCU-R would run 14.3 s, the WIDE takes the hand-over
+  const restage = storyPlan(lines, { link: 'R2', linkKind: 'restage' }, { duration: 16.3 });
+  restage.ctx.speaker = 'A';
+  const cut = holdCut(restage, 2, onAir, opts);
+  assert.ok(cut && cut.shot === 'wide' && !cut.mid, `the hand-over on the WIDE: ${JSON.stringify(cut)}`);
+  // a correspondent's hand-over goes to the two-way (director.js throwTo): the guard leaves it alone
+  const cross = storyPlan(lines, { link: 'R2' }, { duration: 16.3 });
+  cross.ctx.speaker = 'A';
+  assert.equal(holdCut(cross, 2, onAir, opts), null);
+  // a picture on air at a re-staged hand-over: the director cuts back to the presenter there, so its end is the hand-over
+  assert.equal(holdCut(restage, 2, { shot: 'full', framing: null, focus: 'A', held: 5 }, opts), null);
 });
 
 test('guard: the round-up\'s opening map carries its title on top of the map maximum', () => {
@@ -301,6 +380,84 @@ test('planner: a split long single alternates single ⇄ over-the-shoulder, neve
   const ep = { id: 'tb-long', program: { id: 'tech-bytes' }, cast: { A: 'max', B: 'ada' }, segments: [{ type: 'intro', anchor: 'A', text: 'This is TECH BYTES.', cues: [] }, story(long), { type: 'outro', anchor: 'A', text: 'That is TECH BYTES.', cues: [] }] };
   const shots = shotsOf(ep, 1);
   for (let k = 1; k < shots.length; k++) assert.notEqual(`${shots[k].framing}`, `${shots[k - 1].framing}`, shots.map((e) => e.framing).join(' '));
+});
+
+test('planner: NEWS IN 60 never opens an item on the framing the last one ended on (a short located item after the round-up is no map)', () => {
+  const loc = (place, lat, lon) => ({ place, lat, lon });
+  const story = (id, text, extra = {}) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'world', hasImage: true, emotion: 'neutral', cues: [], text, ...extra });
+  // the live NEWS IN 60 of 13 Oct: after the two-item round-up, a one-sentence located item (no round-up item:
+  // the next one is long) ended on MCU-L, and the last item was planned as if a map came before it
+  const ep = {
+    id: 'epN60', program: { id: 'news-60', title: 'NEWS IN 60', theme: 'flash' }, cast: { A: 'sam' }, rundown: [],
+    segments: [
+      { type: 'intro', anchor: 'A', text: "This is NEWS IN 60. I'm Sam Night.", cues: [] },
+      story('s1', 'Six energy sites have been hit since the ceasefire was announced, the president said on Sunday. Repairs will take weeks, engineers warned, as the cold sets in across the region.', { location: loc('UKRAINE', 49, 31.4) }),
+      story('s2', 'Women say they share stories of abuse to highlight the issue, despite social pressure. Campaigners say the courts are slow to act on their reports.', { location: loc('IRAQ', 33.2, 43.7) }),
+      story('s3', 'Around the world. First, Qatar. The emir says his country has shown it can mediate between the two sides.', { location: loc('QATAR', 25.3, 51.2), feature: 'roundup', roundup: { index: 0, count: 2 } }),
+      story('s4', 'In Paris, the iconic covered market was ravaged by fire overnight, France 24 reports.', { location: loc('PARIS, FRANCE', 48.86, 2.35), feature: 'roundup', roundup: { index: 1, count: 2 } }),
+      story('s5', 'Russia said on Monday that European countries had bought $320.7 billion worth of its energy since 2022.', { location: loc('RUSSIA', 61.5, 90) }),
+      story('s6', 'China has sanctioned two foreign ministers over their ties with Taiwan. The two countries are among the last twelve remaining diplomatic allies of Taiwan, according to ABC News.', { location: loc('PARAGUAY', -23.4, -58.4) }),
+      { type: 'outro', anchor: 'A', text: "That's the minute. Stay with us on GLOBIT 24.", cues: [] },
+    ],
+  };
+  const plans = ep.segments.map((s, i) => shotsOf(ep, i));
+  assert.deepEqual(plans[5].map((e) => e.framing), ['mcu-l'], 'the item after the round-up opens on MCU-L');
+  for (let i = 2; i < plans.length - 1; i++) {
+    const end = plans[i - 1].at(-1);
+    const open = plans[i][0];
+    if (open.shot === 'map' && end.shot === 'map') continue; // the round-up's one map pans from pin to pin
+    assert.ok(open.shot !== end.shot || open.framing !== end.framing, `item ${i} opens on ${open.shot}/${open.framing}, as item ${i - 1} ended: no visible cut`);
+  }
+});
+
+test('planner: a long MONEY MINUTE intro plans WIDE → MCU-R → WIDE, the greeting on the WIDE, every shot inside the maximum', () => {
+  const max = paceFor('money-minute').shots.studioMax;
+  const check = (ep, label) => {
+    const shots = shotsOf(ep, 0);
+    const plan = planSegment(ep, 0, { gapAfter: (j) => gapAfter(ep, j).gap });
+    const end = plan.ctx.duration + gapAfter(ep, 0).gap;
+    assert.deepEqual(shots.map((e) => e.framing), ['wide', 'mcu-r', 'wide'], label);
+    const ends = [...shots.slice(1).map((e) => e.at), end];
+    shots.forEach((e, k) => {
+      const len = ends[k] - e.at;
+      assert.ok(len >= 4 - 1e-6 && len <= max + 1e-6, `${label}: ${e.framing} ${len.toFixed(2)} s`);
+    });
+    const greet = plan.ctx.sentences.find((x) => /^this is/i.test(x.text.trim()));
+    assert.ok(shots[2].at <= greet.t0 + 1e-6, `${label}: the WIDE is back for the greeting`);
+    return shots;
+  };
+  for (const name of ['money-minute', 'money-minute-long']) {
+    const shots = check(fixture(name), name);
+    const plan = planSegment(fixture(name), 0, { gapAfter: (j) => gapAfter(fixture(name), j).gap });
+    for (const e of shots.slice(1)) assert.ok(plan.ctx.sentences.some((x) => Math.abs(x.start - e.char) <= 2), `${name}: in a sentence's pause (money-minute.md §5.8)`);
+  }
+  // the live intro of 13 Oct (three long headlines, 26 s): no two sentence pauses fit; the cut takes a colon's pause
+  const intro = "Americans Hall and Woodford win Nobel Prize in economics for stabilisation models. Also coming up: Swamped with 'daily avalanches' of soiled items and poor-quality fast fashion, secondhand stores are in crisis. Later: Lobbying, lawyers and a media blitz: the fight to kill the Church of England's £100m slavery compensation fund. This is MONEY MINUTE. I'm Penny Sterling.";
+  const ep = { id: 'mmLive', program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, cast: { A: 'penny' }, rundown: [], segments: [{ type: 'intro', anchor: 'A', text: intro, cues: [] }, { type: 'story', anchor: 'A', storyId: 's1', headline: 'x', source: 'X', hasImage: true, cues: [], text: 'Two Americans won the Nobel Prize in economics on Monday for their work on stabilisation. The prize committee praised models that central banks still use.' }, { type: 'outro', anchor: 'A', text: "That's MONEY MINUTE.", cues: [] }] };
+  const shots = check(ep, 'live intro');
+  const mid = shots.slice(1).find((e) => !/[.!?]\s*$/.test(ep.segments[0].text.slice(0, e.char)));
+  assert.ok(mid, `one cut in a phrase's pause: ${shots.map((e) => e.char).join(' ')}`);
+  assert.match(ep.segments[0].text.slice(mid.char - 3, mid.char), /[:;]\s*$/, 'a colon\'s pause before a comma\'s');
+});
+
+test('planner: a MONEY MINUTE story never opens on the WIDE the previous story stayed on (however long it was)', () => {
+  const story = (id, text, extra = {}) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'business', hasImage: true, emotion: 'neutral', cues: [], text, ...extra });
+  const ep = {
+    id: 'mmWide', program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, cast: { A: 'penny' }, rundown: [],
+    segments: [
+      { type: 'intro', anchor: 'A', text: "Cocoa stays expensive. This is MONEY MINUTE. I'm Penny Sterling.", cues: [] },
+      story('s1', 'Chocolate makers warn of higher prices as cocoa stays expensive for a third year. Retailers say shoppers are already trading down to cheaper bars.'),
+      // one long sentence and a short one: no sentence start leaves both sides 4 s, so the story stays on its WIDE
+      story('s2', 'Trade ministers from twelve countries met in Geneva on Tuesday to restart talks on a deal covering steel, aluminium and the cars made with them. A deal is not close.'),
+      story('s3', 'Electric car sales overtook diesel in Europe for the first time last month. Carmakers credit cheaper batteries and new models at lower prices.'),
+      { type: 'outro', anchor: 'A', text: "That's MONEY MINUTE.", cues: [] },
+    ],
+  };
+  const s2 = shotsOf(ep, 2);
+  assert.deepEqual(s2.map((e) => e.framing), ['wide'], 'the trade story stays on its WIDE');
+  assert.ok(planSegment(ep, 2, { gapAfter: (j) => gapAfter(ep, j).gap }).ctx.duration > 8.5, 'longer than the old rule of thumb (8.5 s)');
+  const s3 = shotsOf(ep, 3);
+  assert.equal(s3[0].framing, 'mcu-r', `the next story opens on the MCU-R: ${s3.map((e) => e.framing).join(' ')}`);
 });
 
 test('planner: a picture or map gives way near the middle of its window, not at the first sentence start it can', () => {
