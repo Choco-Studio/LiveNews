@@ -58,8 +58,8 @@ export const GROUND = {
     aisle: 16, // a stair every 16 seats
   },
   boards: { Z: 5700, top: 80, every: 400, pad: 3 }, // FULL TIME bands at X = 0, ±400, ±800... (clear of the near masts)
-  board: { Z: 6000, X: 0, Y0: -342 }, // the scoreboard (wide: y 5-13, over the screen)
-  pennant: { X: 102, top: -342 }, // its pole beside the board (the cloth is live)
+  board: { Z: 6000, X: 0, Y0: -336 }, // the scoreboard (wide: y 6-12, a row of sky above and below it, over the screen)
+  pennant: { X: 102, top: -336 }, // its pole beside the board (the cloth is live)
   stripe: 240, // mowing stripe width
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
@@ -107,7 +107,7 @@ const pal = (o) => {
   for (const [k, v] of Object.entries(o)) out[k] = Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? C[n] : n)) : typeof v === 'string' && C[v] !== undefined ? C[v] : v;
   return out;
 };
-const NIGHT = { sky: ['ink', 'ink', 'navy', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: [0, -4], line: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate', 'ink'], band: 'orange', pole: 'steel' };
+const NIGHT = { sky: ['ink', 'ink', 'ink', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: [0, -4], line: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate', 'ink'], band: 'orange', pole: 'steel' };
 const PALS = [
   // night: a black sky, the floodlit pitch, the stand dark with its lower tier in the spill
   pal(NIGHT),
@@ -438,7 +438,7 @@ function scoreboard(cam, P, soft, guard) {
   const k = kOf(cam, B.Z);
   const s = Math.max(1, Math.round(k * 6));
   const dw = 17 * s; // HH:MM, a dot a column: digits at 0, 4, 10, 14, the colon at 8
-  const w = dw + 4 * s, h = 8 * s;
+  const w = dw + 4 * s, h = 7 * s; // a frame, the five rows of dots, a frame
   const cx = 192 + (B.X - cam.x) * k;
   const x0 = Math.round(cx - w / 2), y0 = Math.round(cam.hy + (B.Y0 - cam.y) * k);
   const r = { x0, y0, x1: x0 + w, y1: y0 + h };
@@ -453,7 +453,7 @@ function scoreboard(cam, P, soft, guard) {
   fill(x0, y0, x0 + w, y0 + h, C.ink);
   fill(x0, y0, x0 + w, y0 + s, P.head);
   fill(x0 + s, y0 + s, x0 + w - s, y0 + h - s, C.black);
-  const dx0 = x0 + 2 * s, dy0 = y0 + 2 * s;
+  const dx0 = x0 + 2 * s, dy0 = y0 + s;
   for (let d = 0; d < 4; d++) {
     const gx = dx0 + digitX(d) * s;
     for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) fill(gx + i * s, dy0 + j * s, gx + (i + 1) * s, dy0 + (j + 1) * s, C.maroon);
