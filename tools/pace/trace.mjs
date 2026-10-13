@@ -21,6 +21,13 @@
 // Options: --port N | --url URL, --v2 (the default anyway), --v1 (the old renderer), --start now|open|break, --until next-open+S|break-end+S|episode-end+S,
 //   --count N, --seconds N (max), --max-wait N, --skip N, --fps 15 (clock step), --sheet-every 12,
 //   --cols 6, --out prefix (writes <prefix>-timeline.json, <prefix>-sheet.png, <prefix>-tiles/)
+//   --item file.json   a saved episode / break served for the page's first /api/next (the server's history serves
+//                      what follows it: the break and the next programme's open), so a before / after pair airs the
+//                      same script with the same voices
+//   --camera           the camera frame by frame (every clock step; use --fps 30): the shot on air, its framing and
+//                      move, the Stage's camera as drawn (x, y, z, zoom, hy) and each presenter's voice (speaking, word,
+//                      sentence) in the timeline's `camera` rows (tools/pace/camera.mjs measures them)
+//   --frames a-b,c-d   every frame of those windows (seconds after the start event) as <prefix>-frames/*.png
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -93,6 +100,52 @@ await page.route(/\/js\/main\.js(\?.*)?$/, async (route) => {
   const body = `${await res.text()}\n${INSTRUMENT}`;
   await route.fulfill({ response: res, body, headers: { ...res.headers(), 'cache-control': 'no-store', 'content-length': String(Buffer.byteLength(body)) } });
 });
+// --js-root dir: the page's scripts from another checkout's public/js (a before / after pair on one server: the same
+// items, voices and pictures, the old code); main.js keeps its instrumentation line
+if (opts['js-root']) {
+  const root = path.resolve(String(opts['js-root']));
+  await page.route(/\/js\/(?!main\.js).+\.js(\?.*)?$/, async (route) => {
+    const rel = new URL(route.request().url()).pathname.replace(/^\/js\//, '');
+    const file = path.join(root, rel);
+    if (!file.startsWith(root) || !fs.existsSync(file)) return route.continue();
+    await route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(file, 'utf8'), headers: { 'cache-control': 'no-store' } });
+  });
+}
+if (opts.item) {
+  const item = fs.readFileSync(String(opts.item), 'utf8');
+  let served = false;
+  await page.route(/\/api\/next(\?.*)?$/, async (route) => {
+    if (served) return route.continue();
+    served = true;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: item });
+  });
+}
+// --camera: one row per clock step, read right after the frame was rendered at that instant (pump)
+const CAMERA_SAMPLE = `(async () => {
+  const g = window.__showcase;
+  const s = g?.scene;
+  if (!s) return null;
+  const C = (window.__camMod ||= await import('/js/v2/canvas25d/camera.js'));
+  const st = g.renderer?.v2?.stage || null;
+  const t = performance.now() / 1000;
+  let cam = null;
+  let base = null;
+  if (st && st.base && (s.shot === 'wide' || s.shot === 'close')) {
+    let c = st.base;
+    if (st.spec?.move && typeof C.cameraAt === 'function') c = C.cameraAt(st.spec, t - st.moveSince) || c;
+    cam = [c.x, c.y, c.z, c.zoom, c.hy].map((v) => Math.round(v * 1e4) / 1e4);
+    base = [st.base.x, st.base.y, st.base.z, st.base.zoom, st.base.hy].map((v) => Math.round(v * 1e4) / 1e4);
+  }
+  const voice = {};
+  const a = g.audio;
+  for (const slot of new Set([...Object.keys(s.cast || {}), ...Object.keys(s.anchors || {})])) {
+    if (!a || typeof a.speechFrame !== 'function') break;
+    const f = a.speechFrame(t * 1000, slot, {});
+    if (f && (f.speaking || f.voice > 0.05)) voice[slot] = [f.speaking ? 1 : 0, f.sentenceIndex, f.wordIndex, f.charIndex, Math.round((f.voice ?? -1) * 100) / 100, f.pause ? 1 : 0];
+  }
+  return { t: performance.now(), shot: s.shot, since: s.shotSince, framing: s.framing ?? null, focus: s.focus ?? null, move: s.cameraMove ? [s.cameraMove.type, s.cameraMove.amount, s.cameraMove.delay, s.cameraMove.dur] : null, moveSince: st?.moveSince ?? null, spec: st?.spec?.framing ?? null, cam, base, solo: st ? !!st.solo : null, voice, card: s.card ? String(s.card.quote?.text || s.card.fact || s.card.term?.term || (s.card.numbers ? 'numbers:' + s.card.numbers.map((n) => n.value).join('|') : '') || (s.card.known ? 'known' : '') || (s.card.timeline ? 'timeline' : '') || (s.card.change ? 'change' : '') || s.card.place || (s.card.index ?? '') || (s.card.items ? s.card.items.join('|') : '')).slice(0, 40) : null, weather: s.weather?.seg ? String(s.weather.seg.shot || s.weather.seg.kind || '') : null, sub: s.subtitle ? String(s.subtitle).slice(0, 48) : null, stinger: s.stinger?.start ?? null, seg: s.segPlan?.index ?? null };
+})()`;
+const cameraRows = [];
 const maxSeconds = opts['max-wait'] + opts.skip + opts.seconds + 30;
 // a low sample rate: nothing is rendered, the OfflineAudioContext only has to exist and decode
 const cfg = { sampleRate: 8000, maxSeconds, speechLatencyMs: 45, voices: FAKE_VOICES };
@@ -129,12 +182,17 @@ const pullLog = async () => {
   return l;
 };
 const stepMs = Math.max(8, Math.round(1000 / opts.fps));
+let sampling = false; // --camera rows from the start event on
 async function step(ms, png = false) {
   const st = await page.evaluate((grab) => {
     window.__sc.takeRequests(); // estimate mode: nothing to synthesise
     window.__sc.pump();
     return { t: performance.now(), inflight: window.__sc.inflight, png: grab ? window.__sc.frame() : null };
   }, png);
+  if (opts.camera && sampling) {
+    const row = await page.evaluate(CAMERA_SAMPLE);
+    if (row) cameraRows.push(row);
+  }
   if (st.inflight > 0) await settle(st.inflight);
   await page.clock.runFor(ms);
   return st;
@@ -164,18 +222,27 @@ await pullLog();
 // R: page time of the first traced instant (the start event itself when there is one)
 const startHit = startEvent ? allLog.filter(startEvent).pop() : null;
 let R = startHit ? startHit.at ?? startHit.t : await pageNow();
+sampling = true;
 const tiles = [];
+// --frames a-b,c-d: every frame of those windows (s after the start event) as PNG, for filmstrips
+const frameWindows = String(opts.frames || '').split(',').map((w) => w.split('-').map(Number)).filter((w) => w.length === 2 && w.every(Number.isFinite));
 let nextTile = R;
 let stopAt = untilMatch ? Infinity : R + opts.seconds * 1000;
 let hits = 0;
 let lastReport = Date.now();
 for (let i = 0; ; i++) {
   const now = await pageNow();
-  const grab = now >= nextTile;
-  const st = await step(stepMs, grab);
-  if (grab && st.png) {
+  const tile = now >= nextTile;
+  const rel0 = (now - R) / 1000;
+  const film = frameWindows.some(([a, b]) => rel0 >= a - 1e-3 && rel0 <= b + 1e-3);
+  const st = await step(stepMs, tile || film);
+  if (tile && st.png) {
     tiles.push({ t: (st.t - R) / 1000, png: st.png });
     nextTile += opts['sheet-every'] * 1000;
+  }
+  if (film && st.png) {
+    fs.mkdirSync(`${OUT}-frames`, { recursive: true });
+    fs.writeFileSync(`${OUT}-frames/f${((st.t - R) / 1000).toFixed(3).padStart(9, '0')}.png`, Buffer.from(st.png.split(',')[1], 'base64'));
   }
   if (i % 4 === 0) {
     const fresh = await pullLog();
@@ -232,6 +299,7 @@ const timeline = {
   recordedClips: clipsPlayed,
   music: cues.filter((c) => c.t >= R).map((c) => ({ t: rel(c.t), moment: c.moment, opts: c.opts, why: c.why })),
   events,
+  ...(opts.camera ? { camera: cameraRows.map((r) => ({ ...r, t: rel(r.t), since: Number.isFinite(r.since) ? rel(r.since * 1000) : null, moveSince: Number.isFinite(r.moveSince) ? rel(r.moveSince * 1000) : null, stinger: Number.isFinite(r.stinger) ? rel(r.stinger * 1000) : null })) } : {}),
   reports: { pageErrors: pageErrors.slice(0, 50) },
 };
 fs.writeFileSync(`${OUT}-timeline.json`, JSON.stringify(timeline, null, 1));
