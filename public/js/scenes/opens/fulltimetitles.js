@@ -101,8 +101,8 @@ function orient(o, pitch) {
 // axis, a little nearer and on a longer lens, its frame's centre shifted: three still framings, cut on the beat (no zoom,
 // no move: a pixel picture scaled between frames shimmers). FRAMING: each one's share of the way from the wide lens to
 // the clock's (in log focal length);
-// NEARER: how much higher and nearer the far stand its camera stands (m): the clock's camera stands at the halfway line,
-// so the far goal's crossbar falls below its frame (never a sliver of it at the frame's foot).
+// NEARER: how much higher and nearer the far stand its camera stands (m): the clock's stands just short of the halfway
+// line, so the far goal's crossbar falls below its frame (never a sliver of it at the frame's foot).
 const FRAMING = [0, 0.5, 1];
 const NEARER = [[0, 0], [1, 8], [2.4, 20]];
 
