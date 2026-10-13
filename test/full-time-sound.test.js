@@ -14,6 +14,21 @@ import { Director } from '../public/js/director.js';
 import { parseTune } from '../public/js/audio/tune.js';
 import { CUES, hitOf, durationOf } from '../public/js/scenes/opens/cues.js';
 import { fakeClock } from '../tools/pace/fakeplay.mjs';
+import { LofiEngine } from '../public/js/music/proposals/lofi/engine.js';
+import { P } from '../public/js/palette.js';
+import { u32 } from '../public/js/gfx/index.js';
+import { textPixels } from '../public/js/font.js';
+
+// a frame's pixels by palette colour (rows y0..y1)
+const NAME = new Map(Object.entries(P).map(([k, v]) => [u32(v), k]));
+function colours(d, y0 = 0, y1 = 216) {
+  const c = {};
+  for (let y = y0; y < y1; y++) for (let x = 0; x < 384; x++) {
+    const n = NAME.get(d[y * 384 + x]) || '?';
+    c[n] = (c[n] || 0) + 1;
+  }
+  return c;
+}
 
 // a canvas whose image data is real memory (the open draws into pixel buffers)
 function fakeCanvas() {
@@ -105,6 +120,53 @@ describe('FULL TIME: the open', () => {
     assert.ok(circle.z > top.z, 'and in towards it');
     for (let b = 0; b < Q.settle; b += 0.05) assert.equal(titles.fullTimeCamera(b).F[0], 0, `beat ${b.toFixed(2)}`);
     assert.equal(titles.fullTimeCamera(Q.circle + 1).moving, 0, 'held still on the circle (the crowd\'s detail draws in)');
+  });
+
+  test('the whistle\'s cut-ins: a still framing closer on each blast, never a zoom; the watch on whole pixels', () => {
+    assert.deepEqual([Q.circle + 0.5, Q.whistle[1] + 0.5, Q.whistle[2] + 0.5].map(titles.fullTimeFraming), [0, 1, 2]);
+    // still between the cuts: the same lens, the same frame (a pixel picture is never scaled between frames)
+    for (const [a, b] of [[Q.whistle[0], Q.whistle[1]], [Q.whistle[1], Q.whistle[2]], [Q.whistle[2], 15]]) {
+      const c0 = titles.fullTimeCamera(a), c1 = titles.fullTimeCamera(b - 0.01);
+      for (const k of ['f', 'px', 'py', 'y', 'z']) assert.ok(Math.abs(c0[k] - c1[k]) < 1e-6, `${k} held from beat ${a} to ${b}`);
+      assert.equal(c1.moving, 0);
+    }
+    // each cut closer, on its blast (the board's clock a quarter larger at least each time)
+    for (const w of Q.whistle.slice(1)) assert.ok(titles.watchOnScreen(w).k > 1.25 * titles.watchOnScreen(w - 0.01).k, `a cut-in on beat ${w}`);
+    for (const b of [Q.whistle[1] + 0.5, Q.whistle[2] + 0.5]) {
+      const w = titles.watchOnScreen(b);
+      assert.ok(Math.abs(w.x - Math.round(w.x)) < 1e-6 && Math.abs(w.y - Math.round(w.y)) < 1e-6, `the watch on whole pixels at beat ${b}`);
+    }
+  });
+
+  test('the pitch: mown stripes in solid bands; the light falls on the grass quarter by quarter', () => {
+    const lit = titles.fullTimeFrame(Q.circle + 0.5);
+    const c = colours(lit);
+    assert.ok(c.green > 5000 && c.midGreen > 5000, `green ${c.green}, mid green ${c.midGreen}`);
+    // solid bands: a stripe's pixel has its own colour beside it (no dither between the two greens)
+    let same = 0, n = 0;
+    for (let y = 120; y < 216; y++) for (let x = 0; x < 383; x++) {
+      const a = lit[y * 384 + x];
+      if (a !== u32(P.green) && a !== u32(P.midGreen)) continue;
+      n++;
+      if (lit[y * 384 + x + 1] === a) same++;
+    }
+    assert.ok(same / n > 0.97, `${((100 * same) / n).toFixed(1)}% of the stripes' pixels have their own colour beside them`);
+    // in the dark: dark and deep green, no lit grass; one bank on: its quarter lit, the rest still dark
+    const dark = colours(titles.fullTimeFrame(1));
+    assert.ok(!dark.green && !dark.midGreen && dark.darkGreen > 3000 && dark.deepGreen > 3000);
+    const one = colours(titles.fullTimeFrame(Q.floods[0] + 0.5));
+    assert.ok(one.green > 300 && one.midGreen > 300 && one.darkGreen > 3000 && one.deepGreen > 3000, JSON.stringify(one));
+  });
+
+  test('the last cut-in: FULL TIME in the board\'s 7 px face at 2x; the far stand holds its scarves up on the long blast', () => {
+    const up = titles.fullTimeFrame(Q.flip + 0.6);
+    const text = textPixels('FULL TIME', 'body');
+    assert.equal(colours(up, 0, 186).orange, text.pixels.length * 4, 'every pixel of the line at twice the face');
+    // the scarves: a band of orange and white across the far stand's front rows, half a beat into the long blast, held
+    const bottom = (b) => colours(titles.fullTimeFrame(b), 186, 216);
+    const before = bottom(Q.flip + 0.2), after = bottom(Q.flip + 0.6);
+    assert.ok(!before.orange && after.orange > 150 && after.white > 150, `${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+    assert.deepEqual(bottom(14.9), after, 'held to the cut');
   });
 
   test('the stopwatch at 90:00 lands on centre stage at the emblem\'s size, so it becomes the plate with no pop', () => {
@@ -263,6 +325,7 @@ describe('FULL TIME: the stings', () => {
 
   test('candidate A, the crowd swell: many voices out of tune with one another, open vowels, a swell and a fall, ducked', () => {
     const param = (v = 0) => ({ value: v, events: [], setValueAtTime(x, t) { this.events.push(['set', x, t]); return this; }, linearRampToValueAtTime(x, t) { this.events.push(['ramp', x, t]); return this; }, setTargetAtTime(x, t, k) { this.events.push(['target', x, t, k]); return this; } });
+    const convolvers = [];
     const node = (extra) => ({ connect: (d) => d, disconnect() {}, ...extra });
     const oscs = [];
     const filters = [];
@@ -274,12 +337,14 @@ describe('FULL TIME: the stings', () => {
       createOscillator: () => { const o = node({ type: 'sine', frequency: param(440), start() {}, stop() {} }); oscs.push(o); return o; },
       createBufferSource: () => node({ buffer: null, loop: false, playbackRate: param(1), start() {}, stop() {} }),
       createStereoPanner: () => node({ pan: param(0) }),
+      createConvolver: () => { const c = node({ buffer: null }); convolvers.push(c); return c; },
+      createBuffer: (ch, n, sr) => { const data = Array.from({ length: ch }, () => new Float32Array(n)); return { numberOfChannels: ch, length: n, sampleRate: sr, getChannelData: (c) => data[c] }; },
     };
     let ducked = null;
     let played = null;
     const eng = { ctx, rig: { white: {}, pink: {}, play: (srcs, nodes, t, stop) => { played = { srcs, t, stop }; } }, duckedSting: (level, under) => { ducked = [level, under]; return ctx.createGain(); } };
     const end = STINGS.scoreCrowd(eng, 10);
-    assert.equal(oscs.length, 22, 'twenty-two voices');
+    assert.equal(oscs.length, 34, 'thirty voices and four callers');
     assert.ok(oscs.every((o) => o.type === 'sawtooth'));
     const f0 = oscs.map((o) => o.frequency.events[0][1]);
     assert.ok(f0.every((f) => f >= 100 && f <= 340), 'men and women, 100-340 Hz');
@@ -294,10 +359,51 @@ describe('FULL TIME: the stings', () => {
     assert.ok(bands.some((f) => f > 500 && f < 800) && bands.some((f) => f > 950 && f < 1300), 'vowel formants (F1, F2)');
     assert.ok(filters.some((f) => f.type === 'highshelf' && f.gain.value < 0), 'its top rolled off: not hiss');
     assert.deepEqual(ducked, [3.3, 1.2], 'ducked under the voice it lands on');
-    assert.ok(played && played.stop === end && end - 10 <= 4.5, `gone in under five seconds (${end - 10} s)`);
+    assert.ok(played && played.stop === end && end - 10 <= 5, `gone in under five seconds (${end - 10} s)`);
+    // the callers' vowels open from "eh" to "ah" (their first formant slides up)
+    const glides = filters.filter((f) => f.type === 'bandpass' && f.frequency.events.some((e) => e[0] === 'ramp'));
+    assert.ok(glides.length >= 4 * 3, 'four callers, three formants each');
+    // the ground's space: a dark tail of about a second and a half
+    assert.equal(convolvers.length, 1);
+    const ir = convolvers[0].buffer.getChannelData(0);
+    const rms = (a, b) => Math.sqrt(ir.slice(Math.round(a * 48000), Math.round(b * 48000)).reduce((s, v) => s + v * v, 0) / ((b - a) * 48000));
+    const drop = 20 * Math.log10(rms(1.3, 1.5) / rms(0.03, 0.23));
+    assert.ok(drop < -40 && drop > -70, `the tail falls ${drop.toFixed(0)} dB in 1.3 s`);
     // on air, scoreSting plays the pick
     STINGS.scoreSting(eng, 20, {});
-    assert.equal(oscs.length, 44, 'scoreSting is the crowd');
+    assert.equal(oscs.length, 68, 'scoreSting is the crowd');
+  });
+});
+
+describe('FULL TIME: SCORE CENTRE\'s row ticks and the bed\'s ticks', () => {
+  const tick = (t) => {
+    const k = { t, note: {}, g: { gain: { calls: [], setValueAtTime(v, at) { this.calls.push([v, at]); } } } };
+    return k;
+  };
+  test('the bed\'s own tick leaves room for a row\'s: none within 150 ms of it', () => {
+    // the bed ticks in eighths at 116 BPM (0.259 s); the clock is at 10.00 s
+    const ticks = [9.741, 10.0, 10.259, 10.517, 10.776].map(tick);
+    const eng = { ctx: { currentTime: 10.0 }, beds: new Set([{ ticks }]) };
+    // asked for 30 ms ahead: the tick that has just sounded (10.000) moves it to 10.150; the one at 10.259 is silenced
+    const at = LofiEngine.prototype.rowTick.call(eng, 10.03);
+    assert.ok(Math.abs(at - 10.15) < 1e-9, `${at}`);
+    assert.deepEqual(ticks.map((k) => Boolean(k.off)), [false, false, true, false, false]);
+    assert.equal(ticks[2].note.cancelled, true);
+    assert.deepEqual(ticks[2].g.gain.calls, [[0, 10.249]]);
+    // no bed tick that still sounds is within 150 ms of the row's
+    for (const k of ticks) if (!k.off) assert.ok(Math.abs(k.t - at) >= 0.15 - 1e-9, `${k.t}`);
+    // far from the grid's last tick: on time, and the next one silenced if it is near
+    const t2 = [10.0, 10.259].map(tick);
+    assert.equal(LofiEngine.prototype.rowTick.call({ ctx: { currentTime: 10.1 }, beds: new Set([{ ticks: t2 }]) }, 10.2), 10.2);
+    assert.equal(t2[1].off, true);
+  });
+
+  test('music/live.js asks the engine when the row\'s tick sounds; without a bed, at once', () => {
+    const off = new LiveMusic({ context: null, musicBus: null }, { enabled: false });
+    assert.equal(off.rowTick(0.03), 0.03);
+    const m = new LiveMusic({ context: { currentTime: 5 }, musicBus: {} }, { enabled: false });
+    m.engine = { rowTick: (at) => at + 0.08 };
+    assert.ok(Math.abs(m.rowTick(0.03) - 0.11) < 1e-9);
   });
 });
 
@@ -353,6 +459,18 @@ describe('FULL TIME: the director\'s hooks', () => {
     const ticks = sfx.filter((s) => s.name === 'scoreTick');
     assert.equal(ticks.length, 3, 'one tick a row');
     assert.ok(ticks.every((t) => t.o.programId === 'full-time'));
+    // when the bed's tick asks for room, the row's tick and the row itself come in a little later together
+    const { d: d2, sfx: sfx2 } = director();
+    d2.music.rowTick = () => 0.1;
+    const calls = [];
+    const sfxCall = d2.audio.sfx;
+    d2.audio.sfx = (name, o) => { calls.push({ name, ahead: o.startAt - performance.now() }); sfxCall(name, o); };
+    d2.scene.shotSince = -100;
+    await d2.playBoardSegment(seg, 0);
+    const late = calls.filter((c) => c.name === 'scoreTick');
+    assert.equal(late.length, 3);
+    assert.ok(late.every((c) => Math.abs(c.ahead - 100) < 5), JSON.stringify(late));
+    assert.equal(sfx2.filter((s) => s.name === 'scoreTick').length, 3);
     // COMING UP turns leaves, it does not tick
     sfx.length = 0;
     const t2 = "Coming up in sport. On Wednesday, it's Starfield City against Glimmerford. On Thursday, Bitport Comets against Lanternhill Lynx.";

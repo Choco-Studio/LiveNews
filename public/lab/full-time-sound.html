@@ -31,6 +31,8 @@
     <script type="module">
       import { renderTune } from '../js/audio/synth.js';
       import { themeFor, cueFor } from '../js/audio/themes.js';
+      import { parseTune } from '../js/audio/tune.js';
+      import { estimateLoudness } from '../js/audio/loudness.js';
       import { durationOf } from '../js/scenes/opens/cues.js';
       import { WN_DURATION } from '../js/scenes/opens/worldcues.js';
       import { CUES as SEQ_CUES } from '../js/scenes/opens/cues.js';
@@ -92,9 +94,22 @@
       // --------------------------------------------------------------- renderers
 
       /** A programme's open theme as the director plays it: from the cut at volume 0.6, stopped (faded) on the cut. */
-      async function renderTheme({ id = 'full-time', seconds } = {}) {
+      /**
+       * The open's theme as the director plays it. solo / mute: track indices to keep or leave out (the stems of a
+       * check, such as the whistle against the band), at the whole theme's own level (its loudness gain, not their own).
+       */
+      async function renderTheme({ id = 'full-time', seconds, solo = null, mute = null } = {}) {
         const d = openLength(id);
-        const r = await renderTune(themeFor(id, { duration: d }), { seconds: seconds ?? d + 1.4, volume: 0.6, startAt: 0, stopAt: d, sampleRate: SR });
+        const tune = themeFor(id, { duration: d });
+        const opts = { seconds: seconds ?? d + 1.4, volume: 0.6, startAt: 0, stopAt: d, sampleRate: SR };
+        let song = tune;
+        if (solo || mute) {
+          const keep = (_, i) => (solo ? solo.includes(i) : !mute.includes(i));
+          song = { ...tune, tracks: tune.tracks.filter(keep) };
+          opts.normalise = false;
+          opts.volume = 0.6 * estimateLoudness(parseTune(tune)).gain;
+        }
+        const r = await renderTune(song, opts);
         return pack(r.buffer);
       }
 
@@ -136,20 +151,34 @@
           }
           engine.pump(Math.min(T + LOOKAHEAD, seconds + 2));
         };
+        // (each suspension's work: the bed's next seconds; a row's tick as the director asks for it)
+        const work = new Map();
+        const when = (time, fn) => {
+          const q = Math.max(1, Math.round((time * SR) / 128));
+          if (!work.has(q)) work.set(q, []);
+          work.get(q).push(fn);
+        };
         const STEP = 4;
         runUntil(STEP);
-        for (let T = STEP; T < seconds; T += STEP) {
-          ctx.suspend(T).then(() => {
-            runUntil(T + STEP);
-            ctx.resume();
-          });
-        }
+        for (let T = STEP; T < seconds; T += STEP) when(T, () => runUntil(T + STEP));
         if (stem !== 'music') await placeVoice(ctx, voice);
-        // SCORE CENTRE's row ticks (audio.sfx in the director: the audio stream's cue, ducked by its own depth)
+        // SCORE CENTRE's row ticks (audio.sfx in the director: the audio stream's cue, ducked by its own depth), asked for
+        // 30 ms ahead as the director does; the bed's own ticks leave room for them (LofiEngine.rowTick)
+        const rowTicks = [];
         for (const t of ticks) {
           const duck = regions.map(([a, b]) => [a - t, b - t]).filter(([, b]) => b > 0);
           const r = await renderTune(cueFor('scoreTick', 'full-time'), { seconds: 1, volume: 0.5, startAt: 0, duck, sampleRate: SR });
-          if (stem !== 'voice') mixIn(ctx, r.buffer, t);
+          when(Math.max(0.01, t - 0.03), () => {
+            const at = engine.rowTick(t);
+            rowTicks.push({ asked: t, at });
+            if (stem !== 'voice') mixIn(ctx, r.buffer, at);
+          });
+        }
+        for (const [q, fns] of [...work].sort((a, b) => a[0] - b[0])) {
+          ctx.suspend((q * 128) / SR).then(() => {
+            for (const fn of fns) fn();
+            ctx.resume();
+          });
         }
         // the open's theme and the sign-off's tail (audio.sfx('outro')) through the audio stream's mixer, ducked under the voices
         for (const [t, kind] of tunes) {
@@ -161,6 +190,13 @@
         const out = await ctx.startRendering();
         window.__lastLog = engine.log;
         window.__lastNotes = engine.notes;
+        // each row tick's nearest bed tick that sounded (s), and the bed ticks silenced for the rows
+        const bedTicks = (engine.notes || []).filter((n) => n.inst === 'tick');
+        window.__rowTicks = rowTicks.map((r) => ({
+          ...r,
+          nearest: Math.min(Infinity, ...bedTicks.filter((n) => !n.cancelled).map((n) => Math.abs(n.t - r.at))),
+          silenced: bedTicks.filter((n) => n.cancelled && Math.abs(n.t - r.at) < 0.3).map((n) => +(n.t - r.at).toFixed(3)),
+        }));
         return pack(out);
       }
 
@@ -241,6 +277,7 @@
         render: async (opts = {}) => (RENDER[opts.what || 'theme'] || renderTheme)(opts),
         log: () => window.__lastLog,
         notes: () => window.__lastNotes,
+        rowTicks: () => window.__rowTicks,
       };
 
       // --------------------------------------------------------------------- UI
