@@ -536,7 +536,8 @@ describe('loadChannel', () => {
 // ---------------------------------------------------------------- the real config/channel.json
 
 describe('config/channel.json', () => {
-  const channel = loadChannel();
+  // (with its drafts: a programme in the making is held to every rule before it airs, server/channel.js)
+  const channel = loadChannel(undefined, { drafts: true });
   const feedCategories = new Set(JSON.parse(fs.readFileSync(REAL_FEEDS_FILE, 'utf8')).map((f) => f.category));
   const programs = Object.entries(channel.programs);
   // the fresh-news programmes (a weather programme is written from the weather data: test/weather.test.js; SEVEN DAYS
@@ -585,7 +586,9 @@ describe('config/channel.json', () => {
   });
 
   test('every programme airs at least once in the rotation, and every presenter hosts something', () => {
-    for (const [id] of programs) assert.ok(channel.rotation.includes(id), `${id} is never scheduled`);
+    // (a draft is never scheduled until it is ready: server/channel.js)
+    for (const [id] of programs) assert.ok(channel.rotation.includes(id) || channel.drafted?.includes(id), `${id} is never scheduled`);
+    for (const id of channel.drafted || []) assert.ok(!channel.rotation.includes(id), `draft ${id} is scheduled`);
     // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js),
     // an expert the analyses of the programmes that put stories to them (server/experts.js)
     const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || []), ...(p.experts || [])]));

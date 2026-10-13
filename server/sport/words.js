@@ -77,15 +77,22 @@ export function retime(sentence, { published, now = Date.now(), tz = 'Europe/Lon
 }
 
 // the outlets' verdicts on a sporting act: an evaluative word before a sporting noun
-const EVAL = 'brilliant|stunning|superb|sublime|sensational|magnificent|majestic|wonderful|fantastic|dazzling|outstanding|world-class|clinical|woeful|dismal|abject|shambolic|awful|dreadful|poor|sloppy|lacklustre|lackluster|embarrassing|pivotal|incredible|amazing|spectacular|stellar|masterful|imperious|horrendous|terrible|appalling|calamitous|exquisite|glorious|fabulous|majestic|wondrous|breathtaking|jaw-dropping|stupendous|scintillating|spineless|inept|hapless|toothless|insipid|abysmal|disgraceful';
+const EVAL = 'brilliant|stunning|superb|sublime|sensational|magnificent|majestic|wonderful|fantastic|dazzling|outstanding|world-class|clinical|woeful|dismal|abject|shambolic|awful|dreadful|poor|sloppy|lacklustre|lackluster|embarrassing|pivotal|incredible|amazing|spectacular|stellar|masterful|imperious|horrendous|terrible|appalling|calamitous|exquisite|glorious|fabulous|majestic|wondrous|breathtaking|jaw-dropping|stupendous|scintillating|spineless|inept|hapless|toothless|insipid|abysmal|disgraceful|wasteful|profligate|lethargic|ruthless|dire|feeble|limp|pathetic|clueless|shoddy|uninspired|uninspiring|mesmerising|mesmerizing|virtuoso|heroic|inspirational|unplayable|impressive|excellent|remarkable|terrific|tremendous|phenomenal|exceptional|disappointing|underwhelming|mediocre|standout|stand-out|classy|sumptuous|delightful';
+// the same verdicts as adverbs on an act ("before Mfuni superbly added a fourth", Sky Sports 13 Oct): the adverb goes
+const EVAL_ADV = /\b(?:superbly|brilliantly|sublimely|wonderfully|magnificently|majestically|beautifully|expertly|clinically|exquisitely|stunningly|sensationally|fantastically|gloriously|masterfully|impressively|excellently|remarkably|deftly|delightfully|woefully|dismally|abjectly|sloppily|poorly|dreadfully|awfully|terribly|horribly|ineptly|feebly|limply|lethargically|spinelessly|disgracefully|embarrassingly)\s+(?=\p{Ll})/giu;
+// (one after its verb, "he played poorly", is all the clause says: the sentence goes)
+const EVAL_ADV_AFTER = /\b(?:superbly|brilliantly|sublimely|wonderfully|magnificently|majestically|beautifully|expertly|clinically|exquisitely|stunningly|sensationally|fantastically|gloriously|masterfully|impressively|excellently|remarkably|deftly|delightfully|woefully|dismally|abjectly|sloppily|poorly|dreadfully|awfully|terribly|horribly|ineptly|feebly|limply|lethargically|spinelessly|disgracefully|embarrassingly)\b/iu;
 // an act ("a brilliant goal"): the verdict goes and the act stays; a state ("a woeful start", "a poor season"): the
 // verdict is all the phrase says, so the sentence goes
-const ACT = 'goals?|strikes?|finish(?:es)?|headers?|saves?|catch(?:es)?|efforts?|wins?|victor(?:y|ies)|defeats?|comebacks?|innings|knocks?|laps?|drives?|shots?|pass(?:es)?|tackles?|volleys?|free-kicks?|penalt(?:y|ies)|tries|try|touchdowns?|dunks?|serves?|aces?|one-twos?';
+const ACT = 'goals?|winners?|equali[sz]ers?|openers?|hat-tricks?|braces?|assists?|strikes?|finish(?:es)?|headers?|saves?|catch(?:es)?|efforts?|wins?|victor(?:y|ies)|defeats?|comebacks?|innings|knocks?|laps?|drives?|shots?|pass(?:es)?|tackles?|volleys?|free-kicks?|penalt(?:y|ies)|tries|try|touchdowns?|dunks?|serves?|aces?|one-twos?';
 const STATE = 'displays?|performances?|runs?|shows?|spells?|debut|half|start|season|form|night|afternoon|evening|outing|game|match|figure|player|character|manager|coach|side|team|defending|finishing';
-const EVAL_BEFORE = new RegExp(`\\b(an?\\s+|the\\s+|his\\s+|her\\s+|their\\s+|its\\s+)?((?:(?:${EVAL})(?:\\s*,\\s*|\\s+and\\s+|\\s+))+)((?:[\\p{L}\\d-]+\\s+)?(?:${ACT}))\\b`, 'giu');
-const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|maverick|flawed)\\s+(?:[\\p{L}\\d-]+\\s+)?(?:${STATE})\\b`, 'iu');
+const EVAL_BEFORE = new RegExp(`\\b(an?\\s+|the\\s+|his\\s+|her\\s+|their\\s+|its\\s+)?((?:(?:${EVAL})(?:\\s*,\\s*|\\s+and\\s+|\\s+))+)((?:[\\p{L}\\d'’-]+\\s+){0,3}?(?:${ACT}))\\b`, 'giu');
+const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|maverick|flawed|fine|nightmare|dream)\\s+(?:[\\p{L}\\d-]+\\s+)?(?:${STATE})\\b`, 'iu');
 // a verdict on a person outright ("Caicedo was outstanding", "the referee got it wrong", "they deserved it")
-const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+)?(?:${EVAL})\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
+// a verdict on a team or a player by name ("A wasteful Newcastle lost at Coventry despite having 19 shots", Sky Sports 13
+// Oct), read after the verdicts on acts are gone ("A stunning Sven Botman strike" keeps its act); case-sensitive
+const EVAL_NAME = new RegExp(`\\b(?:[Aa]n?|[Tt]he)\\s+(?:${EVAL})\\s+\\p{Lu}`, 'u');
+const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare)\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
 
 /**
  * A sentence without the outlets' praise or blame of a sporting act ("A brilliant goal from Bruno Guimaraes helps
@@ -104,6 +111,8 @@ export function withoutJudgement(sentence) {
       continue;
     }
     if (VERDICT.test(p) || EVAL_STATE.test(p)) return null;
+    p = p.replace(EVAL_ADV, '');
+    if (EVAL_ADV_AFTER.test(p)) return null;
     p = p.replace(EVAL_BEFORE, (m, det, evals, noun) => {
       // "an outstanding goal" -> "a goal"; "a brilliant one-two" keeps its article
       let d = det || '';
@@ -111,6 +120,7 @@ export function withoutJudgement(sentence) {
       if (/^a\s+$/i.test(d) && /^[aeiou]/i.test(noun)) d = d.replace(/a(\s+)$/i, 'an$1');
       return `${d}${noun}`;
     });
+    if (EVAL_NAME.test(p)) return null;
     out.push(p);
   }
   return out.join('').replace(/\s{2,}/g, ' ').replace(/^\s*(\p{Ll})/u, (m, c) => c.toUpperCase());

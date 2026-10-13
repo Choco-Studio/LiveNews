@@ -18,19 +18,20 @@ const BOARDS = ['known', 'timeline', 'change', 'share', 'next', 'who'];
 let cache = null;
 let mtime = 0;
 
-export function loadChannel(file = FILE) {
+export function loadChannel(file = FILE, { drafts = false } = {}) {
+  const withDrafts = (data) => (drafts ? draftsOn(data) : data);
   const stat = fs.statSync(file);
-  if (cache && stat.mtimeMs === mtime && cache.file === file) return cache.data;
+  if (cache && stat.mtimeMs === mtime && cache.file === file) return withDrafts(cache.data);
   try {
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     validateChannel(data);
     cache = { file, data };
-    return data;
+    return withDrafts(data);
   } catch (err) {
     // A broken edit keeps the channel on air with the last good line-up.
     if (cache?.file === file) {
       console.error(`[channel] ${path.basename(file)} is invalid, keeping the previous version: ${err.message}`);
-      return cache.data;
+      return withDrafts(cache.data);
     }
     throw err;
   } finally {
@@ -38,15 +39,39 @@ export function loadChannel(file = FILE) {
   }
 }
 
+// A programme in the making ("drafts": FULL TIME before its graphics, set, cast and voices pass, docs/programmes/
+// full-time.md §9) is validated like the others but never on air: not in the rotation, not among the programmes the
+// station and the browser see. The producer's harnesses and tests write it with loadChannel(file, { drafts: true }).
+const drafted = new WeakMap();
+function draftsOn(data) {
+  if (!data?.drafts) return data;
+  if (!drafted.has(data)) {
+    const { drafts, ...rest } = data;
+    drafted.set(data, { ...rest, programs: { ...data.programs, ...drafts }, drafted: Object.keys(drafts) });
+  }
+  return drafted.get(data);
+}
+
 export function validateChannel(ch) {
   if (!ch?.programs || !ch?.presenters || !Array.isArray(ch.rotation) || !ch.rotation.length) {
     throw new Error('channel.json needs presenters, programs and a non-empty rotation');
+  }
+  if (ch.drafts !== undefined) {
+    if (!ch.drafts || typeof ch.drafts !== 'object' || Array.isArray(ch.drafts)) throw new Error('channel "drafts" is not a map of programmes');
+    for (const id of Object.keys(ch.drafts)) {
+      if (ch.programs[id]) throw new Error(`draft "${id}" is also an on-air programme`);
+      if (ch.rotation.includes(id)) throw new Error(`draft "${id}" is in the rotation: a draft never airs`);
+    }
+    // the drafts are held to every rule of the programmes (validated with them, then left out)
+    const { drafts, ...rest } = ch;
+    validateChannel({ ...rest, programs: { ...ch.programs, ...drafts } });
+    return;
   }
   for (const id of ch.rotation) {
     if (!ch.programs[id]) throw new Error(`rotation references unknown programme "${id}"`);
   }
   for (const [id, p] of Object.entries(ch.programs)) {
-    if (p.kind !== undefined && p.kind !== 'weather' && p.kind !== 'weekly') throw new Error(`programme "${id}" has an unknown "kind" (only "weather" or "weekly")`);
+    if (p.kind !== undefined && !['weather', 'weekly', 'sport'].includes(p.kind)) throw new Error(`programme "${id}" has an unknown "kind" (only "weather", "weekly" or "sport")`);
     // a weather programme is written from the weather data (server/weatherwriter.js): no stories, no sections;
     // the weekly (server/weeklywriter.js) from the archive: its sections, no story length (the aired words set it)
     const news = p.kind !== 'weather';

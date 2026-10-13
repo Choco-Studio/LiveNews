@@ -441,6 +441,33 @@ const CATCH = [
   // the catch itself, last: a "but" is in most stories
   { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
 ];
+// FULL TIME, THE BREAKDOWN (docs/programmes/full-time.md §4): Kai asks the question a story's context answers and Rosa
+// answers with that sentence of the story: the record or the wait, the table, what comes next, what they said. Never
+// an opinion: the sentences have already lost the outlets' verdicts (server/sport/prepare.js).
+const BREAKDOWN = [
+  { test: /\b(?:first\s+(?:[\w-]+\s+){0,5}since|for the first time (?:in|since)|in \d+ years|\d+-year wait|(?:end(?:s|ed)?|snap(?:s|ped)?) (?:a|an|their|his|her|its) (?:[\w-]+\s+){0,3}(?:wait|run|drought|streak)|records?|unbeaten|consecutive|in a row|straight (?:wins|defeats|victories)|losing streak|winless run|back-to-back)\b/i, q: (rosa) => [`[lean_in] ${rosa}, how long has that been coming?`, `[look_partner] Put that in context for us, ${rosa}.`, '[lean_in] How big a moment is that?'] },
+  { test: /\b(?:top of the (?:table|league)|bottom of the (?:table|league)|relegation zone|drop zone|points? (?:clear|behind|adrift|ahead|off)|\d+(?:st|nd|rd|th) place|league leaders|title race|play-off (?:places?|spots?)|top four|top half|bottom three|standings|out of the (?:relegation|drop) zone)\b/i, q: (rosa) => [`[look_partner] Where does that leave them, ${rosa}?`, '[lean_in] And what does that do to the table?', `[look_partner] And the table, ${rosa}?`] },
+  { test: /\b(?:will (?:face|host|play|meet|travel|visit|take on)|(?:face|host|play|meet|visit) \p{Lu}[\p{L}'’-]+ (?:on|next|in)|second leg|next (?:up|week|game|match|month)|before (?:the|their) (?:next|return))\b/iu, q: (rosa) => [`[look_partner] What's next for them, ${rosa}?`, '[lean_in] And what comes next?', `[look_partner] Where do they go from here, ${rosa}?`] },
+  { test: /["“][^"”]{12,}["”]/, q: (rosa) => [`[look_partner] What are they saying, ${rosa}?`, '[lean_in] And the reaction?', `[look_partner] What did they make of it, ${rosa}?`] },
+];
+// FULL TIME, after the moment of the day: one of Rosa's (fictional) memories of her playing days and Kai's reply. No
+// real club, match, stadium or player; each once in the station's recent lines.
+const ROSA_MEMORIES = [
+  // (no figures in them: a chat may say no number its stories do not, so "eleven minutes" would never air)
+  ['[shrug] I once missed a penalty in a cup final. Nobody here mentions it.', '[nod] We mention it every week, Rosa.'],
+  ['[chin] I scored from the halfway line once. In training. It still counts.', '[shake_head] It does not count.'],
+  ['[nod] My first coach said I ran like a filing cabinet. A fast filing cabinet.', '[nod] High praise.'],
+  ['[shrug] I played a whole match in odd boots once. We won. I wore them all season.', '[nod] That is science.'],
+  ['[nod] I still have the shirt from my debut. It no longer fits. Neither do the shorts.', '[nod] Too much detail, Rosa.'],
+  ['[shrug] We trained in the rain every winter. I think I am still drying out.', '[nod] It shows.'],
+  ['[chin] My mum came to every game. She mostly watched the other team\'s goalkeeper.', '[nod] Tactical.'],
+  ['[nod] I once did a lap of honour after a draw. Nobody joined me.', '[nod] A brave lap.'],
+  ['[shrug] I took a corner once that went out for a throw-in. It is on the internet somewhere.', '[nod] I will find it.'],
+  ['[chin] I captained my country once. Briefly. The captain was tying his laces.', '[nod] A proud moment.'],
+  ['[nod] I scored an own goal on my debut, then scored at the right end. Balance.', '[nod] Very balanced.'],
+  ['[shrug] I was the fastest in my team at the start of every season. By October, not so much.', '[nod] Every October, Rosa.'],
+];
+
 // COSMOS DESK, UNIT-8 ASKS: the robot asks Dr Reyes the literal question a story leaves (how far, how long ago, how
 // big, how they know, what comes next, what it means) and she answers with the story's own sentence. Each type
 // once a programme; several phrasings for a 24/7 rotation; UNIT-8 is never rude, only exact.
@@ -674,7 +701,9 @@ function nameWhole(t, told, info) {
 const COMMON_PROPER = /^(?:Earth|Moon|Sun|Mars|Venus|Jupiter|Saturn|Mercury|Neptune|Uranus|Pluto|God|Internet|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|English|Christmas|Easter|Covid|COVID)$/;
 function strangers(t, told, info) {
   const out = [];
-  for (const m of String(t).matchAll(/(?<=[\p{Ll},;”"]\s+)(\p{Lu}\p{Ll}[\p{Ll}’'-]+)(?![’']s\b)(?!\s+\p{Lu})/gu)) {
+  // (a whole word: "Jack Rudoni" after "Goals from" once gave "Jac", a stranger the article never names, and the sentence
+  // went, Sky Sports 13 Oct)
+  for (const m of String(t).matchAll(/(?<=[\p{Ll},;”"]\s+)(\p{Lu}\p{Ll}[\p{Ll}’'-]+)(?![\p{L}’'-])(?![’']s\b)(?!\s+\p{Lu})/gu)) {
     const name = m[1];
     const before = t.slice(0, m.index);
     if (/\b(?:the|a|an|its|their|his|her|our)\s+$/i.test(before) || /\p{Lu}[\p{L}’'-]*\s+$/u.test(before)) continue;
@@ -770,7 +799,10 @@ const openingOf = (t) => {
 const DEMONYM = /^(?:American|British|English|Scottish|Welsh|Irish|French|German|Dutch|Belgian|Swiss|Austrian|Italian|Spanish|Portuguese|Greek|Turkish|Russian|Ukrainian|Polish|Czech|Hungarian|Romanian|Swedish|Norwegian|Danish|Finnish|Icelandic|European|African|Asian|Arab|Chinese|Japanese|Korean|Indian|Pakistani|Bangladeshi|Indonesian|Thai|Vietnamese|Filipino|Malaysian|Australian|Canadian|Mexican|Brazilian|Argentine|Chilean|Colombian|Peruvian|Cuban|Israeli|Palestinian|Iranian|Iraqi|Syrian|Saudi|Egyptian|Nigerian|Kenyan|Ethiopian|Ghanaian|Kazakh|Uzbek|Afghan|Sudanese|Libyan|Moroccan|Algerian|Tunisian|Lebanese|Jordanian|Qatari|Emirati|Taiwanese|Mongolian|Nepalese|Sri Lankan|Venezuelan|Haitian|Jamaican|Congolese|Somali|Ugandan|Tanzanian|Zimbabwean|Zambian|Senegalese|Malian|Latin|Western|Eastern|Northern|Southern|Middle)$/;
 // (a pronoun after an opening phrase too: "Once completed, it will house GM’s new Battery Cell Development Center", "Together,
 // they offer an unprecedented view...", The Verge 12 Oct, both aired as their stories' first words)
-const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b|^[^,;:]{2,40},\s+(?:it|its|they|their|he|she|his|her)\b/;
+// (and after a short time or place phrase: "On Tuesday they will oversee the club's first home game", Guardian 13 Oct)
+// (an opening phrase of at most four words before the comma: "Once completed, it will…"; never a clause with its figure,
+// "Opener Ravi Menon made 141, his first century of the season…", whose "his" is its own subject's)
+const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b|^(?:[\p{L}’'-]+\s+){0,3}[\p{L}’'-]+,\s+(?:it|its|they|their|he|she|his|her)\b|^(?:On|In|At|By|From|After|Before|Since|Until|Last|This|Next|Earlier|Later)\s+[\p{L}\d ]{1,24}?\s(?:they|he|she|it)\s/u;
 /**
  * Can this summary sentence open a story or a round-up item? The summary's first sentence can (unless it
  * opens on a pronoun: "The central bank has kept rates..." is how the outlet itself starts); a later one
@@ -812,7 +844,9 @@ const TIME_BACK = /\b(?:at the time\b(?! of)|(?:that|the) same (?:year|day|week|
 // (nor one that points back with "this" or "these" before its first comma: "CHIME can use this hydrogen signal to trace
 // how matter is spread...", ScienceDaily 9 Oct, before the sentence that says what the signal is)
 const POINTS_BACK = /^[^,;:]{0,60}?\b(?:this|these|those)\s+(?!(?:week|weekend|month|year|morning|afternoon|evening|summer|winter|spring|autumn|time|season|is|was|are|were)\b)[a-z]/i;
-const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t));
+// (a later sentence opens no story with a pronoun either: "On Tuesday they will oversee the club’s first home Champions League
+// game" opened a FULL TIME story, Guardian 13 Oct)
+const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t) && !PRONOUN_START.test(t));
 /**
  * Two sentences that say the same thing in other words: most of the shorter one's content words are in the
  * other ("A UCLA study links faster brain aging to specific gut bacteria" / "A new UCLA study suggests that the
@@ -897,7 +931,8 @@ function spokenPlace(entry) {
   return entry.name;
 }
 
-const kickerFor = (s) => topicOf(s);
+// (FULL TIME: the strap carries the story's sport, server/sport/desk.js sportTag)
+const kickerFor = (s) => s.sportTag || topicOf(s);
 
 /** Greeting by the London studio clock, unless the episode might air across a boundary (it is made minutes ahead). */
 function timeGreeting(now) {
@@ -964,7 +999,8 @@ function study(story) {
   const raw = [...sentencesOf(s.summary), ...(s.body ? sentencesOf(s.body) : [])];
   const prevOf = new Map(raw.map((x, i) => [x, raw[i - 1]]));
   // Breaking news is never "light", whatever it is about.
-  const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
+  // (FULL TIME marks its moments of the day itself: a record, a milestone, an auction, a farewell; server/sport/prepare.js)
+  const light = !grave && !isBreaking(story.title) && ((LIGHT.test(title) && !SOBER.test(text)) || !!story.moment);
   return {
     s,
     breaking: isBreaking(story.title),
@@ -977,7 +1013,7 @@ function study(story) {
     severity: severity(text),
     sad: grave && (DEATHS.test(text) || /(?<![\p{L}])R\.?I\.?P\b/u.test(text)),
     light,
-    curious: light && (LIGHTER.test(title) || CURIOUS.test(title)),
+    curious: light && (LIGHTER.test(title) || CURIOUS.test(title) || !!story.moment),
     loc: precise,
     country: precise ? precise.entry.country || precise.entry.name : null,
     places: placesIn(text),
@@ -1024,7 +1060,8 @@ function runningOrder(infos, n, program, featured = new Set()) {
   // before a canal reopening the outlet calls breaking news (which then plays second).
   const breaking = pool.find((i) => i.breaking) || null;
   const graver = breaking ? pool.slice(0, 6).find((i) => !i.breaking && !i.live && i.severity >= 3 && i.severity > breaking.severity) : null;
-  const lead = (graver && take((i) => i === graver)) || take((i) => i.breaking) || takeLead(pool, program) || take(() => true);
+  // (FULL TIME's desk has already put its lead first: the story most outlets carry, server/sport/prepare.js balance)
+  const lead = (graver && take((i) => i === graver)) || take((i) => i.breaking) || (program?.id === 'full-time' ? take((i) => !i.live) : takeLead(pool, program)) || take(() => true);
   if (!lead) return { order: [], roundup: [], lighter: null, number: null };
   let slots = n - 1;
   // A feature that ran lately (the station's memory) gives way to another story when one qualifies: the same
@@ -1661,10 +1698,14 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const linked = links.has(info) || analysed.has(info);
       const deep = !linked && longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
       // (an answer is one spoken sentence of the programme's length: the validator trims stories, not chats)
-      const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2;
+      // (FULL TIME: Rosa's answer is the story's context, never its news: not the first sentence, nor one with the
+      // story's own scoreline, which the presenter reads)
+      const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2 && (pid !== 'full-time' || (t !== info.sentences[0] && !PRONOUN_START.test(t) && !/^\s*(?:he|she|they|it|we|i)\s+(?:added|said|says|told)\b/i.test(t) && !/["”’]\s*,?\s*(?:he|she|they|it)\s+(?:said|says|added|told)\b/i.test(t) && !(info.s.scorelines || []).some((sl) => t.includes(`${sl.sa}-${sl.sb}`))));
       // (never before a grave story: no chat follows a story there, and the kept-back sentence would be lost)
       const quietAfter = !!order[k + 1]?.grave;
-      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave && !quietAfter ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
+      const catchList = pid === 'tech-bytes' ? CATCH : pid === 'full-time' ? BREAKDOWN : null;
+      // (FULL TIME: THE BREAKDOWN after the lead and after one more main story at most, docs/programmes/full-time.md §4)
+      const catchFor = catchList && (k === 0 || deep) && !info.grave && !quietAfter && (pid !== 'full-time' || exchanges < 2) ? catchList.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
       // COSMOS: UNIT-8 asks when Dr Reyes read the story (never after the lead, which has his restatement)
       const unitSlot = idOf('B') === 'unit8' ? 'B' : idOf('A') === 'unit8' ? 'A' : null;
       const askFor = pid === 'cosmos' && unitSlot && k > 0 && deep && !quietAfter && anchor !== unitSlot ? ASK.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
@@ -1939,6 +1980,16 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           } else if (pid === 'tech-bytes' && (slot === 'lead' || slot === 'story') && info.catchAnswer) {
             const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';
             planned.push({ anchor: askB, text: pickLine(info.catchAnswer.q(nameOf(other(askB))), `${key}~catch`, info) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
+          } else if (pid === 'full-time' && (slot === 'lead' || slot === 'story') && info.catchAnswer) {
+            // THE BREAKDOWN: Kai asks, Rosa answers with the story's own sentence
+            const rosa = idOf('B') === 'rosa' ? 'B' : idOf('A') === 'rosa' ? 'A' : 'B';
+            planned.push({ anchor: other(rosa), text: pickLine(info.catchAnswer.q(nameOf(rosa)), `${key}~bd`, info) }, { anchor: rosa, text: `[nod] ${info.catchAnswer.line}` });
+          } else if (pid === 'full-time' && slot === 'lighter') {
+            const rosa = idOf('B') === 'rosa' ? 'B' : idOf('A') === 'rosa' ? 'A' : 'B';
+            const keyed = ROSA_MEMORIES.map((p) => ({ text: `${p[0]} ${p[1]}`, pair: p }));
+            const both = pickLine(keyed, `${key}~rosa`, info);
+            const pair = keyed.find((x) => x.text === both)?.pair || ROSA_MEMORIES[0];
+            planned.push({ anchor: rosa, text: pair[0] }, { anchor: other(rosa), text: pair[1] });
           } else if (pid === 'tech-bytes' && slot === 'lighter') {
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : SOFTWARE_KICKERS.has(info.kicker) ? 'software' : 'science';

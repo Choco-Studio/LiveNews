@@ -10,6 +10,8 @@ import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
 import { restageCheck, bookGuest, provenanceLine } from './guests/restage.js';
 import { writeWeekly } from './weeklywriter.js';
+import { balance, prepareStories } from './sport/prepare.js';
+import { shapeEpisode } from './sport/shape.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -100,6 +102,11 @@ export class Producer {
     // written from it
     this.archive = archive;
     this.lastWeeklyAt = 0;
+    // FULL TIME (kind 'sport'): when it last aired, the stories it told then, and its leads lately (a lead that led in
+    // the last three hours does not lead again; an edition airs at least 40 % new stories)
+    this.lastSportAt = 0;
+    this.lastSportStories = new Set();
+    this.recentSportLeads = []; // [{ id, at }]
     // IN THEIR WORDS, re-staged (server/guests/restage.js): who a named speaker is (server/guests/identity.js) and
     // where every re-staged line is logged (data/guests/audit.jsonl), both optional
     this.identity = identity;
@@ -130,8 +137,13 @@ export class Producer {
     this.stages = [
       // The picture desk works before the writer, so the writer knows which candidates have a picture.
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
+      // FULL TIME: its stories made ready before the writer sees them (time words from today, no verdicts on players,
+      // scorelines and fixtures read) and balanced across sports (server/sport/prepare.js)
+      { name: 'sport-desk', run: (ctx) => this.sportDesk(ctx), enabled: (ctx) => ctx.program.kind === 'sport' },
       { name: 'write', run: (ctx) => this.write(ctx) },
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
+      // ...and shaped for the day and the hour after the writer (server/sport/shape.js)
+      { name: 'sport', run: (ctx) => this.shapeSport(ctx), enabled: (ctx) => ctx.program.kind === 'sport' && !!ctx.episode?.segments },
       // IN THEIR WORDS, re-staged: a story's sourced quote said by the person themselves, a labelled recreation (after
       // the review: the editor checks the words where the presenter reads them, the recreation adds none of its own)
       { name: 'guests', run: (ctx) => this.guests(ctx), enabled: (ctx) => (Number(ctx.program.restage) || 0) > 0 && this.config.restage !== false && !!ctx.episode?.segments },
@@ -167,7 +179,8 @@ export class Producer {
     // Long programmes (pace: up to ~10 min) need a deeper pool than the default 12: at least 1.5 x their stories.
     // A programme with a picture on every item (NEWS IN 60) looks a little deeper, for stories that have one.
     const every = program.pictures === 'every';
-    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * (every ? 2.5 : 1.5)));
+    // (FULL TIME too: its balance needs other sports to swap in, and SCORE CENTRE the results its stories do not tell)
+    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * (every || program.kind === 'sport' ? 2.5 : 1.5)));
     const list = this.news.candidates(pool, { categories: program.categories, fill: true, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
     if (!every) return list;
     // Stories with a picture first (in the desk's order), then the rest as a fallback for the writer.
@@ -217,6 +230,7 @@ export class Producer {
     const program = { id: programId, ...channel.programs[programId] };
     if (program.kind === 'weather') return !!this.weather?.enabled && this.weather.usable?.() !== false && this.newsSinceWeather >= (program.minBetween ?? 3);
     if (program.kind === 'weekly') return this.weeklyReady(program);
+    if (program.kind === 'sport') return this.sportReady(program);
     return this.stock(program).length >= this.floorOf(program);
   }
 
@@ -233,7 +247,7 @@ export class Producer {
     const correspondents = rosterOf(program, channel.presenters);
     // ...and its experts (analyses: server/experts.js), voiced in the slots that follow the links'
     const experts = restedExperts(program, expertsOf(program, channel.presenters), this.recentExperts);
-    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, experts, channelPresenters: channel.presenters };
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, experts, channelPresenters: channel.presenters, channelClock: channel.clock };
     const started = Date.now();
     try {
       for (const stage of this.stages) {
@@ -288,6 +302,48 @@ export class Producer {
       }
     } : null;
     return this.archive.week({ same });
+  }
+
+  /**
+   * FULL TIME can air: not again within `minGapHours`, its floor of stories, and at least 40 % of the stories it would
+   * tell new since its last edition (overnight in UK time, when the sport desk barely moves, the slot is skipped).
+   */
+  sportReady(program) {
+    if (Date.now() - this.lastSportAt < (program.minGapHours ?? 1.5) * 3600_000) return false;
+    const list = this.stock(program);
+    if (list.length < this.floorOf(program)) return false;
+    const top = list.slice(0, program.stories || 10);
+    const fresh = top.filter((s) => !this.lastSportStories.has(s.id)).length;
+    return fresh >= Math.ceil(0.4 * top.length);
+  }
+
+  /** FULL TIME's stories made ready and balanced (the 'sport-desk' stage). */
+  sportDesk(ctx) {
+    const now = Date.now();
+    const tz = ctx.channelClock?.timezone || 'Europe/London';
+    const before = ctx.candidates.length;
+    const led = new Set(this.recentSportLeads.filter((x) => now - x.at < 3 * 3600_000).map((x) => x.id));
+    const list = balance(prepareStories(ctx.candidates, { now, tz }), { count: ctx.program.stories || 10, ledLately: (id) => led.has(id) });
+    // the writer tells the edition (football at most half of it); the shape reads results and dates from all of them
+    ctx.sportPool = list;
+    ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program)));
+    return { stories: ctx.candidates.length, pool: list.length, dropped: before - list.length };
+  }
+
+  /** FULL TIME's shape for the day and the hour (the 'sport' stage). */
+  shapeSport(ctx) {
+    const note = shapeEpisode(ctx.episode, {
+      candidates: ctx.sportPool || ctx.candidates, program: ctx.program, presenters: ctx.presenters, channelName: ctx.channelName,
+      now: Date.now(), tz: ctx.channelClock?.timezone || 'Europe/London', recentLines: this.recentText(), seed: `${this.seq}`,
+    });
+    const now = Date.now();
+    for (const line of note.lines || []) this.recentLines.push({ line, at: now });
+    this.lastSportAt = now;
+    this.lastSportStories = new Set(ctx.episode.storyIds || []);
+    const lead = ctx.episode.segments.find((s) => s.type === 'story' && s.storyId && !s.feature);
+    if (lead) this.recentSportLeads.push({ id: lead.storyId, at: now });
+    this.recentSportLeads = this.recentSportLeads.filter((x) => now - x.at < 6 * 3600_000);
+    return { shape: note.shape, results: note.results, fixtures: note.fixtures };
   }
 
   /** SEVEN DAYS can air: a week told on three days or more, six stories at least, and not again within `minGapHours`. */

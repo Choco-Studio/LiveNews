@@ -38,8 +38,8 @@ const MAN = '(?:(?:10|ten|nine|9)-man\\s+)?';
 
 // The forms, most specific first. Each gives the winner's and the loser's spans, the scores, and the line's verb.
 const FORMS = [
-  // "X leads/guides/fires/powers A to a 37-34 victory over B" (the team, never the player)
-  { re: new RegExp(`\\b(?:leads?|led|leading|guides?|guided|guiding|fires?|fired|firing|powers?|powered|powering|inspires?|inspired|inspiring|helps?|helped|helping|carries|carried|carrying|propels?|propelled|sends?|sent)\\s+(?:the\\s+)?${TEAM}\\s+to\\s+(?:an?\\s+)?${ADJ}${SCORE}\\s+(?:home\\s+|away\\s+)?(?:win|victory|triumph)\\s+(?:over|against|at)\\s+(?:the\\s+)?${TEAM}`, 'u'), map: (m) => ({ w: m[1], l: m[4], sw: m[2], sl: m[3], verb: 'beat', kind: 'win' }) },
+  // "X leads/guides/fires/powers/lifts A to a 37-34 victory over B" (the team, never the player)
+  { re: new RegExp(`\\b(?:leads?|led|leading|guides?|guided|guiding|fires?|fired|firing|powers?|powered|powering|inspires?|inspired|inspiring|helps?|helped|helping|carries|carried|carrying|propels?|propelled|lifts?|lifted|lifting|sends?|sent)\\s+(?:the\\s+)?${TEAM}\\s+to\\s+(?:an?\\s+)?${ADJ}${SCORE}\\s+(?:home\\s+|away\\s+)?(?:overtime\\s+|extra-time\\s+|OT\\s+)?(?:win|victory|triumph)\\s+(?:over|against|at)\\s+(?:the\\s+)?${TEAM}`, 'u'), map: (m) => ({ w: m[1], l: m[4], sw: m[2], sl: m[3], verb: 'beat', kind: 'win' }) },
   // "A's 5-1 win against B", "Rams' 37-34 overtime loss to the Buffalo Bills"
   { re: new RegExp(`${TEAM}['’]s?\\s+${SCORE}\\s+${ADJ}(home\\s+|away\\s+)?(win|victory|triumph|success|loss|defeat|draw)\\s+(?:to|over|against|at|by|with)\\s+(?:the\\s+)?${TEAM}`, 'u'), map: (m) => (/loss|defeat/.test(m[5]) ? { w: m[6], l: m[1], sw: m[2], sl: m[3], verb: 'beat', kind: 'loss', at: m[4] } : /draw/.test(m[5]) ? { a: m[1], b: m[6], sw: m[2], sl: m[3], kind: 'draw' } : { w: m[1], l: m[6], sw: m[2], sl: m[3], verb: 'beat', kind: 'win', home: m[4] }) },
   // "A come(s) from behind to beat B 2-1", "A fight back to beat B 2-1"
@@ -189,6 +189,32 @@ export function scorelinesIn(sentences, sport, context = '') {
     }
   }
   return out;
+}
+
+// a headline's result in words ("Allen has monster day as Bills beat Rams in overtime thriller")
+const HEADLINE_RESULT = new RegExp(`${TEAM}\\s+${WIN}\\s+${MAN}${TEAM}`, 'u');
+const last = (name) => String(name || '').split(' ').at(-1).toLowerCase();
+
+/**
+ * Does a story's copy name another result than its headline? "Bills beat Rams" over "…lifting the Buffalo Bills to a
+ * thrilling 37-34 victory over the Los Angeles Chargers" (Sky Sports, 13 Oct: the copy's error) is a story the channel
+ * cannot tell: one of the two is wrong, and nothing says which. True when a scoreline of the copy has one of the
+ * headline's teams and not the other, or has them the other way round.
+ */
+export function headlineContradicts(title, scorelines) {
+  const m = HEADLINE_RESULT.exec(String(title || '').replace(/\s+/g, ' '));
+  if (!m) return false;
+  const w = teamName(m[1]);
+  const l = teamName(m[3]);
+  if (!w || !l) return false;
+  for (const sl of scorelines || []) {
+    const names = [last(sl.a), last(sl.b)];
+    const hasW = names.includes(last(w));
+    const hasL = names.includes(last(l));
+    if (hasW !== hasL) return true;
+    if (hasW && hasL && !sl.draw && last(sl.winner) === last(l)) return true;
+  }
+  return false;
 }
 
 /** The result line SCORE CENTRE reads, in figures (the captions); the voice speaks the score in words (spokenScore). */

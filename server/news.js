@@ -11,7 +11,7 @@ import { guardedFetch, readCapped } from './net.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
 import { sentencesIn, sameWord } from './facts.js';
-import { notSport } from './sport/desk.js';
+import { notSport, sportApart } from './sport/desk.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
@@ -1083,6 +1083,8 @@ export class NewsDesk {
   }
 
   sameStory(a, b) {
+    // (two sport stories with different scores, a women's and a men's match, or a result and a preview: never one)
+    if (a?.category === 'sport' && b?.category === 'sport' && sportApart(a, b)) return false;
     // a named storm is one story wherever it is told ("Isaias becomes major category three storm before landfall" /
     // "Hurricane Isaias strengthens as it heads towards land", BBC 10 Oct: both aired in one COSMOS), and an update
     // whose summary says the same as another's is the same story

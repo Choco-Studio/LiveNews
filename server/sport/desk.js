@@ -81,18 +81,43 @@ export function isWomensSport(story) {
   return WOMEN_PATH.test(String(story?.link || '')) || WOMEN_WORDS.test(`${story?.title || ''}. ${story?.summary || ''}`);
 }
 
+/**
+ * Two sport stories the desk must never fold into one, whatever names they share: a women's match and a men's ("Pixelburg
+ * United Women beat Starfield City Women 2-0" is not "Pixelburg United beat Bitport Athletic 3-1"), two different scores,
+ * or a result and a preview of a match still to come.
+ */
+export function sportApart(a, b) {
+  const head = (s) => `${s?.title || ''}. ${String(s?.summary || '').split(/(?<=[.!?])\s+/)[0]}`;
+  const ws = (s) => /\b(?:women|women's|womens|ladies|wsl|wnba|lionesses|girls)\b/i.test(String(s?.title || ''));
+  if (ws(a) !== ws(b)) return true;
+  const scores = (s) => [...head(s).matchAll(/\b(\d{1,3})\s*[-–]\s*(\d{1,3})\b/g)].map((m) => [m[1], m[2]].sort().join('-'));
+  const sa = scores(a);
+  const sb = scores(b);
+  if (sa.length && sb.length && !sa.some((x) => sb.includes(x))) return true;
+  const ahead = (s) => /\b(?:will (?:host|face|meet|play|visit|take on)|meet with|preview|ahead of|set to (?:face|meet|host))\b/i.test(head(s));
+  const result = (s) => sa.length + sb.length > 0 && scores(s).length > 0;
+  return (ahead(a) && result(b) && !ahead(b)) || (ahead(b) && result(a) && !ahead(a));
+}
+
 // What never airs on FULL TIME (§3.1), each with its reason, so the desk's choices can be listed and checked.
 const NEVER = [
   ['video page', (s) => /\/(?:videos?|watch\/video|tv-shows|av)\//.test(s.link)],
   ['live page', (s) => /\/live\//.test(s.link) || /\b(?:live text|live updates?|live blog|as it happened|minute-by-minute|scorecard|live scores?|scores and schedule)\b|[-–—|]\s*live\s*$|^\s*live\s*[:|-]/i.test(s.title) || /\b(?:tennis|live) scores:/i.test(s.title)],
-  ['gossip or the papers', (s) => /\bgossip\b|^\s*papers?\s*:|\bthe papers\b|\btransfer (?:rumours?|news live|window live)\b|\brumour mill\b/i.test(s.title)],
-  ['rumour', (s) => /\b(?:eye|eyes|eyeing|linked with|interested in|monitoring|keen on|weigh up|weighing up|considering a move|plot (?:a |an )?(?:move|bid)|in talks)\b/i.test(s.title) && !/\b(?:confirm(?:s|ed)?|announce[sd]?|official(?:ly)?|statement)\b/i.test(`${s.title} ${s.summary}`)],
+  ['gossip or the papers', (s) => /\bgossip\b|^\s*papers?\s*:|\bthe papers\b|\btransfer (?:rumou?rs?|news live|window live|talk)\b|\brumou?r mill\b|\brumou?rs?\b/i.test(s.title) || /\btransfer talk\b/i.test(s.summary)],
+  ['rumour', (s) => (/\b(?:eye|eyes|eyeing|linked with|interested in|monitoring|monitor|keep tabs|keeping tabs|keen on|weigh up|weighing up|considering a move|plot (?:a |an )?(?:move|bid)|in talks|growing confident of signing|close in on (?:a )?(?:deal|move|signing))\b/i.test(s.title) || (/\b(?:keep tabs|keeping tabs|monitor|monitoring|eyeing|linked with|interested in|growing confident of signing)\b/i.test(s.summary.split(/(?<=[.!?])\s/)[0]) && /\b(?:transfer|signing|sign|move|bid|deal|fee|window|target)\b/i.test(`${s.title} ${s.summary}`)) ) && !/\b(?:confirm(?:s|ed)?|announce[sd]?|official(?:ly)?|statement)\b/i.test(`${s.title} ${s.summary}`)],
   ['quiz or promo', (s) => /\bquiz(?:zes)?\b|\bwho am i\b|\bfive in five\b|\bbrainteaser\b|\bpredict(?:s|ions?|or)?\b|\bfantasy\b|\bsweepstake\b|\bcompetition to win\b/i.test(s.title)],
   ['betting', (s) => /\b(?:odds|betting|bets?|bookmakers?|bookies|accumulator|free bets?|tips?|tipster|paddy power|bet365|william hill|ladbrokes|betfair)\b/i.test(`${s.title} ${s.summary}`)],
   ['column or opinion', (s) => /\s\|\s+\p{Lu}[\p{L}’'.-]*(?:\s+\p{Lu}[\p{L}’'.-]*)*\s*$/u.test(s.title) || /\b(?:comment|opinion|verdict|column|analysis:|the view from|mailbag|letters?)\b/i.test(s.title)],
   ['Q&A, talking points or ratings', (s) => /\bQ&A\b|\btalking points\b|\bteam of the week\b|\bplayer ratings\b|\bmarks out of\b|\bwinners and losers\b|\bfive things\b|\bthings we learned\b|\bwhat we learned\b|\bpower rankings\b/i.test(s.title)],
   ['podcast, gallery or photo essay', (s) => /\bpodcast\b|\bin pictures\b|\bphoto essay\b|\bgallery\b|\bbest (?:plays|photos|pictures)\b|[–—-]\s*video\s*$/i.test(s.title)],
-  ['analysis, list or listing', (s) => /\b(?:takeaways|grading|overreacting|power rankings|rankings:|projections|poll reaction|draft risers|stock up|stock down|mock draft|notes off|inside the huddle|catch-up|round-?up|group-by-group|team-by-team|club-by-club|\d+ of the best|can you name|today on sky sports|how to watch|tv channel|live stream)\b/i.test(s.title) || /^\s*(?:sources?|report)\s*:/i.test(s.title) || /(?:^|\?\s+)ranking\b/i.test(s.title) || /:\s*\p{Lu}[\p{L}'’-]+ on (?:an?|the|how|why|what|his|her|their)\b/u.test(s.title)],
+  ['analysis, list or listing', (s) => /\b(?:takeaways|grading|overreacting|power rankings|rankings:|projections|poll reaction|draft risers|stock up|stock down|mock draft|notes off|inside the huddle|catch-up|round-?up|group-by-group|team-by-team|club-by-club|\d+ of the best|can you name|today on sky sports|how to watch|tv channel|live stream)\b/i.test(s.title) || /^\s*(?:sources?|report)\s*:/i.test(s.title) || /(?:^|\?\s+)ranking\b/i.test(s.title) || /:\s*\p{Lu}[\p{L}'’-]+ on (?:an?|the|how|why|what|his|her|their)\b/u.test(s.title)
+    // (a piece that looks at how: "The star is Luis Enrique - inside the plans to keep PSG…", whose standfirst says "Guillem
+    // Balague looks at how the coach keeps his side at the top", BBC Sport 13 Oct)
+    || /\binside the (?:plans|mind|making|numbers|tactics|dressing room|rise)\b/i.test(s.title) || /\b(?:looks at|examines|analyses|analyzes|assesses|explores|breaks down)\s+(?:how|why|what|whether)\b/i.test(s.summary)],
+  // (an interview feature: a headline that ends on the subject's quotation over a standfirst that opens on one, "Viking’s
+  // two head coaches on Champions League adventure: ‘For us, it’s the best team in the world’", Guardian 13 Oct; its
+  // sentences are scenes and quotations, and its news is told elsewhere)
+  ['interview feature', (s) => /:\s*[‘'“"][^‘'“"]{6,}[’'”"]\s*$/u.test(s.title) && /^\s*[“"‘]/u.test(s.summary)],
   ['a series column', (s) => /^[\p{L}\d ’'.&-]{2,32}\s\|\s/u.test(s.title) || /^david squires on\b/i.test(s.title)],
   // (a headline that asks is an analysis or a pun, never a report: "Can Texas bounce back? … Connelly on an eventful Week 6")
   ['a question', (s) => /\?/.test(s.title.replace(/[‘'“"][^’'”"]*[’'”"]/g, ' '))],

@@ -984,12 +984,17 @@ export function headlineNames(title, summary = '') {
  */
 export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
   const t = String(sentence).trim().replace(/[.!?]+$/, '');
+  // a sentence that opens on a subordinate clause has its main clause after the first comma: a cut there would keep
+  // only the subordinate one ("As Luis Enrique bids to guide PSG to a third successive Champions League triumph.", BBC
+  // Sport 13 Oct, aired on FULL TIME); its cuts must come after that comma
+  const sub = /^(?:As|While|Although|Though|Because|If|When|Since|After|Before|Whereas|Unless|Once|Until)\b/.test(t) ? t.indexOf(', ') : -1;
   // (a bare "with" or "as" usually completes what comes before: "visible with binoculars", "served as a base")
   const cuts = [...t.matchAll(/,\s+|\s+(?:where|which|while|after|as|but|and|whose|when|because|although|though|following|before)\s+/g)]
     .filter((m) => m[0].trim() !== 'as' || asStartsClause(t.slice(m.index + m[0].length)))
     .map((m) => ({ at: m.index, end: m.index + m[0].length, comma: m[0].trim() === ',' }))
     .reverse();
   for (const { at, end, comma } of cuts) {
+    if (sub >= 0 && at <= sub) continue;
     // (an aside's dash goes with it: "...the use of clearfell logging[ – where all trees are cut down]")
     const head = t.slice(0, at).trim().replace(/\s*[–—]$/, '');
     const n = head.split(/\s+/).length;
@@ -1152,6 +1157,9 @@ const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million|billion|dozens|hundreds|thousands|millions|billions)$/i;
 const PROPER_ING = /^(?:beijing|nanjing|chongqing|kunming|peking|jinping|boeing|reading|woking|ealing|epping|stirling|sterling|corning|kipling|bing|king|ming|viking)$/;
 /** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
+// people by their role, in a list ("…teenager Sidiki Cherif and substitutes Ellis Simms and Stephen Mfuni gave…", Sky
+// Sports 13 Oct): a plural noun, never the verb its "-s" suggests
+const ROLE_PLURAL = /^(?:substitutes|replacements|teammates|team-mates|defenders|strikers|forwards|midfielders|goalkeepers|wingers|players|newcomers|debutants|youngsters|veterans|rookies|pitchers|batters|bowlers|riders|drivers|referees|officials|fans|supporters|spectators|residents|campaigners|protesters|officers|lawmakers|ministers)$/;
 export function hasFiniteVerb(clause) {
   const words = String(clause).split(/\s+/).map((w) => w.replace(/^[^\p{L}]+|[^\p{L}'’-]+$/gu, '')).filter(Boolean);
   for (let i = 1; i < words.length; i++) {
@@ -1164,6 +1172,7 @@ export function hasFiniteVerb(clause) {
     const gerund = /ing$/.test(prev) && !(/^\p{Lu}/u.test(words[i - 1]) && (i > 1 || PROPER_ING.test(prev)));
     if (NOT_VERB_AFTER.test(prev) || gerund) continue;
     if (PLURAL_VERB.test(w) || /^[a-z]{3,}ed$/.test(w)) return true;
+    if (ROLE_PLURAL.test(w)) continue;
     if (/^[a-z]{2,}(?:[^s'’]s|ies)$/.test(w) && !/(?:ss|us|is|ous|ics|ings|ness|ies)$/.test(w.replace(/ies$/, 'y') + (w.endsWith('ies') ? '' : ''))) return true;
   }
   return false;
@@ -1201,7 +1210,7 @@ export function isFragment(sentence) {
 }
 
 // The longest sentence each programme's bible allows (config `sentenceWords` overrides).
-export const SENTENCE_WORDS = { 'world-now': 20, 'news-60': 18, 'tech-bytes': 22, cosmos: 22, 'money-minute': 22 };
+export const SENTENCE_WORDS = { 'world-now': 20, 'news-60': 18, 'tech-bytes': 22, cosmos: 22, 'money-minute': 22, 'full-time': 28 };
 
 const pick = (v, list, fallback) => (list.includes(v) ? v : fallback);
 

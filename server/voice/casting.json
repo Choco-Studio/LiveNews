@@ -222,5 +222,31 @@
    "dash": 0.22
   },
   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Legal Affairs Correspondent, careful and crisp: ef_dora (a Spanish voice, read with en-US phonemes) with 45% af_sky. Nearest UNIT-8 63, Sam 65, Vic 68; every WORLD NOW voice further; median F0 ~167 Hz. WER 0.02. Led by ef_dora rather than af_sky (the cloudbrella advert's lead), which also moved her further from the cast (62 -> 63+). Clara shares af_sky (37 apart), but they differ by accent (en-US / en-GB), pace and a Spanish against a French colour, and one analysis airs per programme."
+ },
+ "kai": {
+  "voice": "bm_lewis:0.55+am_puck:0.45",
+  "speed": 1.06,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.16,
+   "sentence": 0.38,
+   "semicolon": 0.26,
+   "colon": 0.26,
+   "dash": 0.2
+  },
+  "notes": "FULL TIME's presenter, quick and warm: bm_lewis with 45% am_puck, a British male with a brighter top than Paco's bm_george blend and none of Max's am_fenrir. A touch quicker than the anchors (sport's pace), never shouting; the results lines get the voice plan's marked names and score. First choice; the owner hears A/B before it is final."
+ },
+ "rosa": {
+  "voice": "if_sara:0.4+bf_alice:0.6",
+  "speed": 0.98,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "FULL TIME's analyst, a former international: bf_alice with 40% if_sara, a warm, lower British alto with a Mediterranean colour unlike Ines (ef_dora) or Clara (ff_siwis). Calm and dry, a little slower than Kai so the context lands. First choice; the owner hears A/B before it is final."
  }
 }

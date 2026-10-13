@@ -81,7 +81,8 @@ describe('the fallback writer on real news (9 Oct)', () => {
     );
     assert.match(text, /^Margaret Hamilton died last week at the age of 90/, 'an over-long opener loses its aside, not its news');
     assert.ok(!/that same year/.test(text) || /She met James Cox Hamilton/.test(text), text);
-    assert.ok(!/until he finished/.test(text), text);
+    // ("he" only once the husband is named: "She met James Cox Hamilton…" used to be lost to a name read as "Jame")
+    assert.ok(!/until he finished/.test(text) || /James Cox Hamilton/.test(text.split('until he finished')[0]), text);
   });
 
   test('people by surname alone are named whole or not at all; a connective never opens; an aside already said goes', async () => {

@@ -903,17 +903,20 @@ function otherNumbers(st, L) {
   });
   // Ordinals: "21st", "3rd" (Spanish "1º" is read before the units).
   if (!L.es) st = sub(st, /\b(\d{1,3}(?:,\d{3})+|\d+)(st|nd|rd|th)\b/gi, (mt) => ordinalWords(+mt[1].replace(/,/g, ''), L));
-  // Scores: "won 3-1", "a 2-0 win", "drew 1-1".
-  st = sub(st, /(?<![\w.,])(\d{1,2})\s?[-–]\s?(\d{1,2})\b(?![,.]?\d|\s?%)/g, (mt, s) => {
-    const before = s.slice(Math.max(0, mt.index - 40), mt.index);
+  // Scores: "won 3-1", "a 2-0 win", "drew 1-1"; FULL TIME's result lines ("Coventry City stunned Newcastle United
+  // 4-1.", "London Lions lost 119-66 to…": a basketball score has three figures).
+  st = sub(st, /(?<![\w.,])(\d{1,3})\s?[-–]\s?(\d{1,3})\b(?![,.]?\d|\s?%)/g, (mt, s) => {
+    const before = s.slice(Math.max(0, mt.index - 48), mt.index);
     const after = s.slice(mt.index + mt[0].length, mt.index + mt[0].length + 24);
-    const scoreCtx = /\b(?:won|win|wins|beat|beats|beating|lost|lose|loses|losing|drew|draw|draws|drawn|victory|defeat|defeated|thrashed|edged|trail|trailed|trailing|led|lead|leads|leading|score|scored)\b(?:\s+[\p{L}']+){0,3}\s*$/iu.test(before) ||
+    if ((+mt[1] > 99 || +mt[2] > 99) && !/\b(?:beat|beats|lost|defeat|victory|win|won)\b/i.test(`${before} ${after}`)) return null;
+    const scoreCtx = /\b(?:won|win|wins|beat|beats|beating|lost|lose|loses|losing|drew|draw|draws|drawn|victory|defeat|defeated|thrashed|edged|stunned|crushed|routed|hammered|downed|toppled|overcame|thumped|outlasted|trail|trailed|trailing|led|lead|leads|leading|score|scored|(?:saw|eased|cruised|brushed)\s+(?:off|past|aside))\b(?:\s+[\p{L}'&.-]+){0,4}\s*$/iu.test(before) ||
       /^\s+(?:win|victory|defeat|loss|draw|lead|thrashing|scoreline|result|home win|away win)\b/i.test(after) ||
       (/\b[A-Z][\p{L}]+\s$/u.test(before) && /^\s[A-Z]/.test(after)) || /\bscore[s]?:?\s*(?:[A-Z][\p{L}]+\s+){0,3}$/iu.test(before);
     if (!scoreCtx || L.es) return null;
     const say = (n) => (n === 0 ? (L.gb ? 'nil' : 'nothing') : cardinalEn(n, L.gb));
     const a = +mt[1];
     const b = +mt[2];
+    if (a === 0 && b === 0) return L.gb ? 'nil-nil' : 'zero-zero';
     return a === b ? `${say(a)} all` : `${say(a)} ${say(b)}`;
   });
   // Fractions: "½", "2 1/2", "3/4", "24/7".

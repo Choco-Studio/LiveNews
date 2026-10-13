@@ -38,6 +38,21 @@ const NOT_GRAVE_SENSES = [
   // deep time: what happened millions of years ago is science, not grave news ("the mysterious Ordovician
   // bombardment", "a mass extinction that devastated marine life" 370 million years ago, ScienceDaily 5 Oct)
   /[^.!?]*\b(?:\d[\d,.]*\s+(?:million|billion)\s+years|(?:million|billion) years ago|prehistoric|dinosaurs?|fossil(?:s|ised|ized)?|Ordovician|Cambrian|Permian|Triassic|Jurassic|Cretaceous|ice age)\b[^.!?]*[.!?]?/gi,
+  // sport's own senses (FULL TIME): a player's knee injury, an injury crisis, a team that "crashes out", a striker who
+  // "fires City to victory" or "blasts home", a batting collapse, a dead rubber ("defender Tiago Santos suffered a knee
+  // injury" once made a football story grave and silenced the chat before it, Sky Sports 13 Oct); a player who collapses
+  // on the pitch stays grave
+  /\b(?:knee|hamstring|ankle|groin|calf|thigh|shoulder|back|hip|foot|muscle|muscular|wrist|elbow|achilles|acl|cruciate|ligament|metatarsal|toe|neck|rib|quad|adductor|knock)\s+(?:injur(?:y|ies)|problems?|issues?|strain|scare)\b/gi,
+  /\binjur(?:y|ies)[- ](?:time|list|lists|crisis|update|news|setback|setbacks|scare|worries|worry|concerns?|return|lay-?off|absence|doubts?|blow|record|prone|hit)\b|\binjury-(?:hit|ravaged|plagued|prone)\b|\b(?:returns?|returned|returning|back) from (?:a |an |his |her |their )?(?:[\w-]+\s+){0,2}injury\b|\b(?:carrying|nursing|shaking off|overcome|overcame|picked up) (?:a |an |his |her )?(?:[\w-]+\s+){0,2}injury\b|\binjured list\b/gi,
+  // (a player's injury by name: "Lille considering legal action after Santos injury", BBC Sport 13 Oct)
+  /(?<=\b(?:after|over|with|despite|amid|following|by|to)\s+\p{Lu}[\p{L}'’-]+(?:['’]s?)?\s+)(?:knee\s+|hamstring\s+|ankle\s+|groin\s+|calf\s+|thigh\s+|shoulder\s+|back\s+|foot\s+|muscle\s+)?injury\b/gu,
+  /\b(?:goalkeeping|selection|confidence|form|striker|scoring|defensive) crisis\b/gi,
+  /\bcrash(?:es|ed|ing)? out\b/gi,
+  /\bfire[sd]?\s+(?:\p{Lu}[\p{L}'’-]*\s+){1,3}(?:to|into|past|ahead|level|clear)\b|\b(?:fired|fires|blasts?|blasted|blasting)\s+(?:home|in|past|over|wide|into the (?:top|bottom) corner|a shot)\b/giu,
+  /\bbatting collapse\b|\bcollaps(?:e|ed|es)\s+to\s+\d/gi,
+  /\bdead (?:rubber|ball|heat)\b|\bkill(?:s|ed|ing)? off (?:the|their|any) (?:game|tie|contest|match|hopes?)\b|\bwar of words\b/gi,
+  /\b(?:shooting (?:guard|percentage|boots|practice|form|range|touch)|three-point shooting|free-throw shooting)\b/gi,
+  /\bmissing (?:out|from (?:the )?(?:squad|team|line-up|lineup|side|starting)|piece|link)\b/gi,
 ];
 // What says a grave-sounding event harmed no one ("Moderate earthquake shakes northern Chile, no damage reported").
 const HARM_NEGATED = /\b(?:no (?:reports? of )?(?:damage|injuries|injured|casualties|deaths|victims)(?:\s+(?:or|and|nor)\s+(?:damage|injuries|injured|casualties|deaths|victims))?|no one (?:was )?(?:hurt|injured|killed)|nobody (?:was )?(?:hurt|injured|killed)|without (?:injuries|casualties)|false alarm|(?:a|the) drill\b)/gi;

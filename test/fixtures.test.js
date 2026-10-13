@@ -48,7 +48,8 @@ describe('offline fixture feeds', () => {
       assert.ok(localFeedPath(f.url), `${f.name} is local`);
       assert.doesNotMatch(f.name, /fixture/i, 'an on-air outlet name, not a file label');
     }
-    assert.deepEqual([...new Set(FEEDS.map((f) => f.category))].sort(), ['business', 'science', 'tech', 'world']);
+    // (sport: FULL TIME's offline desk, fictional clubs and players, config/fixtures/sport.xml)
+    assert.deepEqual([...new Set(FEEDS.map((f) => f.category))].sort(), ['business', 'science', 'sport', 'tech', 'world']);
   });
 
   test('hold enough varied stories for long demos: 12+ per feed, 60+ in all, unique links, real summaries', () => {

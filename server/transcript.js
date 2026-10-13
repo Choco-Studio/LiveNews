@@ -64,12 +64,16 @@ const FUNCTION_WORDS = /^(?:a|an|the|of|in|on|at|to|for|and|or|but|is|are|was|we
 // "Follow our live coverage." alone, never a line with news in it: "Follow the latest from the talks, where…")
 const TAGLINES = /^(?:each day a different image|discover the cosmos|astronomy picture of the day)\b|^(?:[\w-]+\s+){0,3}live\s*[–—-]\s*(?:latest|all the latest|live)\s+(?:updates|news)\b|^(?:follow|read) (?:our|the) (?:latest|live)(?: live)? (?:coverage|updates|news|blog|page)(?: here)?\W*$/i;
 
+const SENTENCE_VERB = /^(?:is|are|was|were|will|has|have|had|said|says|host|hosts|face|faces|meet|meets|play|plays|beat|beats|visit|visits|welcome|welcomes|win|wins|won|lost|drew|draws|lead|leads|led|join|joins|joined|sign|signs|signed|named|scored|scores)$/;
 /** Is this sentence a run of menu words (most words capitalised, almost no function words)? */
 export function isNavRun(sentence) {
   const words = String(sentence ?? '').replace(/[^\p{L}\p{N}'’ -]/gu, ' ').split(/\s+/).filter(Boolean);
   if (words.length < 6) return false;
   const caps = words.filter((w) => /^[\p{Lu}\p{N}]/u.test(w)).length;
   const fn = words.filter((w) => FUNCTION_WORDS.test(w)).length;
+  // (a sentence with a verb is news, however many names it has: "Bitport Athletic host Copperfold Town on Saturday.",
+  // "Wales host Albania on Tuesday.")
+  if (words.some((w) => SENTENCE_VERB.test(w))) return false;
   return caps / words.length >= 0.6 && fn / words.length < 0.2;
 }
 
