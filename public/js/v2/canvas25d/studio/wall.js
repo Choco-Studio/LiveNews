@@ -44,7 +44,10 @@ const WIDE_K = F / SET.wallZ; // px per unit of the wall in the wide shot (0.714
 const BAND_PX = 16;
 const MARGIN = 6; // px kept between wall text and a head
 const WIPE = 0.3;
-const MODES = new Set(['idle', 'picture', 'map', 'figure', 'plate']);
+const MODES = new Set(['idle', 'picture', 'map', 'figure', 'plate', 'rest']);
+// the idles that are words (MONEY MINUTE's wordmark, NEWS IN 60's dial and its "60", SEVEN DAYS's lettered tiles):
+// at rest (the two-way's studio box) their wall shows its field only, as a cropped word reads as a broken graphic
+const WORDY_IDLE = new Set(['wordmark', 'dial', 'week']);
 const DEG = Math.PI / 180;
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
@@ -328,9 +331,9 @@ function fieldPixels(b, style, soft, flat) {
   }
   const iu = 1 / Math.max(1e-6, u1 - u0);
   for (let y = y0; y < y1; y++) {
-    let q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf - u0) * iu)) * 16);
-    if (q <= 2) q = 0; // no lone Bayer specks at the ends of the band
-    else if (q >= 14) q = 16;
+    // all sixteen levels of the Bayer matrix, from the first lone speck to the last: a band that started at 3/16
+    // and stopped at 13/16 had a hard top and bottom edge and read as a stripe across the screen (banding)
+    const q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf - u0) * iu)) * 16);
     const row = y * w, br = ((y + ay) & 3) << 2;
     if (q <= 0 || q >= 16) {
       px.fill(q <= 0 ? ca : cz, row + x0, row + x1);
@@ -344,12 +347,15 @@ function fieldPixels(b, style, soft, flat) {
 const FPAT = new Uint32Array(4);
 const FIELD_BAND = [0.62, 0.82]; // where the wall field's top colour falls to its bottom colour (share of the height)
 
-/** A Bayer falloff from `c` at the top edge into the field over `rows` px (MONEY MINUTE's top 12 px). */
+/**
+ * A Bayer falloff from `c` at the top edge into the field over `rows` px (MONEY MINUTE's top 12 px): solid under the
+ * bezel, then every level of the matrix down to the last speck (a falloff that began at 12/16 read as a dotted strip).
+ */
 function topFalloff(b, c, rows) {
   const { w, px } = b;
   const ax = ENV.ax, ay = ENV.ay;
   for (let y = 0; y < Math.min(rows, b.h); y++) {
-    const q = Math.round((1 - y / rows) * 12);
+    const q = Math.round((1 - (y + 0.5) / rows) * 16);
     const row = y * w, br = ((y + ay) & 3) << 2;
     for (let x = 0; x < w; x++) if (q > B16[br + ((x + ax) & 3)]) px[row + x] = c;
   }
@@ -908,7 +914,7 @@ function prepSlice() {
   const run = (deadline) => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     while (PREP.queue.length) {
-      sourceOf(PREP.queue.shift());
+      noteSource(sourceOf(PREP.queue.shift()));
       const left = deadline && deadline.timeRemaining ? deadline.timeRemaining() : 8 - ((typeof performance !== 'undefined' ? performance.now() : 0) - t0);
       if (left < 4) break;
     }
@@ -1176,8 +1182,56 @@ function pictureAt(src, pw, ph, maxL, letter = false) {
   gradePicture(pw * ph, maxL);
   quantisePicture(p.px, pw, ph);
   PICS.set(key, p);
-  if (PICS.size > 10) PICS.delete(PICS.keys().next().value);
+  if (PICS.size > 48) PICS.delete(PICS.keys().next().value);
   return p;
+}
+
+// Every picture filtered ahead of its cut at every size the programme's wall has shown one at: the sizes of the
+// cuts so far (one per framing) and the pictures prepared lately (the episode's). A cut the planner's warm-up did
+// not cover (a relief shot, a story moved on the clock) used to filter its picture on its first frame (10-90 ms);
+// now each new picture, and each new size, queues the missing ones for idle time, one per slice.
+const PIC_SIZES = { styleId: '', list: [] }; // [{ pw, ph, maxL, letter }]
+const PIC_SRCS = []; // sources prepared lately, newest last
+const PIC_JOBS = { queue: [], timer: 0 };
+function noteSize(styleId, pw, ph, maxL, letter) {
+  if (PIC_SIZES.styleId !== styleId) {
+    PIC_SIZES.styleId = styleId;
+    PIC_SIZES.list.length = 0;
+  }
+  if (PIC_SIZES.list.some((z) => z.pw === pw && z.ph === ph && z.maxL === maxL && z.letter === letter)) return;
+  const z = { pw, ph, maxL, letter };
+  PIC_SIZES.list.push(z);
+  if (PIC_SIZES.list.length > 8) PIC_SIZES.list.shift();
+  for (const src of PIC_SRCS) queuePicJob(src, z);
+}
+function noteSource(src) {
+  if (!src || PIC_SRCS.includes(src)) return;
+  PIC_SRCS.push(src);
+  if (PIC_SRCS.length > 24) PIC_SRCS.shift();
+  for (const z of PIC_SIZES.list) queuePicJob(src, z);
+}
+function queuePicJob(src, z) {
+  if (PICS.has(`${src.id}|${z.pw}|${z.ph}|${z.maxL}|${z.letter ? 1 : 0}`)) return;
+  PIC_JOBS.queue.push([src, z]);
+  if (PIC_JOBS.queue.length > 96) PIC_JOBS.queue.shift();
+  if (!PIC_JOBS.timer && typeof setTimeout === 'function' && typeof document !== 'undefined') PIC_JOBS.timer = setTimeout(picJobSlice, 120);
+}
+function picJobSlice() {
+  PIC_JOBS.timer = 0;
+  const run = () => {
+    const job = PIC_JOBS.queue.shift();
+    if (job) {
+      const [src, z] = job;
+      try {
+        pictureAt(src, z.pw, z.ph, z.maxL, z.letter);
+      } catch {
+        /* the cut filters it instead */
+      }
+    }
+    if (PIC_JOBS.queue.length) PIC_JOBS.timer = setTimeout(picJobSlice, 60);
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 800 });
+  else run();
 }
 
 /**
@@ -1202,7 +1256,9 @@ function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null, letter = false) {
   if (!src || pw <= 0 || ph <= 0) return;
   const fw = fit ? fit[0] : pw, fh = fit ? fit[1] : ph;
   const half = picHalf(fw, ENV.ts);
-  const p = pictureAt(src, half ? Math.ceil(fw / 2) : Math.max(1, fw), half ? Math.ceil(fh / 2) : Math.max(1, fh), maxL, letter);
+  const qw = half ? Math.ceil(fw / 2) : Math.max(1, fw), qh = half ? Math.ceil(fh / 2) : Math.max(1, fh);
+  noteSize(ENV.styleId, qw, qh, maxL, letter);
+  const p = pictureAt(src, qw, qh, maxL, letter);
   if (half && p.w === Math.ceil(pw / 2) && p.h === Math.ceil(ph / 2)) blit2x(b, p, x0, y0, pw, ph);
   else if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
   else resampleSub(b, p, x0, y0, pw, ph);
@@ -1610,11 +1666,12 @@ function drawPlateOrIdle(b, L, spec, style, env, label = spec.label || '', sub =
 }
 
 /**
- * A story's plate is set in body 1x at every framing (the strap under it carries the headline in body
- * 1x: ART_DIRECTION §4, two type levels per screen); a plate asked for explicitly (scene.wall
- * { mode: 'plate' }, the lab) keeps the wall's text scale.
+ * A plate is set at the wall's own text scale: body 1x in the wide and the two-shot, 2x in the singles, where
+ * the camera sees the screen at twice the size (as the figure panel, money-minute.md §3.5). A story plate
+ * forced to 1x there was a word the size of a caption in the corner of a screen filling half the frame: the
+ * owner's "empty panels". In silver and fog under the white strap, it stays the set's title, not a graphic's.
  */
-const plateScale = (spec, ts) => (spec.story ? 1 : ts);
+const plateScale = (spec, ts) => ts;
 
 /**
  * The plate's rectangle in SCREEN px for a camera (as laid out on a cut), plus the head boxes it must
@@ -1626,7 +1683,7 @@ export function plateRectFor(cam, label, sub, styleIn, story = false) {
   const o = wallOrigin(cam);
   const { w, h } = wallSize(cam, k);
   const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
-  const P = layoutPlate(L, label || '', sub || '', story ? 1 : wallTextScale(k));
+  const P = layoutPlate(L, label || '', sub || '', wallTextScale(k));
   if (!P) return null;
   const heads = [];
   for (let i = 0; i < L.heads; i++) {
@@ -1871,7 +1928,7 @@ function resampleSub(b, sub, x0, y0, w, h) {
 // ---------------------------------------------------------------------------
 // Rendering one wall state into a buffer
 
-const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, wxf: 0, wyf: 0, ax: 0, ay: 0, fy: 0, hf: 63, fe: Infinity, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
+const ENV = { styleId: '', k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, wxf: 0, wyf: 0, ax: 0, ay: 0, fy: 0, hf: 63, fe: Infinity, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
 
 /** Integer scale for wall text and emblems: 1 in the wide and two-shot, 2-3 in singles. */
 export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
@@ -1992,6 +2049,13 @@ function renderSpec(b, spec, style, env) {
     }
     case 'plate':
       sig = drawPlateOrIdle(b, L, spec, style, env);
+      darkBand(b, L.band, style, soft);
+      break;
+    case 'rest':
+      // the wall at rest behind a presenter cropped into a box (the two-way, stage.js): the programme's art when it
+      // has no words, else its field alone (MONEY MINUTE keeps its falloff under the bezel)
+      if (!WORDY_IDLE.has(style.wallIdle)) sig = drawIdle(b, L, spec, style, env);
+      else if (style.wallIdle === 'wordmark') topFalloff(b, C[style.wallTop || 'slate'], Math.max(0, Math.min(Math.round(12 * cs), Math.floor(L.headTop))));
       darkBand(b, L.band, style, soft);
       break;
     default:
@@ -2277,8 +2341,8 @@ function readSpec(req, style, t) {
   IN.location = mode === 'map' ? loc : null;
   IN.figure = mode === 'figure' ? r.figure : null;
   // a picture, map or figure keeps the story's kicker and source: its plate when a head leaves it no room
-  IN.label = mode === 'idle' ? '' : String(r.label || '');
-  IN.sub = mode === 'idle' ? '' : String(r.sub || (mode === 'plate' && loc && !hasLoc ? loc.place : '') || '');
+  IN.label = mode === 'idle' || mode === 'rest' ? '' : String(r.label || '');
+  IN.sub = mode === 'idle' || mode === 'rest' ? '' : String(r.sub || (mode === 'plate' && loc && !hasLoc ? loc.place : '') || '');
   IN.phase = r.phase === 'outro' ? 'outro' : 'intro';
   IN.focus = r.focus || '';
   IN.solo = r.solo ?? style.solo;
@@ -2390,6 +2454,7 @@ function ensure(buf, key, spec, style, env, w, h) {
 export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
   const style = resolveStyle(styleIn);
   const env = ENV;
+  env.styleId = style.id;
   env.k = k;
   env.cs = k / WIDE_K;
   env.ts = wallTextScale(k);

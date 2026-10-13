@@ -976,7 +976,7 @@ describe('fix round 2 (critics of fix round 1)', () => {
     lab.set({ move: null });
   });
 
-  test('story plates carry what the strap does not: the kicker over the place, never the source; body 1x', () => {
+  test('story plates carry what the strap does not: the kicker over the place, never the source; at the wall\'s scale', () => {
     const base = { program: { id: 'news-60' }, cast: { A: 'sam' }, images: new Map(), focus: 'A', framing: 'mcu-l' };
     const seg = { type: 'story', storyId: 'n1', kicker: 'TRANSPORT', source: 'Bitport Herald', location: { place: 'NORWAY', lat: 60, lon: 10 } };
     const w = wallFromScene({ ...base, storyId: 'n1', wall: { mode: 'source', source: 'Bitport Herald', category: 'world' }, lowerThird: { kicker: 'TRANSPORT' }, segPlan: { ctx: { seg, shots: [] } } });
@@ -991,11 +991,14 @@ describe('fix round 2 (critics of fix round 1)', () => {
     // carded: the feature label is a segue, never wall content on its own: the idle art
     const carded = wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [{ shot: 'fact' }] } } });
     assert.deepEqual([carded.mode, carded.label], ['idle', '']);
-    // a story plate is body 1x in a single (the strap is body 1x under it)
+    // a story plate is set at the wall's own scale: 2x in a single (the screen seen at twice the size; at 1x it was a
+    // caption-sized word on half the frame, the owner's "empty panel"), body 1x in the wide
     const p1 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', true);
     const p2 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', false);
-    assert.equal(p1.ts, 1);
+    const p3 = plateRectFor(lab.cameraFor('wide', 'news-60'), 'WATER', 'CANADA', 'news-60', true);
+    assert.equal(p1.ts, 2);
     assert.equal(p2.ts, 2);
+    assert.equal(p3.ts, 1);
   });
 
   test('plate text breaks: balanced lines that never end on a preposition; a place is never cut mid-name', () => {
