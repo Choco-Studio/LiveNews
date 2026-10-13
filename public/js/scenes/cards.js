@@ -198,7 +198,7 @@ const tagWidth = (tag) => TAG_W.get(tag) ?? (TAG_W.set(tag, measureText(tag, 1, 
  * One headline frame. The montage's (tag TOP STORIES with its pips; the first frame comes out of the open), or
  * STILL TO COME's single story (tag 'STILL TO COME', pips: false, tagIn: the tag wipes in after the cut).
  */
-export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, backdrop = null, accent = null, programId = '', tag = 'TOP STORIES', pips = true, tagIn = index === 0 } = {}) {
+export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', kicker = null, image = null, backdrop = null, accent = null, programId = '', tag = 'TOP STORIES', pips = true, tagIn = index === 0 } = {}) {
   const acc = accentFor(programId, accent);
   if (image) {
     ctx.drawImage(image, 0, 0);
@@ -233,7 +233,8 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const top = 194 - blockH;
   const chipY = top - 17;
   // chip: an ink tab with the programme accent bar, the category in white, then the source
-  const label = categoryLabel(category);
+  // (a sport programme's chip is the story's sport, as its strap: FOOTBALL, not SPORT on every headline)
+  const label = kicker ? String(kicker).toUpperCase().slice(0, 18) : categoryLabel(category);
   const cw = textW(label) + 13;
   const src = source ? ellipsis(source, 200) : '';
   const sw = src ? textW(src) + 10 : 0;
@@ -794,7 +795,8 @@ function drawTimeline(ctx, dt, o, acc) {
  */
 export function boardTitle(kind, { programId = '', kicker = '' } = {}) {
   if (kind === 'timeline') return programId === 'seven-days' ? 'HOW THE WEEK UNFOLDED' : 'HOW WE GOT HERE';
-  if (kind === 'numbers') return /\bNUMBERS\b/.test(String(kicker || '')) ? String(kicker) : 'BY THE NUMBERS';
+  // (FULL TIME's THE NUMBER keeps its own name on its card, as on its strap: never BY THE NUMBERS over one figure)
+  if (kind === 'numbers') return /\bNUMBERS\b/.test(String(kicker || '')) || String(kicker) === 'THE NUMBER' ? String(kicker) : 'BY THE NUMBERS';
   return '';
 }
 

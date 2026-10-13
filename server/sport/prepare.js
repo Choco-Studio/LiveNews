@@ -41,6 +41,18 @@ const unglue = (t) => {
   // (a crosshead may have its colon, "Carra: Newcastle 'beaten up' again It is the first time since December 2012…")
   return m && !/[,;]/.test(m[1]) && !/\b(?:is|are|was|were|has|have|had|said|says|will)\b/.test(m[1]) ? m[2] : t;
 };
+// betting's language inside a story (§3.1: never odds, betting or tips): "having entered the game as 36.5-point
+// favourites" (Sky Sports 13 Oct, the London Lions in Portland) is a point spread read out as news. The clause goes; a
+// sentence that still carries odds goes whole. ("As underdogs", with no price, is the outlet's description and stays.)
+const ODDS = /\b(?:\d+(?:\.\d+)?-point\s+(?:favou?rites?|underdogs?)|odds(?:-on|-against)?|bookmakers?|bookies|betting|point spread|favou?rites?\s+at\s+\d+\/\d+|\d+\/\d+\s+(?:favou?rites?|shot|outsiders?|chance))\b/i;
+const ODDS_CLAUSE = /,\s*(?:(?:having|after)\s+)?(?:entered|started|gone into|come into|went into|came into|begun|began|been)\b(?:[^,.;]|\d\.\d)*?\b(?:favou?rites?|underdogs?)\b[^,.;]*(?=[.;!]?\s*$)/i;
+/** A sentence without its betting clause, or null when odds are its point. */
+export function withoutOdds(t) {
+  const s = String(t || '');
+  if (!ODDS.test(s)) return s;
+  const left = s.replace(ODDS_CLAUSE, '');
+  return ODDS.test(left) ? null : left;
+}
 const clean = (sentences, opts) => {
   const out = [];
   let prev = '';
@@ -49,6 +61,7 @@ const clean = (sentences, opts) => {
     const t = unglue(t0);
     const kept = !PROMO.test(t) && !READER_QUESTION(t) && !SUBORDINATE.test(t.trim()) && !isFragment(t) && !leansOnCount(t, prev) && !(lost && FOLLOWS_ON_START.test(t.trim()));
     let said = kept ? withoutJudgement(retime(t, opts) ?? '') : null;
+    if (said) said = withoutOdds(said);
     // a bullet point's headline-ese gets its article ("Tournament is due to kick off in January…", Guardian 13 Oct)
     if (said) said = said.replace(BARE_NOUN_START, (m, noun) => `The ${noun.toLowerCase()}`);
     // (after a sentence that went, an "also" has nothing to add to: "Brad O'Neill also returns…")

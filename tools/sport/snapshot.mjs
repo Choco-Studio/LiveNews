@@ -13,6 +13,29 @@ export function freezeClock(t0) {
   Date.now = () => t0 + (real() - started);
 }
 
+/**
+ * The whole process's clock frozen at `t0` (ms) and running on from there: Date.now() and `new Date()` alike (the
+ * server stamps episodes and reads the hour both ways). Returns a function that restores the real Date.
+ */
+export function freezeAllClocks(t0) {
+  const Real = Date;
+  const started = Real.now();
+  const now = () => t0 + (Real.now() - started);
+  class FrozenDate extends Real {
+    constructor(...a) {
+      if (a.length) super(...a);
+      else super(now());
+    }
+    static now() {
+      return now();
+    }
+  }
+  globalThis.Date = FrozenDate;
+  return () => {
+    globalThis.Date = Real;
+  };
+}
+
 /** A NewsDesk reading the snapshot in `dir` (feeds as dir/<sha>.xml, pages as dir/pages/<sha>.html). */
 export async function snapDesk(root, dir) {
   const quiet = { info() {}, warn() {}, error() {}, log() {} };

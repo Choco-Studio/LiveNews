@@ -261,15 +261,22 @@ export function drawIcon(ctx, name, x, y, color = P.white, shade = null) {
 
 // ---------------------------------------------------------------- SCORELINE
 
-/** A team's name on a board: in capitals, at 2x when it fits the column, else 1x on up to two lines. */
-function nameLines(name, maxW) {
-  const t = String(name || '').toUpperCase();
-  if (textW(t, 2) <= maxW) return { lines: [t], scale: 2 };
-  return { lines: balanceLines(t, maxW, 1, 2), scale: 1 };
+/**
+ * Both teams' names in one type size (a board has one size: the step-7 recording aired "PORTLAND TRAIL BLAZERS" at 1x
+ * over "LONDON LIONS" at 2x, the winner smaller than the loser): 2x on one line each when both fit; else 2x with the
+ * long name on two lines (a long name goes on two lines before anything shrinks), when the board has the height
+ * (`twoLines`); else both at 1x, on up to two lines.
+ */
+function namePair(a, b, maxW, twoLines = true) {
+  const names = [a, b].map((n) => String(n || '').toUpperCase());
+  if (names.every((t) => textW(t, 2) <= maxW)) return names.map((t) => ({ lines: [t], scale: 2 }));
+  const two = names.map((t) => (textW(t, 2) <= maxW ? [t] : balanceLines(t, maxW, 2, 2)));
+  if (twoLines && two.every((l, i) => l.length <= 2 && l.every((x) => textW(x, 2) <= maxW) && l.join(' ') === names[i])) return two.map((lines) => ({ lines, scale: 2 }));
+  return names.map((t) => ({ lines: textW(t, 1) <= maxW ? [t] : balanceLines(t, maxW, 1, 2), scale: 1 }));
 }
 
 const SCORE_LAYOUTS = cache();
-function scoreLayout(sc, source) {
+export function scoreLayout(sc, source) {
   return SCORE_LAYOUTS(`${sc.a}|${sc.b}|${sc.sa}|${sc.sb}|${sc.home}|${sc.draw}|${sc.stage || ''}|${source}`, () => {
     const top = 24;
     const src = srcText(source);
@@ -283,8 +290,10 @@ function scoreLayout(sc, source) {
       const boxW = Math.max(textW(String(home.score), 3), textW(String(away.score), 3)) + 8;
       const mid = PX + (PW >> 1);
       const colW = (INNER >> 1) - boxW - 10;
-      const hn = { ...nameLines(home.name, colW), ...home };
-      const an = { ...nameLines(away.name, colW), ...away };
+      // (the names stand beside the boxes, HOME and AWAY under them: two lines only at 1x)
+      const [hl, al] = namePair(home.name, away.name, colW, false);
+      const hn = { ...hl, ...home };
+      const an = { ...al, ...away };
       const bh = 34;
       const h = top + bh + 10 + (src ? 13 : 0) + 9;
       const PY = place(h);
@@ -298,10 +307,16 @@ function scoreLayout(sc, source) {
     const scoreW = Math.max(...rows.map((r) => textW(String(r.score), 3)));
     const tagW = 26;
     const nameW = INNER - scoreW - tagW - 14;
-    const laid = rows.map((r) => ({ ...r, ...nameLines(r.name, nameW) }));
     const rowH = (r) => Math.max(21, r.lines.length * (r.scale === 2 ? 16 : 10));
-    const bh = rowH(laid[0]) + 6 + rowH(laid[1]);
-    const h = top + bh + (stage ? 10 : 0) + (src ? 13 : 0) + 9;
+    const lay = (twoLines) => {
+      const pair = namePair(rows[0].name, rows[1].name, nameW, twoLines);
+      const laid = rows.map((r, i) => ({ ...r, ...pair[i] }));
+      const bh = rowH(laid[0]) + 6 + rowH(laid[1]);
+      return { laid, bh, h: top + bh + (stage ? 10 : 0) + (src ? 13 : 0) + 9 };
+    };
+    // (2x names on two lines only while the board stays inside the safe area)
+    let { laid, bh, h } = lay(true);
+    if (h > SAFE_BOTTOM - SAFE_TOP) ({ laid, bh, h } = lay(false));
     const PY = place(h);
     return { kind: 'v', PY, PH: h, top, bh, laid, rowH: laid.map(rowH), scoreW, tagW, nameW, tag, stage, src, srcY: PY + top + bh + (stage ? 10 : 0) + 6 };
   });

@@ -38,6 +38,9 @@
 // --wav      keep the rendered sound as this WAV file
 // --item     a saved episode/break JSON served for the page's first /api/next (re-record
 //            the same item; nothing advances the channel for it)
+// --progressive  render the sound while the frames are taken, two seconds at a time and always a second
+//            behind the page's clock (OfflineAudioContext suspend/resume), instead of all at the end: a busy
+//            music bed over several minutes renders in minutes, not an hour; the same sound
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -185,6 +188,17 @@ function pageInit(CFG) {
       this.__closed = false;
       REC.contexts.push(this);
       ev({ type: 'audioContext', sampleRate: this.sampleRate });
+      if (CFG.progressive) {
+        // --progressive: the render runs while the frames are taken, a chunk at a time, always behind the page's
+        // clock (REC.pump), so it never passes a moment the page may still schedule sound for
+        this.__done = 0;
+        this.__busy = false;
+        this.__pending = null;
+        this.__disc = []; // disconnects waiting for the render to pass them
+        REC.renderTo(this, 128 / this.sampleRate); // (the first stop, set before the render starts: its first quantum)
+        this.__final = Offline.prototype.startRendering.call(this);
+        this.__final.catch(() => {});
+      }
     }
     get currentTime() {
       return Math.max(0, (now() - this.__origin) / 1000);
@@ -353,10 +367,14 @@ function pageInit(CFG) {
   AudioNode.prototype.disconnect = function (...a) {
     if (this.context?.__recorded) {
       REC.stats.disconnects++;
+      // --progressive: the disconnect is kept until the render has passed the moment it was asked for, then made, so
+      // the graph holds only the nodes still sounding (the channel disconnects a node once it has stopped)
+      if (CFG.progressive) this.context.__disc?.push({ node: this, args: a, at: this.context.currentTime });
       return undefined;
     }
     return origDisconnect.apply(this, a);
   };
+  REC.origDisconnect = origDisconnect;
   // Recorded voices (decoded buffers) starting: logged for the sync report.
   const origStart = NativeBufferSource.prototype.start;
   NativeBufferSource.prototype.start = function (when = 0, ...rest) {
@@ -476,13 +494,58 @@ function pageInit(CFG) {
     return btoa(s);
   }
   /** Render every recorded context; keep [fromPerf, toPerf) ms of fake time as stereo float. */
+  // --progressive: render `ctx` on to `t` seconds (a render quantum's edge) and stop there. A graph rendered at the end
+  // holds every node of the whole recording at once (disconnect is a no-op here), which grows slow past a few
+  // minutes of a busy music bed; rendered as it goes, each chunk only meets the nodes alive in it.
+  REC.renderTo = (ctx, t) => {
+    const q = 128 / ctx.sampleRate;
+    const at = Math.floor(t / q + 1e-6) * q;
+    if (ctx.__busy || at <= ctx.__done + 1e-9 || at >= ctx.length / ctx.sampleRate - q) return false;
+    ctx.__busy = true;
+    ctx.__pending = Offline.prototype.suspend.call(ctx, at).then(() => {
+      ctx.__done = at;
+      ctx.__busy = false;
+      // (the render has passed these: made now, the nodes leave the graph)
+      const keep = [];
+      for (const d of ctx.__disc) {
+        if (d.at > at) {
+          keep.push(d);
+          continue;
+        }
+        try {
+          REC.origDisconnect.apply(d.node, d.args);
+        } catch { /* already gone */ }
+      }
+      ctx.__disc = keep;
+    }, (err) => {
+      ctx.__busy = false;
+      REC.renderError = String(err);
+    });
+    if (ctx.__done > 0) Offline.prototype.resume.call(ctx).catch(() => {});
+    return true;
+  };
+  /** Called after every clock step: each context renders on to a chunk's edge at least `margin` behind the page's clock. */
+  REC.pump = () => {
+    if (!CFG.progressive) return;
+    for (const ctx of REC.contexts) {
+      const fake = (now() - ctx.__origin) / 1000;
+      const target = Math.floor((fake - CFG.margin) / CFG.chunk) * CFG.chunk;
+      if (target > 0) REC.renderTo(ctx, target);
+    }
+  };
   REC.render = async (fromPerf, toPerf) => {
     const n = Math.max(1, Math.round(((toPerf - fromPerf) / 1000) * SR));
     const out = [new Float32Array(n), new Float32Array(n)];
     const info = [];
     for (const ctx of REC.contexts) {
       const t0 = Date.now();
-      const buf = await Offline.prototype.startRendering.call(ctx);
+      let buf;
+      if (CFG.progressive) {
+        // the last chunk: wait for the suspend in flight, then let it run to its end
+        if (ctx.__busy) await ctx.__pending;
+        if (ctx.__done > 0) Offline.prototype.resume.call(ctx).catch(() => {});
+        buf = await ctx.__final;
+      } else buf = await Offline.prototype.startRendering.call(ctx);
       const off = Math.round(((fromPerf - ctx.__origin) / 1000) * buf.sampleRate);
       const L = buf.getChannelData(0);
       const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
@@ -552,7 +615,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const seed = opts.seed === 'off' ? null : Number(opts.seed) || 1;
 const maxSeconds = 2 + opts.skip + opts.seconds + 8;
 if (!opts.step) {
-  await page.addInitScript(pageInit, { audio: withAudio, sampleRate: opts.rate, maxSeconds, seed });
+  await page.addInitScript(pageInit, { audio: withAudio, sampleRate: opts.rate, maxSeconds, seed, progressive: !!opts.progressive, chunk: 2, margin: 1 });
   // Hand the channel's AudioEngine and Director to the instrumentation (recorder only;
   // the product code is untouched). main.js keeps them as top-level `audio` and `player`.
   await page.route(/\/js\/main\.js(\?.*)?$/, async (route) => {
@@ -602,6 +665,7 @@ async function advance(ms) {
   await settle();
   await page.clock.runFor(ms);
   await new Promise((r) => setImmediate(r));
+  if (opts.progressive && withAudio) await page.evaluate(() => window.__rec?.pump?.());
 }
 async function runFake(seconds) {
   const steps = Math.round((seconds * 1000) / 50);
@@ -643,7 +707,11 @@ for (let i = 0; i < total; i++) {
   sigs.push(Buffer.from(shot.sig, 'base64'));
   scenes.push({ sub: shot.sub, shot: shot.shot });
   fs.writeFileSync(path.join(dir, `f${String(i).padStart(6, '0')}.png`), Buffer.from(shot.url.split(',')[1], 'base64'));
-  if (i % (opts.fps * 10) === 0) process.stdout.write(`  ${Math.round((i / total) * 100)}%\r`);
+  if (i % (opts.fps * 10) === 0) {
+    // (with --progressive, how far the sound has rendered: seconds of each context's timeline)
+    const done = opts.progressive && withAudio ? await page.evaluate(() => (window.__rec?.contexts || []).map((c) => Math.round(c.__done || 0))) : null;
+    process.stdout.write(`  ${Math.round((i / total) * 100)}%${done?.length ? ` (sound rendered to ${done.join(', ')} s)` : ''}\r`);
+  }
 }
 say(`${total} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s${held ? ` (${held} steps did not wait for slow network)` : ''}`);
 

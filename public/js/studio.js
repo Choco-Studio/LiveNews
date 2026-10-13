@@ -199,7 +199,8 @@ export class Renderer {
         const loc = item.location;
         const map = !card.pic && !f && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
         if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        // (FULL TIME, the sport theme: the chip is the story's sport tag, as on its strap)
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, kicker: program?.theme === 'sport' ? item.kicker : null, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'tease': {
         // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
