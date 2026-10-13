@@ -82,30 +82,54 @@ const CAM_Z = track([[0, -128], [Q.sweep, -128], [8, -98], [9.2, -50], [Q.circle
 const CAM_P = track([[0, 33.3], [Q.sweep, 33.3], [8, 25], [9.2, 10], [Q.circle, 5], [16, 5]]);
 const CAM_F = track([[0, 240], [Q.sweep, 240], [Q.circle, 190], [16, 190]]);
 
-const CAM = { x: 0, y: 0, z: 0, f: 1, F: [0, 0, 1], R: [1, 0, 0], U: [0, 1, 0] };
-/** The camera at beat b (the push-in re-aims it on the watch and zooms until the watch is the emblem's size). */
+const CAM = { x: 0, y: 0, z: 0, f: 1, px: CENTRE.x, py: CENTRE.y, F: [0, 0, 1], R: [1, 0, 0], U: [0, 1, 0], moving: 0 };
+/** The camera's orientation for a pitch (radians, down) and no yaw (the camera never turns sideways). */
+function orient(o, pitch) {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  o.F = [0, -sp, cp];
+  o.R = [1, 0, 0];
+  o.U = [0, cp, sp];
+  return o;
+}
+/**
+ * The camera at beat b. The push-in is a zoom on the board's clock with the frame panned to it (a lens shift): the camera
+ * holds its place and never turns, so nothing moves in depth against anything else and the board stays square to the
+ * watch hung on it; the watch arrives at centre stage at the emblem's size. `moving` (0..1): how fast the picture moves
+ * (the crowd's fine detail only shows while it is nearly still).
+ */
 function cameraAt(b, o = CAM) {
-  o.x = 0;
-  o.y = CAM_Y(b);
-  o.z = CAM_Z(b);
-  let pitch = CAM_P(b) * DEG;
-  let yaw = 0;
+  const pos = (bb) => [0, CAM_Y(bb), CAM_Z(bb)];
+  const [x, y, z] = pos(b);
+  o.x = x;
+  o.y = y;
+  o.z = z;
+  orient(o, CAM_P(b) * DEG);
   let f = CAM_F(b);
+  o.px = CENTRE.x;
+  o.py = CENTRE.y;
   const p = easeInOut(seg(b, Q.lift, Q.settle - Q.lift));
+  let zoomRate = 0;
   if (p > 0) {
-    const dx = WATCH.x - o.x, dy = WATCH.y - o.y, dz = WATCH.z - o.z;
-    const yawM = Math.atan2(dx, dz);
-    const pitchM = -Math.atan2(dy, Math.hypot(dx, dz));
-    const fM = (ZOOM * Math.hypot(dx, dy, dz)) / U;
-    pitch += (pitchM - pitch) * p;
-    yaw += (yawM - yaw) * p;
-    f = Math.exp(Math.log(f) + (Math.log(fM) - Math.log(f)) * p);
+    // the watch's direction in the camera's frame, and the focal length at which it is the emblem's size
+    const dx = WATCH.x - x, dy = WATCH.y - y, dz = WATCH.z - z;
+    const depth = dx * o.F[0] + dy * o.F[1] + dz * o.F[2];
+    const xn = (dx * o.R[0] + dy * o.R[1] + dz * o.R[2]) / depth;
+    const yn = (dx * o.U[0] + dy * o.U[1] + dz * o.U[2]) / depth;
+    const f0 = f;
+    const fM = (ZOOM * depth) / U;
+    f = Math.exp(Math.log(f0) + (Math.log(fM) - Math.log(f0)) * p);
+    // the watch's place on screen eases from where it hangs to centre stage; the frame's centre follows from it
+    const sx0 = CENTRE.x + f0 * xn, sy0 = CENTRE.y - f0 * yn;
+    o.px = sx0 + (CENTRE.x - sx0) * p - f * xn;
+    o.py = sy0 + (CENTRE.y - sy0) * p + f * yn;
+    const dp = easeInOut(seg(b + 0.05, Q.lift, Q.settle - Q.lift)) - p;
+    zoomRate = Math.abs(((Math.log(fM) - Math.log(f0)) * dp) / (0.05 * BEAT));
   }
   o.f = f;
-  const cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
-  o.F = [sy * cp, -sp, cy * cp];
-  o.R = [cy, 0, -sy];
-  o.U = [sy * sp, cp, cy * sp];
+  // how fast the picture moves: the camera's speed (m/s) or the zoom's rate (per second)
+  const [x1, y1, z1] = pos(b - 0.1);
+  const speed = Math.hypot(x - x1, y - y1, z - z1) / (0.1 * BEAT);
+  o.moving = Math.max(smoothstep(2, 10, speed), smoothstep(0.15, 0.6, zoomRate));
   return o;
 }
 
@@ -115,8 +139,8 @@ function project(cam, X, Y, Z, out = PR) {
   const dx = X - cam.x, dy = Y - cam.y, dz = Z - cam.z;
   const z = dx * cam.F[0] + dy * cam.F[1] + dz * cam.F[2];
   out.z = z;
-  out.x = CENTRE.x + (cam.f * (dx * cam.R[0] + dy * cam.R[1] + dz * cam.R[2])) / z;
-  out.y = CENTRE.y - (cam.f * (dx * cam.U[0] + dy * cam.U[1] + dz * cam.U[2])) / z;
+  out.x = cam.px + (cam.f * (dx * cam.R[0] + dy * cam.R[1] + dz * cam.R[2])) / z;
+  out.y = cam.py - (cam.f * (dx * cam.U[0] + dy * cam.U[1] + dz * cam.U[2])) / z;
   return out;
 }
 
@@ -132,13 +156,16 @@ function bankAt(i, b) {
 const LIGHT = new Float32Array(4);
 const SX = [-1, 1, -1, 1]; // the banks' sides (X) and ends (Z)
 const SZ = [1, 1, -1, -1];
-/** The light falling at a point of the ground (or the stands' feet): each bank lights its quarter, softly edged. */
+/**
+ * The light falling at a point of the ground (or the stands): each bank lights its own quarter of the ground, edged over
+ * a few metres, so each bang lights a crisp quarter and the four together light it all evenly.
+ */
 function lightAt(x, z) {
   let s = 0;
   for (let i = 0; i < 4; i++) {
     const l = LIGHT[i];
     if (!l) continue;
-    s += l * smoothstep(-14, 10, x * SX[i]) * smoothstep(-22, 14, z * SZ[i]);
+    s += l * smoothstep(-2.5, 2.5, x * SX[i]) * smoothstep(-4, 4, z * SZ[i]);
   }
   return s;
 }
@@ -163,6 +190,8 @@ const band = (v) => {
   const i = Math.floor(v);
   return i + smoothstep(0.36, 0.64, v - i);
 };
+/** A level as whole steps (large flat surfaces: a roof, a wall, the sky's bands). */
+const step = (v) => Math.floor(v + 0.5);
 
 /** The dark share of a stretch [z0, z1] of the mowing stripes (5.25 m each, across the pitch). */
 function stripeShare(z0, z1) {
@@ -247,14 +276,17 @@ const hash2 = (a, b) => {
  * stand's average (the heads never shimmer as they shrink).
  */
 function tierColour(h, l, lit, fp, X, Y) {
+  if (lit < 0.2) return C.black;
   const flat = ramp(DARK, 0.08 + 1.25 * lit, X, Y);
   const th = ditherAt(X, Y) / 16;
   const level = fp + (th - 0.5) * 0.04; // the seams' dither, two hundredths of a metre a pixel wide
-  if (level > 0.29 || lit < 0.2) return flat;
+  // (while the picture moves fast the rows and heads would strobe: the detail draws in as it slows)
+  const most = 0.29 * (1 - MOVING);
+  if (level > most || lit < 0.2) return flat;
   const r = Math.floor(h / ROW_H);
   const fr = h / ROW_H - r;
   if (fr < 0.14) return C.ink; // the riser's lip
-  if (level > 0.21) return r % 2 ? C.ink : C.black; // the rows alone
+  if (level > most - 0.08) return r % 2 ? C.ink : C.black; // the rows alone
   // the heads: slate on the ink and black rows, a few steel, a rare muted scarf
   const s = Math.floor(l / SEAT);
   const fs = l / SEAT - s;
@@ -277,6 +309,7 @@ const KIND = new Uint8Array(W * H); // what each pixel shows (0 sky, 1 ground, 2
 const SK = 0, GR = 1, TI = 2, RF = 3, WL = 4, AD = 5, BD = 6;
 
 let BOARD_LIT = 0; // the board's rim flash (the whistle's short blasts)
+let MOVING = 0; // how fast the picture moves (the camera's cameraAt.moving)
 
 /** The screen rectangle an axis-aligned box covers (1 px margin), or the whole screen when it reaches behind the camera. */
 const BOX = { x0: 0, x1: W - 1, y0: 0, y1: H - 1 };
@@ -318,11 +351,12 @@ function paintWorld(b, cam) {
   for (const st of STANDS) screenBox(cam, st.bbox, st.sbox);
   screenBox(cam, ADS_BOX, ADS_S);
   screenBox(cam, BOARD_BOX, BOARD_S);
-  const off = 0.5 - CENTRE.x;
+  const off = 0.5 - cam.px;
+  MOVING = cam.moving;
   const kx = Rx / f, kz = Rz / f; // D's change a pixel along a row (the camera never rolls: D's Y is the row's)
   let pg = false, pgx0 = 0, pgxd = 0, pgz0 = 0, pgzd = 0; // the last row's ground line
   for (let Y = 0; Y < H; Y++) {
-    const sy = -(Y + 0.5 - CENTRE.y) / f;
+    const sy = -(Y + 0.5 - cam.py) / f;
     const Dy = Fy + sy * Uy;
     const dx0 = Fx + sy * Ux + off * kx, dz0 = Fz + sy * Uz + off * kz; // D at X = 0
     // the ground: one distance for the whole row (a mode-7 floor): its points are linear along it
@@ -334,7 +368,7 @@ function paintWorld(b, cam) {
       const Dx = dx0 + X * kx, Dz = dz0 + X * kz;
       let t = tg;
       let kind = ground ? GR : SK;
-      let a = 0, s2 = 0, who = 0;
+      let a = 0, s2 = 0, who = 0, lat = 0, dep = 0;
       for (let k = 0; k < 4; k++) {
         const st = STANDS[k];
         const sb = st.sbox;
@@ -351,7 +385,7 @@ function paintWorld(b, cam) {
           if (tt > 0 && tt < t) {
             const dd = Cd + tt * Dd, ll = Cl + tt * Dl;
             if (dd >= st.front && dd <= st.back && ll <= st.half && ll >= -st.half) {
-              t = tt; kind = TI; a = (dd - st.front) * st.slope; s2 = ll; who = st.who;
+              t = tt; kind = TI; a = (dd - st.front) * st.slope; s2 = ll; who = st.who; lat = ll; dep = dd;
             }
           }
         }
@@ -361,7 +395,7 @@ function paintWorld(b, cam) {
           if (tt > 0 && tt < t) {
             const dd = Cd + tt * Dd, ll = Cl + tt * Dl;
             if (dd >= rf.front && dd <= rf.back && ll <= st.half + 1 && ll >= -st.half - 1) {
-              t = tt; kind = RF; a = roofTop ? 1 : 0; s2 = dd; who = st.who;
+              t = tt; kind = RF; a = roofTop ? 1 : 0; s2 = dd; who = st.who; lat = ll; dep = dd;
             }
           }
         }
@@ -374,7 +408,7 @@ function paintWorld(b, cam) {
             if (tt <= 0 || tt >= t) continue;
             const yy = cy + tt * Dy, ll = Cl + tt * Dl;
             if (yy >= w[1] && yy <= w[2] && ll <= st.half + w[5] && ll >= -st.half - w[5]) {
-              t = tt; kind = WL; a = w[4]; s2 = (yy - w[1]) / (w[2] - w[1]); who = st.who;
+              t = tt; kind = WL; a = w[4]; s2 = (yy - w[1]) / (w[2] - w[1]); who = st.who; lat = ll; dep = w[0];
             }
           }
         }
@@ -420,7 +454,7 @@ function paintWorld(b, cam) {
         // the footprint: along the row (gxd, gzd), down the column (this row's point less the last row's)
         const bx = pg ? gx - (pgx0 + X * pgxd) : 0, bz = pg ? gz - (pgz0 + X * pgzd) : t / f;
         d[o] = shadeGround(gx, gz, gxd, gzd, bx, bz, X, Y, allOn);
-      } else d[o] = shade(kind, t, a, s2, who, X, Y, Dy, f, allOn);
+      } else d[o] = shade(kind, t, a, s2, who, X, Y, Dy, f, allOn, lat, dep);
     }
     pg = ground;
     pgx0 = gx0; pgxd = gxd; pgz0 = gz0; pgzd = gzd;
@@ -433,7 +467,7 @@ function shadeGround(gx, gz, ax, az, bx, bz, X, Y, allOn) {
   const lit = lightAt(gx, gz);
   if (!inGrass) {
     const inside = Math.abs(gx) < SIDE.front && Math.abs(gz) < END.front;
-    return ramp(DARK, inside ? band(0.08 + 0.95 * Math.min(1, lit)) : 0, X, Y);
+    return DARK[inside ? step(0.08 + 0.95 * Math.min(1, lit)) : 0];
   }
   const ex = Math.abs(ax) + Math.abs(bx);
   const ez = Math.abs(az) + Math.abs(bz);
@@ -445,36 +479,49 @@ function shadeGround(gx, gz, ax, az, bx, bz, X, Y, allOn) {
     return ramp(LINES, m >= 0.5 ? lv : lv - 1.3, X, Y);
   }
   const dark = stripeShare(gz - ez / 2, gz + ez / 2);
-  const v = 2 * Math.min(1, L) - 0.62 * dark * Math.min(1, L * 1.4) + (L > 1 ? 0.5 * (L - 1) : 0);
+  const v = 2 * Math.min(1, L) - 0.26 * dark * Math.min(1, L * 1.4) + (L > 1 ? 0.5 * (L - 1) : 0);
   return ramp(GRASS, v, X, Y);
 }
 
-/** The colour of a pixel of the world (the ground has its own: shadeGround). */
-function shade(kind, t, a, s2, who, X, Y, Dy, f, allOn) {
+/** The light of a stand's quarter at a point of it (lateral position and depth along the stand, who: which stand). */
+function standLight(who, lat, dep) {
+  const sg = who & 1 ? 1 : -1;
+  // (the floods aim at the pitch: a stand catches the light of the banks of its own quarter)
+  return Math.min(1, who < 2 ? lightAt(clamp(lat, -40, 40), sg * 50) : lightAt(sg * 36, clamp(lat, -55, 55)));
+}
+
+/**
+ * The colour of a pixel of the world (the ground has its own: shadeGround). Large flat surfaces (roofs, fascias, walls)
+ * take whole palette steps by the light of their quarter, never a dithered middle tone.
+ */
+function shade(kind, t, a, s2, who, X, Y, Dy, f, allOn, lat, dep) {
   switch (kind) {
     case SK: {
       // the night: black overhead, an ink band along the horizon, the stadium's light dome (a little navy) once it is lit
       const e = Dy; // (D's forward component is 1: Dy is the tangent of the elevation, near enough)
-      return ramp(SKY, band(Math.max(0, 0.95 - e * 3.2) * (0.72 + 0.28 * allOn) + 0.42 * allOn * smoothstep(0.22, 0, e)), X, Y);
+      return SKY[Math.min(2, step(Math.max(0, 0.95 - e * 3.2) * (0.72 + 0.28 * allOn) + 0.42 * allOn * smoothstep(0.22, 0, e)))];
     }
-    case TI: {
-      // the stands are lit by the banks of their quarter: an end by its two, a side by its own along its length
-      const sg = who & 1 ? 1 : -1;
-      const lit = who < 2 ? lightAt(s2, sg * 40) : lightAt(sg * 30, s2);
-      return tierColour(a, s2 + 100 * who, Math.min(1, lit) * 0.9, t / f, X, Y);
+    case TI:
+      // the tiers: dark until their quarter's bank comes on, then the crowd
+      return tierColour(a, s2 + 100 * who, standLight(who, lat, dep) * 0.9, t / f, X, Y);
+    case RF: {
+      // the roofs: their tops catch the light dome once their quarter is lit, their undersides stay dark
+      const lit = standLight(who, lat, dep);
+      return a ? DARK[step(0.15 + 0.9 * lit)] : C.black;
     }
-    case RF:
-      // the roofs: their tops catch the light dome once it is lit, their undersides are dark
-      return a ? ramp(DARK, band(0.1 + 0.85 * allOn), X, Y) : C.black;
-    case WL:
-      // the fascia: an ink face that turns slate under the lights, its top edge catching them; the walls dark
-      if (a === 2) return s2 > 0.72 ? (allOn > 0.5 ? C.steel : allOn > 0 ? C.slate : C.ink) : ramp(DARK, band(0.35 + 1.1 * allOn), X, Y);
-      return ramp(DARK, band(a === 1 ? 0.1 + 0.9 * allOn : 0.05 + 0.4 * allOn), X, Y);
+    case WL: {
+      // the fascia: black, slate under the lights, its top edge catching them; the low front walls and the backs dark
+      const lit = standLight(who, lat, dep);
+      if (a === 2) return s2 > 0.72 ? (lit > 0.5 ? C.steel : C.ink) : DARK[step(0.3 + 1.4 * lit)];
+      return DARK[step(a === 1 ? 0.1 + 1.0 * lit : 0.05 + 0.5 * lit)];
+    }
     case AD: {
-      // the advertising boards: black, the channel's orange band along them, lit with the floods of their quarter
+      // the advertising boards: black, the channel's orange band along them, lit with the floods of their quarter; a
+      // board under three pixels tall is all band (never a dotted line)
       const sg = who & 1 ? 1 : -1;
       const lit = Math.min(1, who < 2 ? lightAt(s2, sg * 55) : lightAt(sg * 36, s2));
-      if (a > 0.3 && a < 0.72) return lit > 0.5 ? C.orange : lit > 0.2 ? C.rust : C.maroon;
+      const band = (a > 0.3 && a < 0.72) || t / f > ADS.h / 3;
+      if (band) return lit > 0.5 ? C.orange : lit > 0.2 ? C.rust : C.maroon;
       return lit > 0.5 ? C.ink : C.black;
     }
     case BD: {
@@ -570,7 +617,7 @@ function towers(cam, b) {
   }
 }
 
-/** A soft halo round each lit head in the sky: cool white, static; larger and whiter during its flash. */
+/** A soft halo round each lit head against the night: cool white, static; larger and whiter during its flash. */
 const HALO = [C.black, C.ink, C.slate, C.steel, C.fog, C.silver, C.white];
 function halos(cam) {
   for (let i = 0; i < 4; i++) {
@@ -581,18 +628,20 @@ function halos(cam) {
     if (P0.z <= 0.5) continue;
     const k = cam.f / P0.z;
     const fl = l - 1; // the flash (0.55 at the bang, gone in a tenth of a second)
-    const r = HEAD.w * k * (1.5 + 1.2 * fl);
+    // (never under 22 px, so a far head seen from the air still has its glow round it)
+    const r = Math.max(HEAD.w * k * (1.5 + 1.2 * fl) + 5, 22 * (1 + fl));
     const x0 = Math.max(0, Math.floor(P0.x - r)), x1 = Math.min(W - 1, Math.ceil(P0.x + r));
     const y0 = Math.max(0, Math.floor(P0.y - r)), y1 = Math.min(H - 1, Math.ceil(P0.y + r));
     for (let Y = y0; Y <= y1; Y++) {
       for (let X = x0; X <= x1; X++) {
         const o = Y * W + X;
         const kd = KIND[o];
-        if (kd !== SK || DEPTH[o] < P0.z) continue;
+        // (over the night only: the sky, or the dark land beyond the stadium when the camera looks down on it)
+        if (DEPTH[o] < P0.z || (kd !== SK && LAYER.d[o] !== C.black && LAYER.d[o] !== C.ink)) continue;
         const q = 1 - Math.hypot(X + 0.5 - P0.x, Y + 0.5 - P0.y) / r;
         if (q <= 0) continue;
         const v = band(q * Math.sqrt(q) * (4.6 + 4 * fl));
-        // (in the sky only: the stands round a head are lit by it already; never darker than the sky)
+        // (the stands round a head are lit by it already; the glow is never darker than the night under it)
         if (v >= 2) LAYER.d[o] = ramp(HALO, v, X, Y);
       }
     }
@@ -735,7 +784,7 @@ export const FULLTIME_SEQ = SEQ;
 /** For checks: the camera at beat b; the watch's projected place and size; a bank's light; the panel's line. */
 export const fullTimeCamera = (b) => {
   const c = cameraAt(b, { F: [], R: [], U: [] });
-  return { x: c.x, y: c.y, z: c.z, f: c.f, F: [...c.F] };
+  return { x: c.x, y: c.y, z: c.z, f: c.f, px: c.px, py: c.py, F: [...c.F], moving: c.moving };
 };
 export function watchOnScreen(b) {
   const cam = cameraAt(b, { F: [], R: [], U: [] });
