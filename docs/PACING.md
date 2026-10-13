@@ -51,7 +51,8 @@ of a window for filmstrips. Each programme was then recorded with sound (`tools/
   cut back to the reader 1.7 s before it); the round-up's opening map carries its title line on top of the map maximum
   and is never cut by a phrase mark (the reader flashed 4.4 s between two maps); a re-staged quote's hand-over stays on
   the presenter, so a studio shot carries it and the guard may cut between the studio shots there (an MCU-R held
-  14.9 s), with no margin when the shot runs on to the segment's end (the words are known).
+  14.9 s), with no margin when the shot runs on to the segment's end (the words are known); a link next is no "next
+  opening" for the guard (its studio plan never airs, and every cut to the WIDE before a re-staged guest was refused).
 - **The links (linkplan.js `capHolds`).** A correspondent's or expert's full frame past the studio maximum gives way to
   their pictures or the two-way in two or three parts (a LOCATION held 24.2 s live, twice).
 - **The planner's rhythm (direction/shots.js).** A story never opens on the single the previous story ended on (the
@@ -61,7 +62,7 @@ of a window for filmstrips. Each programme was then recorded with sound (`tools/
   greeting (the guard alone held the last WIDE 15.1 s), and an intro's headline frames followed by a wide over the
   maximum put the remaining teasers on the reader's single (COSMOS: 15.8 s); a story carries at most
   max(2, floor(L / ideal)) shots at the programme's median (COSMOS); COSMOS never plans two cuts closer than its 4.5 s
-  cooldown; no lead-in wide before a chat with a card of its own (a 4 s wide before STILL TO COME); the closing wide
+  cooldown; no lead-in wide before a chat with a card of its own (a 2.3 s wide before STILL TO COME); the closing wide
   capped by the studio maximum; a picture or map gives way near the middle of its window; a split single alternates
   single ⇄ OTS down the run (a 13.6 s OTS); the quote card is refused when it would hold past the card maximum (10.7 s
   live); capMax may cut a picture as late as its maximum when its return single merges (8.9 s); a cut inside a sentence
