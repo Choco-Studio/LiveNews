@@ -103,6 +103,19 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
       - tu visto bueno para meterlo en la parrilla (después de WORLD WEATHER).
     - Para verlo antes: modo de prueba `DRAFTS_ON_AIR=full-time@world-weather`.
 
+38. 🟡 **Nuevo programa PAY ATTENTION (concurso con las noticias de la semana, unos 5 min).** Diseño aprobado por la autocrítica (9,75, a la séptima ronda), ahora en construcción.
+    - Dos presentadores del canal juegan; el espectador juega desde casa.
+    - Las preguntas salen solo de noticias que el canal ya emitió: nada falso en pantalla.
+    - Cinco tipos de ronda:
+      - una foto que se va enfocando;
+      - un titular que se rellena letra a letra;
+      - un mapa con tres chinchetas;
+      - "¿hoy o no hoy?";
+      - "¿cuántos?", solo cuando hay cifras.
+    - Nunca pregunta por muertes, sucesos, guerras ni política. Los días de noticias graves no se emite.
+    - **Falta de ti, más adelante:** la cara, la voz y el nombre del presentador nuevo, y el nombre del programa.
+    - Pasos: 1 la mesa de preguntas · 2 el guion · 3 los gráficos · 4 la dirección · 5 el plató, la cabecera y la música · 6 la cara del presentador · 7 dos ediciones grabadas.
+
 ## E. Plató, gráficos y cámara
 24. Plató:
     - cifras cortadas en la pantalla y paneles vacíos;
