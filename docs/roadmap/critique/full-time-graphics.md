@@ -102,8 +102,9 @@ What changed, fault by fault:
 11. "V", "VS", "V.", "VERSUS" all split an event.
 12. The arc (the part of the ten-yard circle round the spot outside the area); the ground open at the far end.
 13. The American football field: posts on the end line on one stem, the end zone hatched, the goal line and a line every
-    ten yards. Rugby: an H on the try line, the in-goal behind it, the 22, the dashed 10 m line and halfway, in metres
-    (`{ metres: 45, sport: 'rugby' }` → "45 METRES").
+    ten yards. Rugby: an H on the try line, the in-goal behind it and halfway, in metres (`{ metres: 45, sport: 'rugby' }`
+    → "45 METRES"); not union's 22 and 10 m lines, which league does not have (league has a 20 and a 40), since the
+    desk does not tell the two codes apart.
 14. A distance outside 1–70 draws no board at all; the label is the source's number, never a clamped one.
 15. Only football, American football and rugby draw a ground; anything else draws nothing.
 16. The chalkboard 196 px wide: "THE PENALTY SPOT" at 2x.

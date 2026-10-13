@@ -243,3 +243,62 @@ export function spokenScore(x, y, sport = 'football') {
   if (x === y) return x === 0 ? (zero === 'nil' ? 'nil-nil' : 'nothing each') : `${words(x, zero)} all`;
   return `${words(x, zero)} ${words(y, zero)}`;
 }
+
+// ---- THE MOMENT ON THE BOARD (docs/programmes/full-time.md §4): the distance of a goal or a kick, as the story says it
+
+const NUMBER_WORD = new Map();
+for (let n = 1; n <= 70; n++) NUMBER_WORD.set(words(n, 'nil'), n);
+const DIST = `(\\d{1,2}|${[...NUMBER_WORD.keys()].sort((a, b) => b.length - a.length).join('|')})`;
+const distNum = (x) => (/^\d+$/.test(x) ? Number(x) : NUMBER_WORD.get(x.toLowerCase()) || 0);
+// (a shot or a kick that scored: never a miss, a save, the woodwork; never a run, a pass or a throw)
+const MISSED = /\b(?:miss(?:ed|es)?|saved?|blocked|wide|no good|over the bar|hit the (?:post|bar|woodwork|upright)|off the (?:post|bar|upright)|doinked|denied)\b/i;
+const NOT_A_KICK = /\b(?:run|ran|runs|rushed|rushing|pass(?:ed|es)?|throw|threw|catch|caught|carry|carried|return(?:ed)?|interception|sprint(?:ed)?)\b/i;
+const SHOT_WORD = '(?:strike|shot|effort|volley|half-volley|drive|free[- ]kick|lob|chip|curler|goal|thunderbolt|piledriver|screamer|finish)';
+const CHALK_FORMS = {
+  football: [
+    [new RegExp(`\\bfrom (?:fully |some |around |about |nearly |almost )?${DIST} yards\\b`, 'i'), 'yards'],
+    [new RegExp(`\\b${DIST}[- ]yard ${SHOT_WORD}\\b`, 'i'), 'yards'],
+  ],
+  'american-football': [[new RegExp(`\\b${DIST}[- ]yard field goals?\\b`, 'i'), 'yards']],
+  rugby: [
+    [new RegExp(`\\b(?:penalty|drop goal|conversion|kick)\\b[^.;]{0,40}?\\bfrom (?:fully |some |around |about |nearly |almost )?${DIST} (?:metres|meters|m)\\b`, 'i'), 'metres'],
+    [new RegExp(`\\b${DIST}[- ]?(?:metre|meter|m) (?:penalty|drop goal|kick)\\b`, 'i'), 'metres'],
+  ],
+};
+// a goal or kick sentence: in football a word of scoring must be there ("scored from 30 yards", "a 25-yard strike")
+const SCORED_WORD = /\b(?:scor(?:ed|es|ing)|goal|netted|nets|fired|fires|curled|curls|struck|strikes|smashed|lashed|drilled|rifled|volleyed|lobbed|chipped|bent|found the (?:net|corner|top corner)|into the (?:net|top corner|bottom corner))\b/i;
+
+/**
+ * The moment's distance, from the sentences said on air: { yards | metres, sport, label? } or null. Football: "scored
+ * from 30 yards", "a 25-yard strike", "from the spot" (THE PENALTY SPOT, 12 yards); American football: "a 45-yard
+ * field goal"; rugby: "a penalty from 45 metres". Only the three grounds the board draws, only 1 to 70, only a kick
+ * that scored, and only when the text gives one distance (two numbers would leave the board to guess).
+ */
+export function chalkOf(text, sport) {
+  const forms = CHALK_FORMS[sport];
+  if (!forms) return null;
+  const sentences = String(text || '').replace(/\[[^\]]*\]\s*/g, '').split(/(?<=[.!?])\s+/);
+  const found = [];
+  for (const s of sentences) {
+    if (MISSED.test(s)) continue;
+    if (sport === 'football' && /\bfrom the (?:penalty )?spot\b/i.test(s)) {
+      found.push({ yards: 12, sport, label: 'THE PENALTY SPOT' });
+      continue;
+    }
+    // (every distance in the sentence: "from 20 yards and then from 25 yards" is two, and the board shows one)
+    const here = [];
+    for (const [re, unit] of forms) {
+      for (const m of s.matchAll(new RegExp(re.source, 'gi'))) {
+        if (NOT_A_KICK.test(s.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30))) continue;
+        if (sport === 'football' && !SCORED_WORD.test(s)) continue;
+        here.push({ [unit]: distNum(m[1]), sport });
+      }
+    }
+    found.push(...here.filter((f) => (f.yards ?? f.metres) >= 1 && (f.yards ?? f.metres) <= 70));
+    if (here.some((f) => (f.yards ?? f.metres) > 70)) found.push({ tooFar: true });
+  }
+  // (a distance past the board's 70 makes the moment one it cannot draw: no board rather than the wrong one)
+  if (found.some((f) => f.tooFar)) return null;
+  const distinct = [...new Map(found.map((f) => [JSON.stringify(f), f])).values()];
+  return distinct.length === 1 ? distinct[0] : null;
+}

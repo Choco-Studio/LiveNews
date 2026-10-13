@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { balance, leansOnCount, prepareStory, sameEvent, together } from '../server/sport/prepare.js';
 import { BANKS, ROSA_MEMORIES, ROSA_NEEDLES, shapeEpisode } from '../server/sport/shape.js';
-import { headlineContradicts, scorelinesIn } from '../server/sport/scores.js';
+import { chalkOf, headlineContradicts, scorelinesIn } from '../server/sport/scores.js';
 import { notSport, sportApart } from '../server/sport/desk.js';
 import { withoutJudgement } from '../server/sport/words.js';
 import { isGrave } from '../server/facts.js';
@@ -285,5 +285,29 @@ describe('FULL TIME: an edition from the offline desk (a draft until it airs)', 
       const src = desk.get(s.storyId);
       assert.ok(new RegExp(`${s.score.sa}\\s*[-–]\\s*${s.score.sb}`).test(`${src.title} ${src.summary}`), s.headline);
     }
+  });
+});
+
+describe('FULL TIME: THE MOMENT ON THE BOARD', () => {
+  test('the distance of a goal or a kick that scored, as said on air; nothing for a miss, a run, a pass, two distances or another sport', () => {
+    assert.deepEqual(chalkOf('Mfuni curled in from 30 yards to seal it.', 'football'), { yards: 30, sport: 'football' });
+    assert.deepEqual(chalkOf('From thirty yards, he found the top corner.', 'football'), { yards: 30, sport: 'football' });
+    assert.deepEqual(chalkOf('Rice scored a 25-yard strike.', 'football'), { yards: 25, sport: 'football' });
+    assert.deepEqual(chalkOf('He converted from the spot in the 90th minute.', 'football'), { yards: 12, sport: 'football', label: 'THE PENALTY SPOT' });
+    assert.deepEqual(chalkOf('Bass kicked a 45-yard field goal as time expired.', 'american-football'), { yards: 45, sport: 'american-football' });
+    assert.deepEqual(chalkOf('Farrell landed a penalty from 45 metres.', 'rugby'), { metres: 45, sport: 'rugby' });
+    assert.deepEqual(chalkOf('Russell kicked a 40m penalty.', 'rugby'), { metres: 40, sport: 'rugby' });
+    for (const [text, sport] of [
+      ['He missed from the spot.', 'football'],
+      ['His 52-yard field goal was blocked.', 'american-football'],
+      ['Smith ran 45 yards for a touchdown.', 'american-football'],
+      ['He passed from 40 yards to set up the goal.', 'football'],
+      ['The keeper was beaten from 40 yards.', 'football'],
+      ['He scored from 20 yards and then from 25 yards.', 'football'],
+      ['A 75-yard field goal and a 45-yard field goal.', 'american-football'],
+      ['A 75-yard field goal.', 'american-football'],
+      ['She holed a putt from 30 feet.', 'golf'],
+      ['He scored from 30 yards.', 'basketball'],
+    ]) assert.equal(chalkOf(text, sport), null, text);
   });
 });

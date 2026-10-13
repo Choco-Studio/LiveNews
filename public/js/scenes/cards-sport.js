@@ -795,16 +795,11 @@ const chalkRect = (ctx, x, y, w, h, c) => {
   chalkLine(ctx, x + w, y, x + w, y + h, c);
 };
 
-/** A chalk line of dashes (the ground's dashed lines: rugby's 10 m line). */
-function chalkDash(ctx, x0, x1, y) {
-  for (let x = x0; x < x1; x += 6) chalkLine(ctx, x, y, Math.min(x + 3, x1), y);
-}
-
 /**
  * THE MOMENT ON THE BOARD: o = { chalk: { yards | metres, label?, sport } }, the ground top-down with the goal at the top:
  *   football           the pitch's end to scale: the penalty area, the six-yard box, the spot and the arc, the goal
  *   american-football  the posts on the end line, the end zone hatched, a line every ten yards from the goal line
- *   rugby              the posts (an H) on the try line, the in-goal behind it, the 22, the dashed 10 m and halfway
+ *   rugby              the posts (an H) on the try line, the in-goal behind it, halfway (in metres; either code)
  * The dotted line runs from the distance the source states straight to the posts or the goal and is drawn over 0.8 s;
  * its length is written under the ground ("30 YARDS", "45 METRES", or the source's own words: "THE PENALTY SPOT").
  */
@@ -869,14 +864,11 @@ export function drawChalkboard(ctx, dt, o) {
         last = [x, y];
       }
     } else if (sport === 'rugby') {
-      // the in-goal behind the try line, the posts on it; the 22, the dashed 10 m line and halfway when the ground shows them
+      // the in-goal behind the try line, the posts on it, and halfway when the ground reaches it (union's 22 and 10 m
+      // lines are not league's 20 and 40: the desk does not tell the two codes apart, so neither is drawn)
       chalkGround(ctx, gx, top - 6, gw, gh + 6);
       chalkLine(ctx, gx, top, gx + gw, top);
-      for (const [u, dash] of [[22, false], [40, true], [50, false]]) {
-        if (u >= depth) continue;
-        if (dash) chalkDash(ctx, gx, gx + gw, Y(u));
-        else chalkLine(ctx, gx, Y(u), gx + gw, Y(u));
-      }
+      if (50 < depth) chalkLine(ctx, gx, Y(50), gx + gw, Y(50));
       ctx.fillStyle = CHALK;
       ctx.fillRect(cx - 4, top - 1, 9, 1);
       ctx.fillRect(cx - 4, top - 5, 1, 8);

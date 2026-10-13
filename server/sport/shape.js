@@ -7,7 +7,7 @@ import { isGrave, pointsBack, sentencesIn } from '../facts.js';
 import { embedCues, parseCues } from '../../public/js/cues.js';
 import { dayIn, withoutJudgement } from './words.js';
 import { FOLLOWS_ON_START, leansOnCount, sameEvent } from './prepare.js';
-import { resultLine } from './scores.js';
+import { resultLine, chalkOf } from './scores.js';
 import { shortHeadline } from '../writer.js';
 
 const HOUR = 3600_000;
@@ -391,6 +391,9 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       edit(seg, (t) => t.replace(/(^|\.\s+)((?:\[[^\]]+\]\s*)*)and finally(?: tonight| today| this evening)?\s*[,:]?\s*(\p{L})/iu, (m, pre, cues, c) => `${pre}${cues}${c.toUpperCase()}`));
       lead(pick(BANKS.moment, `${seed}~m${seg.storyId}`, recent));
       seg.kicker = 'MOMENT OF THE DAY';
+      // THE MOMENT ON THE BOARD: the distance of the goal or the kick, when the words on air state one
+      const chalk = chalkOf(seg.text, story.sport);
+      if (chalk) seg.chalk = chalk;
     } else if (k > 0 && seg.follows) {
       lead(pick(BANKS.follow, `${seed}~f${seg.storyId}`, recent));
     } else if (k > 0 && seg.feature !== 'number' && story.sport && story.sport !== prevSport) {
