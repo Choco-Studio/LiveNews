@@ -13,6 +13,8 @@
 //                     'turtleneck'  fine-gauge roll-neck, no jacket (Ada)
 //                     'cardigan'    open knit cardigan over a round-neck top (Nova)
 //                     'chassis'     UNIT-8's casing: neck column, shell, chest plate
+//   exported for other wardrobes (cast/wardrobe-sport.js, read-only): bodyPoly, clothTone, drape, bunch,
+//                   shoulderRim, knitRibs
 // Group ids: the look-owned range 40-55 (character.js GROUPS.look). Folds and
 // seams are tone changes inside the garment's own group (no extra outlines);
 // lapels, collars and plates are separate groups so the line system draws a
@@ -357,7 +359,7 @@ export function smoothPts(ctrl, sub) {
 }
 
 /** Polygon from body-space points, with the breathing / shrug lift of torsoFrame. */
-function bodyPoly(o, lift, pts) {
+export function bodyPoly(o, lift, pts) {
   const out = [];
   for (const [x, y] of pts) out.push(...o.toS(x, lift(x < 0 ? -1 : 1, y)));
   return out;
@@ -367,7 +369,7 @@ function bodyPoly(o, lift, pts) {
  * Cloth tone for a torso panel: a lit strip toward the key, broad base, shade on the far side,
  * shoulder tops catching light, a soft occlusion band under the collar. Returns fn(x, y).
  */
-function clothTone(o, opts = {}) {
+export function clothTone(o, opts = {}) {
   const { toS, s, L } = o;
   const T = L.torso;
   const c = toS(0, 10);
@@ -404,7 +406,7 @@ function clothTone(o, opts = {}) {
  * arms toward the front, so two diagonal tension folds per side (one in the medium), softer and
  * shorter for knits (`soft`). Medium shots get a single 1 px line; the wide gets none.
  */
-function drape(o, mat, group, t, soft = 0) {
+export function drape(o, mat, group, t, soft = 0) {
   if (t === 0) return;
   const T = o.L.torso;
   const k = 1 - soft * 0.3;
@@ -436,7 +438,7 @@ function drape(o, mat, group, t, soft = 0) {
  * Cloth bunched where the torso folds toward the desk: two shallow two-tone arcs across the front
  * (lit lip above a shaded crease), the lower one wider, stopping short of the flanks.
  */
-function bunch(o, mat, group, t, y0, w0) {
+export function bunch(o, mat, group, t, y0, w0) {
   if (t === 0) return;
   const d1 = 1 / o.s;
   for (const [y, w, bow] of [[y0, w0 * 0.62, 0.5], [y0 + 2.6, w0 * 0.8, 0.7]]) {
@@ -456,7 +458,7 @@ function bunch(o, mat, group, t, y0, w0) {
  * the line stays unbroken down the steep steps of a sloping shoulder (a column-top rim leaves
  * dashes there). Nothing in front (hair, head, collar) means no rim: occluders keep it off.
  */
-function shoulderRim(o, T, gJ) {
+export function shoulderRim(o, T, gJ) {
   if (o.s < 1.35) return;
   const { buf } = o;
   const [ax] = o.toS(T.neckHW + 1.5, 0);
@@ -611,7 +613,7 @@ function knitBlazer(o) {
  * Fine-gauge knit ribs: on the lit part of the garment only (tones 0-1, left of the centre), short broken
  * vertical dashes one step down every few px, each column with its own rhythm (a texture, never stripes).
  */
-function knitRibs(o, mt, g, T) {
+export function knitRibs(o, mt, g, T) {
   const { buf, toS, s } = o;
   const step = Math.max(4, Math.round(1.25 * s));
   const [ax, ay] = toS(-T.shoulderHW, T.shoulderTop + 1);

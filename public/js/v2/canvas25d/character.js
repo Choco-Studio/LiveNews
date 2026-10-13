@@ -14,7 +14,7 @@
 //   hands.js         sleeves, cuffs and articulated hands
 // Draw order (back to front): hairBack → neck → outfit → ears → head → face →
 // hair → over (facial hair, glasses) → props → arms, the one nearer the camera
-// last.
+// last → the look's sleeves hook (repaints of the sleeves, e.g. a track top's stripe).
 // Rigid parts snap their origin to whole pixels so they never "boil" while
 // they translate; only parts that rotate or scale are re-sampled.
 // Wave 2 (PRESENTERS A): the neck is shaded (the jaw casts a soft shadow on
@@ -156,6 +156,9 @@ export function drawCharacter(buf, L, sk, xf) {
     drawArm(buf, L, m, arm, side === 'L' ? -1 : 1, toS, s, ga, gc, gh, z);
     z += 4;
   }
+  // look-owned finish on the sleeves (a track top's stripe down each arm): repaints of the sleeve groups only,
+  // so the hands and the other arm in front of a sleeve stay as they are
+  if (parts.sleeves) parts.sleeves(buf, L, m, ska.arms, toS, s, gb);
   if (xf.desk) plantEnd();
   if (P) {
     lap('arms', t0);

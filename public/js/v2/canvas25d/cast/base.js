@@ -14,6 +14,8 @@
 //                   head(buf, L, m, head, s)          replaces head.js drawHead (UNIT-8)
 //                   face(buf, L, head, f, s)          replaces face.js drawFace (UNIT-8)
 //                   coversEars: true                  hair hides the ears (no drawEars)
+//                   sleeves(buf, L, m, arms, toS, s, gb)  after both arms: repaints of the sleeve
+//                                                     groups (gb + GROUPS.armA / armB), e.g. a stripe
 //   mats          extra materials { name: { ramp, line, rim?, rimTop?, th?, decal?, noLine? } },
 //                 registered by matsOf() under the look's id and reachable as m.<name>
 //   matKeys       optional registry keys by material name (matKey): a look made at air time (a re-staged
