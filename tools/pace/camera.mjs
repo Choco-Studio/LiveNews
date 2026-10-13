@@ -163,8 +163,11 @@ function programme(epEv, t0, t1, rows, events, dt, episode, nextStart) {
     if (s.dur < minShot - 0.05) flag('short shot', s.at, `${s.shot}${s.framing ? `/${s.framing}` : ''} ${r2(s.dur)} s (floor ${minShot})`);
     // over the top of its window (pace.js shotMax: maps, pictures, cards, studio shots), 0.5 s of grace
     // (a correspondent's shots: the two-way and LOCATION are studio-like holds, the B-roll a picture)
+    // (the round-up's opening map carries its title line over the world view on top of the map maximum, ≤ 3 s, as the
+    // planner's capMax and the runtime guard allow: the zoom to item 1 is a move inside that one map shot)
     const legacy = s.shot === 'twoway' || s.shot === 'location' ? 'wide' : s.shot === 'broll' ? 'full' : s.shot;
-    const max = ['wide', 'close', 'map', 'full', 'fact'].includes(legacy) ? shotMax(pid, legacy) : null;
+    const roundupOpen = s.shot === 'map' && events.some((e) => e.ev === 'say' && e.phase === 'start' && e.roundup?.index === 0 && Math.abs(e.t - s.at) < 0.6);
+    const max = ['wide', 'close', 'map', 'full', 'fact'].includes(legacy) ? shotMax(pid, legacy) + (roundupOpen ? 3 : 0) : null;
     if (max && s.dur > max + 0.5) flag('over its maximum', s.at, `${s.shot}${s.framing ? `/${s.framing}` : ''} ${r2(s.dur)} s (max ${max})`);
   }
   if ((edit.length - 1) / editMinutes > P.shots.cutsPerMinMax + 0.05) flag('cut rate', bodyStart, `${r2((edit.length - 1) / editMinutes)} cuts a minute (at most ${P.shots.cutsPerMinMax})`);

@@ -247,6 +247,8 @@ test('guard: a re-staged quote\'s hand-over stays on the presenter, so a long si
   restage.ctx.speaker = 'A';
   const cut = holdCut(restage, 2, onAir, opts);
   assert.ok(cut && cut.shot === 'wide' && !cut.mid, `the hand-over on the WIDE: ${JSON.stringify(cut)}`);
+  // inside the maximum with the hand-over (7.0 + 4.5 s of 12): no cut, the hand-over's length is known (no margin)
+  assert.equal(holdCut(restage, 2, { ...onAir, held: 7.0 }, opts), null);
   // a correspondent's hand-over goes to the two-way (director.js throwTo): the guard leaves it alone
   const cross = storyPlan(lines, { link: 'R2' }, { duration: 16.3 });
   cross.ctx.speaker = 'A';
@@ -509,4 +511,17 @@ test('camera analyser: cuts inside words, jump cuts, eyelines, moves that start 
   for (const k of ['cut inside a word', 'jump cut', 'move starts abruptly', 'move cut before it settles']) assert.ok(kinds.has(k), `${k} found: ${[...kinds].join(', ')}`);
   assert.ok(p.defects.some((d) => d.kind === 'cut inside a word' && Math.abs(d.at - 6.1) < 0.05));
   assert.equal(p.shots, 4);
+  // an 11.7 s map: over WORLD NOW's 10 s, unless it is the round-up's opening map (its title line over the world view)
+  const map = (roundup) => {
+    const r = [];
+    for (let f = 0; f < 30 * 15; f++) {
+      const t = f / 30;
+      r.push({ t, ...(t < 1 ? { shot: 'open', since: 0 } : t < 12.7 ? { shot: 'map', since: 1, spec: 'wide', focus: 'A' } : { shot: 'close', since: 12.7, spec: 'mcu-l', focus: 'A', base: single, cam: single }), voice: {} });
+    }
+    const ev = [{ ev: 'playEpisode', phase: 'start', t: 0, programId: 'world-now', episodeId: 'e2', cast: { A: 'paco', B: 'lola' } }, { ev: 'say', phase: 'start', t: 1, type: 'story', anchor: 'A', roundup }];
+    return analyseTimeline({ camera: r, events: ev })[0].defects.filter((d) => d.kind === 'over its maximum').length;
+  };
+  assert.equal(map(null), 1, 'a plain map: over its maximum');
+  assert.equal(map({ index: 0, count: 4 }), 0, 'the round-up\'s opening map: the title allowance');
+  assert.equal(map({ index: 1, count: 4 }), 1, 'a later round-up item: no allowance');
 });

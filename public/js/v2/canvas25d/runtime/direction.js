@@ -221,7 +221,10 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   const zoom = onAir.shot === 'map' ? (plan.events || []).find((e) => e.kind === 'shot' && e.zoom && e.shot === 'map') : null;
   if (zoom && point) return null;
   const quick = (onAir.shot === 'full' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0) + (zoom && Number.isFinite(zoom.at) ? Math.min(3, Math.max(0, zoom.at)) : 0);
-  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + quick - HOLD_MARGIN) return null;
+  // (at a re-staged hand-over only the hand-over is left, its length known: no margin, a single held 11.8 s of TECH
+  // BYTES's 12 is no cut)
+  const margin = restaged && !point && si === (ctx.sentences?.length ?? 0) - 1 ? 0 : HOLD_MARGIN;
+  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + quick - margin) return null;
   let shot, framing;
   if (onAir.shot === 'close') {
     if (programId === 'news-60') return null;
