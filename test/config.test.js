@@ -57,6 +57,7 @@ const KEYS = [
   'WEATHER_WARNINGS',
   'WEATHER_TTL_MIN',
   'ROTATION_START',
+  'DRAFTS_ON_AIR',
   'STATION_CLOCK',
 ];
 
@@ -238,6 +239,11 @@ describe('.env.example', () => {
     const used = [...source.matchAll(/\b(?:env|num|bounded)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
     assert.deepEqual([...used].sort(), [...KEYS].sort(), 'the list of variables in this test is out of date');
     for (const key of used) assert.ok(key in example, `${key} is missing from .env.example`);
+  });
+
+  test('DRAFTS_ON_AIR: none by default; a list of draft ids (with an optional @slot) for a test or a recording', async () => {
+    assert.deepEqual((await loadConfig()).draftsOnAir, []);
+    assert.deepEqual((await loadConfig({ DRAFTS_ON_AIR: ' full-time@world-weather , other ' })).draftsOnAir, ['full-time@world-weather', 'other']);
   });
 
   test('the channel clock: on by default, off for a ROTATION_START demo unless STATION_CLOCK=1, off with STATION_CLOCK=0', async () => {

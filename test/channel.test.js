@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { castOf, loadChannel, publicChannel, validateChannel } from '../server/channel.js';
+import { castOf, loadChannel, publicChannel, validateChannel, withDraftsOnAir } from '../server/channel.js';
 import { ROOT } from '../server/config.js';
 import { Station } from '../server/station.js';
 
@@ -688,5 +688,21 @@ describe('validateChannel: optional editorial keys (style bibles)', () => {
     assert.ok(!('role' in publicChannel(ch).presenters.bob));
     ch.presenters.bob.role = 7;
     assert.throws(() => validateChannel(ch), /role/);
+  });
+});
+
+describe('withDraftsOnAir (DRAFTS_ON_AIR: a draft on air for a test or a recording)', () => {
+  const raw = loadChannel();
+  test('unset, the station sees the official line-up; a draft goes after the slot it names, or at the end', () => {
+    assert.equal(withDraftsOnAir(raw, []), raw);
+    assert.equal(withDraftsOnAir(raw, ['no-such-draft']), raw, 'a name that is not a draft is ignored');
+    const end = withDraftsOnAir(raw, ['full-time']);
+    assert.equal(end.rotation.at(-1), 'full-time');
+    assert.ok(end.programs['full-time'] && !end.drafts, 'on air: a programme, no longer a draft');
+    const after = withDraftsOnAir(raw, 'full-time@world-weather');
+    assert.equal(after.rotation[after.rotation.indexOf('world-weather') + 1], 'full-time');
+    assert.deepEqual(after.draftsOnAir, ['full-time']);
+    assert.equal(publicChannel(after).programs['full-time'].theme, 'sport', 'the browser knows its theme');
+    assert.ok(!raw.rotation.includes('full-time') && !raw.programs['full-time'], 'the official line-up untouched');
   });
 });

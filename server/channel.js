@@ -52,6 +52,37 @@ function draftsOn(data) {
   return drafted.get(data);
 }
 
+/**
+ * The channel with drafts put on air for a test or a recording (DRAFTS_ON_AIR, a developer's switch: "full-time" puts
+ * the draft at the end of the rotation, "full-time@world-weather" right after that slot). The official line-up in
+ * channel.json is untouched: unset, the station sees what it always sees. A name that is not a draft is ignored.
+ */
+const aired = new WeakMap();
+export function withDraftsOnAir(data, specs = []) {
+  const list = (Array.isArray(specs) ? specs : String(specs || '').split(',')).map((x) => String(x).trim()).filter(Boolean);
+  if (!list.length || !data?.drafts) return data;
+  const key = list.join(',');
+  let byKey = aired.get(data);
+  if (!byKey) aired.set(data, (byKey = new Map()));
+  if (!byKey.has(key)) {
+    const { drafts, ...rest } = data;
+    const programs = { ...data.programs };
+    const rotation = [...data.rotation];
+    const onAir = [];
+    for (const spec of list) {
+      const [id, after] = spec.split('@').map((x) => x.trim());
+      if (!drafts[id] || onAir.includes(id)) continue;
+      programs[id] = drafts[id];
+      const at = after ? rotation.indexOf(after) : -1;
+      if (at >= 0) rotation.splice(at + 1, 0, id);
+      else rotation.push(id);
+      onAir.push(id);
+    }
+    byKey.set(key, onAir.length ? { ...rest, programs, rotation, draftsOnAir: onAir } : data);
+  }
+  return byKey.get(key);
+}
+
 export function validateChannel(ch) {
   if (!ch?.programs || !ch?.presenters || !Array.isArray(ch.rotation) || !ch.rotation.length) {
     throw new Error('channel.json needs presenters, programs and a non-empty rotation');

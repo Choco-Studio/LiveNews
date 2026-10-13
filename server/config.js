@@ -37,6 +37,8 @@ const bounded = (key, fallback, min, max) => {
 
 // the rotation slot the channel starts at (a programme id: demos and recordings), else the first
 const rotationStart = env('ROTATION_START', '').trim();
+// drafts put on air for a test or a recording (server/channel.js withDraftsOnAir): "full-time" or "full-time@world-weather"
+const draftsOnAir = env('DRAFTS_ON_AIR', '').split(',').map((x) => x.trim()).filter(Boolean);
 
 export const config = {
   host: env('HOST', '127.0.0.1'),
@@ -69,6 +71,7 @@ export const config = {
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
   rotationStart,
+  draftsOnAir,
   // The channel's clock (config/channel.json `clock`: NEWS IN 60 at :00 and :30, dayparts). STATION_CLOCK=0 turns it
   // off; a ROTATION_START demo plays the bare rotation unless STATION_CLOCK=1 asks for the clock too
   clock: !/^(0|false|no|off)$/i.test(env('STATION_CLOCK', rotationStart ? '0' : '1')),

@@ -8,6 +8,7 @@ import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
 import { Station } from './station.js';
+import { loadChannel, withDraftsOnAir } from './channel.js';
 import { Producer } from './producer.js';
 import { createVoiceService } from './voice/index.js';
 import { ImageSearch } from './imagesearch.js';
@@ -69,7 +70,9 @@ const audit = (entry) => {
 const archive = new Archive({ dir: path.join(config.dataDir, 'archive') });
 newsDesk.archive = archive;
 const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive });
-const station = new Station({ config, newsDesk, producer, chain });
+// (DRAFTS_ON_AIR: a draft programme on air for a test or a recording, never the official line-up)
+const station = new Station({ config, newsDesk, producer, chain, ...(config.draftsOnAir.length ? { channel: () => withDraftsOnAir(loadChannel(), config.draftsOnAir) } : {}) });
+if (config.draftsOnAir.length) console.warn(`[channel] test mode: drafts on air: ${config.draftsOnAir.join(', ')}`);
 
 function sendJson(res, status, body) {
   res.writeHead(status, { 'content-type': MIME['.json'], 'cache-control': 'no-store' });
