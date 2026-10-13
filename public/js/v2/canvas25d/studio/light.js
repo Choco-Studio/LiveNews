@@ -16,8 +16,8 @@ const W = 384, H = 216;
 
 // L* of each palette colour (palette.js, sRGB → CIE L*), for "lift only" writes
 const LSTAR = {
-  black: 7.5, ink: 18.2, maroon: 18.8, purple: 31.5, slate: 29.4, navy: 32.7, brown: 32.7, darkGreen: 34.9, darkRed: 36.6,
-  tanShade: 42.5, steel: 44.3, rust: 47, magenta: 48.7, red: 51.9, skinShade: 54.2, blue: 59.8, tan: 61, fog: 63.5,
+  black: 7.5, ink: 18.2, maroon: 18.8, deepGreen: 23, purple: 31.5, slate: 29.4, navy: 32.7, brown: 32.7, darkGreen: 34.9,
+  darkRed: 36.6, midGreen: 51.1, tanShade: 42.5, steel: 44.3, rust: 47, magenta: 48.7, red: 51.9, skinShade: 54.2, blue: 59.8, tan: 61, fog: 63.5,
   orange: 64, pink: 64.7, green: 72.3, skin: 72.9, yellow: 77, silver: 81.3, cyan: 84.4, cream: 85.7, white: 100,
 };
 export const L_OF = new Map(Object.entries(LSTAR).map(([n, l]) => [C[n] >>> 0, l]));
