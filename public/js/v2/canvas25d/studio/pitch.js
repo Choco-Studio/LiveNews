@@ -3,24 +3,28 @@
 // a stadium, in a few clean layers on their own depth planes (so the camera's moves give the depth, and nothing moves
 // by itself):
 //   sky        the channel's sky by the hour (city.js skyPhase: night, dawn, day, golden hour, blue hour), flat bands
-//              with a tall Bayer ramp between them
+//              with a short Bayer ramp between them; a band's edge never crosses behind a head (in a framing whose
+//              horizon is at the presenters' height, the over-the-shoulder, the bands sit below the shoulders)
 //   towers     four floodlight towers: a pair in the far corners, beyond the stand's ends (GROUND.far), and a pair at the
 //              near corners in front of it (GROUND.near); a lattice mast and a head of lamps in four banks; at night
-//              static posterised halos; at dusk the banks come on one at a time as the sky reddens; by day off
+//              static posterised halos; at dusk the banks come on one at a time as the sky reddens, each lit head's
+//              glare a warm bloom in the red sky; by day off
 //   stand      the far stand (GROUND.stand.Z): the roof's fascia and its dark underside, the upper tier dark with rows
 //              of empty seats, aisles and a few lit exits, the balcony, the lower tier holding a still crowd at low
 //              contrast (heads as a two-tone texture over their shoulders, a few muted scarves; never animated), the
 //              pitch-side wall; in the open corners a low terrace under the towers
-//   scoreboard on a gantry over the stand's roof, in the slot above the hero screen: an LED board showing the channel's
-//              clock (the lit digits are live.js's layer, turning over each minute), a plain orange pennant on a pole
-//              beside it (three frames, slow; live.js)
+//   scoreboard on the stand's roof, to the right of the hero screen: an LED board in its own frame on two legs, its
+//              shadow on the roof's lit edge, showing the channel's clock (the lit digits are live.js's layer, turning
+//              over each minute); a plain orange pennant on a pole beside it (three frames, slow; live.js)
 //   boards     the advertising boards along the far touchline: unlit black panels and, every few metres, the channel's
 //              orange band with FULL TIME in dark type (no brand), shown whole or not at all, never behind a person
-//   pitch      the striped pitch from the boards to the platform's edge, in true perspective: mowing stripes running to
-//              the vanishing point (flat darkGreen, the stripe mown away from the light a Bayer step down toward ink,
-//              mirrored about the halfway line), the halfway line
+//   pitch      the striped pitch from the boards to the platform, in true perspective: mowing stripes running to the
+//              vanishing point in two values, each a solid colour or a 50 % mix of two adjacent ones (the day's lit
+//              stripe green over darkGreen, the night's mown stripe darkGreen over ink), a centre stripe on the halfway
+//              line and wide ones beside it, laid so that no stripe's edge runs behind a head in any framing; the
+//              halfway line
 // Out of focus (cam.soft: the singles) the ground is the same ground with its fine detail gone: the crowd a flat tone,
-// the pitch flat, no lines, no text, the lamps a step dimmer.
+// the stripes' two values and the halfway line a dim soft line, no text, the lamps a step dimmer.
 //
 //   groundKey()                       the hour's state as a number (phase * 8 + banks lit): the background cache key
 //   drawGround(fr, cam, box, soft, guard)   box: the screen rect to fill (the open back of the set)
@@ -58,9 +62,15 @@ export const GROUND = {
     aisle: 16, // a stair every 16 seats
   },
   boards: { Z: 5700, top: 80, every: 400, pad: 3 }, // FULL TIME bands at X = 0, ±400, ±800... (clear of the near masts)
-  board: { Z: 6000, X: 0, Y0: -336 }, // the scoreboard (wide: y 6-12, a row of sky above and below it, over the screen)
-  pennant: { X: 102, top: -336 }, // its pole beside the board (the cloth is live)
-  stripe: 240, // mowing stripe width
+  // the scoreboard on the stand's roof, right of the hero screen (wide: x 251-272, y 22-28, its legs down to the roof
+  // at y 31; clear of the screen's mount, the clock's box and the presenter's head under it)
+  board: { Z: 6000, X: 417, Y0: -240 },
+  pennant: { X: 492, top: -228 }, // its pole beside the board, on the roof (the cloth is live; wide: x 274-282, y 24-27)
+  // the mowing stripes (world X, mirrored about the halfway line): a centre stripe 400 wide, then stripes 650 wide.
+  // Their edges (X ±200, ±850, ±1500...) keep clear of every head: in the wide an edge between |X| 278 and 618 would
+  // pass behind a presenter's chin, in the two-shot one between 218 and 820 (the ots and the singles see the pitch only
+  // below the shoulders)
+  stripe: { centre: 400, width: 650 },
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
   far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, gapx: true, halo: 50, mast: 6.4, far: true },
@@ -100,31 +110,43 @@ export function groundKey() {
 }
 
 // --------------------------------------------------------------------------- the palettes by phase
-// names → u32 (arrays kept). pitch: [stripe A, stripe B] as a Bayer share (-16..16) over darkGreen: > 0 toward green,
-// < 0 toward ink
-const pal = (o) => {
-  const out = {};
-  for (const [k, v] of Object.entries(o)) out[k] = Array.isArray(v) ? v.map((n) => (typeof n === 'string' ? C[n] : n)) : typeof v === 'string' && C[v] !== undefined ? C[v] : v;
-  return out;
-};
-const NIGHT = { sky: ['ink', 'ink', 'ink', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: [0, -4], line: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate', 'ink'], band: 'orange', pole: 'steel' };
+// names → u32 (nested arrays kept). pitch: [centre stripe, the stripes beside it], each [a, b]: one colour when a and b
+// are the same, else a 50 % mix of the two (a checker of adjacent steps, calm: no Bayer pattern within a stripe).
+// halo: posterised rings [inner, middle, outer] lifting darker pixels, or 'up': each pixel lifted a step up its own
+// ramp (two inside), the glare taking the sky's colour (the golden hour: a red sky)
+const toC = (v) => (Array.isArray(v) ? v.map(toC) : typeof v === 'string' && C[v] !== undefined ? C[v] : v);
+const pal = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, toC(v)]));
+// the pitch's values (L*: green 72, the green/darkGreen mix 58 as the eye mixes it, darkGreen 35, the darkGreen/black
+// mix 26, the darkest green the palette can make: a mix with ink or slate turns teal-grey, with brown or maroon olive):
+// the stripes beside the centre, behind the presenters' heads in the wide and the two-shot, are darkGreen in every
+// phase (one solid colour behind a head); the centre stripe, between the presenters, carries the light: in the sun the
+// green/darkGreen mix (the brightest pitch, under every face, 59-73, in every framing), under the floodlights and in
+// the half light of dawn the darkGreen/black mix
+const PITCH_NIGHT = [['darkGreen', 'black'], ['darkGreen', 'darkGreen']];
+const PITCH_DAY = [['green', 'darkGreen'], ['darkGreen', 'darkGreen']];
+const PITCH_DAWN = PITCH_NIGHT;
+const NIGHT = { sky: ['ink', 'ink', 'ink', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: PITCH_NIGHT, line: 'steel', softLine: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate', 'ink'], band: 'orange', pole: 'steel', boardFrame: 'slate' };
 const PALS = [
   // night: a black sky, the floodlit pitch, the stand dark with its lower tier in the spill
   pal(NIGHT),
   // dawn: the night lifting behind the stand, the ground cold and in shadow, the floodlights off
-  pal({ ...NIGHT, sky: ['ink', 'navy', 'purple', 'rust'], softSky: 'navy', town: 'black', roofEdge: 'purple', exit: 'ink', exitEdge: 'black', heads: ['slate', 'slate'], pitch: [0, -7], line: 'slate', tower: 'ink', towerDark: 'black', head: 'ink', lamp: 'slate', halo: null, band: 'rust', pole: 'slate' }),
+  pal({ ...NIGHT, sky: ['ink', 'navy', 'purple', 'rust'], softSky: 'navy', town: 'black', roofEdge: 'purple', exit: 'ink', exitEdge: 'black', heads: ['slate', 'slate'], pitch: PITCH_DAWN, line: 'slate', softLine: 'slate', tower: 'ink', towerDark: 'black', head: 'ink', lamp: 'slate', halo: null, band: 'rust', pole: 'slate', boardFrame: 'ink' }),
   // day: the stand in sun and shadow (the roof shades the upper tier, the sun on the lower), the pitch in the sun
-  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: [0, -3], line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog' }),
-  // the golden hour: the sky reddening behind the stand, its roof catching the last light, the banks coming on
-  pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', pitch: [0, -4] }),
+  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: PITCH_DAY, line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog', boardFrame: 'slate' }),
+  // the golden hour: the sky reddening behind the stand, its roof catching the last light, the banks coming on, each
+  // lit head's glare a bloom of the red sky
+  pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', halo: ['tan', 'tanShade', null], boardFrame: 'ink' }),
   // the blue hour: the last light a purple band over the roof, every bank on
-  pal({ ...NIGHT, sky: ['ink', 'navy', 'navy', 'purple'], softSky: 'navy' }),
+  pal({ ...NIGHT, sky: ['ink', 'navy', 'navy', 'purple'], softSky: 'navy', halo: ['fog', 'steel', 'slate'], boardFrame: 'ink' }),
 ];
 export const PHASE_PALS = PALS;
 
 // out of focus: each light a step dimmer, the bright lines gone
 const MUTE = new Map([['white', 'silver'], ['silver', 'fog'], ['fog', 'steel'], ['steel', 'slate'], ['orange', 'brown'], ['rust', 'brown'], ['tan', 'tanShade'], ['cream', 'tan']].map(([a, b]) => [C[a] >>> 0, C[b]]));
 const mute = (c) => MUTE.get(c >>> 0) ?? c;
+// a step up a colour's own ramp (a glare in a coloured sky keeps its hue), never past L* 65 (under every face)
+const UP = new Map([['black', 'ink'], ['ink', 'slate'], ['slate', 'steel'], ['steel', 'fog'], ['navy', 'steel'], ['purple', 'magenta'], ['magenta', 'pink'], ['maroon', 'darkRed'], ['darkRed', 'red'], ['red', 'pink'], ['brown', 'rust'], ['rust', 'orange']].map(([a, b]) => [C[a] >>> 0, C[b]]));
+const up = (c) => UP.get(c >>> 0) ?? c;
 
 // --------------------------------------------------------------------------- helpers
 const hash = (a, b, c = 0) => {
@@ -188,38 +210,75 @@ const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a
 // corners, below it, the town beyond the ground: a low roofline in one flat colour.
 const SKY_E = [38, 19, 7];
 const RAMP = 5;
-function skyAt(s, h, x, y, rw) {
+// the bands' edges for this camera, in screen rows (the ramp's centre) and the ramps' half heights (px)
+const EDGE = new Float64Array(3), RW = new Float64Array(3);
+/**
+ * The bands' edge rows for a camera: the city's heights above the horizon, except that an edge never crosses behind a
+ * head. In the over-the-shoulder the horizon is at the presenter's shoulders and the bands' edges would run behind the
+ * face; there the head stands in the sky's second band: the first edge moves above the crown (its ramp kept), the
+ * others below the neck (the last light hugging the horizon, a row's ramp each), the bands two rows apart at least.
+ */
+function skyEdges(cam) {
+  const z = cam.zoom;
   for (let i = 0; i < 3; i++) {
-    const t = SKY_E[i], hw = rw[i];
-    if (h > t + hw) return s[i];
-    if (h > t - hw) return s[i] === s[i + 1] ? s[i] : (t + hw - h) / (2 * hw) * 16 > bay16(x, y) ? s[i + 1] : s[i];
+    const above = i === 0 ? 60 : SKY_E[i - 1] - SKY_E[i], below = i === 2 ? SKY_E[2] : SKY_E[i] - SKY_E[i + 1];
+    RW[i] = Math.max(0.5, Math.min(RAMP, 0.45 * Math.min(above, below) * z));
+    EDGE[i] = cam.hy - SKY_E[i] * z;
+  }
+  for (const h of headRows(cam)) {
+    for (let i = 0; i < 3; i++) {
+      if (EDGE[i] + RW[i] <= h.y0 || EDGE[i] - RW[i] >= h.y1) continue;
+      if (i === 0) EDGE[0] = h.y0 - RW[0]; // above the crown, its ramp kept
+      else {
+        RW[i] = 0.5;
+        EDGE[i] = h.y1 + 1;
+      }
+    }
+    for (let i = 1; i < 3; i++) if (EDGE[i] < EDGE[i - 1] + 2) EDGE[i] = EDGE[i - 1] + 2;
+  }
+}
+/** The rows of each head in the frame (crown to neck, 6 px round; screen px), for the sky's band edges. */
+function headRows(cam) {
+  const kp = kOf(cam, SET.presenterZ);
+  const s = Math.max(0.5, Math.round(22 * kp) / 22);
+  const out = [];
+  for (const X of [SET.seatX.A, SET.seatX.B]) {
+    const x = 192 + (X - cam.x) * kp, y = cam.hy + (SET.neckY - cam.y) * kp;
+    if (x + 20 * s < 0 || x - 20 * s >= W) continue;
+    // (the presenters' head box: the crown about 25 units over the neck, room for the hair, 6 px of clearance)
+    out.push({ y0: y - 30 * s, y1: y + 6 });
+  }
+  return out;
+}
+function skyAt(s, y, x) {
+  const yc = y + 0.5;
+  for (let i = 0; i < 3; i++) {
+    const t = EDGE[i], hw = RW[i];
+    if (yc < t - hw) return s[i];
+    if (yc < t + hw) return s[i] === s[i + 1] ? s[i] : (yc - (t - hw)) / (2 * hw) * 16 > bay16(x, y) ? s[i + 1] : s[i];
   }
   return s[3];
 }
-const RW = new Float64Array(3);
 function sky(cam, P, yEnd, soft) {
   // out of focus the bands melt into one flat tone (no band edge crossing behind a head in a single)
   if (soft) {
     fill(BOX.x0, BOX.y0, BOX.x1, yEnd, P.softSky);
     return;
   }
-  const s = P.sky, z = cam.zoom;
-  for (let i = 0; i < 3; i++) {
-    const up = i === 0 ? 60 : SKY_E[i - 1] - SKY_E[i], down = i === 2 ? SKY_E[2] : SKY_E[i] - SKY_E[i + 1];
-    RW[i] = Math.max(0.5 / z, Math.min(RAMP / z, 0.45 * Math.min(up, down)));
-  }
+  const s = P.sky;
+  skyEdges(cam);
   for (let y = BOX.y0; y < Math.min(BOX.y1, yEnd); y++) {
-    const h = (cam.hy - (y + 0.5)) / z;
+    const yc = y + 0.5;
     const row = y * W;
     // a row outside every ramp is one colour (filled at once); a ramp's share within 2/16 of an end snaps flat
     let flat = -1;
-    for (let i = 0; i < 3; i++) if (Math.abs(h - SKY_E[i]) < RW[i] && s[i] !== s[i + 1]) flat = i;
+    for (let i = 0; i < 3; i++) if (Math.abs(yc - EDGE[i]) < RW[i] && s[i] !== s[i + 1]) flat = i;
     if (flat < 0) {
-      PX.fill(skyAt(s, h, 0, y, RW), row + BOX.x0, row + BOX.x1);
+      PX.fill(skyAt(s, y, 0), row + BOX.x0, row + BOX.x1);
       continue;
     }
-    const t = SKY_E[flat], hw = RW[flat];
-    let q = Math.round(((t + hw - h) / (2 * hw)) * 16);
+    const t = EDGE[flat], hw = RW[flat];
+    const q = Math.round(((yc - (t - hw)) / (2 * hw)) * 16);
     if (q <= 2 || q >= 14) {
       PX.fill(q >= 14 ? s[flat + 1] : s[flat], row + BOX.x0, row + BOX.x1);
       continue;
@@ -297,18 +356,31 @@ function towerHeadDraw(t, hd, P, banks, soft) {
   }
 }
 
-/** A static halo round a lit head: posterised rings that only lift darker pixels (no Bayer fringe, never moving). */
+/**
+ * A static halo round a lit head: posterised rings that only lift darker pixels (no Bayer fringe, never moving). In a
+ * coloured sky ('up', the golden hour) the glare lifts each pixel up its own ramp, two steps near the head and one
+ * further out, so the bloom is the red sky brightened, as strong as the blue hour's halo over navy.
+ */
 function halo(hd, P, banks, soft) {
   if (!P.halo || banks <= 0) return;
   const R = hd.R * (0.55 + 0.45 * (banks / 4)) * (soft ? 1.2 : 1);
-  const [c0, c1, c2] = P.halo;
   const cx = hd.cx, cy = hd.cy;
+  const bloom = P.halo === 'up';
+  const [c0, c1, c2] = bloom ? [0, 0, 0] : P.halo;
   for (let y = Math.floor(cy - R - 1); y <= Math.ceil(cy + R + 1); y++) {
     for (let x = Math.floor(cx - R - 1); x <= Math.ceil(cx + R + 1); x++) {
       if (x >= hd.x0 && x < hd.x0 + hd.w && y >= hd.y0 && y < hd.y0 + hd.h) continue; // the head itself
+      if (x < BOX.x0 || x >= BOX.x1 || y < BOX.y0 || y >= BOX.y1) continue;
       const d = Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.15) / R;
       if (d >= 1) continue;
-      lift(x, y, d < 0.5 ? c0 : d < 0.74 ? c1 : c2);
+      if (bloom) {
+        if (d >= 0.8) continue;
+        const o = y * W + x, c = PX[o];
+        PX[o] = d < 0.45 ? up(up(c)) : up(c);
+      } else {
+        const c = d < 0.5 ? c0 : d < 0.74 ? c1 : c2;
+        if (c) lift(x, y, c);
+      }
     }
   }
 }
@@ -432,26 +504,39 @@ function stand(cam, P, soft) {
 }
 
 // --------------------------------------------------------------------------- the scoreboard and the pennant
-// the board's LED matrix: four 3x5 digits and a colon, a dot a pixel at the wide (whole pixels closer in), the unlit
-// dots dark red-brown (an LED panel reads by its unlit dots); the lit digits are the live layer's
-function scoreboard(cam, P, soft, guard) {
+// The stand's scoreboard, an object on the roof: an LED matrix of four 3x5 digits and a colon (a dot a pixel at the
+// wide, whole pixels closer in; the unlit dots dark red-brown, an LED panel reads by its unlit dots; the lit digits
+// are the live layer's) in a black housing with a steel frame, its top catching the light, on two legs standing on
+// the roof; the board shades the roof's lit edge under it, the shadow thrown to the right (the key light from camera
+// left by day; at night the floodlights in front of the stand, the board's shadow straight down). Whole or not at
+// all; out of focus never (the singles do not see the roof).
+function scoreboard(cam, P, soft, guard, phase) {
   const B = GROUND.board;
   const k = kOf(cam, B.Z);
   const s = Math.max(1, Math.round(k * 6));
   const dw = 17 * s; // HH:MM, a dot a column: digits at 0, 4, 10, 14, the colon at 8
-  const w = dw + 4 * s, h = 7 * s; // a frame, the five rows of dots, a frame
+  const w = dw + 4 * s, h = 7 * s; // the frame, the five rows of dots, the frame
   const cx = 192 + (B.X - cam.x) * k;
   const x0 = Math.round(cx - w / 2), y0 = Math.round(cam.hy + (B.Y0 - cam.y) * k);
-  const r = { x0, y0, x1: x0 + w, y1: y0 + h };
+  const yRoof = Math.round(cam.hy + (GROUND.stand.roof - cam.y) * k);
+  const r = { x0, y0, x1: x0 + w, y1: yRoof };
+  // (the board and its pennant together: clear of the frame's furniture and of every person)
+  const all = { x0, y0, x1: Math.round(192 + (GROUND.pennant.X - cam.x) * k) + 9 * s, y1: yRoof };
   LIVE_STATE.board = null;
   LIVE_STATE.pennant = null;
-  if (soft || !guard(r)) return;
-  // the gantry's two legs down to the roof (the hero screen hides them in the wide)
-  const yRoof = Math.round(cam.hy + (GROUND.stand.roof - cam.y) * k);
-  fill(x0 + 3 * s, y0 + h, x0 + 4 * s, yRoof, P.towerDark);
-  fill(x0 + w - 4 * s, y0 + h, x0 + w - 3 * s, yRoof, P.towerDark);
-  // the board: black in an ink frame, its top edge catching the light
-  fill(x0, y0, x0 + w, y0 + h, C.ink);
+  if (soft || !guard(r) || peopleBoxes(cam).some((b) => overlaps(all, b))) return;
+  // its shadow on the roof's lit edge (and the edge's row under the legs)
+  const sh = phase === 2 || phase === 3 ? 2 * s : 0;
+  fill(x0 + sh, yRoof, x0 + w + sh, yRoof + s, P.roof);
+  // two legs with a brace between them, from the board down to the roof
+  const lx0 = x0 + 3 * s, lx1 = x0 + w - 4 * s;
+  // (the legs and the frame in the one colour that stands off the sky in every phase: slate on the night's ink and the
+  // day's steel, ink on dawn's, the golden hour's and the blue hour's colours)
+  fill(lx0, y0 + h, lx0 + s, yRoof, P.boardFrame);
+  fill(lx1, y0 + h, lx1 + s, yRoof, P.boardFrame);
+  if (yRoof - (y0 + h) >= 3 * s) fill(lx0, y0 + h + s, lx1 + s, y0 + h + 2 * s, P.boardFrame);
+  // the board: a steel frame round a black face, its top edge catching the light
+  fill(x0, y0, x0 + w, y0 + h, P.boardFrame);
   fill(x0, y0, x0 + w, y0 + s, P.head);
   fill(x0 + s, y0 + s, x0 + w - s, y0 + h - s, C.black);
   const dx0 = x0 + 2 * s, dy0 = y0 + s;
@@ -460,10 +545,10 @@ function scoreboard(cam, P, soft, guard) {
     for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) fill(gx + i * s, dy0 + j * s, gx + (i + 1) * s, dy0 + (j + 1) * s, C.maroon);
   }
   LIVE_STATE.board = { x0: dx0, y0: dy0, s };
-  // the pennant's pole beside the board (whole with its cloth, or not at all)
+  // the pennant's pole beside the board, on the roof (whole with its cloth, or not at all)
   const px = Math.round(192 + (GROUND.pennant.X - cam.x) * k);
   const pTop = Math.round(cam.hy + (GROUND.pennant.top - cam.y) * k);
-  if (!guard({ x0: px - s, y0: pTop, x1: px + 9 * s, y1: pTop + 5 * s })) return;
+  if (!guard({ x0: px - s, y0: pTop, x1: px + 9 * s, y1: yRoof })) return;
   fill(px, pTop, px + s, yRoof, P.pole);
   LIVE_STATE.pennant = { x: px + s, y: pTop, s };
 }
@@ -565,44 +650,56 @@ function boards(cam, P, soft, guard) {
 }
 
 // --------------------------------------------------------------------------- the pitch
+/** The stripe under world X: 0 the centre stripe's value, 1 the next (mirrored about the halfway line, X = 0). */
+function stripeOf(X) {
+  const a = Math.abs(X), h = GROUND.stripe.centre / 2;
+  return a < h ? 0 : (1 + Math.floor((a - h) / GROUND.stripe.width)) & 1;
+}
+/** The first stripe edge right of world X (edges at ±centre/2, then every stripe width). */
+function nextEdge(X) {
+  const h = GROUND.stripe.centre / 2, sw = GROUND.stripe.width;
+  if (X < -h) {
+    // the edges left of the centre stripe: -(h + n sw), the nearest above X
+    const n = Math.ceil((-X - h) / sw) - 1;
+    const e = -(h + n * sw);
+    return e > X ? e : e + sw;
+  }
+  if (X < h) return h;
+  return h + (Math.floor((X - h) / sw) + 1) * sw;
+}
 function pitch(cam, P, soft, yTop) {
   const f = F * cam.zoom, dY = GROUND.pitchY - cam.y;
-  const g0 = C.darkGreen, up = C.green, dn = C.ink;
   const yA = Math.max(BOX.y0, yTop), yB = BOX.y1;
   const xs = BOX.x0, xe = BOX.x1;
-  const SW = GROUND.stripe;
   // the far touchline's row (a pixel row where the line's Z falls)
   const yTouch = Math.round(cam.hy + dY * (f / (GROUND.touch - cam.z)) - 0.5);
+  const S0 = P.pitch[0], S1 = P.pitch[1];
   for (let y = yA; y < yB; y++) {
     const dy = y + 0.5 - cam.hy;
     if (dy <= 0) continue;
     const kr = dy / dY; // px per unit on this row
     const row = y * W;
-    if (soft) {
-      PX.fill(g0, row + xs, row + xe); // out of focus the stripes melt into one flat green
-      continue;
-    }
-    // the stripes: runs between the stripe edges (straight lines to the vanishing point), flat within a stripe, the
-    // pattern mirrored about the halfway line (the stripe either side of it the same)
-    let n = Math.floor((cam.x + (xs + 0.5 - 192) / kr) / SW);
+    // the stripes: runs between the stripe edges (straight lines to the vanishing point), each stripe one colour or a
+    // checker of two (the same out of focus: a stripe is a broad shape, the blur only takes the lines)
+    let X = cam.x + (xs + 0.5 - 192) / kr;
     let x = xs;
-    const br = (y & 3) << 2;
     while (x < xe) {
-      const xb = Math.min(xe, Math.ceil(192 + ((n + 1) * SW - cam.x) * kr - 0.5));
-      const v = P.pitch[(n < 0 ? -n - 1 : n) & 1];
-      if (v === 0) PX.fill(g0, row + x, row + Math.max(x, xb));
-      else {
-        const q = Math.abs(v), c1 = v > 0 ? up : dn;
-        for (let xx = x; xx < xb; xx++) PX[row + xx] = q > B16[br + (xx & 3)] ? c1 : g0;
-      }
-      x = Math.max(x + 1, xb);
-      n++;
+      const eX = nextEdge(X);
+      const xb = Math.min(xe, Math.max(x + 1, Math.ceil(192 + (eX - cam.x) * kr - 0.5)));
+      const [a, b] = stripeOf(X) ? S1 : S0;
+      if (a === b) PX.fill(a, row + x, row + xb);
+      else for (let xx = x; xx < xb; xx++) PX[row + xx] = (xx + y) & 1 ? a : b;
+      x = xb;
+      // the next run's stripe: the one under its first pixel's centre (past this edge, and past any edge narrower
+      // than a pixel near the horizon)
+      X = Math.max(eX + 1e-6, cam.x + (xb + 0.5 - 192) / kr);
     }
     // the halfway line, a faint line in the floodlights from the touchline under the boards toward the camera (the far
-    // touchline itself is left out: in the network's two-shot it would run along the presenters' crowns)
+    // touchline itself is left out: in the network's two-shot it would run along the presenters' crowns); out of focus
+    // a dim soft line
     if (y > yTouch) {
       const hx = Math.round(192 - cam.x * kr - 0.5);
-      if (hx >= xs && hx < xe) PX[row + hx] = P.line;
+      if (hx >= xs && hx < xe) PX[row + hx] = soft ? P.softLine : P.line;
     }
   }
 }
@@ -637,7 +734,7 @@ export function drawGround(fr, cam, box, soft, guard = () => true) {
     heads.push(hd);
   }
   stand(cam, P, soft);
-  scoreboard(cam, P, soft, guard);
+  scoreboard(cam, P, soft, guard, phase);
   const yBoards = boards(cam, P, soft, guard);
   pitch(cam, P, soft, yBoards);
   for (const t of TOWERS) {

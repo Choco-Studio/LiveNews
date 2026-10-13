@@ -957,6 +957,61 @@ function fullTime(fr, cam, style, soft) {
   studioLamps(fr, cam, soft);
 }
 
+// The platform's front edge, in front of the desk: the deck runs on a metre and a half in front of the desk (ink, under
+// the desk's foot), to the edge's orange LED strip with its light on the riser's top row, then the riser's black
+// panels, their seams under the desk's module joints, running down out of the frame (its foot, the grass and the
+// touchline in front of it are below the frame: the wide sees the pitch's surface only from 11 m out, behind the desk).
+// The edge runs straight across (the desk curves back from it). Its light sits in the wide's free rows between the
+// captions and the lower third (down to y 196) and the ticker (from y 202): the deck under the captions is a quiet ink,
+// the riser under the ticker black. In every other framing the edge is below the frame. In the graphics zone: only
+// black, ink and the one light line (ART_DIRECTION: the desk's foot light, here the platform's; DESK_FRONTS base,
+// baseAt 'platform').
+const PLATFORM = { z0: 765, curve: 0, seams: [0, 104, 178], span: 600, n: 120 };
+const PLAT_Y = new Float32Array(W);
+function platformFront(fr, cam, style, soft) {
+  const D = SET;
+  const zOf = (X) => PLATFORM.z0 + PLATFORM.curve * (X / D.deskHW) ** 2;
+  // the edge's row under each column (the curve tessellated, rows at the columns' centres)
+  PLAT_Y.fill(NaN);
+  let px = -Infinity, py = 0;
+  for (let i = 0; i <= PLATFORM.n; i++) {
+    const X = -PLATFORM.span + (2 * PLATFORM.span * i) / PLATFORM.n;
+    const k = kAt(cam, zOf(X));
+    const sx = sxOf(cam, k, X), sy = syOf(cam, k, D.floorY);
+    if (i > 0) {
+      for (let x = Math.max(0, Math.ceil(px - 0.5)); x < Math.min(W, Math.ceil(sx - 0.5)); x++) {
+        const u = (x + 0.5 - px) / Math.max(1e-6, sx - px);
+        PLAT_Y[x] = py + (sy - py) * u;
+      }
+    }
+    px = sx;
+    py = sy;
+  }
+  const ramp = RAMPS[DESK_FRONTS[style.id]?.base || 'orange'];
+  const deck = C.ink, riser = C.black, seam = C.ink;
+  for (let x = 0; x < W; x++) {
+    if (!Number.isFinite(PLAT_Y[x])) continue;
+    const yE = Math.round(PLAT_Y[x]);
+    if (yE >= H) continue;
+    // the deck in front of the desk (the desk, drawn after, covers it down to its foot)
+    for (let y = Math.max(0, yE - 40); y < Math.min(H, yE); y++) fr.px[y * W + x] = deck;
+    if (yE >= 0) fr.px[yE * W + x] = soft ? ramp.halo : ramp.core;
+    if (yE + 1 >= 0 && yE + 1 < H) fr.px[(yE + 1) * W + x] = soft ? ramp.outer : ramp.halo;
+    for (let y = Math.max(0, yE + 2); y < H; y++) fr.px[y * W + x] = riser;
+  }
+  // the riser's panel seams at the desk's joints (a mirrored pair of whole columns); the LED strip runs panel by panel,
+  // broken at each joint (a fixture on the riser, not a line drawn across the picture)
+  for (const X of PLATFORM.seams) {
+    const c = sxOf(cam, kAt(cam, zOf(X)), X);
+    const xr = Math.floor(c), xl = 383 - xr;
+    for (const x of X ? [xl, xr] : [191, 192]) {
+      if (x < 0 || x >= W || !Number.isFinite(PLAT_Y[x])) continue;
+      const yE = Math.round(PLAT_Y[x]);
+      for (let y = Math.max(0, yE); y < H; y++) fr.px[y * W + x] = y < yE + 2 ? riser : seam;
+    }
+  }
+}
+
 // the canopy's slim columns (the set's flats): a black steel column each side, its inner face lit, an orange inlay
 const FT_COL = { X: 218, inlay: 222 };
 function canopyColumns(fr, cam, soft) {
@@ -998,6 +1053,9 @@ export const FLATS = {
   'full-time': (fr, cam, style, soft) => canopyColumns(fr, cam, soft), // the canopy's slim columns, an orange inlay
 };
 
+/** A programme's own floor in front of the desk (set.js, after the floor, before the desk): FULL TIME's platform edge. */
+export const FLOORS = { 'full-time': platformFront };
+
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
 export function drawDressing(fr, cam, style, soft = false) {
   if (!DRESSING.on) return;
@@ -1026,6 +1084,7 @@ export const DESK_FRONTS = {
   // coral light at its foot
   'seven-days': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'pink', glow: 'coral', sheen: true, base: 'coral', zone: 'black', slab: 2.4 },
   // FULL TIME: curved black under a slab with one orange edge light (the LED line and its light on the front), nothing
-  // else on it (full-time.md §6: "the desk is curved black with an orange edge light")
-  'full-time': { hi: 'black', lo: 'black', glow: 'orange', sheen: true, zone: 'black', slab: 2.4 },
+  // else on it (full-time.md §6: "the desk is curved black with an orange edge light"); the foot light runs along the
+  // platform's front edge, not the desk's foot (FLOORS)
+  'full-time': { hi: 'black', lo: 'black', glow: 'orange', sheen: true, zone: 'black', slab: 2.4, base: 'orange', baseAt: 'platform' },
 };

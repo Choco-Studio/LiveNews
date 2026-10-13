@@ -33,7 +33,7 @@ import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
 import { updateWall, drawWallContent, wallFromScene as wallOfScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
-import { drawDressing, DESK_FRONTS, DRESSING, FLATS, RUNDOWN, rundownRows } from './dressing.js';
+import { drawDressing, DESK_FRONTS, DRESSING, FLATS, FLOORS, RUNDOWN, rundownRows } from './dressing.js';
 import { drawLive, liveReset, setLive, LED_ROWS } from './live.js';
 import { RAMPS, litBy } from './light.js';
 import { drawSconce } from './sconce.js';
@@ -751,6 +751,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
   drawFloor(fr, cam, style);
+  // a programme's own floor in front of the desk (FULL TIME: the platform's front edge, its light and riser)
+  if (DRESSING.on && FLOORS[style.id]) FLOORS[style.id](fr, cam, style, soft);
   if (pOn) p0 = lap(PROF, 'floor', p0);
   if (CACHE.on) {
     CACHE.bg.set(fr.px);
@@ -1287,8 +1289,9 @@ function deskLight(fr, cam, front, kc, topC, panelHi) {
         if (edge > 3 || B16[((y & 3) << 2) | (x & 3)] < edge * 4) px[y * W + x] = litBy(topC);
       }
     }
-    // the light line at the desk's foot and its reflection on the glossy floor below
-    if (base && bot < fr.h && f < 2) {
+    // the light line at the desk's foot and its reflection on the glossy floor below (a front whose light runs along
+    // the platform's edge instead, FULL TIME's, has it drawn with the floor: dressing.js FLOORS)
+    if (base && front.baseAt !== 'platform' && bot < fr.h && f < 2) {
       px[(bot - 1) * W + x] = base.core;
       // (solid rows, no Bayer: under a camera move a dithered reflection would flicker)
       for (let d = 0; d < 2; d++) {
