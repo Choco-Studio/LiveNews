@@ -23,6 +23,8 @@ const FORMS = [
   { re: new RegExp(`${TEAM}\\s+and\\s+${TEAM}\\s+(?:will|are set to|are due to|are scheduled to)\\s+(?:fight|meet|play|face each other|clash|box|go head to head)\\b`, 'u'), sides: (m) => [m[1], m[2]] },
   // "Wales host Albania on Tuesday", "Coventry will face Arsenal next week"
   { re: new RegExp(`${TEAM}\\s+${VERB}\\s+(?:the\\s+)?${TEAM}`, 'u'), sides: (m) => [m[1], m[2]] },
+  // "the Daniel Dubois vs Fabio Wardley rematch on Saturday" (Sky Sports 13 Oct)
+  { re: new RegExp(`${TEAM}\\s+(?:vs?\\.?|versus)\\s+${TEAM}\\s+(?:rematch|fight|bout|clash|match|game|final|showdown)\\b`, 'u'), sides: (m) => [m[1], m[2]] },
 ];
 // an event by its own name: "The Ashes begins on 21 November", "The Rugby League World Cup gets under way on Saturday"
 const EVENT = new RegExp(`^((?:The\\s+)?${NAMEW}(?:\\s+(?:${NAMEW}|of|de))*)\\s+(?:starts?|begins?|gets?\\s+under\\s+way|kicks?\\s+off|tees?\\s+off|takes?\\s+place|will\\s+(?:start|begin|be\\s+held|take\\s+place|get\\s+under\\s+way|kick\\s+off))\\b`, 'u');

@@ -323,7 +323,7 @@ export class Producer {
     const tz = ctx.channelClock?.timezone || 'Europe/London';
     const before = ctx.candidates.length;
     const led = new Set(this.recentSportLeads.filter((x) => now - x.at < 3 * 3600_000).map((x) => x.id));
-    const list = balance(prepareStories(ctx.candidates, { now, tz }), { count: ctx.program.stories || 10, ledLately: (id) => led.has(id) });
+    const list = balance(prepareStories(ctx.candidates, { now, tz }), { count: ctx.program.stories || 10, ledLately: (id) => led.has(id), now });
     // the writer tells the edition (football at most half of it); the shape reads results and dates from all of them
     ctx.sportPool = list;
     ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program)));

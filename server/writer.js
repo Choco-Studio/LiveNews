@@ -142,6 +142,18 @@ function whoRule(program) {
 - WHO'S WHO: for a main story whose candidate names two or three people in public life with their roles ("Interior Minister Laurent Nuñez", "Matteo Bruni, the Vatican spokesperson"), add "who": [{"name": the name as written, "role": the role the candidate gives them, at most ${WHO_LIMITS.role} characters}]; the presenter names each of them. Never a private person, a victim, a witness, a suspect or a relative. Otherwise "who": null.`;
 }
 
+/** FULL TIME (docs/programmes/full-time.md §3–4): what a sport edition says and never says, for the AI writer. */
+function sportRule(program, solo, a = 'A', b = 'B') {
+  if (program.kind !== 'sport') return '';
+  return `
+- Results: say a score only as the candidate states it as final, in figures ("4-1"), with both teams named as the candidate names them; never a half-time, aggregate, series or live score as a result, never a score the candidate does not give.
+- Nobody is judged: no praise or blame of a player, a manager, a referee or a team ("brilliant", "poor", "wasteful", "deserved", "should have"); facts, and the words of the people involved inside quotation marks with their speaker.
+- Never betting, odds, gossip, rumours or transfer talk.
+- Time words are as the candidates give them: never "tonight" or "tomorrow" for a game the candidate dates otherwise.${solo ? '' : `
+- THE BREAKDOWN: directly after the lead (and after at most one more main story), a chat in which ${a} asks one short question that names ${b} and fits what the story's own words can answer: how long it has been coming (a record, a first since, a run), where it leaves them (the table), what comes next (a dated step), or what they are saying (an attributed quotation); ${b} answers with one or two of that story's sentences ${a} has not read. No such sentence, no question.`}
+- The lighter story is the moment of the day: a record, a milestone, an auction, a farewell, a remarkable catch; never grave, never a story about a person's misfortune.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -263,7 +275,7 @@ PRESENTERS
 ${cast}${chemistry}
 
 TASK
-1. From the CANDIDATES below, select the ${n} stories of greatest interest and impact for an international audience that fit this programme.${primary} Prefer stories many outlets are covering ("outletsCovering" > 1). Avoid purely local or niche items, celebrity gossip, shopping deals, product reviews, sports minutiae, opinion pieces and live blogs with no clear news line ("liveBlog": true marks rolling coverage: call it a developing story, never breaking news, and never read its "follow the latest" line). Keep some variety.
+1. ${program.kind === 'sport' ? `The CANDIDATES below are this edition, already chosen and balanced by the sport desk (the lead first, football at most half, several sports): tell up to ${n} of them, keeping the first as the lead.` : `From the CANDIDATES below, select the ${n} stories of greatest interest and impact for an international audience that fit this programme.${primary} Prefer stories many outlets are covering ("outletsCovering" > 1). Avoid purely local or niche items, celebrity gossip, shopping deals, product reviews, sports minutiae, opinion pieces and live blogs with no clear news line ("liveBlog": true marks rolling coverage: call it a developing story, never breaking news, and never read its "follow the latest" line). Keep some variety.`}
 2. Order them like a real newsroom: the biggest story first; a breaking story ("breaking": true) always leads${features.includes('lighter') ? '; a lighter one last' : ''}.
 3. Write the script in English, to be read aloud by a synthetic voice.
 
@@ -278,7 +290,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}${timelineRule(program)}${changeRule(program)}${shareRule(program)}${nextRule(program)}${whoRule(program)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${sportRule(program, solo, a, b)}${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}${timelineRule(program)}${changeRule(program)}${shareRule(program)}${nextRule(program)}${whoRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -509,6 +521,9 @@ function tailPredicate(tail) {
 }
 const TAIL_VERB_S = /^(?:wins|loses|says|gets|faces|takes|makes|calls|backs|hits|beats|ends|leads|plans|sees|sets|joins|quits|warns|urges|vows|seeks|rejects|denies|admits|accepts|refuses|agrees|launches|unveils|announces|reveals|confirms|signs|buys|sells|sues|wants|needs|gives|offers|returns|resigns|dies|kills|claims|insists|pledges|demands)$/;
 // Nouns that are empty without what follows them: "a sharp fall [in deforestation]", "a new wing [for boats]".
+// a cut after an auxiliary or a copula says nothing: "World heavyweight title will be[ on the line for Fury vs AJ]" (Sky
+// Sports 13 Oct, aired as a FULL TIME strap)
+const AUX_END = /\b(?:will|would|could|can|may|might|must|shall|should)(?:\s+(?:be|have|not|get))?$|\b(?:is|are|was|were|be|been|being|has|have|had|gets?|got)$/i;
 const NEEDS_COMPLEMENT = /\b(?:fall|rise|drop|increase|decrease|decline|cut|cuts|growth|surge|jump|slump|fleet|wing|parts?|signs?|number|share|rest|half|lack|loss|end|start|return|plans?|series|range|role|wave|chain|agreement|deal|bid|warning|ban|limit|call|push|move|shift|switch|access|support)$/i;
 // A head ending on an intransitive verb whose phrase was the point ("AI model runs [on a laptop]").
 const BARE_VERB_END = /\b(?:heads|nears|approaches|disappears|vanishes|appears|emerges|arrives|runs|works|lives|sits|stands|lands|goes|comes|moves|depends|relies|focuses|close|closes|closed|end|ends|ended|trades|ranks|finishes|settles|expand|expands|spreads|grows|stays|remains|turns|looks)$/i;
@@ -537,6 +552,7 @@ const OBJECT_VERB = /^(?:orders?|ordered|asks?|asked|urges?|urged|forces?|forced
 
 // Headline style drops articles; `hard` also drops them after a preposition ("on parts of Great Barrier Reef"),
 // except in fixed phrases ("in a month", "a week of use").
+const IDIOM_THE = /^(?:on the (?:line|rise|move|way|run|mark|board|brink|cards|ropes|road|spot|ball|bench)|in the (?:end|dark|balance|air|frame|mix|running|hunt|bag)|at the (?:top|bottom|double|death|helm|wheel)|off the (?:mark|bench|pace)|to the (?:wire|top)|for the (?:taking|chop))[.,;:!?’'”"]*$/;
 const compactOf = (text, hard = false) => {
   const words = text.split(' ');
   return words
@@ -544,6 +560,8 @@ const compactOf = (text, hard = false) => {
       if (!/^(?:a|an|the)$/i.test(w)) return true;
       if (i === 0) return false;
       if (KEEP_ARTICLE_BEFORE.test(words[i + 1] || '')) return true;
+      // (an idiom keeps its article: "on the line" is not "on line", Sky Sports 13 Oct)
+      if (/^the$/i.test(w) && IDIOM_THE.test(`${words[i - 1]} the ${words[i + 1] || ''}`.toLowerCase())) return true;
       return !hard && PREPOSITIONS.includes(words[i - 1].toLowerCase());
     })
     .join(' ')
@@ -571,7 +589,7 @@ export function headlineCuts(t) {
     if (!head || head === t || out.has(head)) return;
     // never inside a quotation ("Greens must avoid ‘capture [by extremists…’]"), never on a possessive, a negation or
     // a participle that needs what follows ("…OpenAI’s [latest drop]", "deals may not [last]", "truck trapped [in…]")
-    if (unbalanced(head) || CUT_BAD_END.test(head.replace(/[’'”"]+$/, ''))) return;
+    if (unbalanced(head) || CUT_BAD_END.test(head.replace(/[’'”"]+$/, '')) || AUX_END.test(head)) return;
     // a second verb cut from its complement: "Isaias pummels the Gulf Coast, and plows [through Alabama]" (NPR 10 Oct)
     if (/,\s*and\s+[a-z]+s$/i.test(head)) return;
     // a named object is the story: "Irish property group in talks about rescue deal [for Poundland]" (Guardian 10 Oct;

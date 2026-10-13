@@ -168,9 +168,12 @@ describe('FULL TIME: the shape', () => {
     assert.doesNotMatch(oka.text, /Thanks, Rosa/, 'the writer\'s pick-up was for its own order');
     assert.match(oka.text, /^(?:Staying with that story|More on that now|There is more on that one|Staying with that one|And there is more on that|More from that one)\./);
     assert.doesNotMatch(stories[0].text, /Rosa\?/, 'the writer\'s toss goes');
-    // the rugby is Rosa's after Kai's football: Kai hands it over by name, and Rosa needs no "Rugby now"
-    assert.match(oka.text, /(?:Rosa has the rugby|Over to Rosa for the rugby|Rosa now, with the rugby|Here's Rosa with the rugby)\./);
+    // Kai the lead, then in turn: Rosa the story that follows it on, Kai the rugby, Rosa the cricket
+    assert.deepEqual(stories.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
+    // the rugby is Kai's after Rosa's football: she hands it over by name, and Kai needs no "Rugby now"
+    assert.match(oka.text, /(?:Kai has the rugby|Over to Kai for the rugby|Kai now, with the rugby|Here's Kai with the rugby)\./);
     assert.doesNotMatch(stories[2].text, /^(?:Rugby now|To the rugby|In rugby|Some rugby|On to the rugby|Rugby next)\./);
+    assert.match(stories[2].text, /(?:Rosa has the cricket|Over to Rosa for the cricket|Rosa now, with the cricket|Here's Rosa with the cricket)\.$/);
     // three different stories in the headlines, never the match and its reaction both
     assert.doesNotMatch(ep.segments[0].text, /Okafor/);
     assert.match(ep.segments[0].text, /Menon century/);

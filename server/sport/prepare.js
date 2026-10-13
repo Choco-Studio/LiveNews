@@ -30,14 +30,22 @@ export const leansOnCount = (t, prev) => {
 const BARE_NOUN_START = /^(Tournament|Match|Game|Club|Team|Player|Manager|Coach|Striker|Midfielder|Defender|Goalkeeper|Forward|Winger|Quarterback|Competition|Event|Race|Final|Squad|Side|Champion|Holder|Holders|Skipper|Captain|Referee|Fixture|Season)(?=\s+(?:is|was|has|have|had|will|would|could|can|must|may|might|faces?|returns?|remains?|said|says)\b)/;
 // a sentence that follows on from the one before it ("That was despite topping the table since September…", Sky Sports
 // 13 Oct, after a sentence that went): it goes when that one went
-export const FOLLOWS_ON_START = /^(?:But|And|So|Yet|Still|However|Instead|Meanwhile|Nevertheless|Nonetheless|Then|In the end|In response|As a result|Despite that|Despite this|Even so|By then|That|This|These|Those|Which|He|She|They|It|His|Her|Their|Its)\b/;
+export const FOLLOWS_ON_START = /^(?:But|And|So|Yet|Still|However|Instead|Meanwhile|Nevertheless|Nonetheless|Then|In the end|In response|As a result|Despite that|Despite this|Even so|By then|Not only that|On top of that|What is more|What's more|That|This|These|Those|Which|He|She|They|It|His|Her|Their|Its)\b/;
 // a question the outlet asks its reader ("Watch Scottish Premiership games on your phone Not got Sky?"), never a quotation
 const READER_QUESTION = (t) => /\?\s*$/.test(t) && !/["”’]\s*$/.test(t.trim());
+// a crosshead the page ran into the next sentence ("Suljovic apologises over incident On Monday afternoon, Suljovic
+// subsequently issued an apology", Sky Sports 13 Oct): the sentence starts where the capital says it does
+const CROSSHEAD = /^(.{8,80}?[\p{Ll}\d])\s+((?:On|In|At|After|Before|During|But|However|Meanwhile|Speaking|Asked|When|While|The|He|She|They|It)\s+\S.*)$/u;
+const unglue = (t) => {
+  const m = CROSSHEAD.exec(t);
+  return m && !/[,;:]/.test(m[1]) && !/\b(?:is|are|was|were|has|have|had|said|says|will)\b/.test(m[1]) ? m[2] : t;
+};
 const clean = (sentences, opts) => {
   const out = [];
   let prev = '';
   let lost = false;
-  for (const t of sentencesIn(sentences)) {
+  for (const t0 of sentencesIn(sentences)) {
+    const t = unglue(t0);
     const kept = !PROMO.test(t) && !READER_QUESTION(t) && !SUBORDINATE.test(t.trim()) && !isFragment(t) && !leansOnCount(t, prev) && !(lost && FOLLOWS_ON_START.test(t.trim()));
     let said = kept ? withoutJudgement(retime(t, opts) ?? '') : null;
     // a bullet point's headline-ese gets its article ("Tournament is due to kick off in January…", Guardian 13 Oct)
@@ -67,6 +75,17 @@ export function prepareStory(story, { now = Date.now(), tz = 'Europe/London' } =
   const summary = clean(String(story.summary || ''), opts);
   const body = story.body ? clean(String(story.body), opts) : [];
   if (summary.length + body.length < 2) return null;
+  // one person, two first names ("head coach Brian McDermott" in the summary, "head coach Brad McDermott" in the article,
+  // Sky Sports 13 Oct): the outlet got one of them wrong, and the channel says the first only
+  const firstSeen = new Map();
+  const variant = (t) => [...String(t).matchAll(/\b(\p{Lu}\p{Ll}+)\s+(\p{Lu}[\p{L}'’]{2,}(?:-\p{Lu}\p{Ll}+)?)(?![\p{L}])/gu)].some((m) => {
+    const known = firstSeen.get(m[2]);
+    if (!known) return firstSeen.set(m[2], m[1]) && false;
+    return known !== m[1] && !/^(?:Mr|Mrs|Ms|Dr|Sir|Lord|Lady|The|And|But|Head|Coach|Manager|Captain|Boss|Chairman|Striker|Defender|Midfielder|Goalkeeper|Winger|Forward|Prop|Hooker|Scrum|Fly|Full|Centre|Opener|Bowler|Batter|Driver|Rider|Team|Former|Ex|New|Old|Young|Saint|St|Real|Inter|Sporting|Athletic|Atletico|United|City|Town|County|Rovers|Wanderers|Albion|North|South|East|West|Great|Little|Grand|Premier|Super|League|World|Golden|Gold|Coast|Titans|Hull|Leeds|Leigh|London|Manchester|Newcastle)$/.test(m[1]) && !/^(?:Mr|Mrs|Ms|Dr|Sir|Lord|Lady|The|And|But|Head|Coach|Manager|Captain|Boss|Chairman|Former|New|Saint|St)$/.test(known);
+  });
+  for (const t of [...summary]) variant(t);
+  const bodyKept = body.filter((t) => !variant(t));
+  body.splice(0, body.length, ...bodyKept);
   const sport = sportOf(story);
   const all = [title, ...summary, ...body];
   const context = all.join(' ');
@@ -109,14 +128,22 @@ const clubsOf = (s) => {
  * new does not lead (`ledLately(id)`). The returned list's `edition` is how many of its first stories the edition may
  * tell; the others are there for SCORE CENTRE and COMING UP.
  */
-export function balance(stories, { count = 10, ledLately = () => false } = {}) {
+export function balance(stories, { count = 10, ledLately = () => false, now = Date.now() } = {}) {
   const list = [...(stories || [])];
   if (!list.length) return list;
   // the lead: the story most told (a match told by three outlets, or twice by one), among the desk's first eight, never
   // one that led lately; on a tie a result among the desk's first three before team news, then the desk's order
   const coverage = (s) => list.filter((o) => o !== s && sameEvent(o, s)).length;
-  const top = list.slice(0, 8).map((s, i) => ({ s, i, c: ledLately(s.id) || s.moment ? -1 : coverage(s), r: i < 3 && s.scorelines?.length ? 1 : 0 }));
-  const best = top.sort((a, b) => b.c - a.c || b.r - a.r || a.i - b.i)[0];
+  // (never a day-and-a-half-old story while a fresher one is there: on Thursday, Monday's match is no lead)
+  const stale = (s) => Number.isFinite(Number(s.published)) && now - Number(s.published) > 30 * 3600_000;
+  const anyFresh = list.slice(0, 8).some((s) => !stale(s));
+  const top = list.slice(0, 8).map((s, i) => ({ s, i, c: ledLately(s.id) || s.moment || (anyFresh && stale(s)) ? -1 : coverage(s), r: i < 3 && s.scorelines?.length ? 1 : 0 }));
+  let best = top.sort((a, b) => b.c - a.c || b.r - a.r || a.i - b.i)[0];
+  // (of a match told twice, the result leads and the reaction follows: never "Jaissle sorry…" before "Coventry thump…")
+  if (best && best.c >= 0 && !best.s.scorelines?.length) {
+    const result = list.find((o) => o !== best.s && o.scorelines?.length && sameEvent(o, best.s) && !ledLately(o.id));
+    if (result) best = { ...best, s: result };
+  }
   if (best && best.c >= 0) list.unshift(...list.splice(list.indexOf(best.s), 1));
   const out = [];
   const waiting = [];

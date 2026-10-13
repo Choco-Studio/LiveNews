@@ -85,8 +85,6 @@ const LEANS_START = { test: (t) => pointsBack(t) || LEANS_START_RE.test(String(t
 
 // a sport as a hand-over names it
 const SPORT_NAME = { football: 'the football', f1: 'the Formula One', rugby: 'the rugby', cricket: 'the cricket', tennis: 'the tennis', 'american-football': 'the NFL', basketball: 'the basketball', baseball: 'the baseball', boxing: 'the boxing', cycling: 'the cycling', golf: 'the golf', athletics: 'the athletics' };
-// a toss at the end of a story ("…relegation zone. [look_partner] Rosa?")
-const TOSS_END = /\s*(?:\[[^\]]+\]\s*)*\p{Lu}[\p{L}'’-]+\?\s*((?:\[[^\]]+\]\s*)*)$/u;
 const ALSO_FIRST_CLAUSE = /^[^,;:.]{0,80}?\s+also\b/i;
 // a story's sentences as the outlet wrote them, and where a told sentence sits among them (its first eight words; a
 // credit the writer added at its end aside), or -1
@@ -101,6 +99,19 @@ function sourceIndex(story, sentence) {
   }
   const key = firstWords(sentence);
   return key.split(' ').length >= 5 ? sourceCache.get(story).indexOf(key) : -1;
+}
+
+// a headline that is only a quotation ("'I let the team down'"): Kai would say it in the first person
+const QUOTE_ONLY = /^\s*[‘'“"][^‘'“"]+[’'”"]\s*$/u;
+// a title as a strap or a headline says it: the words after a quotation that opens it ("'I let the team down' - Norris
+// accepts blame for Piastri collision"), its words before a colon, without an aside between its subject and its verb
+// ("Bills' Allen, 0-7 in OT games entering MNF, finally gets over hump in wild win", ESPN 13 Oct)
+function strapTitle(title) {
+  let t = String(title || '').trim();
+  const q = /^[‘'“"][^‘'“"]+[’'”"]\s*[-–—:]\s*(.+)$/u.exec(t);
+  if (q) t = q[1];
+  t = t.split(/:\s+/)[0];
+  return t.replace(/^([^,]{3,40}), [^,]{3,50}, (?=\p{Ll})/u, '$1 ');
 }
 
 const fill = (t, vars) => t.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
@@ -224,11 +235,53 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     const grouped = ordered.map((b, i) => ({ b, i, r: rank(b, i) })).sort((x, y) => x.r - y.r || x.i - y.i).map((x) => x.b);
     segs = [first, ...grouped.flat(), last].filter(Boolean);
   }
+  // a "Still to come" stands only while what it promises is still to come and not the very next thing on air (checked
+  // here, before the hand-overs are written, and again on the final order)
+  const words = (t) => String(t || '').toLowerCase().replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\d ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  const keepPromises = (list) => list.filter((c, i, all) => {
+    if (c.type !== 'chat' || !/^(?:\[[^\]]*\]\s*)*still to come\b/i.test(String(c.text || ''))) return true;
+    const key = words(String(c.text).replace(/^.*?still to come\s*:?\s*/i, '')).split(' ').slice(0, 6).join(' ');
+    // (the promise is a story's headline or its words)
+    const at = all.findIndex((x) => x.type === 'story' && key && [x.text, x.headline, byId.get(x.storyId)?.title].some((w) => words(w).includes(key)));
+    // (and something to wait for: at least two stories before it, never the next but one)
+    const between = all.slice(i + 1, at).filter((x) => x.type === 'story').length;
+    return at > i && between >= 2;
+  });
+  segs = keepPromises(segs);
+  // who reads what (§4): Kai the lead, Rosa a story that follows it on, then AROUND THE GROUNDS in turn; THE NUMBER and
+  // the moment of the day are Rosa's (a story that changes hands takes its partner's gestures with it)
+  const flip = (seg, to) => {
+    if (!seg || seg.anchor === to || !presenters[to]) return;
+    seg.anchor = to;
+    edit(seg, (t) => t.replace(/\[(A|B):/g, (m, x) => `[${x === 'A' ? 'B' : 'A'}:`));
+  };
+  {
+    let last = null;
+    let leadDone = false;
+    for (const seg of segs) {
+      if (seg.type !== 'story' || !seg.storyId) continue;
+      if (seg.feature === 'number' || seg.feature === 'lighter') flip(seg, 'B');
+      else if (seg.roundup) continue;
+      else if (!leadDone) {
+        flip(seg, 'A');
+        leadDone = true;
+        last = 'A';
+      } else {
+        const to = last === 'A' ? 'B' : 'A';
+        flip(seg, to);
+        last = to;
+      }
+    }
+  }
   const title = program.title || 'FULL TIME';
   const A = presenters.A?.name || 'Kai Sprite';
   const B = String(presenters.B?.name || 'Rosa Rally').split(' ')[0];
   const air = clockIn(now, tz);
   const part = daypart(air.hour);
+  // a toss at the end of a story, by a presenter's first name ("…relegation zone. [look_partner] Rosa?", "Over to you,
+  // Rosa.")
+  const names = [A, B].map((n) => String(n).split(' ')[0]).filter(Boolean).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const tossEnd = new RegExp(`\\s*(?:\\[[^\\]]+\\]\\s*)*(?:(?:over to you|over to|and now|now)\\s*,?\\s*)?(?:${names})(?:\\?|\\.|,\\s*over to you\\.)\\s*((?:\\[[^\\]]+\\]\\s*)*)$`, 'iu');
 
   // ---- the stories: strap tag, scoreline card where the presenter says the result, transitions, the moment
   const stories = segs.filter((s) => s.type === 'story' && s.storyId);
@@ -238,18 +291,15 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     const story = byId.get(seg.storyId);
     if (!story) return;
     // a pick-up ("Thanks, Kai.") only answers a toss: after a story that did not hand over by name, it goes
-    // THE NUMBER is Rosa's (§4): read by the writer's other presenter, it changes hands with its partner's gestures
-    if (seg.feature === 'number' && seg.anchor === 'A' && presenters.B) {
-      seg.anchor = 'B';
-      edit(seg, (t) => t.replace(/\[(A|B):/g, (m, x) => `[${x === 'A' ? 'B' : 'A'}:`));
-    }
     // the writer's hand-overs ("…relegation zone. Rosa?" / "Thanks, Rosa.") were made for its own order, which the
     // shape has changed: they go, and the shape hands over where the sport changes (below)
-    edit(seg, (t) => t.replace(TOSS_END, ''));
+    edit(seg, (t) => t.replace(tossEnd, ''));
     edit(seg, (t) => t.replace(/^((?:\[[^\]]+\]\s*)*)(?:thanks|thank you)(?: very much)?,?\s+\p{Lu}[\p{L}'’-]*\.\s*/iu, '$1'));
     // the strap's headline fits the programme's line (its words before a colon first)
+    // (from the story's own headline, never from a strap the validator already clipped; one that still runs long
+    // goes up whole on two lines rather than as a scrap, graphics/strap.js)
     const max = program.headlineMax || 45;
-    if (String(seg.headline || '').length > max) seg.headline = shortHeadline(String(seg.headline).split(/:\s+/)[0], max);
+    if (String(seg.headline || '').length > max || /\b(?:will|would|could|can|is|are|was|were|be|has|have|had|to|of|for|and|the|a)$/i.test(String(seg.headline || '')) || QUOTE_ONLY.test(String(seg.headline || ''))) seg.headline = shortHeadline(strapTitle(story.title || seg.headline), max);
     edit(seg, (t) => {
       let parts = sentencesIn(t);
       // never a first sentence that leans on one the viewer did not hear ("On Tuesday they will oversee…"), nor a count
@@ -292,6 +342,9 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       parts.splice(at, 0, line);
       return parts.join(' ');
     });
+    // ("And finally" belongs to the moment of the day: a story the writer closed with but which is not one says no
+    // such thing)
+    if (seg.feature !== 'lighter') edit(seg, (t) => t.replace(/(^|\.\s+)((?:\[[^\]]+\]\s*)*)and finally(?: tonight| today| this evening)?\s*[,:]?\s*(\p{L})/iu, (m, pre, cues, c) => `${pre}${cues}${c.toUpperCase()}`));
     if (seg.feature === 'lighter') {
       // the moment of the day: its own words in place of "And finally"
       edit(seg, (t) => t.replace(/(^|\.\s+)((?:\[[^\]]+\]\s*)*)and finally(?: tonight| today| this evening)?\s*[,:]?\s*(\p{L})/iu, (m, pre, cues, c) => `${pre}${cues}${c.toUpperCase()}`));
@@ -317,7 +370,11 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   // ---- SCORE CENTRE and COMING UP
   const results = freshResults(candidates, { now, tz }).filter((r) => !told.has([r.a, r.b].sort().join('|'))).slice(0, 6);
   const fixtures = [];
-  for (const s of candidates) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event)) fixtures.push({ ...f, source: s.source });
+  // (today's events only in the morning: by the afternoon a game "today" may be on or over, and the channel does not
+  // know which)
+  const todayN = dayIn(now, tz).n;
+  const dayOf = (f) => (f.date ? Math.round(Date.parse(`${f.date}T00:00:00Z`) / (24 * HOUR)) : null);
+  for (const s of candidates) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event) && !(dayOf(f) === todayN && air.hour >= 12) && !(dayOf(f) !== null && dayOf(f) < todayN)) fixtures.push({ ...f, source: s.source });
   fixtures.sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')));
   const matchday = (air.weekday === 6 && air.hour >= 15) || air.weekday === 0 || (air.weekday === 1 && air.hour < 10) || results.length >= 4;
   const preview = !matchday && ((air.weekday === 5 && air.hour >= 6) || (air.weekday === 6 && air.hour < 14)) && fixtures.length >= 3 && results.length < 3;
@@ -340,17 +397,28 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     };
   }
   let comingUp = null;
-  const ahead = fixtures.slice(0, 3);
+  // (never the dates the story just before it has read out: COMING UP is no echo of the last ten seconds)
+  const lastBefore = (shape === 'PREVIEW' ? [] : segs.filter((x) => x.type === 'story' && x.storyId && x.feature !== 'lighter')).at(-1);
+  const justSaid = (f) => lastBefore && f.storyId === lastBefore.storyId && words(lastBefore.text).includes(words(f.sentence || '').split(' ').slice(0, 5).join(' '));
+  const ahead = fixtures.filter((f) => !justSaid(f)).slice(0, 3);
   if (ahead.length >= 2) {
     const weekend = shape === 'PREVIEW' && ahead.every((f) => f.date && [5, 6, 0].includes(new Date(`${f.date}T12:00:00Z`).getUTCDay()));
     const cTitle = weekend ? 'THE WEEKEND AHEAD' : 'COMING UP';
     // read as a calendar is spoken: "Tomorrow, it's Starfield City against Glimmerford. On Thursday, Bitport Comets
     // against Lanternhill Lynx. And on Friday, Harbourside Hawks against Ironvale Giants."
-    const lines = ahead.map((f, i) => {
+    // (two events the same day in one line: "On Saturday, it's England against Tonga, and Wales against Fiji.")
+    const days = [];
+    for (const f of ahead) {
       const when = whenPhrase(f, now, tz);
-      const what = titleCase(f.event).replace(/^./, (c) => c.toUpperCase());
-      const w = i > 0 && i === ahead.length - 1 ? `And ${when[0].toLowerCase()}${when.slice(1)}` : when;
-      return `${w}, ${i === 0 && / against /.test(what) ? "it's " : ''}${what}.`;
+      const day = days.find((d) => d.when === when);
+      if (day) day.what.push(titleCase(f.event));
+      else days.push({ when, what: [titleCase(f.event)] });
+    }
+    const lines = days.map((d, i) => {
+      const w = i > 0 && i === days.length - 1 ? `And ${d.when[0].toLowerCase()}${d.when.slice(1)}` : d.when;
+      const what = d.what.map((x, k) => (k === 0 ? x.replace(/^./, (c) => c.toUpperCase()) : x));
+      const list = what.length > 1 ? `${what.slice(0, -1).join(', ')}, and ${what.at(-1)}` : what[0];
+      return `${w}, ${i === 0 && / against /.test(what[0]) ? "it's " : ''}${list}.`;
     });
     comingUp = {
       type: 'story', anchor: 'A', emotion: 'neutral', storyId: ahead[0].storyId, feature: 'fixtures', kicker: cTitle,
@@ -411,7 +479,8 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       if (chosen.length === heads.length) {
         heads = chosen.map((x) => {
           const tw = words(byId.get(x.storyId).title);
-          return heads.find((h) => [...words(h)].filter((w) => tw.has(w)).length >= 3) || `${shortHeadline(String(byId.get(x.storyId).title).split(/:\s+/)[0], 60).replace(/[.!?]*$/, '')}.`;
+          const own = heads.find((h) => [...words(h)].filter((w) => tw.has(w)).length >= 3 && !QUOTE_ONLY.test(h.replace(/[.!?]+$/, '')));
+          return own || `${shortHeadline(strapTitle(byId.get(x.storyId).title), 60).replace(/[.!?]*$/, '')}.`;
         });
       }
       return `${heads.join(' ')} [nod] ${greeting}`.trim();
@@ -426,17 +495,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   for (const seg of [scoreCentre, comingUp]) if (seg) edit(seg, (t) => t);
 
   episode.segments = [intro, hello, ...order.flat(), outro].filter(Boolean);
-  // a "Still to come" stands only while what it promises is still to come and not the very next thing on air
-  const words = (t) => String(t || '').toLowerCase().replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\d ]+/gu, ' ').replace(/\s+/g, ' ').trim();
-  episode.segments = episode.segments.filter((c, i, all) => {
-    if (c.type !== 'chat' || !/^(?:\[[^\]]*\]\s*)*still to come\b/i.test(String(c.text || ''))) return true;
-    const key = words(String(c.text).replace(/^.*?still to come\s*:?\s*/i, '')).split(' ').slice(0, 6).join(' ');
-    // (the promise is a story's headline or its words)
-    const at = all.findIndex((x) => x.type === 'story' && key && [x.text, x.headline, byId.get(x.storyId)?.title].some((w) => words(w).includes(key)));
-    // (and something to wait for: at least two stories before it, never the next but one)
-    const between = all.slice(i + 1, at).filter((x) => x.type === 'story').length;
-    return at > i && between >= 2;
-  });
+  episode.segments = keepPromises(episode.segments);
   episode.storyIds = [...new Set(episode.segments.filter((s) => s.storyId).map((s) => s.storyId))];
   episode.sport = { shape, results: scoreCentre ? scoreCentre.scores.length : 0, fixtures: comingUp ? comingUp.fixtures.length : 0 };
   episode.segments = episode.segments.filter((s) => s.type !== 'story' || String(s.text || '').trim());

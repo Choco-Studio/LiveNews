@@ -702,8 +702,8 @@ const COMMON_PROPER = /^(?:Earth|Moon|Sun|Mars|Venus|Jupiter|Saturn|Mercury|Nept
 function strangers(t, told, info) {
   const out = [];
   // (a whole word: "Jack Rudoni" after "Goals from" once gave "Jac", a stranger the article never names, and the sentence
-  // went, Sky Sports 13 Oct)
-  for (const m of String(t).matchAll(/(?<=[\p{Ll},;”"]\s+)(\p{Lu}\p{Ll}[\p{Ll}’'-]+)(?![\p{L}’'-])(?![’']s\b)(?!\s+\p{Lu})/gu)) {
+  // went, Sky Sports 13 Oct; a capital inside it, "McDermott", "DeLauter", is still one name)
+  for (const m of String(t).matchAll(/(?<=[\p{Ll},;”"]\s+)(\p{Lu}\p{Ll}[\p{L}’'-]+)(?![\p{L}’'-])(?![’']s\b)(?!\s+\p{Lu})/gu)) {
     const name = m[1];
     const before = t.slice(0, m.index);
     if (/\b(?:the|a|an|its|their|his|her|our)\s+$/i.test(before) || /\p{Lu}[\p{L}’'-]*\s+$/u.test(before)) continue;
@@ -1071,7 +1071,8 @@ function runningOrder(infos, n, program, featured = new Set()) {
   if (features.includes('lighter') && slots >= 1) {
     const ok = (i) => !i.breaking && !i.grave && !i.live;
     const own = (i) => !primary || i.s.category === primary;
-    const tiers = [(i) => ok(i) && own(i) && i.curious, (i) => ok(i) && own(i) && i.light, (i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category), (i) => ok(i) && i.light];
+    // (FULL TIME: the moment of the day is a story the sport desk marked as one, never a cricket report closing the show)
+    const tiers = program?.id === 'full-time' ? [(i) => ok(i) && !!i.s.moment] : [(i) => ok(i) && own(i) && i.curious, (i) => ok(i) && own(i) && i.light, (i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category), (i) => ok(i) && i.light];
     for (const strict of [true, false]) for (const t of tiers) lighter ||= take((i) => t(i) && (!strict || fresh(i)));
     if (lighter) slots--;
   }
