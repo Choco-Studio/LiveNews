@@ -11,7 +11,7 @@ import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
 import * as cards from './scenes/cards.js';
 import { drawScoreboard } from './scenes/cards-sport.js';
-import { drawOpen } from './scenes/opens.js';
+import { drawOpen, warmStudioOpens } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
 import { Graphics } from './graphics/index.js';
@@ -65,6 +65,8 @@ export class Renderer {
     // asked, so the default path never runs v2 code; any v2 failure falls back to the shots below.
     this.v2 = null;
     if (v2) import('./v2/canvas25d/runtime/host.js').then((m) => (this.v2 = new m.StageHost({ audio, perf })), (err) => console.warn('[v2] stage unavailable, old renderer on air', err));
+    // the opens shot in a v2 studio (PAY ATTENTION's) load theirs now, so no open airs before its studio has arrived
+    if (v2) warmStudioOpens();
     // WORLD NOW's city follows the hour on the studio clock (London): night, dawn, day, golden hour, blue hour
     if (v2) import('./v2/canvas25d/studio/set.js').then((s) => s.setSkyClock(() => {
       const t = zoneTime(STUDIO_TZ);

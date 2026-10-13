@@ -385,3 +385,14 @@ Numbers (node, `labs/pay-attention-set.js`, the stand-in cast, the board at rest
 - Top row: nothing but the dark wall within 4 px of the bug's or the clock's box at any point of the sweep.
 - Tests: `test/pay-attention-set.test.js` 20/20 (new: the room's elements, the ring of light, the bulbs, the lamp
   test); `test/v2-set.test.js` and `test/full-time-set.test.js` pass unchanged.
+
+## Reviewer, after round 6
+
+Set accepted by the reviewer at 9.75: composition 9.75, not 9.8.
+
+| Category | Round 6 (panel) | Reviewer |
+|---|---|---|
+| Composition and depth | 9.8 | 9.75 |
+
+**Accepted at 9.75** (the gate is above 9.7). The open's round 7 (`pay-attention-open.md`) leaves the set as it stands:
+the open's dark beats are drawn in the opens package, and nothing in `studio/quiz.js` or `studio/set.js` changed.
