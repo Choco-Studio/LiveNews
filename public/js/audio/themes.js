@@ -10,6 +10,7 @@
 //   MONEY MINUTE         -> 6   (F major, F6/9)
 //   NEWS IN 60           -> 8   (G: the octave, "the minute starts")
 //   SEVEN DAYS           -> 4   (B-flat: the plagal colour, the Sunday "amen"; 4 -> 3 on the hit)
+//   FULL TIME            -> #5  (E-flat: the augmented lift of a stadium anthem; #5 -> 6 on the hit)
 //   BREAKING             -> b3  (the programme's key, minor, low and firm)
 //   UP NEXT promo        -> 2   (three notes, left hanging on 2 over IV add9)
 // Harmony leans on sevenths, ninths and plagal moves (no V-I fanfares, no
@@ -25,7 +26,7 @@ import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
-export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, week: 5, breaking: 3, next: 2 });
+export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, week: 5, sport: 8, breaking: 3, next: 2 });
 
 const D4 = 62; // channel home key: D major
 
@@ -674,6 +675,130 @@ function worldNowTitles(tempo, H, C) {
   };
 }
 
+// FULL TIME (full-time.md §6): the day in sport, E-flat major at 120 BPM, its colour the raised 5th (B natural over the
+// E-flat pedal: the augmented lift of a stadium anthem), rising to the 6th on the hit. The instruments are the bed's
+// (punchy drums, a driving synth bass, a muted guitar) under a brass section. The cue sheet (opens/cues.js):
+//   dark      0-3    only the board's clock is alight: a dry tick a second (every two beats), an E-flat sub and low
+//                    strings on the open fifth, from nothing
+//   floods    3-6    a bank of floodlights bangs on each beat: a low thunk each (a felt thump, a timpani and a short
+//                    low brass note), climbing E-flat, G, B-flat, E-flat: the band's count-in; a snare pickup
+//   sweep     7-10   the groove as the camera sweeps down the pitch: kick, backbeat, eighth hats, the bass in driving
+//                    eighths, guitar chops on the off-beats, brass stabs over Eb, Cm7 and Ab add9 (no V-I fanfare)
+//   whistle   10-14  stop time: the final whistle on the trumpets, three blasts on B-flat (the key's 5th, a pea
+//                    whistle's flutter on the last, long one), the band hitting each blast; the board flips on the
+//                    last over Abmaj9 on the E-flat pedal, with a timpani and a felt thump
+//   lift      13-15  an air swell under the clock lifting out to centre stage, a snare fill over Bb/Eb into...
+//   signature 15-19  ...the signature on the brass, trumpets an octave up, over the groove: Eb add9, then the colour
+//                    (B) over an augmented chord, all on the E-flat pedal; Eb6/9 on the hit (the brass on C, the 6th)
+// No crash, no whoosh, no crowd: the stadium is in the pictures, the music is the band.
+const SPORT = {
+  // the lead brass and the trumpets: bright section brass (two detuned voices, a scoop into the note)
+  horn: { wave: 'pulse25', preset: 'brass', a: 0.02, d: 0.24, s: 0.8, r: 0.12, scoop: 30, cutoff: 3600, fenv: [3, 0.14], vib: [10, 5, 0.32] },
+  trumpet: { wave: 'pulse25', preset: 'brass', a: 0.012, d: 0.2, s: 0.8, r: 0.1, scoop: 25, cutoff: 4400, fenv: [3, 0.1], unison: 2, detune: 8, spread: 0.35, vib: [9, 5.2, 0.3] },
+  // the whistle on the trumpets: a pea whistle's flutter on the held blast (the fastest vibrato the engine plays)
+  whistle: { wave: 'pulse25', preset: 'brass', a: 0.008, d: 0.12, s: 0.86, r: 0.06, scoop: 15, cutoff: 4800, fenv: [2.4, 0.06], unison: 2, detune: 6, spread: 0.3, vib: [34, 12, 0.12] },
+  // the section's stabs: short, a hard filter bite
+  stab: { wave: 'pulse25', preset: 'brass', a: 0.01, d: 0.16, s: 0.55, r: 0.08, scoop: 0, cutoff: 3000, fenv: [3.2, 0.08], unison: 2, detune: 7, spread: 0.5, vib: false },
+  // a muted guitar: a pulse through a low-pass that snaps shut, no sustain (palm-muted chops)
+  guitar: { wave: 'pulse25', preset: 'pluck', a: 0.002, d: 0.08, s: 0, r: 0.04, cutoff: 1900, fenv: [2.6, 0.035], vib: false },
+};
+
+function fullTimeTitles(tempo, H, C) {
+  const k = 63; // E-flat 4
+  const Qc = SEQ_CUES['full-time'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const floods = Qc.floods.map(at);
+  const [w1, w2, w3] = Qc.whistle.map(at);
+  const wLong = at(Qc.long);
+  const groove = at(7); // the downbeat after the count-in
+  const fill = at(14);
+  const lift = at(Qc.lift);
+  const Eb2 = k - 24;
+  // the harmony over the E-flat pedal (the bass walks only under the sweep)
+  const ch = {
+    fifth: [k - 12, k - 5], // Eb3 Bb3: the dark ground
+    add9: [k - 12, k - 5, k + 2, k + 4], // Eb3 Bb3 F4 G4: the floods
+    eb: [k + 4, k + 7, k + 12], // G4 Bb4 Eb5
+    cm7: [k + 4, k + 7, k + 9, k + 12], // G4 Bb4 C5 Eb5
+    ab9: [k + 5, k + 7, k + 9, k + 12], // Ab4 Bb4 C5 Eb5
+    abmaj9: [k + 5, k + 9, k + 12, k + 16], // Ab4 C5 Eb5 G5: under the long blast
+    bbEb: [k + 2, k + 7, k + 11], // F4 Bb4 D5: Bb over the pedal, the lift
+    sig: [k + 4, k + 7, k + 12], // G4 Bb4 Eb5: under the signature
+    aug: [k, k + 4, k + 12], // Eb4 G4 Eb5: the augmented colour's chord (the B is the brass's)
+    hit: [k + 4, k + 9, k + 12, k + 14], // G4 C5 Eb5 F5: Eb6/9
+  };
+  // the band's count-in: four thunks climbing the E-flat chord, a bank a beat
+  const climb = [Eb2, Eb2 + 4, Eb2 + 7, Eb2 + 12];
+  // the bass: driving eighths under the sweep (Eb, C, Ab, a B-flat passing into the whistle), the pedal from the whistle
+  const eighths = (from, to, root, vel = 0.62) => range(from, to, 0.5).map((b, i) => [b, i % 4 === 2 ? root + 12 : root, 0.45, i % 2 ? vel - 0.14 : vel]);
+  const bass = [
+    ...eighths(groove, groove + 1, Eb2, 0.72), ...eighths(groove + 1, groove + 2, k - 27, 0.66), [groove + 2, k - 19, 0.45, 0.66], [groove + 2.5, k - 17, 0.45, 0.6],
+    [w1, Eb2, 0.4, 0.8], [w2, Eb2, 0.4, 0.8], [w3, Eb2, wLong - 0.05, 0.82],
+    ...eighths(fill, m0, Eb2, 0.6), ...eighths(m0, H, Eb2, 0.72),
+  ];
+  // the guitar: chops on the off-beats (a sixteenth pushing into some), a dyad of the chord's upper notes
+  const dyad = (b) => (b < groove + 1 ? [k + 7, k + 12] : b < groove + 2 ? [k + 9, k + 12] : b < w1 ? [k + 5, k + 9] : b < m0 + 2.5 ? [k + 7, k + 12] : [k + 8, k + 12]);
+  const chops = [];
+  for (const [a, b] of [[groove, w1], [m0, H]]) {
+    for (let x = a + 0.5; x < b - 1e-6; x += 1) chops.push([x, dyad(x), 0.25, 0.5]); // every "and"
+    for (let x = a + 0.75; x < b - 1e-6; x += 2) chops.push([x, dyad(x), 0.2, 0.34]); // a sixteenth pushing into the backbeat
+  }
+  const hats = [...range(groove, w1, 0.5), ...range(m0, H, 0.5)].map((b, i) => [b, 'H', i % 2 ? 0.34 : 0.46]);
+  return {
+    bpm: tempo,
+    room: 0.2,
+    hall: 0.22,
+    echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
+    fadeOut: 0.9,
+    tracks: [
+      // the signature first (the lead's first five notes, as in every open): the colour, B, rises to C (the 6th) on the hit
+      { kind: 'lead', inst: SPORT.horn, notes: part([...motif(k, COLOURS.sport, m0), [H, k + 9, C - H - 0.25, 0.85]], total), gain: 1 },
+      // the trumpets an octave up, landing on the 3rd of the hit chord
+      { kind: 'lead', inst: SPORT.trumpet, notes: part([...motif(k + 12, COLOURS.sport, m0, { vel: 0.72 }), [H, k + 16, C - H - 0.25, 0.7]], total), gain: 0.62, pan: 0.2, echo: 0.25 },
+      // the final whistle: three blasts on B-flat, the last held for two beats with a pea whistle's flutter
+      { kind: 'lead', inst: SPORT.whistle, notes: part([[w1, k + 19, 0.4, 0.78], [w2, k + 19, 0.4, 0.8], [w3, k + 19, wLong, 0.88]], total), gain: 0.72, pan: -0.12, echo: 0.3 },
+      // the section: low thunks with the floods, stabs over the sweep, the band's hits under the whistle, the lift
+      { kind: 'harmony', inst: SPORT.stab, notes: part([
+        ...floods.map((b, i) => [b, climb[i] + 12, 0.45, 0.4 + 0.05 * i]),
+        [groove, ch.eb, 0.75, 0.74], [groove + 1.5, ch.cm7, 0.5, 0.66], [groove + 2.5, ch.ab9, 0.5, 0.7],
+        [w1, [k, k + 4, k + 7], 0.4, 0.66], [w2, [k, k + 4, k + 7], 0.4, 0.68], [w3, ch.abmaj9, wLong, 0.6],
+        [fill, ch.bbEb, 1, 0.5],
+        [H, ch.hit, 1.5, 0.66],
+      ], total), gain: 0.95, pan: 0.15 },
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [0, ch.fifth, floods[0], 0.3], // from nothing under the dark ground
+        [floods[0], ch.add9, groove - floods[0], 0.42], // the floods
+        [groove, ch.eb, 1, 0.56], [groove + 1, ch.cm7, 1, 0.58], [groove + 2, ch.ab9, w1 - groove - 2, 0.6],
+        [w3, ch.abmaj9, wLong, 0.56],
+        [fill, ch.bbEb, m0 - fill, 0.52],
+        [m0, ch.sig, 2.5, 0.54], [m0 + 2.5, ch.aug, 1.5, 0.58],
+        [H, ch.hit, total - H, 0.66],
+      ], total), gain: 1.05, pan: -0.15 },
+      { kind: 'harmony', inst: 'warm', notes: part([
+        [floods[0], [k - 12, k - 5], groove - floods[0], 0.36],
+        [w3, [k - 12, k - 7, k - 3], wLong, 0.46], // Eb3 Ab3 C4
+        [m0, [k - 12, k - 5], 2.5, 0.46], [m0 + 2.5, [k - 12, k - 8, k - 4], 1.5, 0.5], // Eb3 G3 B3: the augmented chord
+        [H, [k - 12, k - 5, k + 2], total - H, 0.56], // Eb3 Bb3 F4
+      ], total), gain: 0.7, pan: 0.2 },
+      { kind: 'harmony', inst: SPORT.guitar, notes: part(chops, total), gain: 1.1, pan: -0.32, echo: 0.12 },
+      { kind: 'bass', inst: 'synthbass', notes: part([...bass, [H, Eb2, total - H, 0.85]], total), gain: 0.82 },
+      // the E-flat under everything: a sub in the dark, again under the whistle and the signature
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 36, groove, 0.5], [w3, k - 36, m0 - w3, 0.6], [m0, k - 36, H - m0, 0.66], [H, k - 36, total - H, 0.8]], total), gain: 0.42 },
+      { kind: 'bass', inst: 'timpani', notes: part([...floods.map((b, i) => [b, climb[i], 1, 0.52 + 0.04 * i]), [w3, Eb2, 2, 0.72], [H, Eb2, 2, 0.7], [C, Eb2, 1.5, 0.55]], total), gain: 0.85 },
+      stab(SPORT.stab, [k - 12, k - 5, k + 4], C, total, 0.6, 0.9),
+      { drums: drums([[groove, 'K', 0.72], [groove + 1.5, 'K', 0.5], [groove + 2, 'K', 0.62], [w1, 'K', 0.74], [w2, 'K', 0.74], [w3, 'K', 0.8], [m0, 'K', 0.74], [m0 + 1.5, 'K', 0.5], [m0 + 2, 'K', 0.64], [m0 + 3.5, 'K', 0.5], [H, 'K', 0.82]], total), gain: 1.1 },
+      { drums: drums([[floods[3] + 0.5, 'S', 0.22], [floods[3] + 0.75, 'S', 0.32], [groove + 1, 'S', 0.55], [groove + 2.75, 'S', 0.3], [w1, 'S', 0.5], [w2, 'S', 0.52], [fill, 'S', 0.24], [fill + 0.25, 'S', 0.3], [fill + 0.5, 'S', 0.36], [fill + 0.75, 'S', 0.44], [m0 + 1, 'S', 0.56], [m0 + 3, 'S', 0.56], [C, 'T', 0.4]], total), gain: 1.45 },
+      { drums: drums(hats, total), gain: 0.9 },
+      { drums: drums([...floods.map((b, i) => [b, 'F', 0.48 + 0.04 * i]), [w3, 'F', 0.72], [H, 'F', 0.7], [C, 'F', 0.55]], total) },
+      // the board's clock (a dry tick a second until 90:00), then an air swell under the lift
+      { drums: `${drums(Qc.ticks.map((b) => [at(b), 'X', 0.4]), lift)} A:${fmt(at(15) - lift)}@0.42` },
+    ],
+  };
+}
+
 // Each open: preferred tempo, then a builder that receives H (the beat of the
 // final chord, landing exactly on the title lock-up) and C (the beat of the
 // cut to the studio, possibly fractional) and returns the tune. The motif
@@ -946,6 +1071,48 @@ OPENS['seven-days'] = {
   },
 };
 
+// FULL TIME (full-time.md §6): 120 BPM, E-flat major, its colour the raised 5th (the augmented lift), rising to the 6th
+// on the hit. Its title sequence (opens/fulltimetitles.js) on its own grid; the 4 s package's version: the signature on
+// the brass over the groove (kick and backbeat, the bass in driving eighths on the E-flat pedal, guitar chops), Eb add9
+// then the augmented chord under the colour, Eb6/9 on the hit.
+OPENS['full-time'] = {
+  bpm: 120,
+  key: 63,
+  long: { bpm: SEQ_CUES['full-time'].bpm, maxDuration: 11 },
+  build(H, C) {
+    if (H >= SEQ_CUES['full-time'].hit) return fullTimeTitles(this.tempo, H, C);
+    const k = 63; // E-flat 4
+    const m0 = H - 4;
+    const total = C + 2;
+    const g0 = Math.max(0, m0 - 1); // the groove from a beat before the signature
+    const bass = range(g0, H, 0.5).map((b, i) => [b, i % 4 === 2 ? k - 12 : k - 24, 0.45, i % 2 ? 0.5 : 0.66]);
+    const chops = range(g0 + 0.5, H, 1).map((b) => [b, b < m0 + 2.5 ? [k + 7, k + 12] : [k + 8, k + 12], 0.25, 0.48]);
+    return {
+      bpm: this.tempo,
+      room: 0.2,
+      echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
+      fadeOut: 0.8,
+      tracks: [
+        { kind: 'lead', inst: SPORT.horn, notes: part([...motif(k, COLOURS.sport, m0), [H, k + 9, C - H - 0.25, 0.85]], total), gain: 1 }, // #5 -> 6 on the hit
+        { kind: 'lead', inst: SPORT.trumpet, notes: part([...motif(k + 12, COLOURS.sport, m0, { vel: 0.7 }), [H, k + 16, C - H - 0.25, 0.68]], total), gain: 0.6, pan: 0.2, echo: 0.25 },
+        { kind: 'harmony', inst: 'strings', notes: part([
+          [0, [k - 12, k - 5, k + 2, k + 4], m0 + 2.5, 0.5], // Eb add9
+          [m0 + 2.5, [k, k + 4, k + 12], 1.5, 0.56], // under the colour: with the brass's B, an augmented chord
+          [H, [k + 4, k + 9, k + 12, k + 14], total - H, 0.64], // Eb6/9
+        ], total), gain: 1, pan: -0.15 },
+        { kind: 'harmony', inst: SPORT.guitar, notes: part(chops, total), gain: 1.05, pan: -0.3 },
+        { kind: 'bass', inst: 'synthbass', notes: part([...bass, [H, k - 24, total - H, 0.85]], total), gain: 0.7 },
+        { kind: 'bass', inst: 'timpani', notes: part([[H, k - 24, 2, 0.7], [C, k - 24, 1.5, 0.55]], total), gain: 0.8 },
+        stab(SPORT.stab, [k - 12, k - 5, k + 4], C, total, 0.6, 0.9),
+        { drums: drums([[g0, 'K', 0.7], [m0, 'K', 0.72], [m0 + 1.5, 'K', 0.5], [m0 + 2, 'K', 0.62], [m0 + 3.5, 'K', 0.5], [H, 'K', 0.8]], total), gain: 0.95 },
+        { drums: drums([[m0 + 1, 'S', 0.55], [m0 + 3, 'S', 0.55], [C, 'T', 0.4]], total), gain: 1.3 },
+        { drums: drums(range(g0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.32 : 0.44]), total), gain: 0.9 },
+        { drums: drums([[H, 'F', 0.7], [C, 'F', 0.55]], total) },
+      ],
+    };
+  },
+};
+
 // Unknown programmes: the channel signature in C major, sober, all major:
 // Cadd9 -> Dm9/C -> Fmaj7/C over the C pedal, a C6/9 hit (no minor start,
 // unlike WORLD NOW's arc).
@@ -979,7 +1146,7 @@ const GENERIC = {
   },
 };
 
-const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather', 'seven-days': 'week' };
+const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather', 'seven-days': 'week', 'full-time': 'sport' };
 
 /**
  * Theme tune for a programme's open. The final chord lands on the title
@@ -1020,6 +1187,7 @@ const VOICE = {
   'news-60': { key: 67, lead: LEAD.darkPulse, pad: 'pad' },
   'world-weather': { key: 60, lead: LEAD.breeze, pad: 'pad' },
   'seven-days': { key: 70, lead: LEAD.flugel, pad: 'pad' },
+  'full-time': { key: 63, lead: SPORT.horn, pad: 'pad' },
   channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
 };
 const keyOf = (programId) => (VOICE[programId] ? programId : 'channel');
@@ -1117,6 +1285,36 @@ function buildOutro(programId) {
       meta,
     };
   }
+  if (id === 'full-time') {
+    // full-time.md §6: the sign-off is the theme's tail: the signature on the brass over the groove (its kick and
+    // backbeat, the bass's driving eighths on the E-flat pedal, the guitar's chops), the colour rising to the 6th on
+    // Eb6/9 with a timpani and a felt thump, ringing over the end card. Never after grave news: the director asks the
+    // cue sheet first (music/live.js signoffAllowed).
+    const total = 6.5;
+    const H = 4;
+    const tail = range(0, H, 0.5).map((b, i) => [b, i % 4 === 2 ? k - 12 : k - 24, 0.45, i % 2 ? 0.48 : 0.62]);
+    return {
+      bpm: 120,
+      room: 0.22,
+      hall: 0.2,
+      echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
+      loudness: -1.5,
+      fadeOut: 0.9,
+      tracks: [
+        { kind: 'lead', inst: SPORT.horn, notes: part([...motif(k, COLOURS.sport, 0), [H, k + 9, total - H - 0.5, 0.85]], total), gain: 1 },
+        { kind: 'lead', inst: SPORT.trumpet, notes: part([...motif(k + 12, COLOURS.sport, 0, { vel: 0.68 }), [H, k + 16, total - H - 0.5, 0.66]], total), gain: 0.58, pan: 0.2, echo: 0.25 },
+        { kind: 'harmony', inst: 'strings', notes: part([[0, [k + 4, k + 7, k + 12], 2.5, 0.5], [2.5, [k, k + 4, k + 12], 1.5, 0.55], [H, [k + 4, k + 9, k + 12, k + 14], total - H, 0.62]], total), gain: 1, pan: -0.15 },
+        { kind: 'harmony', inst: SPORT.guitar, notes: part(range(0.5, H, 1).map((b) => [b, b < 2.5 ? [k + 7, k + 12] : [k + 8, k + 12], 0.25, 0.46]), total), gain: 1.05, pan: -0.3 },
+        { kind: 'bass', inst: 'synthbass', notes: part([...tail, [H, k - 24, total - H, 0.82]], total), gain: 0.7 },
+        { kind: 'bass', inst: 'timpani', notes: part([[H, k - 24, 2, 0.66]], total), gain: 0.8 },
+        { drums: drums([[0, 'K', 0.66], [1.5, 'K', 0.46], [2, 'K', 0.58], [3.5, 'K', 0.46], [H, 'K', 0.74]], total), gain: 0.9 },
+        { drums: drums([[1, 'S', 0.5], [3, 'S', 0.5]], total), gain: 1.25 },
+        { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.3 : 0.42]), total), gain: 0.85 },
+        { drums: drums([[H, 'F', 0.66]], total) },
+      ],
+      meta,
+    };
+  }
   if (id === 'money-minute') {
     // money-minute.md: the button lands on the end card's first downbeat, then
     // the motif comes home over the F6/9.
@@ -1197,6 +1395,28 @@ function buildPromo(programId) {
   };
 }
 
+/**
+ * SCORE CENTRE's row tick (full-time.md §4, §6): one dry tick as each result flips onto the board. A sound effect, not
+ * music: it plays after grave news too (the music rule does not cover it). Short and quiet: a woodblock on the key's
+ * fifth (B-flat) under a dry click, below the speech band's core; it lands on the first word of the row's line, so it
+ * is barely ducked, and its level is set from the lab meter against the house voice (the note model reads so short a
+ * sound loud, so the trim is the engine's lowest).
+ */
+function buildScoreTick() {
+  return {
+    bpm: 120,
+    room: 0.06,
+    loudness: -12,
+    duck: -2,
+    fadeOut: 0.08,
+    tracks: [
+      { kind: 'harmony', inst: { wave: 'tri', preset: 'mallet', a: 0.001, d: 0.07, s: 0, r: 0.04, cutoff: 2600, fenv: false, vib: false }, notes: 'Bb5:0.5', gain: 1 },
+      { drums: 'X:0.5@0.5' },
+    ],
+    meta: { cue: 'scoreTick', programId: 'full-time' },
+  };
+}
+
 // The channel's clock and dayparts run on London time (util.js zoneTime), not
 // the viewer's: the night ident follows it. One formatter, made on first use.
 let londonFmt;
@@ -1209,7 +1429,7 @@ function londonHour(date = new Date()) {
   return date.getUTCHours();
 }
 
-const CUE_NAMES = { jingle: 'ident', ident: 'ident', bumper: 'ident', whoosh: 'stinger', stinger: 'stinger', breaking: 'breaking', outro: 'outro', signoff: 'outro', promo: 'promo', upnext: 'promo' };
+const CUE_NAMES = { jingle: 'ident', ident: 'ident', bumper: 'ident', whoosh: 'stinger', stinger: 'stinger', breaking: 'breaking', outro: 'outro', signoff: 'outro', promo: 'promo', upnext: 'promo', scoreTick: 'scoreTick' };
 const cueCache = new Map();
 
 /**
@@ -1224,10 +1444,10 @@ export function cueFor(cue, programId, { hour } = {}) {
   if (!kind) return null;
   const h = Number.isFinite(Number(hour)) && hour !== null ? Number(hour) : londonHour();
   const night = h < 7 || h >= 21;
-  const key = kind === 'ident' ? `ident:${night}` : kind === 'stinger' ? 'stinger' : `${kind}:${keyOf(programId)}`;
+  const key = kind === 'ident' ? `ident:${night}` : kind === 'stinger' || kind === 'scoreTick' ? kind : `${kind}:${keyOf(programId)}`;
   let tune = cueCache.get(key);
   if (!tune) {
-    tune = kind === 'ident' ? buildIdent(night) : kind === 'stinger' ? buildStinger() : kind === 'breaking' ? buildBreaking(programId) : kind === 'outro' ? buildOutro(programId) : buildPromo(programId);
+    tune = kind === 'ident' ? buildIdent(night) : kind === 'stinger' ? buildStinger() : kind === 'scoreTick' ? buildScoreTick() : kind === 'breaking' ? buildBreaking(programId) : kind === 'outro' ? buildOutro(programId) : buildPromo(programId);
     cueCache.set(key, tune);
   }
   return tune;
@@ -1239,6 +1459,7 @@ export const STINGER = buildStinger();
 export const BREAKING = buildBreaking(null);
 export const OUTRO = buildOutro(null);
 export const PROMO = buildPromo(null);
+export const SCORE_TICK = buildScoreTick();
 export const CUE_PROGRAMMES = Object.keys(VOICE);
 
 /** Named channel cues (channel voicing), as played by AudioEngine.sfx(name). */
@@ -1248,4 +1469,5 @@ export const CUES = Object.freeze({
   breaking: BREAKING,
   outro: OUTRO, signoff: OUTRO,
   promo: PROMO, upnext: PROMO,
+  scoreTick: SCORE_TICK,
 });

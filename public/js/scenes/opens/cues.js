@@ -72,6 +72,24 @@ export const CUES = Object.freeze({
     seven: 11, // the top card turns to the 7
     hit: 14,
   }),
+  // FULL TIME (full-time.md §6): the final whistle. A dark ground at night, only the board's clock alight (89:55, a
+  // second every two beats); the floodlights bang on bank by bank, one a beat (a low thunk each: the band's count-in);
+  // the camera sweeps down the pitch to the centre circle under the board; the referee's final whistle on the brass,
+  // three blasts, the last long, and the board flips to FULL TIME on it; the board's clock, a stopwatch at 90:00, lifts
+  // out to centre stage: the emblem, from which the plate wipes out
+  'full-time': Object.freeze({
+    bpm: 120,
+    ticks: Object.freeze([0, 2, 4, 6, 8]), // the board's clock: 89:55 at the cut, a second every two beats
+    floods: Object.freeze([3, 4, 5, 6]), // a bank of floodlights bangs on each beat (far left, far right, near left, near right)
+    sweep: 6.5, // the camera sweeps down the pitch...
+    circle: 10, // ...and comes to rest over the centre circle, the board over the far stand
+    whistle: Object.freeze([10, 11, 12]), // the final whistle: three blasts on the beat, the last one long...
+    long: 2, // ...two beats (the clock reads 90:00 from the first)
+    flip: 12, // the board flips to FULL TIME on the last blast
+    lift: 13.5, // the board's clock lifts out of it...
+    settle: 15.25, // ...and settles at centre stage: the stopwatch at 90:00, the emblem
+    hit: 19,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

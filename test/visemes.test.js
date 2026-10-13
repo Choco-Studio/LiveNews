@@ -489,7 +489,8 @@ describe('sonic identity', () => {
   const sounding = (song, b, kinds) => song.tracks.filter((t) => kinds.includes(t.kind)).flatMap((t) => t.events.filter((e) => e.at <= b + 1e-6 && e.at + e.dur > b + 1e-6).flatMap((e) => e.midis));
 
   test('every programme open states the signature, then its own colour note', () => {
-    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty, 'world-weather': COLOURS.weather, 'seven-days': COLOURS.week };
+    // (FULL TIME is a draft, full-time.md §8: its theme is built and tested like the others')
+    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty, 'world-weather': COLOURS.weather, 'seven-days': COLOURS.week, 'full-time': COLOURS.sport };
     const keys = new Set();
     for (const id of THEME_IDS) {
       const notes = leadNotes(themeFor(id));
