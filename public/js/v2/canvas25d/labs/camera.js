@@ -35,9 +35,8 @@ const CASTS = {
   cosmos: { A: 'nova', B: 'unit8' },
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
-  // FULL TIME (a draft): Kai and Rosa get their own looks in build step 6; until then lookFor gives them Paco's and
-  // Lola's designs on air (by voice gender), so the lab seats those
-  'full-time': { A: 'paco', B: 'lola' },
+  // FULL TIME (a draft): Kai and Rosa, their own looks (cast/full-time.js, the candidate on air)
+  'full-time': { A: 'kai', B: 'rosa' },
 };
 
 const state = { mode: 'gallery', programme: 'world-now', framing: 'wide', focus: 'A', move: 'greeting', overlay: false, episode: null };

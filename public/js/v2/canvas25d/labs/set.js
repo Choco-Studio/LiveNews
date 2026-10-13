@@ -50,9 +50,8 @@ export const CASTS = {
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
   'seven-days': { A: 'paco', B: 'lola' },
-  // FULL TIME's Kai and Rosa get their own looks in build step 6 (full-time.md §9); until then the channel's lookFor
-  // gives them Paco's and Lola's designs on air (by voice gender), so the lab seats those
-  'full-time': { A: 'paco', B: 'lola' },
+  // FULL TIME's Kai and Rosa, their own looks (cast/full-time.js: the candidate on air, public/js/full-time-looks.js)
+  'full-time': { A: 'kai', B: 'rosa' },
   generic: { A: 'paco', B: 'lola' },
 };
 export const PROGRAMMES = [...STYLE_IDS, 'generic'];
