@@ -176,8 +176,10 @@ The host never calls the game live and never suggests a real contest.
 | Result and the table | Host | The winner; the week's table (persisted, §5) | 22 s |
 | Sign-off | Host | "That's PAY ATTENTION…" and when the next edition airs | 8 s |
 
-- **Length: 300–330 s** at the voices' 15 characters a second (`targetSeconds [290, 360]`). When an edition comes in
-  under 300 s, the last round takes a fourth question if the plan holds one.
+- **Length: 300–345 s** at the voices' 15 characters a second, and up to 360 s with a tie-break (`targetSeconds [290,
+  360]`). Measured on twenty editions written from the real archive (step 2): 308–343 s, and 360 s with a tie-break.
+- **The reveal is short.** The source and the airing are always on the screen. The host says them at every third reveal
+  and always for a figure, so the game keeps moving; a spoken credit on every reveal cost about 25 s an edition.
 - **The reading rule.** The options stay on screen from when the host starts reading them to the last lock-in, for at
   least their characters ÷ 12 + 1.5 s:
   - PICTURE THIS: three 50-character headlines need 14 s and are on screen 17.5 s;
@@ -187,7 +189,8 @@ The host never calls the game live and never suggests a real contest.
   before, in a different order. **Data comes first**: a type the plan cannot fill is not chosen.
 - **DOUBLE OR NOTHING** falls back to PICTURE THIS when the type not played cannot be filled (pictures: 30 of 30 usable
   stories on 12 Oct).
-- **Ties** are broken by a sudden-death LETTER BY LETTER headline, never a coin toss.
+- **Ties** are broken by a sudden-death LETTER BY LETTER headline, never a coin toss. If neither player names it, the
+  game is drawn, and counts half a win to each in the table (1.6 % of simulated editions).
 
 ### 4.1 The rounds
 
@@ -196,7 +199,7 @@ The host never calls the game live and never suggests a real contest.
 | **PICTURE THIS** | A story's picture, beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines, at most two from one desk (13 Oct's pool: 20 technology, 13 science, 2 world), none sharing a name with another | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with pictures; 6 more headlines |
 | **LETTER BY LETTER** | A real headline as letter tiles. Every word's first letter, the digits and the punctuation show at once; then a quarter, a half and three quarters of the other letters, on the beat, in a seeded order that never leaves a word unrevealed past the second stage. The first to buzz says the headline | None | 3 / 2 / 1 by stage; a stall locks that player out for the headline | ~20 s | 3 stories |
 | **WHERE IN THE WORLD?** | The headline in its frame, its place masked if it names it; three pins on the world map (`scenes/worldmap.js`); the zoom to the right one | Three countries in three regions (§3.2). An answer is never another question's wrong pin, and no wrong pin shows more than twice in a round | 2 points | ~21 s | 3 stories with a usable place, 6 more places |
-| **TODAY OR NOT TODAY?** | A quickfire of six real headlines | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline | 3 for TODAY, 3 for EARLIER |
+| **TODAY OR NOT TODAY?** | A quickfire of six real headlines. The players answer on their lamps, not aloud; the host names a player only when the two differ, and closes with the round's tally | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline | 3 for TODAY, 3 for EARLIER |
 | **HOW MANY?** (when the week allows) | The aired sentence with its figure masked (§3.2) | None: each player says a guess, shown as GUESS | Closest 2 points; exactly right 3, but only for a figure that aired without "about", "around", "nearly" or "up to" | ~19 s | 3 usable figures |
 
 - **A usable place** is a story's place, named in its aired words where the story happens: after "in", "at", "off"…, as
@@ -214,22 +217,29 @@ The host never calls the game live and never suggests a real contest.
 
 ### 4.2 The players
 
-- **The contestants' answers** come from a seeded model of each player, deterministic per edition. It has:
-  - an accuracy by the question's desk: Penny strong on business, Max on technology, Nova on science; a base of 55–70 %;
-  - lock-in timing in PICTURE THIS and buzz timing in LETTER BY LETTER;
-  - guesses for figures drawn around the true value, with a spread set by confidence.
-- **Variance is real.** A strong player loses a third of the time, comebacks happen, and no edition is decided before
-  DOUBLE OR NOTHING more than half the time. All three are measured over simulated weeks before it airs.
+- **The contestants' answers** come from a seeded model of each player, deterministic per edition
+  (`server/quiz/players.js`). It has:
+  - an accuracy by the question's desk, on a base of 60–66 %, and two strong desks for each player, at least one outside
+    their own programme. A player is never asked about their own programme, so a strength only inside it would never
+    show: Max is strong on technology and science, Nova on science and world, Penny on business and world;
+  - a speed: lock-in timing in PICTURE THIS and buzz timing in LETTER BY LETTER;
+  - guesses for figures drawn around the true value, with a spread set by confidence, said as people say numbers ("$800
+    million", "$150"). Two players never say the same number.
+- **Variance is real**, measured over 500 simulated editions (step 2):
+  - a strong favourite (one who wins 65 % or more of 100 replays of the same plan) loses 28 % of the time;
+  - the player behind at half time wins 29 % of the time;
+  - 24 % of editions are decided before DOUBLE OR NOTHING;
+  - every player's win rate lies between 43 % and 59 %.
 
 ## 5. Repertoire: never the same programme twice
 
-- **Lines**: every spoken frame has a bank, picked by hash and the station's recent-lines memory so that none repeats
-  within six hours:
+- **Lines**: every spoken frame has a bank, picked by hash of the edition, the pair and the moment, and by the station's
+  recent-lines memory, so that none repeats within six hours and no player's reaction repeats within an edition:
   - welcomes (10) and player introductions (10);
   - question frames, 12 for each of the five rounds;
   - countdown prompts (8);
-  - reveals, right (12) and wrong (12);
-  - close calls (8);
+  - reveals: right (12), wrong (12), both right (6), the closest guess (6), exactly right (4), nobody (4);
+  - close calls (8), the quickfire's tally (4), a tie-break won (4);
   - DOUBLE OR NOTHING (8) and the desk pick (8);
   - results (10) and sign-offs (10).
 - **No catchphrase**, but the genre's conventions as banks of variants ("Lock it in", "Fingers on buzzers").

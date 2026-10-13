@@ -191,7 +191,7 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
         const answer = { ...ev.place, key: ev.key };
         const pins = shuffle([answer, ...picks], rnd);
         return {
-          type, key: ev.key, words: ev.words, masked: ev.place.masked || null, aired: aired(ev),
+          type, key: ev.key, words: ev.words, masked: ev.place.masked || null, desk: ev.category, aired: aired(ev),
           options: pins.map((p, i) => ({ letter: letter(i), label: p.label, country: p.country, lat: p.lat, lon: p.lon, region: p.region, key: p.key })),
           answer: letter(pins.indexOf(answer)),
         };
@@ -199,14 +199,14 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
     }
     case 'howmany':
       return asked.map((ev) => ({
-        type, key: ev.key, words: ev.words, masked: ev.figure.masked, sentence: ev.figure.sentence,
+        type, key: ev.key, words: ev.words, masked: ev.figure.masked, sentence: ev.figure.sentence, desk: ev.category,
         figure: { value: ev.figure.value, label: ev.figure.label, qualifier: ev.figure.qualifier, exact: ev.figure.exact },
         aired: aired(ev, ev.figureAt || ev.last),
       }));
     case 'today':
       return [{
         type,
-        items: shuffle(asked, rnd).map((ev) => ({ key: ev.key, words: ev.words, answer: ev.first >= todayStart ? 'TODAY' : 'EARLIER', aired: aired(ev) })),
+        items: shuffle(asked, rnd).map((ev) => ({ key: ev.key, words: ev.words, desk: ev.category, answer: ev.first >= todayStart ? 'TODAY' : 'EARLIER', aired: aired(ev, ev.first) })),
       }];
     default:
       return null;

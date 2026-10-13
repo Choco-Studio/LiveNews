@@ -105,6 +105,21 @@ that decided it. Faults:
 The bible is amended to match: §3.1 (notices; a headline says what happened) and §4.1 (PICTURE THIS's desks; WHERE's
 mask and wrong pins).
 
+## Found later, in the step-2 reading (fixed in the desk)
+
+Reading twenty written editions (`docs/roadmap/critique/pay-attention-writer.md`) found three more:
+
+- "Enter the Zachbot: Trump's new press secretary malfunctions on podium debut". The politics list now names politicians
+  and press secretaries.
+- "BBC FM radio transmissions suspended in Afghanistan". Censorship and suspended broadcasts now count as politics;
+  Afghanistan, Myanmar, Haiti, Libya, Burkina Faso, Eritrea, Belarus and Venezuela join the conflict places.
+- "Iconic Iguazu Falls walkway dismantled amid record water levels". Record water levels and surging water are now
+  disasters.
+- "Google makes it easier to launch your vibe-coded apps" had "a new feature in the US" as its place. Features, services
+  and roll-outs are where a product is sold, never a place.
+
+That makes two leaks found only by reading. The gate reads every question by hand for this reason.
+
 ## The first plan on real data (a dry run)
 
 This was planned for **13 Oct, 22:00 London** on the archive as it stood that evening (1.3 days), with the three-day

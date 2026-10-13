@@ -34,6 +34,10 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(out('Mechanism’s first Switch 2 case is as awesome as I hoped it would be'), 'opinion');
     assert.equal(out('Pupils return to school after the summer'), 'children');
     assert.equal(entryOut(entry({ title: 'Museum reopens its doors', grave: true })), 'read grave or serious');
+    // found in the step-2 reading (13 Oct): a politician named in the headline, censorship, a flood without victims
+    assert.equal(out('Enter the Zachbot: Trump’s new press secretary malfunctions on podium debut'), 'politics');
+    assert.equal(out('BBC FM radio transmissions suspended in Afghanistan'), 'conflict');
+    assert.equal(out('Iconic Iguazu Falls walkway dismantled amid record water levels'), 'disaster');
   });
   test('senses that only look excluded', () => {
     assert.equal(out('Roman fort found in Wales could prove myth of emperor’s camp is real', 'The Roman emperor led his troops against the Picts and set up a military camp, folklore says.'), null);
@@ -82,6 +86,9 @@ describe('places and figures (§4.1)', () => {
     assert.equal(p.label, 'ICELAND');
     assert.equal(p.masked, null);
     assert.equal(p.region, 'europe');
+    // where a product is sold is no "where" either
+    const google = entry({ title: 'Google makes it easier to launch your vibe-coded apps', text: 'The feature is available in the US from today.', location: { place: 'USA', lat: 39.8, lon: -98.6 } });
+    assert.equal(usablePlace(google, google.title), null);
     // a company's home country is no "where"
     const cmf = entry({ title: 'CMF’s first wireless speakers look like musical milk cartons', text: 'Indian brand CMF has unveiled its first wireless speakers.', location: { place: 'INDIA', lat: 22, lon: 79 } });
     assert.equal(usablePlace(cmf, cmf.title), null);

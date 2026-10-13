@@ -17,11 +17,11 @@ const DAY = 86400_000;
 // hand; each kind is named for that check. Each list is matched on the title, summary and aired text of every airing.
 export const EXCLUDED = [
   ['harm', /\b(?:kill\w*|dead|deaths?|die[sd]?|dying|funerals?|injur\w*|hurt|victims?|casualt\w*|missing|rescue[sd]?|rescuers?|evacuat\w*|displac\w*|bod(?:y|ies))\b/i],
-  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*)\b/i],
+  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*|water levels?|surg(?:e|es|ed|ing) (?:of )?waters?|waters? surg\w*|high water|overflow\w*|swollen rivers?|deluge|torrential)\b/i],
   ['crime', /\b(?:polic(?:e|ing)|officers? (?:said|arrested)|courts?|judges?|trials?|jail\w*|prison\w*|sentenc\w*|charged|charges|arrest\w*|murder\w*|crimes?|criminal\w*|fraud\w*|scam\w*|con(?:s|ned)? (?:homeowners|people|customers|victims)|falsif\w*|forg(?:ed|ery)|evade tax|evasion|dodge tax|launder\w*|bribe\w*|corrupt\w*|scandal\w*|lawsuits?|su(?:e|es|ed|ing)\b|legal action|abuse\w*|assault\w*|raid\w*|detain\w*|detention|investigators?|under investigation|investigat(?:es|ed|ing)? (?:the |a |an )?(?:death|crash|attack|fraud|claims?|allegations?|case|complaints?)|police investigation|criminal investigation|justice department|department of justice|fbi|prosecut\w*|probes? into|exploit(?:ed|ation)|smuggl\w*|thefts?|stolen|steal\w*|robber\w*|hack(?:ed|ers?)|ransomware|cyber-?attacks?)\b/i],
-  ['conflict', /\b(?:wars?|warfare|army|armies|armed|military|militar\w*|troops|soldiers?|missiles?|drones? (?:strikes?|attacks?)|(?:air)?strikes? (?:on|against)|attack\w*|terror\w*|bomb\w*|shoot\w*|shots? fired|guns?|gunm[ae]n|weapons?|ceasefire|fightback|offensive|rebels?|militias?|insurgen\w*|houthis?|hamas|hezbollah|taliban|nato|invasion|invad\w*|occupation|hostages?|sanction\w*|defen[cs]e (?:minister|ministry|forces)|frontline|front line|ukraine|russia|gaza|israel\w*|palestin\w*|(?:armed|security|special|government|rebel|federal|allied|enemy|ground|naval|paramilitary|regional) forces|forces (?:enter\w*|captur\w*|seiz\w*|advanc\w*|took|take|withdr\w*|clash\w*|launch\w*|fire[sd]?)|strategic (?:town|city|port|hill)|militants?|jihad\w*|al-shabaab|isis|islamic state|coups?|junta|tigray|darfur|sudan\w*|yemen\w*|syria\w*|somalia\w*|sahel|kashmir|iran\w*|north korea\w*|taiwan strait|south china sea|hormuz|crosshairs)\b/i],
+  ['conflict', /\b(?:wars?|warfare|army|armies|armed|military|militar\w*|troops|soldiers?|missiles?|drones? (?:strikes?|attacks?)|(?:air)?strikes? (?:on|against)|attack\w*|terror\w*|bomb\w*|shoot\w*|shots? fired|guns?|gunm[ae]n|weapons?|ceasefire|fightback|offensive|rebels?|militias?|insurgen\w*|houthis?|hamas|hezbollah|taliban|nato|invasion|invad\w*|occupation|hostages?|sanction\w*|defen[cs]e (?:minister|ministry|forces)|frontline|front line|ukraine|russia|gaza|israel\w*|palestin\w*|(?:armed|security|special|government|rebel|federal|allied|enemy|ground|naval|paramilitary|regional) forces|forces (?:enter\w*|captur\w*|seiz\w*|advanc\w*|took|take|withdr\w*|clash\w*|launch\w*|fire[sd]?)|strategic (?:town|city|port|hill)|militants?|jihad\w*|al-shabaab|isis|islamic state|coups?|junta|tigray|darfur|sudan\w*|yemen\w*|syria\w*|somalia\w*|sahel|kashmir|iran\w*|north korea\w*|taiwan strait|south china sea|hormuz|crosshairs|afghan\w*|myanmar|haiti\w*|libya\w*|burkina faso|eritrea\w*|belarus\w*|venezuela\w*)\b/i],
   ['children', /\b(?:child|children|childhood|kids?|boys?|girls?|teen\w*|minors?|pupils?|schools?|schoolchildren|bab(?:y|ies)|toddlers?|infants?|nurser(?:y|ies)|adolescen\w*)\b/i],
-  ['politics', /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deal|dispute)|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/],
+  ['politics', /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deal|dispute)|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank|press secretary|spokesperson for the|censor\w*|press freedom|suspend(?:s|ed|ing)? (?:broadcasts?|transmissions?|services? of)|trump\w*|biden|kamala harris|vance|starmer|sunak|badenoch|farage|reeves|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|burnham|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/],
   ['health', /\b(?:cancer\w*|tumou?rs?|diseases?|diagnos\w*|hospital\w*|patients?|surger(?:y|ies)|operation on|illness\w*|ill\b|sick\w*|virus\w*|outbreaks?|pandemic|epidemic|dementia|alzheimer\w*|stroke\b|heart attack|overdos\w*|suicid\w*|mental health|nhs|medicines? (?:grow )?scarce|nodule)\b/i],
   ['money of people', /\b(?:salar(?:y|ies)|wages?|pay ?(?:rise|cut|deal)|earn(?:s|ed|ing)?\s+(?:up to\s+|over\s+|more than\s+|about\s+|around\s+)?[£$€]|i earn|income|pensions?|fined|fines?\b|damages|compensation|payouts?|net worth|fortune|wealth\w*|billionaires?|millionaires?|inheritance|tax(?:es)? (?:bill|affairs))\b/i],
   ['betting', /\b(?:bet(?:s|ting)?|bookmakers?|bookies|odds|tips?\b|tipster\w*|predictions?|predicted line-?ups?|gambl\w*|casino\w*|lotter(?:y|ies)|jackpot)\b/i],
@@ -133,6 +133,9 @@ export function countryOf(location) {
 // locative preposition ("In Iceland, a fissure eruption…"), as its owner ("Egypt's Fayoum mummy portraits…") or as a
 // dateline ("Norway: …"). "Indian brand CMF…" is no "where" (12 Oct).
 const LOCATIVE = /\b(?:in|at|near|off|across|outside|around|over|throughout|inside|on the coast of|the coast of|to western|to eastern|to northern|to southern)\s+(?:the\s+)?$/i;
+// "available in the US", "users in Japan", "a new feature in the US" (The Verge, 13 Oct): where a product is sold, not
+// where a story happened
+const AVAILABILITY = /\b(?:available|availability|users?|customers?|subscribers?|buyers?|shoppers?|owners?|players?|sold|sells?|selling|ships?|shipping|features?|services?|rolls? out|rolling out|rollout|expands?|expanding|expansion|subscriptions?|apps?|launch(?:es|ed|ing)? (?:first )?(?:only )?)\s+(?:only\s+)?(?:in|across|to)\s+(?:the\s+)?$/i;
 const insideOf = (e, country, placeEntry) => e === country || e === placeEntry || e.country === country.name;
 function happensIn(texts, country, place) {
   const placeEntry = lookupPlace(String(place).split(',')[0]);
@@ -140,7 +143,8 @@ function happensIn(texts, country, place) {
     const s = String(t ?? '');
     for (const h of findPlaces(s)) {
       if (!insideOf(h.entry, country, placeEntry)) continue;
-      if (LOCATIVE.test(s.slice(Math.max(0, h.index - 24), h.index))) return true;
+      const before = s.slice(Math.max(0, h.index - 40), h.index);
+      if (LOCATIVE.test(before.slice(-24)) && !AVAILABILITY.test(before)) return true;
       const after = s.slice(h.index + h.text.length, h.index + h.text.length + 3);
       if (/^['’]s\b/.test(after) || (h.index === 0 && /^\s*:/.test(after))) return true;
     }
@@ -239,7 +243,7 @@ export function usableFigure(e) {
   const sentences = sentencesIn(String(e?.text || ''));
   for (const n of nums) {
     const value = String(n?.value || '').trim();
-    if (!/\d/.test(value) || /^(?:19|20)\d\d$/.test(value)) continue;
+    if (!/\d/.test(value) || /^(?:19|20)\d\d$/.test(value) || !parseFigure(value)) continue;
     const labelWords = norm(n.label).split(/[^a-z]+/).filter((w) => w.length >= 3 && !STOP.has(w));
     if (!labelWords.length) continue;
     const v = norm(value).replace(/bn$/, 'bn').replace(/m$/, 'm');
@@ -260,6 +264,44 @@ export function usableFigure(e) {
   return null;
 }
 
+// A figure as a number and back in its own style: "1.2 million", "15", "40%", "£9bn", "$26M", "120,000"
+export function parseFigure(value) {
+  const m = String(value).trim().match(/^([£$€]?)\s*([\d,.]+)\s*(%|percent|per cent|bn|billion|m|million|k|thousand)?$/i);
+  if (!m) return null;
+  const n = Number(m[2].replace(/,/g, ''));
+  if (!Number.isFinite(n)) return null;
+  const unit = (m[3] || '').toLowerCase();
+  const mult = { bn: 1e9, billion: 1e9, m: 1e6, million: 1e6, k: 1e3, thousand: 1e3 }[unit] || 1;
+  return { n: n * mult, cur: m[1], unit, mult, raw: m[2] };
+}
+/**
+ * A number as a person says it, in the figure's own style: its currency, a per cent, or millions and billions in words
+ * ("£1.4 billion", "860 million", "12,000", "35%").
+ */
+export function formatFigure(n, like) {
+  const { cur, unit } = like;
+  if (unit === '%' || unit === 'percent' || unit === 'per cent') return `${cur}${n}%`;
+  const one = (x) => (Number.isInteger(x) ? String(x) : String(Math.round(x * 10) / 10));
+  if (n >= 1e9) return `${cur}${one(n / 1e9)} billion`;
+  if (n >= 1e6) return `${cur}${one(n / 1e6)} million`;
+  return `${cur}${Math.round(n).toLocaleString('en-GB')}`;
+}
+// The numbers people guess: 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9 times a power of ten
+const NICE = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10];
+export function niceNumber(n) {
+  if (!(n > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(n)));
+  const m = n / p;
+  const best = NICE.reduce((a, b) => (Math.abs(b - m) < Math.abs(a - m) ? b : a));
+  return Math.round(best * p * 1000) / 1000;
+}
+/** The next nice number up from `n` (two players never say the same guess). */
+export function nextNice(n) {
+  const p = Math.pow(10, Math.floor(Math.log10(n)));
+  const m = Math.round((n / p) * 1000) / 1000;
+  const i = NICE.findIndex((x) => x > m + 1e-9);
+  return Math.round((i >= 0 ? NICE[i] : 12) * p * 1000) / 1000;
+}
 // Day words: a TODAY OR NOT TODAY headline must not carry its own answer ("TechCrunch Disrupt 2026 starts tomorrow")
 export const DAY_WORDS = /\b(?:today|tonight|tomorrow|yesterday|this (?:week|weekend|morning|afternoon|evening|year)|last (?:week|night|year)|next (?:week|year)|weekend|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|january|february|march|april|may|june|july|august|september|october|november|december|(?:19|20)\d\d|\d{1,2}(?:st|nd|rd|th)\b|\d+ hours to|hours away|days? away|days? to go)\b/i;
 
