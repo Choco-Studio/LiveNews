@@ -19,13 +19,17 @@
      place, lat, lon, figure, label, sub, since, move, lod }), profile(n), ready (images loaded).
      Pictures load from ../../config/fixtures/img (serve the repo root, e.g.
      `timeout 1500 python3 -m http.server 8505 --bind 127.0.0.1`, then /public/lab/v2-set.html)
-     and are pixelated exactly like the director does (416x234, 24 colours). ?still=1 for captures. -->
+     and are pixelated exactly like the director does (416x234, 24 colours). ?still=1 for captures.
+     ?hour=21.78 sets the studio clock (WORLD NOW's city, FULL TIME's ground and scoreboard), ?zoom=1|3|4 the display
+     scale, e.g. ?programme=full-time&framing=mcu-l&hour=6.5&zoom=4 -->
 <canvas id="screen" width="384" height="216"></canvas>
 <div class="bar">
   <select id="programme"></select>
   <select id="framing"></select>
   <select id="wall"></select>
   <select id="phase"><option>intro</option><option>outro</option></select>
+  <select id="hour" title="the studio clock: WORLD NOW's city and FULL TIME's ground follow it (five sky phases; FULL TIME's floodlight banks at the golden hour)"><option value="23">night 23:00</option><option value="6.5">dawn 06:30</option><option value="8.5">breakfast 08:30</option><option value="12.5">day 12:30</option><option value="17.1">golden 17:06 (0 banks)</option><option value="17.5">golden 17:30 (1 bank)</option><option value="18.1">golden 18:06 (2 banks)</option><option value="18.7">golden 18:42 (4 banks)</option><option value="20">blue hour 20:00</option><option value="21.78">night 21:47</option></select>
+  <select id="zoom" title="display scale"><option value="3">3x</option><option value="1">1x</option><option value="4">4x</option></select>
   <label><input type="checkbox" id="presenters" checked> presenters</label>
   <label><input type="checkbox" id="cache" checked> cache</label>
   <button id="play">pause</button>
@@ -82,6 +86,18 @@
     $(k).value = lab.LAB[k];
     $(k).onchange = () => lab.set({ [k]: $(k).value });
   }
+  // the studio clock's hour and the display scale
+  if (params.has('hour')) $('hour').value = params.get('hour');
+  lab.set({ hour: Number($('hour').value) });
+  $('hour').onchange = () => lab.set({ hour: Number($('hour').value) });
+  const zoom = () => {
+    const z = Number($('zoom').value);
+    canvas.style.width = `${384 * z}px`;
+    canvas.style.height = `${216 * z}px`;
+  };
+  if (params.has('zoom')) $('zoom').value = params.get('zoom');
+  zoom();
+  $('zoom').onchange = zoom;
   $('presenters').onchange = () => lab.set({ presenters: $('presenters').checked });
   $('cache').onchange = () => lab.set({ cache: $('cache').checked });
   $('prof').onclick = () => {

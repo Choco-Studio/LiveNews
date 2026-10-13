@@ -19,7 +19,9 @@
 <canvas id="screen" width="384" height="216"></canvas>
 <div class="bar">
   <select id="mode"><option>gallery</option><option>move</option><option>storyboard</option><option>framing</option></select>
-  <select id="programme"><option>world-now</option><option>tech-bytes</option><option>cosmos</option><option>money-minute</option><option>news-60</option></select>
+  <select id="programme"><option>world-now</option><option>tech-bytes</option><option>cosmos</option><option>money-minute</option><option>news-60</option><option>full-time</option></select>
+  <select id="hour" title="the studio clock (WORLD NOW's city, FULL TIME's ground)"><option value="23">night 23:00</option><option value="6.5">dawn 06:30</option><option value="12.5">day 12:30</option><option value="17.5">golden 17:30 (1 bank)</option><option value="18.7">golden 18:42 (4 banks)</option><option value="20">blue hour 20:00</option></select>
+  <select id="zoom"><option value="3">3x</option><option value="1">1x</option><option value="4">4x</option></select>
   <select id="move"><option>greeting</option><option>lead</option><option>signoff</option><option>catch</option></select>
   <label><input type="checkbox" id="overlay"> overlay</label>
   <button id="play">play</button>
@@ -38,7 +40,15 @@
   if (params.has('labels')) lab.set({ labels: true });
   $('mode').value = lab.state.mode;
   $('programme').value = lab.state.programme;
-  const redraw = () => lab.render(Number($('t').value));
+  function redraw() { lab.render(Number($('t').value)); }
+  // the studio clock's hour (FULL TIME's ground and WORLD NOW's city follow it) and the display scale (1x, 3x, 4x)
+  if (params.has('hour')) $('hour').value = params.get('hour');
+  lab.set({ hour: Number($('hour').value) });
+  const zoom = () => { const z = Number($('zoom').value); canvas.style.width = `${384 * z}px`; canvas.style.height = `${216 * z}px`; };
+  if (params.has('zoom')) $('zoom').value = params.get('zoom');
+  zoom();
+  $('hour').onchange = () => { lab.set({ hour: Number($('hour').value) }); redraw(); };
+  $('zoom').onchange = zoom;
   $('mode').onchange = () => { lab.set({ mode: $('mode').value }); redraw(); };
   $('programme').onchange = () => { lab.set({ programme: $('programme').value }); redraw(); };
   $('move').onchange = () => { lab.set({ move: $('move').value }); redraw(); };

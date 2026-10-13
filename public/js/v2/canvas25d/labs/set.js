@@ -4,13 +4,14 @@
 //
 //   render(t)                 draw the instant t into scene.frame; returns { cam, heads }
 //   set({ programme, framing, wall, presenters, cache, phase, image, place, lat, lon,
-//         figure, label, sub, since, move, lod, wipe })   (wipe/noCut: the change wipes, no cut)
+//         figure, label, sub, since, move, lod, wipe, hour })   (wipe/noCut: the change wipes, no cut;
+//         hour: the studio clock's fixed hour, 0-24, for the sets that follow it: WORLD NOW, FULL TIME)
 //   profile(n)                ms per frame: bg uncached worst case (moving camera, animating
 //                             wall), bg cached, desk, actors — per the current programme/framing
 //   FRAMINGS, WALLS, CASTS    the lab's vocabularies
 //   setImage(name, img)       register a picture (a canvas / ImageData / { width, height, data })
 import { C, Frame } from '../pixbuf.js';
-import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, bgStats } from '../studio/set.js';
+import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, bgStats, setSkyHour } from '../studio/set.js';
 import { styleFor, STYLE_IDS } from '../studio/styles.js';
 import { resetWall } from '../studio/wall.js';
 import { SET, kAt, sxOf, syOf } from '../studio/geometry.js';
@@ -49,6 +50,9 @@ export const CASTS = {
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
   'seven-days': { A: 'paco', B: 'lola' },
+  // FULL TIME's Kai and Rosa get their own looks in build step 6 (full-time.md §9); until then the channel's lookFor
+  // gives them Paco's and Lola's designs on air (by voice gender), so the lab seats those
+  'full-time': { A: 'paco', B: 'lola' },
   generic: { A: 'paco', B: 'lola' },
 };
 export const PROGRAMMES = [...STYLE_IDS, 'generic'];
@@ -196,6 +200,7 @@ export function set(o = {}) {
   const before = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   Object.assign(LAB, o);
   if ('cache' in o) setCacheEnabled(o.cache);
+  if (Number.isFinite(o.hour)) setSkyHour(o.hour);
   const after = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   // a lab change is a cut: the wall shows the new state at once
   // (noCut: true, or wipe: true, changes the wall in the same shot, as a director update without a

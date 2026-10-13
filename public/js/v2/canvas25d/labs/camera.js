@@ -4,7 +4,8 @@
 //   window.__lab.render(t)     draw instant t (s); in 'gallery' and 'storyboard'
 //                              modes t is the case / shot index (floor)
 //   window.__lab.set({ mode: 'gallery' | 'move' | 'storyboard' | 'framing',
-//                      programme, framing, focus, move, episode, overlay })
+//                      programme, framing, focus, move, episode, overlay, hour })
+//                              (hour: the studio clock's fixed hour, 0-24, for the sets that follow it)
 //   window.__lab.load(url)     fetch an episode JSON (a test fixture or /api/queue)
 //                              for the storyboard; resolves to its shot list
 //   window.__lab.shots()       the storyboard's shot list [{ t0, t1, seg, shot, framing, focus, move }]
@@ -34,6 +35,9 @@ const CASTS = {
   cosmos: { A: 'nova', B: 'unit8' },
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
+  // FULL TIME (a draft): Kai and Rosa get their own looks in build step 6; until then lookFor gives them Paco's and
+  // Lola's designs on air (by voice gender), so the lab seats those
+  'full-time': { A: 'paco', B: 'lola' },
 };
 
 const state = { mode: 'gallery', programme: 'world-now', framing: 'wide', focus: 'A', move: 'greeting', overlay: false, episode: null };
@@ -374,6 +378,7 @@ export function createCameraLab(canvas) {
     },
     set(opts = {}) {
       Object.assign(state, opts);
+      if (typeof opts.hour === 'number' && Number.isFinite(opts.hour)) SETMOD.setSkyHour(opts.hour);
       if (opts.episode && typeof opts.episode === 'object') board = buildBoard(opts.episode);
       return { ...state, episode: !!state.episode };
     },
