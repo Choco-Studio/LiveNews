@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: PAY ATTENTION graphics</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1100px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 16px 12px; }
+  .bar button, .bar select, .bar label { background: #1b1f2c; color: #c8cbd8; border: 1px solid #2c3246; border-radius: 4px; padding: 4px 8px; font: inherit; }
+  .bar button.on { background: #3a4466; color: #fff; }
+  .bar input[type=range] { width: 260px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { image-rendering: pixelated; display: block; background: #000; }
+  figcaption { padding: 4px 0; color: #8a8fa3; max-width: 768px; }
+  pre { margin: 0 16px 16px; color: #8a8fa3; font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>PAY ATTENTION · the question board, PICTURE THIS, LETTER BY LETTER, WHERE IN THE WORLD?, HOW MANY?, TODAY OR NOT TODAY?, the scores, DOUBLE OR NOTHING, the table</h1>
+<p>Real questions from the writer's editions of 13 Oct (the archive's headlines, as the desk chose them), the hardest cases on purpose (72-character headlines on three-line tiles, masked words, a three-line country tag, six-digit and currency figures, a tie, two players on one answer), and generated test pictures (the archive's own pictures stay on the outlets' servers). Each board runs on its own clock. URL: ?scale=1|2|4, ?overlay=1 (the channel's top row and a two-line caption, as on air), ?moment=name or ?t=seconds, ?only=id.</p>
+<div class="bar" id="bar"></div>
+<div class="grid" id="grid"></div>
+<pre id="fits"></pre>
+<script type="module">
+import { P } from '/js/palette.js';
+import * as Q from '/js/scenes/cards-quiz.js';
+import { warmMapData } from '/js/scenes/worldmap.js';
+import { drawTopRow } from '/js/graphics/bug.js';
+import { CaptionState, drawCaptions } from '/js/graphics/captions.js';
+import { CAPTION } from '/js/graphics/layout.js';
+
+warmMapData();
+const qs = new URLSearchParams(location.search);
+let scale = Number(qs.get('scale') || 2);
+let overlay = qs.get('overlay') === '1';
+let moment = qs.get('moment') || (qs.get('t') ? '' : 'reveal');
+let tOverride = qs.get('t') !== null ? Number(qs.get('t')) : null;
+const only = qs.get('only');
+const HN = Q.HALF_NOTE;
+const NOW = Date.parse('2026-10-13T20:20:00Z'); // the editions' moment (a Tuesday evening, London)
+const H = 3600_000;
+
+// ---------------------------------------------------------------- generated test pictures (the lab only)
+function picture(kind) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 288;
+  const g = c.getContext('2d');
+  const grad = (y0, y1, a, b) => { const l = g.createLinearGradient(0, y0, 0, y1); l.addColorStop(0, a); l.addColorStop(1, b); return l; };
+  let seed = kind.length * 977;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  if (kind === 'device') {
+    // a streaming box and its remote on a dark table, a blue glow behind
+    g.fillStyle = grad(0, 288, '#101320', '#2a2f45'); g.fillRect(0, 0, 512, 288);
+    const r = g.createRadialGradient(256, 110, 10, 256, 110, 220); r.addColorStop(0, 'rgba(70,140,255,0.55)'); r.addColorStop(1, 'rgba(70,140,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 512, 288);
+    g.fillStyle = '#c9ccd6'; g.fillRect(0, 210, 512, 78);
+    g.fillStyle = '#1a1a1e'; g.beginPath(); g.roundRect(150, 150, 210, 70, 14); g.fill();
+    g.fillStyle = '#3a3a44'; g.fillRect(160, 156, 190, 4);
+    g.fillStyle = '#e8e8ec'; g.beginPath(); g.roundRect(390, 170, 34, 100, 10); g.fill();
+    g.fillStyle = '#222'; g.beginPath(); g.arc(407, 192, 9, 0, 7); g.fill();
+    g.fillStyle = '#aaa'; g.fillRect(400, 212, 14, 6);
+  } else if (kind === 'ice') {
+    // sea ice under a pale sky: plates of white on dark water
+    g.fillStyle = grad(0, 120, '#7fb6e8', '#d8ecfa'); g.fillRect(0, 0, 512, 120);
+    g.fillStyle = '#16324a'; g.fillRect(0, 110, 512, 178);
+    for (let i = 0; i < 70; i++) {
+      const y = 112 + rnd() * 176; const w = 30 + rnd() * 120 * (y / 288); const h = 4 + rnd() * 18 * (y / 288);
+      g.fillStyle = rnd() > 0.3 ? '#f2f6fa' : '#b9d3e6'; g.beginPath(); g.ellipse(rnd() * 512, y, w, h, 0, 0, 7); g.fill();
+    }
+  } else if (kind === 'corridor') {
+    // a dim corridor with a red light at its end (a horror game)
+    g.fillStyle = '#0c0a0d'; g.fillRect(0, 0, 512, 288);
+    g.fillStyle = '#3b2f2a'; g.beginPath(); g.moveTo(0, 0); g.lineTo(220, 110); g.lineTo(220, 180); g.lineTo(0, 288); g.fill();
+    g.fillStyle = '#2b221f'; g.beginPath(); g.moveTo(512, 0); g.lineTo(292, 110); g.lineTo(292, 180); g.lineTo(512, 288); g.fill();
+    g.fillStyle = '#51433a'; g.beginPath(); g.moveTo(0, 288); g.lineTo(220, 180); g.lineTo(292, 180); g.lineTo(512, 288); g.fill();
+    const r = g.createRadialGradient(256, 145, 4, 256, 145, 90); r.addColorStop(0, 'rgba(255,40,30,0.95)'); r.addColorStop(1, 'rgba(255,40,30,0)'); g.fillStyle = r; g.fillRect(150, 60, 212, 170);
+    g.fillStyle = '#100'; g.fillRect(248, 128, 16, 40);
+  } else if (kind === 'rocket') {
+    // a rocket on its pad at dusk
+    g.fillStyle = grad(0, 288, '#1b1d4a', '#f08a4b'); g.fillRect(0, 0, 512, 288);
+    g.fillStyle = '#20202a'; g.fillRect(0, 250, 512, 38);
+    g.fillStyle = '#555c6e'; g.fillRect(300, 60, 14, 190);
+    for (let y = 70; y < 250; y += 18) g.fillRect(286, y, 28, 3);
+    g.fillStyle = '#f4f4f4'; g.fillRect(236, 70, 40, 180);
+    g.beginPath(); g.moveTo(236, 70); g.lineTo(256, 30); g.lineTo(276, 70); g.fill();
+    g.fillStyle = '#d33'; g.fillRect(236, 120, 40, 8);
+    g.fillStyle = 'rgba(230,230,230,0.7)'; g.beginPath(); g.ellipse(256, 262, 120, 22, 0, 0, 7); g.fill();
+  } else if (kind === 'owl') {
+    // a barn owl's face
+    g.fillStyle = grad(0, 288, '#3d4a2c', '#1e2416'); g.fillRect(0, 0, 512, 288);
+    g.fillStyle = '#c99a5b'; g.beginPath(); g.ellipse(256, 150, 120, 130, 0, 0, 7); g.fill();
+    g.fillStyle = '#f3ead8'; g.beginPath(); g.moveTo(256, 60); g.bezierCurveTo(150, 60, 140, 230, 256, 250); g.bezierCurveTo(372, 230, 362, 60, 256, 60); g.fill();
+    g.fillStyle = '#111'; g.beginPath(); g.arc(215, 140, 16, 0, 7); g.arc(297, 140, 16, 0, 7); g.fill();
+    g.fillStyle = '#d9b48a'; g.beginPath(); g.moveTo(256, 160); g.lineTo(246, 190); g.lineTo(266, 190); g.fill();
+  } else {
+    // a phone with app tiles (software)
+    g.fillStyle = grad(0, 288, '#e9ecf2', '#b8c0cf'); g.fillRect(0, 0, 512, 288);
+    g.fillStyle = '#16171c'; g.beginPath(); g.roundRect(186, 20, 140, 250, 18); g.fill();
+    const cols = ['#4285f4', '#ea4335', '#fbbc05', '#34a853', '#a142f4', '#24c1e0'];
+    for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) { g.fillStyle = cols[(r * 3 + k) % 6]; g.beginPath(); g.roundRect(204 + k * 38, 50 + r * 44, 28, 28, 6); g.fill(); }
+  }
+  // a photo's grain
+  const d = g.getImageData(0, 0, 512, 288);
+  for (let i = 0; i < d.data.length; i += 4) { const n = (rnd() - 0.5) * 18; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+const PICS = { device: picture('device'), ice: picture('ice'), corridor: picture('corridor'), rocket: picture('rocket'), owl: picture('owl'), phone: picture('phone') };
+
+// ---------------------------------------------------------------- data: real questions from the editions of 13 Oct
+const LOLA = { seat: 'A', name: 'LOLA', id: 'lola' };
+const SAM = { seat: 'B', name: 'SAM', id: 'sam' };
+const PENNY = { seat: 'A', name: 'PENNY', id: 'penny' };
+const UNIT8 = { seat: 'B', name: 'UNIT-8', id: 'unit8' };
+const aired = (programme, hoursAgo, source) => ({ programme, at: NOW - hoursAgo * H, source });
+const PIC_APPLE = { type: 'picture', key: 'sde48459db6', words: 'Apple launches Apple TV 4K with Siri AI and voice commands', steps: [8, 16, 32, 64], aired: { programme: 'tech-bytes', at: 1791919961993, source: 'TechCrunch' }, options: [{ letter: 'A', words: 'Apple launches Apple TV 4K with Siri AI and voice commands', desk: 'tech' }, { letter: 'B', words: 'Long-lost horror gaming cult classic P.T. gets much-needed PC port', desk: 'tech' }, { letter: 'C', words: 'Antarctic Sea Ice Grows to Its 2026 Maximum', desk: 'science' }], answer: 'A' };
+// the hardest: three headlines of 71-72 characters, each on its tile's three lines
+const PIC_LONG = { type: 'picture', key: 'hard72', words: 'Bumble agrees to a $1.3B acquisition deal as online dating faces a reset', steps: [8, 16, 32, 64], aired: { programme: 'tech-bytes', at: NOW - 26 * H, source: 'The Wall Street Journal' }, options: [{ letter: 'A', words: 'Fitbit Edge is Google’s middle ground between Fitbit Air and Pixel Watch' }, { letter: 'B', words: 'Smart ring maker Ultrahuman to roll out biological-age model across UAE' }, { letter: 'C', words: 'Bumble agrees to a $1.3B acquisition deal as online dating faces a reset' }], answer: 'C' };
+const PIC_ROCKET = { type: 'picture', key: 'saaf6e65b18', words: 'Mars moon lander set to launch on 19 October', steps: [8, 16, 32, 64], aired: { programme: 'cosmos', at: 1791920000891, source: 'ESA' }, options: [{ letter: 'A', words: 'Prime Video unveils Blade Runner 2099 full trailer' }, { letter: 'B', words: 'Mars moon lander set to launch on 19 October' }, { letter: 'C', words: 'Stinky \'skunk\' plant cleared from river' }], answer: 'B' };
+const WHERE_US = { type: 'where', key: 's971565739d', words: "'Jellyfish' effect lights up US sky", masked: "'Jellyfish' effect lights up ▮▮▮▮▮ sky", desk: 'science', aired: { programme: 'tech-bytes', at: 1791919961993, source: 'BBC Science' }, options: [{ letter: 'A', label: 'UAE', country: 'United Arab Emirates', lat: 23.4, lon: 53.8 }, { letter: 'B', label: 'USA', country: 'United States', lat: 39.8, lon: -98.6 }, { letter: 'C', label: 'JAPAN', country: 'Japan', lat: 36.2, lon: 138.3 }], answer: 'B' };
+const WHERE_F1 = { type: 'where', key: 'sc5e0195fa8', words: "F1 in Singapore: There's new fastest car now", masked: "F1 in ▮▮▮▮▮: There's new fastest car now", desk: 'tech', aired: { programme: 'tech-bytes', at: 1791845049947, source: 'Ars Technica' }, options: [{ letter: 'A', label: 'SINGAPORE', country: 'Singapore', lat: 1.35, lon: 103.8 }, { letter: 'B', label: 'NEW ZEALAND', country: 'New Zealand', lat: -41.3, lon: 174 }, { letter: 'C', label: 'UNITED KINGDOM', country: 'United Kingdom', lat: 54, lon: -2 }], answer: 'A' };
+// a three-line hard case: the full name on the tag, the longest masked headline (71 characters)
+const WHERE_UAE = { type: 'where', key: 's7a20cda744', words: 'Smart ring maker Ultrahuman to roll out biological-age model across UAE', masked: 'Smart ring maker Ultrahuman to roll out biological-age model across ▮▮▮▮▮', desk: 'tech', aired: { programme: 'tech-bytes', at: 1791845049947, source: 'TechCrunch' }, options: [{ letter: 'A', label: 'NETHERLANDS', country: 'Netherlands', lat: 52.2, lon: 5.5 }, { letter: 'B', label: 'UNITED ARAB EMIRATES', country: 'United Arab Emirates', lat: 23.4, lon: 53.8 }, { letter: 'C', label: 'TANZANIA', country: 'Tanzania', lat: -6.4, lon: 34.9 }], answer: 'B' };
+// neighbouring pins in three regions (Egypt, Jordan, Greece: within 15 degrees), a lab headline of the desk's form
+const WHERE_NEAR = { type: 'where', key: 'near', words: 'Ancient harbour found beneath Alexandria shoreline by divers', masked: 'Ancient harbour found beneath ▮▮▮▮▮ shoreline by divers', aired: aired('cosmos', 30, 'Lab'), options: [{ letter: 'A', label: 'JORDAN', lat: 31.2, lon: 36.5 }, { letter: 'B', label: 'GREECE', lat: 39.1, lon: 21.8 }, { letter: 'C', label: 'EGYPT', lat: 26.8, lon: 30.8 }], answer: 'C' };
+const HM_HOMEPOD = { type: 'howmany', words: 'Apple refreshes its HomePod mini', masked: "The new ▮▮▮▮ HomePod mini with Siri AI and a 'SoundGlow' visual feature will be available starting October 30.", sentence: "The new $149 HomePod mini with Siri AI and a 'SoundGlow' visual feature will be available starting October 30.", figure: { value: '$149', label: 'HOMEPOD MINI', qualifier: '', exact: true }, aired: { programme: 'tech-bytes', at: 1791921931674, source: 'TechCrunch' } };
+const HM_BUMBLE = { type: 'howmany', words: 'Bumble agrees to a $1.3B acquisition deal', masked: 'After years of declining subscriber numbers and falling revenue, Bumble just agreed to a ▮▮▮▮▮▮ acquisition.', sentence: 'After years of declining subscriber numbers and falling revenue, Bumble just agreed to a $1.3 billion acquisition.', figure: { value: '$1.3 billion', label: 'ACQUISITION', qualifier: '', exact: true }, aired: { programme: 'tech-bytes', at: 1791919961993, source: 'TechCrunch' } };
+const HM_OWLS = { type: 'howmany', words: 'Owls ringed to measure benefits of wildlife farming', masked: 'A barn owl and ▮▮ chicks are ringed to see if conservation-focused farming is working, according to BBC Science.', sentence: 'A barn owl and 15 chicks are ringed to see if conservation-focused farming is working, according to BBC Science.', figure: { value: '15', label: 'CHICKS', qualifier: '', exact: true }, aired: { programme: 'cosmos', at: 1791922668133, source: 'BBC Science' } };
+// a six-digit figure with a qualifier kept beside the mask (a lab sentence of the form the desk takes)
+const HM_SIX = { type: 'howmany', words: 'Red squirrel project opens community grant', masked: 'The project says up to ▮▮▮▮▮▮ red squirrels could return to the woods within ten years.', sentence: 'The project says up to 250,000 red squirrels could return to the woods within ten years.', figure: { value: '250,000', label: 'RED SQUIRRELS', qualifier: 'UP TO', exact: false }, aired: aired('cosmos', 52, 'BBC Science') };
+const LET_XBOX = { type: 'letters', words: 'Xbox is officially embracing chaos of AI-powered game ports', desk: 'tech', reveal: { shown: [0, 4, 5, 7, 8, 18, 19, 28, 29, 34, 35, 37, 38, 40, 41, 48, 49, 53, 54], order: [3, 46, 11, 31, 56, 21, 50, 12, 52, 57, 25, 36, 51, 15, 24, 47, 14, 27, 2, 44, 22, 33, 1, 42, 32, 45, 58, 9, 6, 16, 13, 10, 30, 39, 17, 20, 55, 26, 23, 43], stages: [10, 20, 30] }, aired: { programme: 'tech-bytes', at: 1791919961993, source: 'The Verge' } };
+const LET_SQUIRREL = { type: 'letters', words: 'Red squirrel project opens £250k community grant', desk: 'science', reveal: { shown: [0, 3, 4, 12, 13, 20, 21, 26, 27, 28, 29, 30, 31, 32, 33, 42, 43], order: [40, 2, 25, 18, 46, 5, 7, 47, 10, 6, 36, 24, 1, 8, 23, 35, 22, 11, 39, 41, 19, 45, 16, 37, 15, 34, 14, 9, 38, 44, 17], stages: [8, 16, 24] }, aired: { programme: 'cosmos', at: 1791922668133, source: 'BBC Science' } };
+const LET_APPLE = { type: 'letters', words: 'Apple’s smart home lineup includes smart lock', desk: 'tech', reveal: { shown: [0, 5, 7, 8, 13, 14, 18, 19, 25, 26, 34, 35, 40, 41], order: [44, 22, 32, 3, 15, 12, 36, 38, 43, 23, 2, 28, 42, 20, 30, 21, 10, 9, 16, 4, 33, 1, 24, 6, 31, 29, 39, 11, 37, 17, 27], stages: [8, 16, 24] }, aired: { programme: 'tech-bytes', at: 1791921931674, source: 'TechCrunch' } };
+// TODAY OR NOT TODAY: real headlines of the archive, with the lab's own airings (the archive has no story from two days back yet)
+const TODAY_ITEMS = [
+  { words: 'Antarctic Sea Ice Grows to Its 2026 Maximum', answer: 'EARLIER', aired: aired('cosmos', 76, 'NASA') },
+  { words: 'Facebook will let you customize your feed algorithm using AI', answer: 'TODAY', aired: aired('tech-bytes', 1.2, 'The Verge') },
+  { words: 'Paris Auto Show is full of interesting cars Americans can’t have', answer: 'EARLIER', aired: aired('money-minute', 100, 'The Verge') },
+];
+
+// ---------------------------------------------------------------- the boards and their timelines
+const field = (ctx) => {
+  const g = ctx.createRadialGradient(192, 82, 10, 192, 82, 300);
+  g.addColorStop(0, P.ink);
+  g.addColorStop(1, P.black);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 384, 216);
+};
+const picBoard = (q, image, players, locks, kicker, extra = {}) => {
+  const cd = { at: 15, dur: 7 * HN };
+  return {
+    len: 26,
+    moments: { open: 0.8, reading: 8, countdown: 15.6, locks: 18.6, step4: 20.5, reveal: 23.4, settled: 25.5 },
+    draw: (ctx, t) => Q.drawQuestionBoard(ctx, t, { question: q, image, players, kicker, optionsAt: 1, countdown: cd, locks: locks.map(([seat, answer, at]) => ({ seat, answer, at })), revealAt: 23, now: NOW, ...extra }),
+  };
+};
+const letBoard = (q, players, buzzes, winner, kicker, extra = {}) => ({
+  len: 16,
+  moments: { open: 0.8, reading: 2.5, countdown: 5, locks: 8.2, step4: 10.5, reveal: 13.4, settled: 15.5 },
+  draw: (ctx, t) => Q.drawLettersBoard(ctx, t, { question: q, players, kicker, stageTimes: [3, 3 + 3 * HN, 3 + 6 * HN], countdown: { at: 3, dur: 9 * HN }, buzzes, winner, revealAt: 13, now: NOW, ...extra }),
+});
+const whereBoard = (q, players, locks, kicker) => {
+  const o = { question: q, players, kicker, pinsAt: 2.2, countdown: { at: 5, dur: 6 * HN }, locks: locks.map(([seat, answer, at]) => ({ seat, answer, at })), revealAt: 13, now: NOW };
+  return { len: 17, moments: { open: 0.6, reading: 2.5, countdown: 6, locks: 9.2, step4: 11.5, reveal: 13.3, settled: 16.5 }, draw: (ctx, t) => Q.drawWhereBoard(ctx, t, o) };
+};
+const hmBoard = (q, players, guesses, kicker) => ({
+  len: 14,
+  moments: { open: 0.8, reading: 2.5, countdown: 6.5, locks: 8, step4: 9.5, reveal: 11.4, settled: 13.5 },
+  draw: (ctx, t) => Q.drawHowManyBoard(ctx, t, { question: q, players, kicker, countdown: { at: 6, dur: 4 * HN }, guesses: guesses.map(([seat, said, at, points]) => ({ seat, said, at, points })), revealAt: 11, now: NOW }),
+});
+const todayBoard = (item, index, players, locks, tally) => ({
+  len: 8,
+  moments: { open: 0.8, reading: 2, countdown: 3.6, locks: 5, step4: 5.5, reveal: 6.2, settled: 7.8 },
+  draw: (ctx, t) => Q.drawTodayBoard(ctx, t, { item, index, total: 6, players, countdown: { at: 3.2, dur: 3 * HN }, locks: locks.map(([seat, answer, at]) => ({ seat, answer, at })), tally, revealAt: 6, now: NOW }),
+});
+const still = (draw, len = 3) => ({ len, moments: { open: 0.5, reading: 1.2, countdown: len, locks: len, step4: len, reveal: len, settled: len }, draw });
+
+const BOARDS = [
+  ['picture', 'PICTURE THIS · real (13 Oct): Lola at step 2, Sam at step 3 on another tile', picBoard(PIC_APPLE, PICS.device, [LOLA, SAM], [['A', 'A', 16.2], ['B', 'B', 18.1]], Q.kickerOf({ type: 'picture', k: 1, n: 3 }))],
+  ['picture72', 'PICTURE THIS · the hardest: three 71-72 character headlines on three-line tiles, both shapes on one tile, a long source', picBoard(PIC_LONG, PICS.phone, [PENNY, UNIT8], [['A', 'C', 16.4], ['B', 'C', 17.2]], Q.kickerOf({ type: 'picture', k: 3, n: 3 }))],
+  ['picturedon', 'PICTURE THIS as DOUBLE OR NOTHING · real (13 Oct): both wrong on one tile', picBoard(PIC_ROCKET, PICS.rocket, [PENNY, UNIT8], [['A', 'A', 19.5], ['B', 'A', 20.1]], Q.kickerOf({ double: 'science' }), { double: 'A' })],
+  ['letters', 'LETTER BY LETTER · real (13 Oct), 59 characters: Sam stalls at stage 2, Lola names it at stage 3', letBoard(LET_XBOX, [LOLA, SAM], [{ seat: 'B', at: 7, stall: true }, { seat: 'A', at: 10.6 }], 'A', Q.kickerOf({ type: 'letters', k: 2, n: 3, desk: 'tech' }))],
+  ['letters2', 'LETTER BY LETTER · real (13 Oct): a currency figure among the tiles; nobody names it', letBoard(LET_SQUIRREL, [PENNY, UNIT8], [], null, Q.kickerOf({ type: 'letters', k: 3, n: 3, desk: 'science' }))],
+  ['sudden', 'SUDDEN DEATH (the tie-break) · real (13 Oct)', letBoard(LET_APPLE, [LOLA, SAM], [{ seat: 'A', at: 6.5 }], 'A', Q.kickerOf({ sudden: true }))],
+  ['where', 'WHERE IN THE WORLD? · real (13 Oct): the place masked; both lock in on the same pin', whereBoard(WHERE_US, [LOLA, SAM], [['A', 'B', 8.1], ['B', 'B', 9.0]], Q.kickerOf({ type: 'where', k: 1, n: 3 }))],
+  ['where2', 'WHERE IN THE WORLD? · real (13 Oct): one right, one wrong, pins half a world apart', whereBoard(WHERE_F1, [LOLA, SAM], [['A', 'A', 8.1], ['B', 'B', 9.0]], Q.kickerOf({ type: 'where', k: 2, n: 3 }))],
+  ['whereuae', 'WHERE IN THE WORLD? · the hardest: "UNITED ARAB EMIRATES" on its tag, the longest masked headline', whereBoard(WHERE_UAE, [PENNY, UNIT8], [['A', 'B', 8.1], ['B', 'C', 9.0]], Q.kickerOf({ type: 'where', k: 3, n: 3 }))],
+  ['wherenear', 'WHERE IN THE WORLD? · the hardest: three neighbouring pins (Egypt, Jordan, Greece) and both players on one', whereBoard(WHERE_NEAR, [LOLA, SAM], [['A', 'A', 8.1], ['B', 'A', 9.0]], Q.kickerOf({ type: 'where', k: 2, n: 3 }))],
+  ['howmany', 'HOW MANY? · real (13 Oct): a price, Sam closer', hmBoard(HM_HOMEPOD, [LOLA, SAM], [['A', '$200', 7, 0], ['B', '$120', 8.5, 2]], Q.kickerOf({ type: 'howmany', k: 1, n: 3 }))],
+  ['howmany2', 'HOW MANY? · real (13 Oct): billions, a six-block mask', hmBoard(HM_BUMBLE, [PENNY, UNIT8], [['A', '$1.2 billion', 7, 2], ['B', '$900 million', 8.5, 0]], Q.kickerOf({ type: 'howmany', k: 3, n: 3 }))],
+  ['howmany3', 'HOW MANY? · a six-digit figure with its qualifier kept (UP TO), exactly right', hmBoard(HM_SIX, [LOLA, SAM], [['A', '200,000', 7, 0], ['B', '250,000', 8.5, 3]], Q.kickerOf({ type: 'howmany', k: 2, n: 3 }))],
+  ['howmanyowl', 'HOW MANY? · real (13 Oct): exactly right on 15 chicks', hmBoard(HM_OWLS, [LOLA, SAM], [['A', '12', 7, 0], ['B', '15', 8.5, 3]], Q.kickerOf({ type: 'howmany', k: 2, n: 3 }))],
+  ['today', 'TODAY OR NOT TODAY? · headline 4 of 6: the two differ', todayBoard(TODAY_ITEMS[0], 3, [LOLA, SAM], [['A', 'EARLIER', 4.2], ['B', 'TODAY', 4.8]], { A: [true, true, false], B: [true, false, true] })],
+  ['today2', 'TODAY OR NOT TODAY? · headline 2 of 6: both say TODAY', todayBoard(TODAY_ITEMS[1], 1, [PENNY, UNIT8], [['A', 'TODAY', 4.0], ['B', 'TODAY', 4.6]], { A: [false], B: [true] })],
+  ['today3', 'TODAY OR NOT TODAY? · headline 6 of 6: the longest headline, both wrong', todayBoard(TODAY_ITEMS[2], 5, [LOLA, SAM], [['A', 'TODAY', 4.0], ['B', 'TODAY', 4.6]], { A: [true, true, false, true, false], B: [true, false, true, true, true] })],
+  ['scores', 'THE SCORES · half time', still((ctx, t) => Q.drawScoresStrip(ctx, t, { players: [LOLA, SAM], scores: { A: 12, B: 8 }, title: 'HALF TIME' }))],
+  ['scorestie', 'THE SCORES · a tie (sudden death follows)', still((ctx, t) => Q.drawScoresStrip(ctx, t, { players: [PENNY, UNIT8], scores: { A: 15, B: 15 }, title: 'LEVEL: SUDDEN DEATH' }))],
+  ['result', 'FINAL SCORE · the winner lit', still((ctx, t) => Q.drawScoresStrip(ctx, t, { players: [LOLA, SAM], scores: { A: 17, B: 13 }, title: 'FINAL SCORE', winner: 'A' }))],
+  ['strip', 'THE SCORES · the one-line strip over the studio', still((ctx, t) => Q.drawScoresStrip(ctx, t, { players: [PENNY, UNIT8], scores: { A: 9, B: 11 }, compact: true }))],
+  ['don', 'DOUBLE OR NOTHING · Sam picks between two desks (the pick at 2 s)', still((ctx, t) => Q.drawDoubleCard(ctx, t, { players: [LOLA, SAM], player: 'B', leader: 'A', offered: ['science', 'tech'], pick: 'tech', pickAt: 2 }), 3)],
+  ['donone', 'DOUBLE OR NOTHING · one desk on offer', still((ctx, t) => Q.drawDoubleCard(ctx, t, { players: [PENNY, UNIT8], player: 'A', leader: 'B', offered: ['business'], pick: 'business', pickAt: 0.6 }))],
+  ['table', "THE WEEK'S TABLE · half wins after a drawn game, tonight's players' shapes", still((ctx, t) => Q.drawTableBoard(ctx, t, { players: [LOLA, SAM], standings: [{ id: 'penny', name: 'PENNY', played: 4, wins: 3 }, { id: 'lola', name: 'LOLA', played: 3, wins: 2.5 }, { id: 'nova', name: 'NOVA', played: 3, wins: 1.5 }, { id: 'unit8', name: 'UNIT-8', played: 2, wins: 1 }, { id: 'paco', name: 'PACO', played: 3, wins: 1 }, { id: 'sam', name: 'SAM', played: 3, wins: 0.5 }, { id: 'max', name: 'MAX', played: 1, wins: 0 }, { id: 'ada', name: 'ADA', played: 1, wins: 0 }] }), 3)],
+  ['round', 'ROUND TWO · PICTURE THIS', still((ctx, t) => Q.drawRoundCard(ctx, t, { type: 'picture', k: 2 }))],
+  ['roundhm', 'ROUND THREE · HOW MANY?', still((ctx, t) => Q.drawRoundCard(ctx, t, { type: 'howmany', k: 3 }))],
+  ['roundsd', 'TIE-BREAK · SUDDEN DEATH', still((ctx, t) => Q.drawRoundCard(ctx, t, { sudden: true }))],
+].filter(([id]) => !only || only.split(',').includes(id));
+
+const CAPTIONS = {
+  picture: 'Is it A, Apple launches Apple TV 4K? B, the PC port? Or C, the sea ice?',
+  where: "Where in the world? 'Jellyfish' effect lights up blank sky.",
+  letters: 'Xbox is officially embracing chaos of AI-powered game ports.',
+  howmany: 'The answer: $149 HomePod mini, as reported on TECH BYTES this evening.',
+  today: 'Earlier: Saturday\'s COSMOS DESK. Lola has it.',
+};
+const canvases = new Map();
+function render(id, t) {
+  const b = BOARDS.find((x) => x[0] === id);
+  if (!b) return null;
+  const cv = canvases.get(id);
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  field(ctx);
+  b[2].draw(ctx, t);
+  if (overlay) {
+    drawTopRow(ctx, 10, { onAt: 0, replay: false, program: { title: 'PAY ATTENTION', color: P.purple }, programIn: 0, programOut: null, clock: '20:20' });
+    const cs = new CaptionState();
+    const text = CAPTIONS[Object.keys(CAPTIONS).find((k) => id.startsWith(k))] || 'That is PAY ATTENTION. Thank you for playing along at home tonight.';
+    cs.update(0, text, 0);
+    cs.update(5, text, 0);
+    drawCaptions(ctx, 5, cs, { bottom: CAPTION.bottomFree });
+  }
+  return cv;
+}
+const timeOf = (b) => (tOverride !== null ? tOverride : b[2].moments[moment] ?? b[2].len);
+function drawAll() {
+  for (const b of BOARDS) render(b[0], timeOf(b));
+}
+function build() {
+  const grid = document.getElementById('grid');
+  grid.textContent = '';
+  canvases.clear();
+  for (const [id, name, def] of BOARDS) {
+    const fig = document.createElement('figure');
+    const cv = document.createElement('canvas');
+    cv.id = `cv-${id}`;
+    cv.width = 384;
+    cv.height = 216;
+    cv.style.width = `${384 * scale}px`;
+    cv.style.height = `${216 * scale}px`;
+    const cap = document.createElement('figcaption');
+    cap.textContent = `${id} · ${name} · its clock: ${def.len} s`;
+    fig.append(cv, cap);
+    grid.append(fig);
+    canvases.set(id, cv);
+  }
+  drawAll();
+}
+// the controls: scale, overlay, a moment or a time, play
+const bar = document.getElementById('bar');
+const btn = (label, on, fn) => { const b = document.createElement('button'); b.textContent = label; if (on) b.classList.add('on'); b.onclick = fn; bar.append(b); return b; };
+for (const s of [1, 2, 4]) btn(`${s}x`, s === scale, () => { scale = s; [...bar.children].forEach((c) => c.textContent.endsWith('x') && c.classList.toggle('on', c.textContent === `${s}x`)); build(); });
+const ov = btn('overlay: top row + caption', overlay, () => { overlay = !overlay; ov.classList.toggle('on', overlay); drawAll(); });
+const sel = document.createElement('select');
+for (const m of ['open', 'reading', 'countdown', 'locks', 'step4', 'reveal', 'settled']) { const o = document.createElement('option'); o.value = m; o.textContent = `moment: ${m}`; if (m === moment) o.selected = true; sel.append(o); }
+sel.onchange = () => { moment = sel.value; tOverride = null; drawAll(); };
+bar.append(sel);
+const range = document.createElement('input');
+range.type = 'range'; range.min = 0; range.max = 26; range.step = 0.05; range.value = tOverride ?? 0;
+range.oninput = () => { tOverride = Number(range.value); drawAll(); };
+bar.append(range);
+let playing = null;
+btn('play', false, (e) => {
+  if (playing) { cancelAnimationFrame(playing); playing = null; e.target.classList.remove('on'); return; }
+  e.target.classList.add('on');
+  const t0 = performance.now();
+  const loop = () => { const s = (performance.now() - t0) / 1000; for (const b of BOARDS) render(b[0], s % (b[2].len + 1.5)); playing = requestAnimationFrame(loop); };
+  loop();
+});
+build();
+// the fit check: what the desk would refuse (a headline is never cut or shrunk)
+const fits = [
+  ['tile', 'Bumble agrees to a $1.3B acquisition deal as online dating faces a reset'],
+  ['tile', 'Fitbit Edge is Google’s middle ground between Fitbit Air and Pixel Watch'],
+  ['tile', 'Smart ring maker Ultrahuman to roll out biological-age model across UAE'],
+  ['tile', 'International Space Station crew completes record-breaking spacewalk today'],
+  ['tile', 'Supercalifragilisticexpialidocious telecommunications conglomerate merges'],
+  ['letters', 'Xbox is officially embracing chaos of AI-powered game ports'],
+  ['today', 'Paris Auto Show is full of interesting cars Americans can’t have'],
+].map(([k, w]) => {
+  const ok = k === 'tile' ? Q.fitsTile(w) : k === 'letters' ? Q.fitsLetters(w) : Q.fitsToday(w);
+  const L = k === 'tile' ? Q.tileLayout(w) : null;
+  return `${ok ? 'fits   ' : 'REFUSED'} ${k.padEnd(8)} ${String(w.length).padStart(3)} ch  ${L ? `${L.lines.length} lines, widest ${L.w} of ${Q.TILE_TEXT_W} px  ` : ''}${w}`;
+});
+document.getElementById('fits').textContent = `The desk's fit check (quizFits / fitsTile): a tile holds ${Q.TILE.lines} lines of ${Q.TILE_TEXT_W} px at 1x.\n${fits.join('\n')}`;
+window.__lab = { ids: BOARDS.map((b) => b[0]), render, timeline: (id) => BOARDS.find((b) => b[0] === id)?.[2], setOverlay: (v) => { overlay = !!v; }, setScale: (s) => { scale = s; build(); } };
+</script>
+</body>
+</html>

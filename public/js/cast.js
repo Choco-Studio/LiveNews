@@ -44,4 +44,5 @@ export const THEME_ACCENT = {
   weather: P.blue,
   week: P.pink, // SEVEN DAYS: coral, the flagship's red softened for the weekend
   sport: P.orange, // FULL TIME (full-time.md §6): orange, dark type on it
+  quiz: P.purple, // PAY ATTENTION (pay-attention.md §6): purple fills only, white type on them, a 1 px fog rim on the dark set
 };

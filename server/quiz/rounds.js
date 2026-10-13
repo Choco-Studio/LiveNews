@@ -3,6 +3,9 @@
 // question of the edition uses, so no option shows a headline the edition asks about later. Every option is a real
 // headline or a real place from an eligible event; nothing here writes a word.
 import { DAY_WORDS, shareName } from './desk.js';
+// the boards' own measure (public/js/scenes/quiz-fit.js, pay-attention.md §6): a text that would not fit its box on
+// screen is never asked nor offered, since the boards never cut or shrink a headline
+import { fitsTile, fitsLetters, fitsWhere, fitsSentence, fitsToday } from '../../public/js/scenes/quiz-fit.js';
 
 export const ROUND_TITLES = Object.freeze({
   picture: 'PICTURE THIS',
@@ -91,8 +94,8 @@ export function letterReveal(words, rnd) {
   return { shown, order, stages: [Math.min(Math.ceil(n * 0.25), second), second, Math.max(second, Math.ceil(n * 0.75))] };
 }
 
-const lettersOk = (ev) => ev.words.length <= LETTERS_MAX && ev.words.split(/\s+/).length >= 3 && ev.words.split(/\s+/).length <= 10 && (ev.words.match(/\p{L}/gu) || []).length >= 12;
-const todayOk = (ev) => !DAY_WORDS.test(ev.words);
+const lettersOk = (ev) => ev.words.length <= LETTERS_MAX && ev.words.split(/\s+/).length >= 3 && ev.words.split(/\s+/).length <= 10 && (ev.words.match(/\p{L}/gu) || []).length >= 12 && fitsLetters(ev.words);
+const todayOk = (ev) => !DAY_WORDS.test(ev.words) && fitsToday(ev.words);
 
 /**
  * The stories a round asks about (not yet its options): `pool` is the pairing's eligible events not yet asked, in
@@ -112,12 +115,12 @@ export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore
   };
   switch (type) {
     case 'picture':
-      return take(fit.filter((ev) => ev.image), n);
+      return take(fit.filter((ev) => ev.image && fitsTile(ev.words)), n);
     case 'letters':
       return take(fit.filter(lettersOk), n);
     case 'where': {
       const out = [];
-      for (const ev of fit.filter((e) => e.place)) {
+      for (const ev of fit.filter((e) => e.place && fitsWhere({ words: e.words, masked: e.place.masked }))) {
         if (out.length >= n) break;
         if (out.some((o) => o.place.country === ev.place.country || shareName(o, ev))) continue;
         out.push(ev);
@@ -125,7 +128,7 @@ export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore
       return out.length >= n ? out : null;
     }
     case 'howmany':
-      return take(fit.filter((ev) => ev.figure), n);
+      return take(fit.filter((ev) => ev.figure && fitsSentence(ev.figure)), n);
     case 'today': {
       const half = Math.ceil(n / 2);
       const todays = take(fit.filter((ev) => todayOk(ev) && ev.first >= todayStart && ev.first <= now), half);
@@ -150,7 +153,7 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
         const picks = [];
         for (const o of shuffle(options.filter((x) => !taken.has(x.key)), rnd)) {
           if (picks.length >= 2) break;
-          if (shareName(o, ev) || picks.some((p) => shareName(p, o))) continue;
+          if (shareName(o, ev) || picks.some((p) => shareName(p, o)) || !fitsTile(o.words)) continue;
           if ([ev, ...picks, o].filter((x) => x.category === o.category).length > 2) continue;
           picks.push(o);
         }

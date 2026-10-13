@@ -159,7 +159,8 @@ function layoutCache(limit = 120) {
 
 /** Programme accents (THEME_ACCENT values); anything else falls back to brand red. */
 const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow, P.pink, P.orange]);
-const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink, 'full-time': P.orange };
+// (PAY ATTENTION's purple is for fills only, in a fog rim, on its own boards: scenes/cards-quiz.js, pay-attention.md §6)
+const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink, 'full-time': P.orange, 'pay-attention': P.purple };
 const accentFor = (programId, accent) => (ACCENTS.has(accent) ? accent : (typeof programId === 'string' && Object.hasOwn(PROGRAM_ACCENT, programId) && PROGRAM_ACCENT[programId]) || P.red);
 
 // ---------------------------------------------------------------------------
