@@ -265,6 +265,9 @@ const THEMES = {
   space: { id: 'space', ring: [P.purple, P.purple], led: [P.ink, P.purple, P.magenta], text: P.pink, tint: P.purple, glow: P.purple, idle: 'planet', screen: [P.black, P.black, P.ink], dark: true },
   money: { id: 'money', ring: [P.darkGreen, P.green], led: [P.darkGreen, P.green, P.yellow], text: P.green, tint: P.cream, glow: P.green, idle: 'chart', screen: [P.ink, P.black, P.black], solo: true },
   flash: { id: 'flash', ring: [P.yellow, P.yellow], led: [P.orange, P.yellow, P.white], text: P.yellow, tint: P.cream, glow: P.yellow, idle: 'countdown', screen: [P.black, P.black, P.ink], solo: true },
+  // FULL TIME (full-time.md §6; the v2 renderer draws its pitchside platform): on the old renderer the network studio in
+  // the programme's orange, the floodlights' warm white on the set, the home globe on the wall
+  sport: { id: 'sport', ring: [P.rust, P.orange], led: [P.rust, P.orange, P.yellow], text: P.orange, tint: P.cream, glow: P.orange, idle: 'globe', screen: [P.ink, P.black, P.black] },
 };
 const themeOf = (scene) => THEMES[scene?.program?.theme] || THEMES.world;
 
@@ -954,7 +957,7 @@ function wallRundown(c, scene, t, th, solo) {
   const ox = slide + out;
   fill(c, 5 + ox, 20, 10, 10, th.led[1]);
   fill(c, 5 + ox, 29, 10, 1, th.led[0]);
-  drawText(c, String(idx + 1), 10 + ox, 22, { color: th.led[1] === P.yellow || th.led[1] === P.green ? P.black : P.white, align: 'center' });
+  drawText(c, String(idx + 1), 10 + ox, 22, { color: th.led[1] === P.yellow || th.led[1] === P.green || th.led[1] === P.orange ? P.black : P.white, align: 'center' });
   let lines = wrapText(items[idx]?.headline || '', w - 24);
   if (lines.length > 3) {
     lines = lines.slice(0, 3);

@@ -61,7 +61,7 @@ export function lstarOf(c) {
 }
 
 /** The colours the bibles call saturated (money-minute.md §5 item 12; news-60.md item 8). */
-export const SATURATED = new Set(['red', 'darkRed', 'rust', 'orange', 'yellow', 'green', 'darkGreen', 'cyan', 'blue', 'navy', 'pink', 'magenta', 'purple']);
+export const SATURATED = new Set(['red', 'darkRed', 'rust', 'orange', 'yellow', 'green', 'midGreen', 'darkGreen', 'cyan', 'blue', 'navy', 'pink', 'magenta', 'purple']);
 export const NEUTRAL = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'silver', 'white']);
 export const SKIN = new Set(['skin', 'skinShade', 'tan', 'tanShade']);
 
@@ -75,6 +75,7 @@ export const DARKER = {
   skin: 'skinShade', skinShade: 'brown', yellow: 'orange', orange: 'rust', rust: 'brown',
   red: 'darkRed', darkRed: 'maroon', pink: 'darkRed', magenta: 'purple', purple: 'ink',
   green: 'darkGreen', darkGreen: 'ink', cyan: 'blue', blue: 'navy', navy: 'ink',
+  midGreen: 'darkGreen', deepGreen: 'black', // (the set's two greens: never on a wall, their steps for completeness)
 };
 export const darker32 = (c, steps = 1) => {
   let n = nameOf(c);

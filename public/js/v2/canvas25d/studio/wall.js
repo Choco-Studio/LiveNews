@@ -47,7 +47,7 @@ const WIPE = 0.3;
 const MODES = new Set(['idle', 'picture', 'map', 'figure', 'plate', 'rest']);
 // the idles that are words (MONEY MINUTE's wordmark, NEWS IN 60's dial and its "60", SEVEN DAYS's lettered tiles):
 // at rest (the two-way's studio box) their wall shows its field only, as a cropped word reads as a broken graphic
-const WORDY_IDLE = new Set(['wordmark', 'dial', 'week']);
+const WORDY_IDLE = new Set(['wordmark', 'dial', 'week', 'fulltime']);
 const DEG = Math.PI / 180;
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
@@ -2225,6 +2225,29 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       IDLE.bot = ny + name.cap * u;
       break;
     }
+    case 'fulltime': {
+      // FULL TIME: the stopwatch at full time (its hand at the top, the orange crown) beside the programme's name in fog
+      // over a 16 px orange rule (as MONEY MINUTE's wordmark), the block whole in the free box that holds it
+      const text = 'FULL TIME';
+      const need = (u) => [(WATCH[0].length + 5) * u + textWidth(text, 'body', u), WATCH.length * u];
+      const ws = ts > 1 && !fitsSomewhere(L, need(ts)[0] + 4, need(ts)[1] + 6 + reserve) ? 1 : ts;
+      const [nw, nh] = need(ws);
+      box = pickBox(L, nw + 4, nh + 6 + reserve, false);
+      const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
+      const cx = Math.round((f.x0 + f.x1) / 2);
+      const top = Math.round(f.y0 + Math.max(3 * ws, (fh - nh) * 0.45));
+      const x0 = cx - Math.round(nw / 2);
+      drawWatch(b, x0, top, ws);
+      const th = capHeight('body', ws);
+      const tx = x0 + (WATCH[0].length + 5) * ws, ty = top + 2 * ws + Math.round((nh - 2 * ws - th - 5 * ws) / 2);
+      stampText(b.px, b.w, b.h, text, tx, ty, C.fog, 'body', ws);
+      rect(b, tx, ty + th + 3 * ws, tx + 16 * ws, ty + th + 5 * ws, C.orange);
+      IDLE.cx = cx;
+      IDLE.cy = top + Math.round(nh / 2);
+      IDLE.hw = Math.ceil(nw / 2);
+      IDLE.bot = top + nh;
+      break;
+    }
     case 'dial': {
       // the free box that holds the largest dial (the wide: the third beside Sam's head, r 14, not
       // the short band above it)
@@ -2295,6 +2318,36 @@ function drawIdle(b, L, spec, style, env, caption = '') {
   return sig;
 }
 
+// FULL TIME's stopwatch (wall px at scale 1): the orange crown on its stem, a fog ring, a black face with the quarter
+// ticks (steel), the silver hand at the top (full time) on an orange hub
+//   o orange, t steel, f fog, k black, s silver
+const WATCH = [
+  '.....ooo.....',
+  '......t......',
+  '....fffff....',
+  '..ffkkkkkff..',
+  '.fkkkkskkkkf.',
+  '.fkkkkskkkkf.',
+  'fkkkkkskkkkkf',
+  'fkkkkkskkkkkf',
+  'ftkkkkokkkktf',
+  'fkkkkkkkkkkkf',
+  'fkkkkkkkkkkkf',
+  '.fkkkkkkkkkf.',
+  '.fkkkktkkkkf.',
+  '..ffkkkkkff..',
+  '....fffff....',
+];
+const WATCH_C = { o: C.orange, t: C.steel, f: C.fog, k: C.black, s: C.silver };
+function drawWatch(b, x, y, u) {
+  for (let j = 0; j < WATCH.length; j++) {
+    for (let i = 0; i < WATCH[j].length; i++) {
+      const ch = WATCH[j][i];
+      if (ch !== '.') rect(b, x + i * u, y + j * u, x + (i + 1) * u, y + (j + 1) * u, WATCH_C[ch]);
+    }
+  }
+}
+
 // SEVEN DAYS's week of tiles (wall px at scale 1): a tile, its coloured cap, the gap between two tiles, the
 // letter's font ('body' initials on the big tiles, 'micro' on the small ones)
 const WEEK_TILE = {
@@ -2342,7 +2395,7 @@ function clockOf(spec, style, env) {
     // and the background cache only invalidates when a pixel actually changed (the signature)
     return Math.round(env.t * (env.lod >= 1 ? 30 : 60));
   }
-  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week'].includes(style.wallIdle)) {
+  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week', 'fulltime'].includes(style.wallIdle)) {
     if (env.lod >= 2) return 0;
     const R = Math.max(6, Math.round(23 * env.cs));
     // a dot moves ~1.2 px/s at the centre: step every quarter pixel of rotation (half rate at lod 1)
@@ -2693,8 +2746,17 @@ const STORY_WALL = {
   cosmos: ['picture', 'plate'], // "without a picture, the kicker plate"; no diagrams
   'money-minute': ['picture', 'plate'], // the WIDE; the MCU-R carries the figure panel (below)
   'news-60': ['picture', 'plate'],
+  // the side screen shows "pictures and the idle FULL TIME emblem" (full-time.md §6): no map, no plate, and no figure
+  // (a story's numbers are often ages, "22-YEAR-OLD"), except THE NUMBER's own figure (fullTimeWall below)
+  'full-time': ['picture'],
   default: ['picture', 'map', 'figure', 'plate'],
 };
+/** FULL TIME's side screen: a picture, THE NUMBER's figure on its own segment, else the emblem (never a map or plate). */
+function fullTimeWall(out, seg) {
+  const m = out.mode;
+  if (m === 'picture' || m === 'idle' || m === 'rest' || (m === 'figure' && seg?.feature === 'number')) return out;
+  return { mode: 'idle' };
+}
 // the writer's feature kickers (server/writer.js FEATURE_KICKERS): segue labels, never wall content
 const FEATURE_LABELS = new Set(['NUMBER OF THE DAY', 'AND FINALLY', 'AROUND THE WORLD', 'QUICK BYTES', 'IN BRIEF']);
 const KICKER_CATS = { general: '', world: 'WORLD', tech: 'TECHNOLOGY', science: 'SCIENCE', business: 'BUSINESS', culture: 'CULTURE', sport: 'SPORT', health: 'HEALTH' };
@@ -2761,7 +2823,7 @@ export function wallFromScene(scene, styleIn) {
     const loc = seg?.location;
     const fig = figureOf(seg?.numbers?.[0]) || seg?.fact || null;
     const carded = (shots || []).some((s) => s.shot === 'fact');
-    const numberOfDay = /NUMBER OF THE DAY/i.test(label0);
+    const numberOfDay = /NUMBER OF THE DAY/i.test(label0) || (style.id === 'full-time' && seg?.feature === 'number');
     if (style.id === 'money-minute' && framing === 'mcu-r') {
       out = fig && !carded ? { mode: 'figure', figure: fig } : plate;
     } else {
@@ -2778,6 +2840,7 @@ export function wallFromScene(scene, styleIn) {
     }
     out.story = true;
   }
+  if (style.id === 'full-time') out = fullTimeWall(out, seg);
   // every field, every time: INTEGRATION keeps one wall object and Object.assign()s this into it per
   // cut, so a field left out would carry the previous story's kicker, image or place into this one
   out.image = out.mode === 'picture' ? out.image || null : null;

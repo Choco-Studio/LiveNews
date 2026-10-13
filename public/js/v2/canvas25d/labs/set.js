@@ -4,13 +4,14 @@
 //
 //   render(t)                 draw the instant t into scene.frame; returns { cam, heads }
 //   set({ programme, framing, wall, presenters, cache, phase, image, place, lat, lon,
-//         figure, label, sub, since, move, lod, wipe })   (wipe/noCut: the change wipes, no cut)
+//         figure, label, sub, since, move, lod, wipe, hour })   (wipe/noCut: the change wipes, no cut;
+//         hour: the studio clock's fixed hour, 0-24, for the sets that follow it: WORLD NOW, FULL TIME)
 //   profile(n)                ms per frame: bg uncached worst case (moving camera, animating
 //                             wall), bg cached, desk, actors — per the current programme/framing
 //   FRAMINGS, WALLS, CASTS    the lab's vocabularies
 //   setImage(name, img)       register a picture (a canvas / ImageData / { width, height, data })
 import { C, Frame } from '../pixbuf.js';
-import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, bgStats } from '../studio/set.js';
+import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, bgStats, setSkyHour } from '../studio/set.js';
 import { styleFor, STYLE_IDS } from '../studio/styles.js';
 import { resetWall } from '../studio/wall.js';
 import { SET, kAt, sxOf, syOf } from '../studio/geometry.js';
@@ -49,10 +50,15 @@ export const CASTS = {
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
   'seven-days': { A: 'paco', B: 'lola' },
+  // FULL TIME's Kai and Rosa, their own looks (cast/full-time.js: the candidate on air, public/js/full-time-looks.js)
+  'full-time': { A: 'kai', B: 'rosa' },
   generic: { A: 'paco', B: 'lola' },
 };
 export const PROGRAMMES = [...STYLE_IDS, 'generic'];
 export const FRAMINGS = ['wide', 'two', 'single-a', 'single-b', 'solo', 'mcu-l', 'mcu-r', 'ots'];
+/** A duo's singles on presenter B (the director's mcu-r and over-the-shoulder on B; kept out of FRAMINGS, which the
+ *  older checks walk for every programme). */
+export const B_FRAMINGS = ['mcu-b', 'ots-b'];
 export const WALLS = ['idle', 'picture', 'map', 'figure', 'plate'];
 
 export const LAB = {
@@ -119,6 +125,10 @@ export function cameraFor(name, prog = LAB.programme) {
       case 'mcu-r':
       case 'ots':
         return camFraming(name, o);
+      case 'mcu-b':
+        return camFraming('mcu-r', { ...o, focus: solo ? 'A' : 'B' });
+      case 'ots-b':
+        return camFraming('ots', { ...o, focus: solo ? 'A' : 'B', side: solo ? -1 : undefined });
       default:
         return camFraming('wide', o);
     }
@@ -161,9 +171,9 @@ function camAtTime(t) {
   // a move is a dolly from the framing: reuse CAMERA's cameraAt on the equivalent spec
   if (!CAM) return base;
   try {
-    SPEC.framing = L.framing === 'single-a' || L.framing === 'single-b' ? (cast.B ? 'single' : 'mcu') : L.framing === 'solo' ? (cast.B ? 'mcu-l' : 'solo-mcu') : L.framing;
+    SPEC.framing = L.framing === 'single-a' || L.framing === 'single-b' ? (cast.B ? 'single' : 'mcu') : L.framing === 'solo' ? (cast.B ? 'mcu-l' : 'solo-mcu') : L.framing === 'mcu-b' ? 'mcu-r' : L.framing === 'ots-b' ? 'ots' : L.framing;
     SPEC.cast = cast;
-    SPEC.focus = L.framing === 'single-b' ? 'B' : 'A';
+    SPEC.focus = L.framing === 'single-b' || ((L.framing === 'mcu-b' || L.framing === 'ots-b') && cast.B) ? 'B' : 'A';
     SPEC.solo = !cast.B;
     SPEC.programId = prog;
     SPEC.move = L.move;
@@ -196,6 +206,7 @@ export function set(o = {}) {
   const before = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   Object.assign(LAB, o);
   if ('cache' in o) setCacheEnabled(o.cache);
+  if (Number.isFinite(o.hour)) setSkyHour(o.hour);
   const after = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   // a lab change is a cut: the wall shows the new state at once
   // (noCut: true, or wipe: true, changes the wall in the same shot, as a director update without a

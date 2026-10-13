@@ -33,11 +33,12 @@ import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
 import { updateWall, drawWallContent, wallFromScene as wallOfScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
-import { drawDressing, DESK_FRONTS, DRESSING, FLATS, RUNDOWN, rundownRows } from './dressing.js';
+import { drawDressing, DESK_FRONTS, DRESSING, FLATS, FLOORS, RUNDOWN, rundownRows } from './dressing.js';
 import { drawLive, liveReset, setLive, LED_ROWS } from './live.js';
 import { RAMPS, litBy } from './light.js';
 import { drawSconce } from './sconce.js';
 import { skyPhase, framePhase, setSkyClock, setSkyHour } from './city.js';
+import { groundKey } from './pitch.js';
 import { skyWarmTasks } from './space.js';
 import { warmExpertStudio, EXPERT_STUDIOS } from './experts.js';
 import { drawPressRoom } from './press.js';
@@ -698,9 +699,10 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const wall = updateWall(opts.wall, style, r.x1 - r.x0, r.y1 - r.y0, r.k, t, cam, opts, lod);
   if (pOn) p0 = lap(PROF, 'wall', p0);
   // the hour's phase, picked once per frame: WORLD NOW's city changes with it; SEVEN DAYS holds its own (style.sky:
-  // the golden hour); other sets ignore it
-  const phase = style.id === 'world-now' ? skyPhase() : style.sky ?? 0;
-  framePhase(phase);
+  // the golden hour); FULL TIME's ground follows it too, with its floodlight banks (pitch.js: phase * 8 + banks lit);
+  // other sets ignore it
+  const phase = style.id === 'world-now' ? skyPhase() : style.id === 'full-time' ? groundKey() : style.sky ?? 0;
+  framePhase(style.id === 'full-time' ? phase >> 3 : phase);
   fillKey(cam, sSerial, wall.version, lod, phase);
   CACHE.frame = fr;
   // NEWS IN 60's rundown board moves on with the story, on a cut only
@@ -739,7 +741,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
     xl = Math.round(sxOf(cam, kf, -FLAT_X));
     xr = Math.round(sxOf(cam, kf, FLAT_X));
   }
-  renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
+  // (an open set, FULL TIME's pitchside platform, has no back wall: its dressing paints everything above the deck)
+  if (!(style.open && DRESSING.on)) renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
   if (pOn) p0 = lap(PROF, 'light', p0);
   drawWallDetails(fr, cam, style, soft);
   liveReset(); // the dressing registers its live pixels as it draws (live.js)
@@ -748,6 +751,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
   drawFloor(fr, cam, style);
+  // a programme's own floor in front of the desk (FULL TIME: the platform's front edge, its light and riser)
+  if (DRESSING.on && FLOORS[style.id]) FLOORS[style.id](fr, cam, style, soft);
   if (pOn) p0 = lap(PROF, 'floor', p0);
   if (CACHE.on) {
     CACHE.bg.set(fr.px);
@@ -1001,7 +1006,7 @@ function interpCol(xs, ys, n, x) {
 const LED_Y = 2; // the accent line, right under the silver edge
 const PLATE_Y0 = 3.2, PLATE_Y1 = 15.6, PLATE_HW = 30;
 const PANEL_SPLIT = 28; // the front panel's upper colour down to here (above y 150 in the wide), its lower colour below
-const REFLECT = { red: 'maroon', pink: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', darkGreen: null };
+const REFLECT = { red: 'maroon', pink: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', orange: 'brown', darkGreen: null };
 
 /** Draw the desk; fills clipRows (Int16Array W) with the desk top's back edge per column. */
 export function drawDesk(fr, cam, clipRows, accent) {
@@ -1284,8 +1289,9 @@ function deskLight(fr, cam, front, kc, topC, panelHi) {
         if (edge > 3 || B16[((y & 3) << 2) | (x & 3)] < edge * 4) px[y * W + x] = litBy(topC);
       }
     }
-    // the light line at the desk's foot and its reflection on the glossy floor below
-    if (base && bot < fr.h && f < 2) {
+    // the light line at the desk's foot and its reflection on the glossy floor below (a front whose light runs along
+    // the platform's edge instead, FULL TIME's, has it drawn with the floor: dressing.js FLOORS)
+    if (base && front.baseAt !== 'platform' && bot < fr.h && f < 2) {
       px[(bot - 1) * W + x] = base.core;
       // (solid rows, no Bayer: under a camera move a dithered reflection would flicker)
       for (let d = 0; d < 2; d++) {
@@ -1362,7 +1368,7 @@ function deskPattern(fr, cam, front, kc) {
   }
 }
 
-const LED_NAMES = new Map(['red', 'pink', 'cyan', 'magenta', 'yellow', 'darkGreen', 'green'].map((n) => [C[n] >>> 0, n]));
+const LED_NAMES = new Map(['red', 'pink', 'cyan', 'magenta', 'yellow', 'darkGreen', 'green', 'orange'].map((n) => [C[n] >>> 0, n]));
 const nameOfLed = (c) => LED_NAMES.get(c >>> 0) || '';
 
 // re-exported for labs and tests that want the wall state machine's version

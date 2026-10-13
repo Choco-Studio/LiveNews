@@ -12,13 +12,17 @@ import { RAMPS } from '../public/js/v2/canvas25d/studio/light.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
 import * as setMod from '../public/js/v2/canvas25d/studio/set.js';
 import { readPNG, writePNG, measure as measureZones, ZONES } from '../tools/measure-frame.mjs';
+import { loadChannel } from '../server/channel.js';
 
 // STUDIO SET stream (public/js/v2/canvas25d/studio/**): per-programme dressing and light, the live
 // video wall and the background cache, measured on frames rendered in node (no DOM: the wall's text
 // and the desk logo need a canvas, so they are absent here; the lab page shows them).
 
 const W = 384, H = 216;
-const channel = JSON.parse(fs.readFileSync(new URL('../config/channel.json', import.meta.url), 'utf8'));
+// the channel with its drafts (config "drafts": a programme built and tested before it airs, FULL TIME until its
+// step 7; server/channel.js loadChannel(file, { drafts: true }) merges them as the producer's harnesses do): a drafted
+// programme's set is built, warmed and held to every rule below like the others
+const channel = loadChannel(new URL('../config/channel.json', import.meta.url).pathname, { drafts: true });
 // the studio programmes (WORLD WEATHER airs from its own weather centre, scenes/weather, not the desk set)
 const PROGRAMS = Object.keys(channel.programs).filter((id) => channel.programs[id].kind !== 'weather');
 
@@ -54,9 +58,9 @@ const PRESENTERS = lab.hasPresenters();
 
 describe('styles: setStyle per programme', () => {
   test('every programme in config/channel.json has its own frozen style', () => {
-    const accents = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'green', 'news-60': 'yellow', 'seven-days': 'pink' };
-    const lines = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'darkGreen', 'news-60': 'yellow', 'seven-days': 'pink' };
-    const idles = { 'world-now': 'globe', 'tech-bytes': 'chip', cosmos: 'planet', 'money-minute': 'wordmark', 'news-60': 'dial', 'seven-days': 'week' };
+    const accents = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'green', 'news-60': 'yellow', 'seven-days': 'pink', 'full-time': 'orange' };
+    const lines = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'darkGreen', 'news-60': 'yellow', 'seven-days': 'pink', 'full-time': 'orange' };
+    const idles = { 'world-now': 'globe', 'tech-bytes': 'chip', cosmos: 'planet', 'money-minute': 'wordmark', 'news-60': 'dial', 'seven-days': 'week', 'full-time': 'fulltime' };
     for (const id of PROGRAMS) {
       const s = styleFor(id);
       assert.equal(s.id, id);
@@ -68,6 +72,8 @@ describe('styles: setStyle per programme', () => {
       assert.ok(styleFor(id) === s, 'cached');
     }
     assert.deepEqual([...STYLE_IDS].sort(), [...PROGRAMS].sort());
+    // the drafts are exactly config's drafts (a programme on air is never counted twice, nor a draft lost)
+    assert.deepEqual([...(channel.drafted || [])].sort(), ['full-time']);
   });
   test('unknown ids get the home look under their own id; setStyle sets the default', () => {
     for (const id of ['weekend-review', '', null, undefined, 42]) {

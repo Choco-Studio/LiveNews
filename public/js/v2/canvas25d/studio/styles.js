@@ -12,7 +12,7 @@
 //   setStyle(id)   the same, and it becomes the default style for calls that
 //                  pass none (the old drawBackground(frame, cam, t) form)
 //   STYLE_IDS      the studio programmes of config/channel.json (WORLD WEATHER
-//                  airs from its own weather centre)
+//                  airs from its own weather centre) and its drafts (FULL TIME)
 //
 // Light is described in "ramp positions" on the neutral ramp
 // black 0, ink 1, slate 2, steel 3, fog 4: the set bakes them into a texture
@@ -22,7 +22,9 @@
 // pixels drawn in the tint colours.
 import { C } from '../pixbuf.js';
 
-export const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days'];
+// (FULL TIME is still a draft in config/channel.json: its set is built and warmed with the others, so it is ready
+// the day it airs)
+export const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days', 'full-time'];
 
 // Seat pools: one soft pool from above behind each head (ART_DIRECTION
 // "head zones ... one soft light pool from above"). Back-wall world units:
@@ -205,6 +207,23 @@ const DEFS = {
     tintNames: ['maroon', 'brown', 'rust', 'darkRed'],
     tintMax: 0.1,
     values: { face: [55, 73], headZone: [18, 45], wall: 45, tintMax: 0.1 },
+  },
+  // FULL TIME (full-time.md §6, a draft): no glass, no room. The pitchside platform: the desk on a raised platform at the
+  // corner of a floodlit pitch, the ground behind it by the hour (pitch.js: sky, four floodlight towers, the stand with
+  // its still crowd, the scoreboard and its pennant, the boards, the striped pitch), the canopy's fascia along the top
+  // with an orange cove and the studio lights under it, its slim columns at the sides (dressing.js); the curved black
+  // desk with an orange edge light; the side screen shows pictures and the FULL TIME emblem (wall.js). `open`: the set
+  // has no back wall, the dressing paints everything behind the platform (set.js skips the wall's light under it).
+  'full-time': {
+    theme: 'sport',
+    accentName: 'orange',
+    deskLineName: 'orange',
+    wallIdle: 'fulltime',
+    open: true,
+    wallField: ['ink', 'ink'],
+    tintNames: [],
+    tintMax: 0,
+    values: { face: [55, 73], headZone: [18, 45], wall: 45 },
   },
 };
 
