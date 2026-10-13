@@ -737,7 +737,21 @@ function studioClock(fr, cam, X, Y, soft) {
   for (const [gx, gy] of g.pixels) for (let j = 0; j < s; j++) for (let q = 0; q < s; q++) set(tx + gx * s + q, ty + gy * s + j, C.fog);
 }
 
-const RUNDOWN = ['WORLD', 'POLITICS', 'BUSINESS', 'SCIENCE', 'SPORT'];
+// the board's rows: the bulletin's own beats (set.js hands over the episode's running order: each story's kicker, else
+// its desk), the one on air marked; the generic desks only where there is no episode (labs, tests)
+export const RUNDOWN = { rows: ['WORLD', 'POLITICS', 'BUSINESS', 'SCIENCE', 'SPORT'], live: 0 };
+const DESK_OF = { world: 'WORLD', politics: 'POLITICS', business: 'BUSINESS', tech: 'TECH', science: 'SCIENCE', health: 'HEALTH', climate: 'CLIMATE', sport: 'SPORT', sports: 'SPORT', culture: 'CULTURE' };
+/** The board's rows for a running order ([{ kicker, category }]): five at most, each a word the board can hold. */
+export function rundownRows(rundown) {
+  const out = [];
+  for (const r of Array.isArray(rundown) ? rundown : []) {
+    if (out.length >= 5) break;
+    const kicker = String(r?.kicker || '').trim().toUpperCase();
+    const desk = DESK_OF[String(r?.category || '').toLowerCase()] || 'NEWS';
+    out.push(kicker && textPixels(kicker, 'micro').width <= 38 ? kicker : desk);
+  }
+  return out;
+}
 function rundownBoard(fr, cam, X0, Y0, X1, Y1, soft) {
   const k = kAt(cam, SET.wallZ);
   // the board: black with an ink frame, its top edge lit
@@ -763,11 +777,12 @@ function rundownBoard(fr, cam, X0, Y0, X1, Y1, soft) {
   const ry = by0 + pad + 5 * s + 2 * s;
   fr.span(bx0 + pad, ry, bx1 - pad, ry + 1, C.slate);
   // the rows
-  const rowH = Math.max(7 * s, Math.floor((by1 - ry - pad) / RUNDOWN.length));
-  RUNDOWN.forEach((name, i) => {
+  const rows = RUNDOWN.rows;
+  const rowH = Math.max(7 * s, Math.floor((by1 - ry - pad) / 5));
+  rows.forEach((name, i) => {
     const y = ry + 3 * s + i * rowH;
     if (y + 5 * s > by1 - 1) return;
-    const live = i === 0;
+    const live = i === RUNDOWN.live;
     if (live) fr.span(bx0 + pad - 2 * s, y - s, bx0 + pad - s, y + 6 * s, C.yellow);
     const nx = bx0 + pad + text(`0${i + 1}`, bx0 + pad, y, live ? C.fog : C.steel) + 3 * s;
     text(name, nx, y, live ? C.silver : C.steel);
@@ -781,7 +796,8 @@ function news60(fr, cam, style, soft) {
   rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
   if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
   studioClock(fr, cam, CLOCK.X, CLOCK.Y, soft);
-  rundownBoard(fr, cam, 146, -112, 224, -34, soft);
+  // (its top below the graphics' top row: at Y -112 the clock graphic sat on its header in the wide)
+  rundownBoard(fr, cam, 146, -100, 224, -28, soft);
   soffit(fr, cam, RAMPS.amber, soft);
 }
 // --------------------------------------------------------------------------- SEVEN DAYS: the weekend edition

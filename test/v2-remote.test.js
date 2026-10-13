@@ -103,7 +103,7 @@ test('TWO-WAY: the presenter’s single and the correspondent, each cropped into
   // a story on the wall before the link (a plate would be cut by the box: it must not show)
   run(st, sceneOf('close', { framing: 'mcu-l', storyId: 's1', wall: { mode: 'source', source: 'PIXELBURG POST' } }), 1, 3);
   const px = run(st, sceneOf('twoway', { shotSince: 2, remote: REMOTE_AT, footageDeck: fakeDeck() }), 2, 6);
-  assert.equal(st.wall.mode, 'idle');
+  assert.equal(st.wall.mode, 'rest'); // the idle art without words (a cropped wordmark read as a broken graphic)
   for (const bx of [TWOWAY.left, TWOWAY.right]) {
     // the fog frame round each box, the accent rule under it
     assert.equal(px[(TWOWAY.y - 1) * W + bx + 20], C.fog);

@@ -4,7 +4,8 @@
 // isobars, the highs and lows travelling with the frames. Palette colours only, ordered dither, no blends.
 //
 //   decodeSky(sky)                   the episode's sky (base64 layers) as numbers, or null (cached per object); the
-//                                    wind is smoothed for the texture it carries (smoothGrid)
+//                                    wind is smoothed for the texture it carries (smoothGrid); warmSky(sky, ms)
+//                                    decodes it ahead in slices
 //   new SkyClock(S).at(hour)         the layers at a fractional hour: Catmull-Rom between the frames (smooth, no
 //                                    kink at each frame), clamped to each layer's range
 //   sampleLayer(S, grid, lat, lon)   one layer at a place: bilinear on the grid, longitude wrapping
@@ -13,7 +14,8 @@
 //                                    matchTracks(systems, frames) the matching alone (the writer names whole tracks)
 //   isobarSegments(field, w, h, level)   marching squares: the contour of one pressure level (grid coordinates)
 //   cloudTexture()                   the cloud shape: a tileable fBm, equalised (uniform 0..1, and the same ranks as a
-//                                    standard normal), with mips and the texture's correlation with itself shifted
+//                                    standard normal), with mips and the texture's correlation with itself shifted;
+//                                    warmCloudTexture(ms) makes it ahead in slices (a page does so from idle time)
 //   flowPhases(tau) / phaseOffset(k, size)   the flow map that carries the texture on the wind (round 4)
 //   composeSky(dst, base, w, h, view, S, cur, opts)   the sky over a map frame (Uint32 pixels, worldmap.js view)
 //   VEIL, RADAR, radarBand, hashOf / colourTable   the cloud's veils, the radar colours, the palette tables
@@ -111,6 +113,29 @@ export function decodeSky(sky) {
   if (!sky || typeof sky !== 'object') return null;
   const hit = DECODED.get(sky);
   if (hit !== undefined) return hit;
+  const steps = SKY_STEPS.get(sky) || decodeSteps(sky);
+  while (!steps.next().done);
+  return DECODED.get(sky) ?? null;
+}
+
+/**
+ * Decodes an episode's sky ahead, in slices of about `budgetMs` (the studio's warm-up queues it when the episode is
+ * first seen: decoded on the spot, it cost the first weather shot about 40 ms). -> true once decoded.
+ */
+export function warmSky(sky, budgetMs = 4) {
+  if (!sky || typeof sky !== 'object' || DECODED.has(sky)) return true;
+  let steps = SKY_STEPS.get(sky);
+  if (!steps) SKY_STEPS.set(sky, (steps = decodeSteps(sky)));
+  const t0 = now();
+  let r;
+  do r = steps.next();
+  while (!r.done && now() - t0 < budgetMs);
+  return !!r.done;
+}
+const SKY_STEPS = new WeakMap(); // sky -> its decode in progress
+
+/** decodeSky's work as steps: a layer's frame each, then the wind's smoothing a frame at a time. */
+function* decodeSteps(sky) {
   let out = null;
   const w = sky.w | 0, h = sky.h | 0, step = Number(sky.step), n = w * h;
   if (w >= 4 && h >= 4 && step > 0 && Array.isArray(sky.hours)) {
@@ -125,20 +150,26 @@ export function decodeSky(sky) {
         const a = decodeLayer(k, sky[k][f], n);
         if (a) S[k].push(a);
         else ok = false;
+        yield;
       }
     }
     if (ok) {
       S.frames = frames;
       // the wind that carries the cloud texture, smoothed over about 9 degrees: the texture then travels with the
       // flow instead of being sheared into streaks by every local gust
-      for (const k of ['u', 'v']) for (const f of S[k]) smoothGrid(f, w, h, 1, 2);
+      for (const k of ['u', 'v']) {
+        for (const f of S[k]) {
+          smoothGrid(f, w, h, 1, 2);
+          yield;
+        }
+      }
       S.systems = (Array.isArray(sky.systems) ? sky.systems : []).filter((s) => (s?.kind === 'H' || s?.kind === 'L') && Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.frame >= 0 && s.frame < frames);
       S.tracks = trackSystems(S);
       out = S;
     }
   }
   DECODED.set(sky, out);
-  return out;
+  SKY_STEPS.delete(sky);
 }
 
 /** A box blur of a grid in place (radius r cells, `passes` times; rows clamp, longitude wraps). */
@@ -344,30 +375,13 @@ function vnoise(x, y, p, seed) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-/**
- * Ranks of a field as 0..255 (a uniform histogram), so a threshold at 1 - cover leaves `cover` of the area; and the
- * same ranks as a standard normal (gauss: the flow map blends two samples there, see composeSky).
- */
-function equalise(f) {
-  const n = f.length;
-  const idx = new Uint32Array(n);
-  for (let i = 0; i < n; i++) idx[i] = i;
-  idx.sort((a, b) => f[a] - f[b]);
-  const out = new Uint8Array(n);
-  const gauss = new Float32Array(n);
-  for (let r = 0; r < n; r++) {
-    out[idx[r]] = Math.min(255, Math.floor((r / n) * 256));
-    gauss[idx[r]] = invPhi((r + 0.5) / n);
-  }
-  return { data: out, gauss };
-}
-
 /** The standard normal's quantile (Acklam's rational approximation, |error| < 1.2e-9 in p). */
+const IA = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+const IB = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+const IC = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+const ID = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
 export function invPhi(p) {
-  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
-  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
-  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
-  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const a = IA, b = IB, c = IC, d = ID;
   const lo = 0.02425;
   if (p <= 0) return -8;
   if (p >= 1) return 8;
@@ -400,35 +414,90 @@ const PHI_O = PHI_R * PHI_K + 0.5;
  */
 export function cloudTexture() {
   if (TEXTURE) return TEXTURE;
+  BUILD.steps ||= cloudSteps();
+  while (!TEXTURE) BUILD.steps.next();
+  return TEXTURE;
+}
+
+/**
+ * Builds the texture ahead, in slices of about `budgetMs` (idle time: the first weather shot cost a 300-400 ms
+ * freeze while it was made on the spot). The same steps and the same result as cloudTexture(), which finishes
+ * whatever is left. -> true once the texture is ready. In a page it runs by itself from idle time after load.
+ */
+export function warmCloudTexture(budgetMs = 4) {
+  if (TEXTURE) return true;
+  BUILD.steps ||= cloudSteps();
+  const t0 = now();
+  do BUILD.steps.next();
+  while (!TEXTURE && now() - t0 < budgetMs);
+  return !!TEXTURE;
+}
+const BUILD = { steps: null };
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+/** The texture's build as a sequence of steps of a few ms each (cloudTexture's doc says what it makes). */
+function* cloudSteps() {
   const f = new Float32Array(TEX * TEX);
-  for (let y = 0; y < TEX; y++) {
-    for (let x = 0; x < TEX; x++) {
-      // a gentle domain warp (period 4 cells): rounded heads instead of a plain value-noise grid
-      const wx = (vnoise(x / 64, y / 64, 4, 11) - 0.5) * 22, wy = (vnoise(x / 64 + 5.2, y / 64 + 1.3, 4, 12) - 0.5) * 22;
-      let s = 0, a = 1, norm = 0;
-      for (let o = 0; o < 6; o++) {
-        const cells = 4 << o; // lattice cells across the tile
-        const k = cells / TEX;
-        s += a * vnoise((x + wx) * k, (y + wy) * k, cells, 3 + o);
-        norm += a;
-        a *= 0.56;
+  for (let y0 = 0; y0 < TEX; y0 += 4) {
+    for (let y = y0; y < y0 + 4; y++) {
+      for (let x = 0; x < TEX; x++) {
+        // a gentle domain warp (period 4 cells): rounded heads instead of a plain value-noise grid
+        const wx = (vnoise(x / 64, y / 64, 4, 11) - 0.5) * 22, wy = (vnoise(x / 64 + 5.2, y / 64 + 1.3, 4, 12) - 0.5) * 22;
+        let s = 0, a = 1, norm = 0;
+        for (let o = 0; o < 6; o++) {
+          const cells = 4 << o; // lattice cells across the tile
+          const k = cells / TEX;
+          s += a * vnoise((x + wx) * k, (y + wy) * k, cells, 3 + o);
+          norm += a;
+          a *= 0.56;
+        }
+        f[y * TEX + x] = s / norm;
       }
-      f[y * TEX + x] = s / norm;
     }
+    yield;
   }
-  const levels = [{ size: TEX, ...equalise(f) }];
-  let src = f, size = TEX;
-  while (size > 32) {
+  // the mips' fields (box-filtered from the raw fBm, each equalised on its own below)
+  const fields = [f];
+  for (let src = f, size = TEX; size > 32; size >>= 1) {
     const half = size >> 1;
     const g = new Float32Array(half * half);
     for (let y = 0; y < half; y++) for (let x = 0; x < half; x++) g[y * half + x] = (src[2 * y * size + 2 * x] + src[2 * y * size + 2 * x + 1] + src[(2 * y + 1) * size + 2 * x] + src[(2 * y + 1) * size + 2 * x + 1]) / 4;
-    levels.push({ size: half, ...equalise(g) });
+    fields.push(g);
     src = g;
-    size = half;
   }
-  for (const l of levels) l.corr = autocorrelation(l);
+  const levels = [];
+  for (const g of fields) {
+    // equalised: the ranks as 0..255 (a uniform histogram), so a threshold at 1 - cover leaves `cover` of the area,
+    // and the same ranks as a standard normal (gauss: the flow map blends two samples there, see composeSky); the
+    // sort, then each rank's byte and quantile in chunks
+    // (sorted as keys: a non-negative float's bits order as its value does, and the index below them breaks ties as
+    // a stable sort would; a native numeric sort is several times quicker than a comparator's)
+    const n = g.length;
+    const bits = new Uint32Array(g.buffer, g.byteOffset, n);
+    const keys = new Float64Array(n);
+    for (let i = 0; i < n; i++) keys[i] = bits[i] * 65536 + i;
+    keys.sort();
+    const idx = new Uint32Array(n);
+    for (let r = 0; r < n; r++) idx[r] = keys[r] % 65536;
+    yield;
+    const data = new Uint8Array(n), gauss = new Float32Array(n);
+    for (let r0 = 0; r0 < n; r0 += 8192) {
+      for (let r = r0, r1 = Math.min(n, r0 + 8192); r < r1; r++) {
+        data[idx[r]] = Math.min(255, Math.floor((r / n) * 256));
+        gauss[idx[r]] = invPhi((r + 0.5) / n);
+      }
+      yield;
+    }
+    levels.push({ size: Math.round(Math.sqrt(n)), data, gauss });
+  }
+  for (const l of levels) {
+    l.corr = new Float32Array(CORR * CORR);
+    for (let j = 0; j < CORR; j += 4) {
+      autocorrelationRows(l, j, j + 4);
+      yield;
+    }
+  }
   TEXTURE = levels;
-  return levels;
 }
 /** Degrees per texel of mip 0 (the tile covers 38.4 degrees). */
 export const TEXEL_DEG = 0.15;
@@ -441,10 +510,12 @@ export const TEXEL_DEG = 0.15;
  * half way through each cross-fade. Estimated on every texel of the small mips, every (size / 64)th of the large.
  */
 const CORR = 32;
-function autocorrelation({ size, gauss }) {
-  const out = new Float32Array(CORR * CORR);
+/** Rows j0..j1 of a level's correlation grid (level.corr), in place. */
+function autocorrelationRows(level, j0, j1) {
+  const { size, gauss } = level;
+  const out = level.corr;
   const st = Math.max(1, size >> 6), n = (size / st) ** 2;
-  for (let j = 0; j < CORR; j++) {
+  for (let j = j0; j < j1; j++) {
     for (let i = 0; i < CORR; i++) {
       const dx = (i * size) / CORR, dy = (j * size) / CORR;
       let s = 0;
@@ -455,7 +526,6 @@ function autocorrelation({ size, gauss }) {
       out[j * CORR + i] = s / n;
     }
   }
-  return out;
 }
 /** The correlation at a shift of (du, dv) texels of a mip (bilinear between the grid's shifts, wrapping). */
 export function correlationAt(level, du, dv) {
@@ -898,3 +968,14 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
 
 /** The packed palette colours the compositor may write (tests). */
 export const SKY_COLOURS = Object.freeze([...new Set([...VEIL.flatMap((m) => [...m.values()]), ...RADAR.map((r) => r.c), PK.silver])]);
+
+// In a page the cloud texture is made from idle time after load, a few ms a slice, so the first weather shot finds it
+// ready (made on the spot, it froze that cut for 300-400 ms).
+if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
+  const slice = (deadline) => {
+    const left = deadline && typeof deadline.timeRemaining === 'function' ? deadline.timeRemaining() - 1 : 3;
+    if (!warmCloudTexture(Math.min(4, Math.max(1, left)))) later();
+  };
+  const later = () => (typeof requestIdleCallback === 'function' ? requestIdleCallback(slice, { timeout: 500 }) : setTimeout(slice, 50));
+  setTimeout(later, 2000);
+}

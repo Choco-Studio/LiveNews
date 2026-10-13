@@ -2,7 +2,7 @@
 // the anchor, the studio clock on the left whose ring of sixty LEDs fills as the minute runs (live), the rundown
 // board on the right, and between them and the screen "the gallery": a wall of small monitors carrying the
 // feeds — colour bars, snow, a waveform, a feed with its red tally — as in a newsroom's gallery. Out of focus the
-// monitors are soft squares of their light.
+// monitors are soft pictures of their feeds (broad bands, a sky, a coast, a grain: never blank squares).
 //
 //   flashWall(fr, cam, soft)      the room (after the wall's light, before the screen)
 //   LIVE_DRAW['news-60']          the clock's seconds, the feeds' snow and waveform, the tallies (live.js)
@@ -26,6 +26,8 @@ const MON = { X0: 88, w: 22, gap: 4, Y0: -104, h: 16, vgap: 5, cols: 2, rows: 4 
 const FEEDS = ['feed', 'bars', 'snow', 'wave', 'map', 'feed', 'dark', 'snow', 'bars', 'feed', 'wave', 'dark', 'snow', 'map', 'feed', 'bars'];
 // colour bars, turned down (a 4x4 patch never brighter than the anchor's face)
 const BARS = [C.steel, C.blue, C.darkGreen, C.magenta, C.darkRed, C.navy, C.slate];
+// the same bars out of focus: four broad bands, one step down
+const SOFT_BARS = [C.slate, C.navy, C.darkGreen, C.purple];
 
 /** The screen rect of monitor i (0..15): { x0, y0, x1, y1 } (its screen, inside the bezel). */
 function monRect(cam, k, i) {
@@ -83,9 +85,16 @@ function monitor(fr, cam, k, i, soft) {
   for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) {
     let c = C.black;
     if (soft) {
-      // out of focus: the screen's average light, softer at its edges
-      c = r.feed === 'dark' ? C.black : r.feed === 'wave' ? C.ink : C.slate;
-      if (y === r.y0 || y === r.y1 - 1 || x === r.x0 || x === r.x1 - 1) c = C.ink;
+      // out of focus: each screen's picture in its broad shapes, one step dimmer, its fine detail gone (a flat
+      // slate square per monitor read as a wall of blank panels): the bars as four soft bands, a feed's sky over
+      // its dark ground, the map's sea and coast, the snow as a coarse grain, the waveform's line
+      const u = (x - r.x0) / w, v = (y - r.y0) / h;
+      if (r.feed === 'bars') c = v < 0.72 ? SOFT_BARS[Math.min(3, Math.floor(u * 4))] : C.black;
+      else if (r.feed === 'feed') c = v < 0.5 ? C.navy : C.black;
+      else if (r.feed === 'map') c = u + 0.25 * Math.sin(v * 3 + i) > 0.58 ? C.slate : C.navy;
+      else if (r.feed === 'snow') c = hash((x - r.x0) >> 1, (y - r.y0) >> 1, i) < 0.5 ? C.slate : C.ink;
+      else if (r.feed === 'wave') c = Math.abs(v - 0.5) < 0.5 / h ? C.darkGreen : C.black;
+      if ((y === r.y0 || y === r.y1 - 1 || x === r.x0 || x === r.x1 - 1) && c !== C.black) c = C.ink;
     } else if (r.feed === 'bars') {
       const n = Math.min(BARS.length - 1, Math.floor(((x - r.x0) / w) * BARS.length));
       c = y - r.y0 < h * 0.72 ? BARS[n] : (x - r.x0) / w < 0.5 ? C.navy : C.black;
@@ -118,7 +127,8 @@ function monitor(fr, cam, k, i, soft) {
 }
 
 // --------------------------------------------------------------------------- the clock and the feeds (live.js)
-export const CLOCK = { X: -186, Y: -72 };
+// (the ring's top below the graphics' top row: at Y -72 the bug sat on it in the wide)
+export const CLOCK = { X: -186, Y: -66 };
 LIVE_DRAW['news-60'] = (fr, cam, t, style, clipRows, soft) => {
   if (soft) return;
   const k = kAt(cam, SET.wallZ);

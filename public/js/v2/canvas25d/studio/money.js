@@ -70,7 +70,18 @@ function inShape(sh, x, y) {
   return dx * dx + dy * dy <= r * r;
 }
 /** The shape list's mask at `pxu` pixels per local unit (30 x 16 box): 2 near side, 1 a far leg only. */
+const MASKS = new Map(); // shapes|pxu|flip -> mask (a framing's bronzes are rasterised once, not on every redraw)
 export function shapeMask(shapes, pxu, flip) {
+  const key = `${shapes === BULL ? 'bull' : shapes === BEAR ? 'bear' : shapes.length}|${pxu}|${flip ? 1 : 0}`;
+  let hit = MASKS.get(key);
+  if (!hit) {
+    hit = rasterMask(shapes, pxu, flip);
+    if (MASKS.size > 24) MASKS.delete(MASKS.keys().next().value);
+    MASKS.set(key, hit);
+  }
+  return hit;
+}
+function rasterMask(shapes, pxu, flip) {
   const w = Math.ceil(30 * pxu), h = Math.ceil(16 * pxu);
   const mask = new Uint8Array((w + 2) * (h + 2));
   for (let j = 0; j < h; j++) {
@@ -91,6 +102,37 @@ export function shapeMask(shapes, pxu, flip) {
 }
 
 // --------------------------------------------------------------------------- the room
+// a lamp's light on the wood lifts each surface one step, or two near the lamp (never past tan: the face stays the
+// warmest, brightest thing in the frame)
+const LIFT = new Map([[C.maroon >>> 0, C.brown], [C.brown >>> 0, C.tanShade], [C.tanShade >>> 0, C.tan]]);
+const LIFT2 = new Map([[C.maroon >>> 0, C.tanShade], [C.brown >>> 0, C.tan], [C.tanShade >>> 0, C.tan]]);
+
+/**
+ * One sconce's wash on the wall around the lamp at (cx, cy): a cone up (30 units) and one down (22), each starting
+ * at its opening (5 units from the lamp's centre), 1.6 units wide there and widening 0.36 units per unit of reach.
+ * Its intensity falls along the cone and across it; two steps of lift above 0.52, one above 0.2, a Bayer fade below.
+ */
+function washSconce(px, cx, cy, k, soft, xa, xb, yb) {
+  const reachUp = 30 * k, reachDown = 22 * k, gap = 5 * k;
+  for (let y = Math.max(0, Math.floor(cy - gap - reachUp)); y < Math.min(yb, Math.ceil(cy + gap + reachDown)); y++) {
+    const dy = y + 0.5 - cy, dist = Math.max(0, Math.abs(dy) - gap), reach = dy < 0 ? reachUp : reachDown;
+    if (dist >= reach || Math.abs(dy) < gap * 0.6) continue; // (the lamp's own body is drawn over its middle)
+    const u = dist / reach;
+    const hw = 2.4 * k + dist * 0.5;
+    const along = 1 - u;
+    for (let x = Math.floor(cx - hw - 1); x <= Math.ceil(cx + hw + 1); x++) {
+      if (x < xa || x >= xb) continue;
+      const a = Math.abs(x + 0.5 - cx) / hw;
+      if (a >= 1) continue;
+      const I = along * (1 - a * a);
+      const o = y * W + x, under = px[o] >>> 0;
+      let c;
+      if (I > 0.45 && !soft) c = LIFT2.get(under);
+      else if (I > 0.12) c = LIFT.get(under);
+      if (c) px[o] = soft && c === C.tan ? C.tanShade : c;
+    }
+  }
+}
 export function moneyWall(fr, cam, soft) {
   const k = kAt(cam, SET.wallZ);
   const px = fr.px;
@@ -154,26 +196,12 @@ export function moneyWall(fr, cam, soft) {
       fill(xs, fy1 + 2, xs + 1, yb, C.brown);
     }
   }
-  // the lamps' warm light on the wood: from each sconce a scallop up and one down, lifting each surface one
-  // step (maroon → brown, brown → tanShade, tanShade → tan), a clean shape with a one-pixel Bayer fringe
-  const lift = new Map([[C.maroon >>> 0, C.brown], [C.brown >>> 0, C.tanShade], [C.tanShade >>> 0, C.tan]]);
-  for (const X of ROOM.sconces) {
-    const cx = sxOf(cam, k, X), cy = syOf(cam, k, ROOM.sconceY);
-    const reachUp = 30 * k, reachDown = 22 * k, gap = 5 * k;
-    for (let y = Math.max(0, Math.floor(cy - gap - reachUp)); y < Math.min(yb, Math.ceil(cy + gap + reachDown)); y++) {
-      const dy = y + 0.5 - cy, dist = Math.max(0, Math.abs(dy) - gap), reach = dy < 0 ? reachUp : reachDown;
-      if (dist >= reach) continue;
-      const hw = 2.6 * k + Math.sqrt(dist * reach) * 0.42;
-      for (let x = Math.floor(cx - hw - 1); x <= Math.ceil(cx + hw + 1); x++) {
-        if (x < xa || x >= xb) continue;
-        const dx = Math.abs(x + 0.5 - cx) / hw;
-        const d = Math.hypot(dist / reach, dx * 0.9);
-        if (d >= 1) continue; // a clean shape: flat light, no dither
-        const c = lift.get(px[y * W + x] >>> 0);
-        if (c) px[y * W + x] = soft ? (c === C.tan ? C.tanShade : c) : c;
-      }
-    }
-  }
+  // the lamps' warm light on the wood: from each sconce's two openings a cone of light up and one down, as a
+  // real up/down wall light throws: narrow at the shade and fanning out, brightest by the lamp and fading along
+  // its length and toward its sides. Two steps of lift near the lamp (brown → tan), one further out, and the
+  // last stretch dithered into the wood (a flat, hard-edged oval of one tone read as a solid shape on the panel,
+  // not as light: the owner's "MONEY MINUTE lights")
+  for (const X of ROOM.sconces) washSconce(px, sxOf(cam, k, X), syOf(cam, k, ROOM.sconceY), k, soft, xa, xb, yb);
   // the dado: a brass rail (its top the ledge, lit), the slats below it
   const dy0 = sy(ROOM.dado[0]), dy1 = sy(ROOM.dado[1]);
   fill(xa, dy0, xb, dy1, soft ? C.tanShade : C.tanShade);
@@ -216,7 +244,7 @@ function bronze(fr, cam, k, X, shapes, flip, soft, put) {
   const ex = Math.round(sxOf(cam, k, X) - m.w / 2), ey = Math.round(ledge - plinthH - m.h);
   // the spot: a warm cone from above, widening down to the bronze (lifts the wood one step)
   if (!soft) {
-    const lift = new Map([[C.maroon >>> 0, C.brown], [C.brown >>> 0, C.tanShade], [C.tanShade >>> 0, C.tan]]);
+    const lift = LIFT;
     const top = Math.round(syOf(cam, k, ROOM.frieze[1])) + 2, cx = ex + m.w / 2;
     for (let y = top; y < ey + m.h; y++) {
       const u = (y - top) / Math.max(1, ey + m.h - top);
@@ -263,7 +291,11 @@ function bronze(fr, cam, k, X, shapes, flip, soft, put) {
 const TICKER = 'MONEY MINUTE • MARKETS • CURRENCIES • COMMODITIES • ENERGY • TECH • ';
 const TICK = { y0: 0, y1: 0, x0: 0, x1: 0, k: 1, soft: false };
 let GLYPH = null;
-/** The ticker's text at an offset of `shift` pixels (it runs right to left, 18 px a second in the wide). */
+/**
+ * The ticker's text at an offset of `shift` pixels (it runs right to left, 10 px a second in the wide). It runs just
+ * over the graphics' top row, so it stays an ambient light of the room: steel letters, green beats, a slow drift
+ * (at 18 px a second in fog it read as a second news ticker racing above the channel's bug).
+ */
 function tickerText(fr, shift) {
   const { y0, y1, x0, x1, k, soft } = TICK;
   if (y1 <= 0 || y0 >= H || x1 <= x0) return;
@@ -295,7 +327,7 @@ function tickerText(fr, shift) {
       for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
         const x = base + gx * s + i, y = ty + gy * s + j;
         if (x < Math.max(0, x0) || x >= Math.min(W, x1) || y < 0 || y >= H) continue;
-        px[y * W + x] = GLYPH.dots.has(gx) ? C.green : C.fog;
+        px[y * W + x] = GLYPH.dots.has(gx) ? C.green : C.steel;
       }
     }
   }
@@ -303,5 +335,5 @@ function tickerText(fr, shift) {
 
 LIVE_DRAW['money-minute'] = (fr, cam, t) => {
   if (!TICK.x1) return;
-  tickerText(fr, t * 18 * TICK.k / 0.76);
+  tickerText(fr, t * 10 * TICK.k / 0.76);
 };

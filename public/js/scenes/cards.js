@@ -32,6 +32,7 @@ const W = 384;
 const H = 216;
 const X0 = 19; // graphics-safe left edge
 const SAFE_BOTTOM = 134; // last row a card under 'news' graphics may use (captions start at 136)
+const CARD_TOP = 26; // first row a card may use (the top row: bug, programme tag and clock end at y 21)
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -81,6 +82,7 @@ const S = {
   ink2: { color: P.ink, scale: 2 },
   ink3: { color: P.ink, scale: 3 },
   white2Right: { color: P.white, scale: 2, align: 'right' },
+  white3Right: { color: P.white, scale: 3, align: 'right' },
   black: { color: P.black },
 };
 
@@ -506,17 +508,24 @@ function ruleLayout(fact, label, source, rows) {
     const r = rows[0] || null;
     const kicker = ellipsis(label || (r ? 'BY THE NUMBERS' : 'KEY FACT'), inner, 1);
     const qual = r && r.qual ? ellipsis(r.qual, inner, 1) : '';
-    const big = r ? ellipsis(r.figure, inner, 2) : null;
+    // the card's one figure is its hero: 3x when it takes at most three quarters of the panel ("30", "40,000",
+    // "1.2 MILLION"); at 2x a short figure was a speck in a 304 px panel, the rest of it empty
+    const scale = r && textW(r.figure, 3) <= inner * 0.75 ? 3 : 2;
+    const big = r ? ellipsis(r.figure, inner, scale) : null;
     const words = r ? (r.label ? balanceLines(r.label, inner, 1, 3) : []) : null;
     const text = r ? null : layout(fact, inner, 3, 4);
-    const src = srcText(source, inner);
-    let h = 10 + 5 + 7; // top pad, micro kicker, gap
-    if (big) h += (qual ? 7 : 0) + 14 + 5 + 1 + 6 + (words.length ? words.length * 11 - 4 : 0);
-    else h += text.lines.length * text.lh - (text.lh - 7 * text.scale) + 5 + 1;
-    if (src) h += 10 + 5;
-    h += 10;
-    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
-    return { PX, PW, PH: h, PY, inner, kicker, qual, big, words, text, src };
+    let src = srcText(source, inner);
+    // the kicker, then (a qualifier stated with the figure sits 3 px over it, apart from the kicker) the figure
+    const gapK = qual ? 9 : 7;
+    const body = big ? (qual ? 7 : 0) + 7 * scale + 5 + 1 + 6 + (words.length ? words.length * 11 - 4 : 0) : text.lines.length * text.lh - (text.lh - 7 * text.scale) + 5 + 1;
+    let h = 10 + 5 + gapK + body + (src ? 15 : 0) + 10;
+    // never into the captions' band (y >= 136): the source line goes first (the strap carries it anyway)
+    if (src && h > SAFE_BOTTOM - CARD_TOP) {
+      src = '';
+      h -= 15;
+    }
+    const PY = Math.max(CARD_TOP, Math.min(SAFE_BOTTOM - h, Math.max(28, Math.round(80 - h / 2))));
+    return { PX, PW, PH: h, PY, inner, kicker, qual, big, scale, gapK, words, text, src };
   });
 }
 
@@ -535,22 +544,22 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
     ctx.fillRect(L.PX, L.PY, L.PW, 1);
     let y = L.PY + 10;
     drawText(ctx, L.kicker, tx, y, S.microFog);
-    y += 12;
+    y += 5 + L.gapK;
     // the panel's words are revealed by the wipe itself (no empty box); the figure waits for its rule
     const ruleAt = wipeDur * 0.6;
     if (L.big) {
       if (L.qual) {
-        // the qualifier belongs to the figure: it is on the panel before the figure cuts in
-        drawText(ctx, L.qual, tx, y, S.microFog);
+        // the qualifier belongs to the figure: in silver, on the panel before the figure cuts in
+        drawText(ctx, L.qual, tx, y, S.microSilver);
         y += 7;
       }
-      const ruleY = y + 14 + 5;
+      const ruleY = y + 7 * L.scale + 5;
       const rw = Math.round(L.inner * easeOutQuint(seg(dt, ruleAt, 0.3)));
       if (rw > 0) {
         ctx.fillStyle = acc;
         ctx.fillRect(tx, ruleY, rw, 1);
       }
-      if (dt >= ruleAt + 0.4) drawText(ctx, L.big, tx, y, S.white2);
+      if (dt >= ruleAt + 0.4) drawText(ctx, L.big, tx, y, L.scale === 3 ? S.white3 : S.white2);
       y = ruleY + 7;
       for (let i = 0; i < L.words.length; i++) drawText(ctx, L.words[i], tx, y + i * 11, S.white);
       y += L.words.length ? L.words.length * 11 - 4 : 0;
@@ -572,7 +581,7 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
 }
 
 // WORLD NOW / NEWS IN 60 / new shows: two or three figures stacked in the fact card's grammar
-const STACK_PITCH = 24;
+const STACK_PITCH = 22; // a figure (14 px), its underline 2 px under it, 5 px to the next row
 const STACK_LAYOUTS = layoutCache(60);
 function stackLayout(label, source, rows) {
   return STACK_LAYOUTS(String(label ?? ''), source, rows, null, () => {
@@ -590,14 +599,26 @@ function stackLayout(label, source, rows) {
       qual: r.qual ? ellipsis(r.qual, fw + 8, 1) : '',
     }));
     const kicker = ellipsis(label || 'BY THE NUMBERS', PW - 24, 1);
-    const src = srcText(source, PW - 24);
-    // a qualifier sits in micro type above its figure: rows get 4 px more room so it never
-    // touches the accent underline of the row above
-    const pitch = items.some((it) => it.qual) ? STACK_PITCH + 4 : STACK_PITCH;
-    const top = 10 + 5 + 9; // kicker, then room for a qualifier above the first figure
-    const h = top + items.length * pitch - 6 + (src ? 13 : 0) + 9;
-    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
-    return { PX, PW, PH: h, PY, lx, items, kicker, src, y0: PY + top, pitch };
+    let src = srcText(source, PW - 24);
+    // each row's figure top, from the panel's top: the kicker, then the rows STACK_PITCH apart; a qualifier in micro
+    // type over its figure gives its row 7 px more (it never touches the row above, and the first one stands 4 px
+    // clear of the kicker, so the two micro lines never read as one two-line kicker)
+    const offs = [];
+    let y = 9 + 5 + 4 + (items[0]?.qual ? 7 + 2 : 3);
+    for (let i = 0; i < items.length; i++) {
+      if (i) y += STACK_PITCH + (items[i].qual ? 7 : 0);
+      offs.push(y);
+    }
+    const rowsEnd = y + 17; // the last figure and its accent underline
+    let h = rowsEnd + (src ? 12 : 0) + 6;
+    // three figures with qualifiers fill the card area: the source line goes (the strap carries it), never the
+    // captions' band (y >= 136)
+    if (src && h > SAFE_BOTTOM - CARD_TOP) {
+      src = '';
+      h -= 12;
+    }
+    const PY = Math.max(CARD_TOP, Math.min(SAFE_BOTTOM - h, Math.max(28, Math.round(80 - h / 2))));
+    return { PX, PW, PH: h, PY, lx, items, kicker, src, ys: offs.map((o) => PY + o), srcY: PY + rowsEnd + 4 };
   });
 }
 
@@ -616,8 +637,8 @@ function drawStack(ctx, dt, o, rows, acc) {
     drawText(ctx, L.kicker, tx, L.PY + 10, S.microFog);
     for (let i = 0; i < L.items.length; i++) {
       const it = L.items[i];
-      const y = L.y0 + i * L.pitch;
-      if (it.qual) drawText(ctx, it.qual, tx, y - 7, S.microFog);
+      const y = L.ys[i];
+      if (it.qual) drawText(ctx, it.qual, tx, y - 7, S.microSilver);
       // the words beside the figure's slot, centred on it
       const ly = it.lines.length > 1 ? y - 2 : y + 4;
       for (let k = 0; k < it.lines.length; k++) drawText(ctx, it.lines[k], L.PX + L.lx, ly + k * 11, S.white);
@@ -630,7 +651,7 @@ function drawStack(ctx, dt, o, rows, acc) {
       }
       if (dt >= at + 0.35) drawText(ctx, it.fig, tx, y, S.white2);
     }
-    if (L.src) drawText(ctx, L.src, tx, L.y0 + L.items.length * L.pitch - 6 + 6, S.microFog);
+    if (L.src) drawText(ctx, L.src, tx, L.srcY, S.microFog);
   } finally {
     ctx.restore();
   }
@@ -921,17 +942,23 @@ function ledgerLayout(rows, label, source) {
   let L = LEDGER_LAYOUTS.get(rows);
   if (L && L.label === label && L.source === source) return L;
   const n = rows.length;
-  const blockH = 12 + n * LEDGER_PITCH - 4 + (source ? 12 : 0);
+  // a ledger of one row (the number of the day) sets its figure at 3x when it fits: the row is the card
+  const fs = n === 1 && textW(rows[0].figure, 3) <= 200 ? 3 : 2;
+  const rowH = LEDGER_PITCH + 7 * (fs - 2);
+  const blockH = 12 + n * rowH - 4 + (source ? 12 : 0);
   const top = clamp(Math.round(82 - blockH / 2), 30, SAFE_BOTTOM - blockH);
   const items = rows.map((r, i) => {
-    const fig = ellipsis(r.figure, 170, 2);
-    const fw = textW(fig, 2);
-    const qual = r.qual ? ellipsis(r.qual, 80, 1) : '';
+    // (at 3x the figure has the width it was chosen for: "$50 MILLION" was cut to "$50 MILLI..." at 170 px)
+    const fig = ellipsis(r.figure, fs === 3 ? 200 : 170, fs);
+    const fw = textW(fig, fs);
+    // a figure without a label (a fact that is only "ALMOST $50 MILLION"): its qualifier reads as the row's label
+    const bare = !r.label && r.qual;
+    const qual = r.qual && !bare ? ellipsis(r.qual, 80, 1) : '';
     const qualW = qual ? measureText(qual, 1, 'micro') + 4 : 0;
-    const lab = ellipsis(r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
-    return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1, 'micro'), y: top + 12 + i * LEDGER_PITCH };
+    const lab = ellipsis(bare ? r.qual : r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
+    return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1), y: top + 12 + i * rowH };
   });
-  L = { label, source, top, items, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: srcText(source, 300) };
+  L = { label, source, top, items, fs, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: srcText(source, 300) };
   LEDGER_LAYOUTS.set(rows, L);
   return L;
 }
@@ -951,23 +978,25 @@ function drawLedger(ctx, dt, o, rows, acc) {
     for (let i = 0; i < n; i++) {
       const it = L.items[i];
       const at = 0.15 + i * 0.3;
-      // label in micro on the figure's baseline, a dotted slate leader, then the qualifier (micro)
-      // right before the figure
-      drawText(ctx, it.lab, X0, it.y + 9, S.microFog);
-      ctx.fillStyle = P.slate;
+      // label in silver body type on the figure's baseline (as the other boards' labels: micro fog on a
+      // dimmed picture was the faintest thing on the card), a dotted steel leader, then the qualifier
+      // (micro) right before the figure
+      const fy = 7 * (L.fs - 2); // the row's baseline drops with a 3x figure
+      drawText(ctx, it.lab, X0, it.y + 7 + fy, S.silver);
+      ctx.fillStyle = P.steel;
       const lx = X0 + it.labW + 4;
       const rx = W - X0 - it.fw - 4 - it.qualW;
-      for (let x = lx + ((lx & 1) ^ 1); x < rx; x += 2) ctx.fillRect(x, it.y + 13, 1, 1);
-      if (it.qual) drawText(ctx, it.qual, rx + 2, it.y + 9, S.microFog);
+      for (let x = lx + ((lx & 1) ^ 1); x < rx; x += 2) ctx.fillRect(x, it.y + 13 + fy, 1, 1);
+      if (it.qual) drawText(ctx, it.qual, rx + 2, it.y + 9 + fy, S.microSilver);
       // the rule under the row: slate between rows, the accent under the last one
       const rw = Math.round(RW * easeOutQuint(seg(dt, at, 0.3)));
       if (rw > 0) {
         ctx.fillStyle = i === n - 1 ? acc : P.slate;
-        ctx.fillRect(X0, it.y + 17, rw, 1);
+        ctx.fillRect(X0, it.y + 17 + fy, rw, 1);
       }
-      if (dt >= at + 0.4) drawText(ctx, it.fig, W - X0, it.y, S.white2Right);
+      if (dt >= at + 0.4) drawText(ctx, it.fig, W - X0, it.y, L.fs === 3 ? S.white3Right : S.white2Right);
     }
-    if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 24, S.microFog);
+    if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 24 + 7 * (L.fs - 2), S.microFog);
   } finally {
     ctx.restore();
   }
@@ -1076,18 +1105,21 @@ function drawReading(ctx, dt, o, rows) {
     if (r.qual) drawText(ctx, ellipsis(r.qual, 200, 1), x0, 48, S.microSilver);
     // the figure wipes on (absent, then whole: no count-up, no typing)
     const fp = easeOutQuint(seg(dt, 0.3, 0.25));
+    // the reading itself at 3x when it fits the column (the instrument's one number; at 2x it floated small
+    // over an empty black frame), its unit under it
+    const fs = textW(r.figure, 3) <= W - x0 - 60 ? 3 : 2;
     if (fp > 0) {
-      const fig = ellipsis(r.figure, W - x0 - 30, 2);
-      const fw = textW(fig, 2);
+      const fig = ellipsis(r.figure, W - x0 - 30, fs);
+      const fw = textW(fig, fs);
       ctx.save();
       try {
-        clipRect(ctx, x0, 55, Math.round((fw + 2) * fp), 17);
-        drawText(ctx, fig, x0, 56, S.white2);
+        clipRect(ctx, x0, 55, Math.round((fw + 2) * fp), 7 * fs + 3);
+        drawText(ctx, fig, x0, 56, fs === 3 ? S.white3 : S.white2);
       } finally {
         ctx.restore();
       }
     }
-    if (r.label) drawText(ctx, ellipsis(r.label, W - x0 - 30, 1), x0, 80, S.silver);
+    if (r.label) drawText(ctx, ellipsis(r.label, W - x0 - 30, 1), x0, fs === 3 ? 84 : 80, S.silver);
     if (ruler) {
       ctx.fillStyle = P.steel;
       ctx.fillRect(x0, 104, 241, 1);
@@ -1285,6 +1317,17 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   return drawRuleCard(ctx, dt, opts, rows, acc, style.wipe || 0.3);
 }
 
+/**
+ * The cards' layouts as drawn (tests): the one-figure rule card, the stack of two or three figures, TECH BYTES's
+ * ledger and the breaking card.
+ */
+export const cardLayouts = {
+  rule: (fact, label = '', source = '') => ruleLayout(fact, label, source, rowsFor(fact, null)),
+  stack: (numbers, label = '', source = '') => stackLayout(label, source, rowsFor('', numbers)),
+  ledger: (numbers, label = '', source = '') => ledgerLayout(typeof numbers === 'string' ? rowsFor(numbers, null) : rowsFor('', numbers), label, source),
+  breaking: (headline, source = '') => breakingLayout(String(headline ?? ''), source),
+};
+
 const QUOTE = { text: '', by: null, image: null, accent: null, programId: '' };
 const NUMBERS = { fact: '', label: 'BY THE NUMBERS', source: '', image: null, numbers: null, programId: '', accent: null, headline: '' };
 
@@ -1385,11 +1428,21 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
 
 const breakingField = lazyBackdrop({ key: 'breaking', colors: [P.black, P.ink], cx: 192, cy: 108, reach: 520 });
 
+/**
+ * The band, the headline and the source as one block, centred a touch above the middle of the frame between the top
+ * row and the ticker (at a fixed y 52 the block filled the top half and left the bottom one empty).
+ */
+function breakingLayout(headline, source) {
+  const BH = 28;
+  const lay = layout(headline, W - 2 * X0, 3, 4);
+  const blockH = BH + 16 + lay.lines.length * lay.lh - (lay.lh - 7 * lay.scale) + (source ? 9 : 0);
+  return { BY: Math.max(40, Math.round(106 - blockH / 2)), BH, blockH, lay };
+}
+
 export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}) {
   ctx.drawImage(breakingField(), 0, 0);
+  const { BY, BH, lay } = breakingLayout(headline, source);
   // the red band wipes in from the left
-  const BY = 52;
-  const BH = 28;
   const bp = easeOutQuint(seg(dt, 0, 0.36));
   plate(ctx, 0, BY, W, BH, P.red, bp);
   plate(ctx, 0, BY + BH, W, 2, P.darkRed, bp);
@@ -1401,8 +1454,7 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
     ctx.restore();
   }
   // headline on the calm field below, balanced lines, all left-aligned on x 19
-  const lay = layout(headline, W - 2 * X0, 3, 4);
-  const top = BY + BH + 14;
+  const top = BY + BH + 16;
   for (let i = 0; i < lay.lines.length; i++) rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, 0.42 + i * 0.08, 0.34), lay.scale === 2 ? S.white2 : S.white);
   if (source) {
     // the breaking card runs under the 'bug' graphics (no captions or strap): room down to the ticker

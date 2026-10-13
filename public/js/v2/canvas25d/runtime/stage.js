@@ -441,9 +441,9 @@ export class Stage {
     bd.accent = this.accent;
     this.base = null;
     if (scene.shot === 'twoway') {
-      // the studio behind the presenter in their box: the wall at rest (a plate or a map cut by the box's edge
-      // would show a word in half: set text is whole or not there)
-      this.wall.mode = 'idle';
+      // the studio behind the presenter in their box: the wall at rest (wall.js 'rest': no plate, map or wordmark,
+      // which the box's edge would cut in half: set text is whole or not there)
+      this.wall.mode = 'rest';
       this.wall.image = this.wall.location = this.wall.figure = null;
       this.wall.label = null;
       this.wall.since = scene.shotSince ?? 0;

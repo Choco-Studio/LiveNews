@@ -2,8 +2,8 @@
 // solid black line boxes, centred and ragged, so they never read as another
 // strap line (straps are left-aligned ink bars with an accent) and the yellow
 // stays where the programme bibles allow it. Two balanced lines of at most ~44
-// characters, or one line at a time while a strap is up, so the bottom third
-// stays light. A long sentence is split into pages at phrase boundaries
+// characters, above the strap too (one-line pages flipped too fast to read in
+// comfort). A long sentence is split into pages at phrase boundaries
 // (graphics/breaks.js 'caption' style: an extra page is cheaper than a line
 // that cuts "the Great / Barrier Reef"), paced to the speech and never
 // stepping back, so no line is ever dropped; each page wipes in diagonally from the

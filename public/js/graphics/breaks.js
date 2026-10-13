@@ -49,10 +49,12 @@ const sq = (x) => x * x;
 // on it is never right. 'caption': subtitles are ragged by nature, so an extra
 // page is cheap next to a line or page that cuts a phrase ("the highest /
 // rate", "the Great / Barrier Reef"). A one-line page under `scrapPage` of its
-// width is a scrap (ramped, no cliff); a closing page may be shorter (`scrapLast`).
+// width is a scrap (ramped, no cliff); a closing page may be shorter (`scrapLast`). A caption page that is one short
+// line in the middle of a sentence flashes past ("An offshore wind farm", then the rest): under 45 % of the width it
+// costs like a bad break, so the words join the next page's two lines instead.
 const STYLES = {
   line: { page: 1, line: 0.25, fill: 0.6, fill1: 1, widow: 0.8, scrap: 2.5, balance: 2.5, lineBreak: 1, pageBreak: 1.6, pageBad: 0.6, overlong: 10, scrapPage: 0.35, scrapLast: 0.22, scrapLine: 0.3, words: 0 },
-  caption: { page: 0.4, line: 0.25, fill: 0.3, fill1: 0.2, widow: 0.3, scrap: 2.5, balance: 1.2, lineBreak: 2, pageBreak: 1.2, pageBad: 1, overlong: 10, scrapPage: 0.2, scrapLast: 0.12, scrapLine: 0.25, words: 0 },
+  caption: { page: 0.4, line: 0.25, fill: 0.3, fill1: 0.2, widow: 0.3, scrap: 2.5, balance: 1.2, lineBreak: 2, pageBreak: 1.2, pageBad: 1, overlong: 10, scrapPage: 0.45, scrapLast: 0.12, scrapLine: 0.25, words: 0 },
 };
 
 /** Word tokens of `text` with their character offsets, lookup forms and capitalisation. */
@@ -68,8 +70,21 @@ function tokenize(text) {
     const bare = raw.toUpperCase().replace(/^[("'“‘«¿¡]+/, '').replace(/[)"'”’»,.;:!?…]+$/, '').replace(/['’]S$/, '');
     const first = raw.replace(/^[("'“‘«¿¡]+/, '');
     const cap = mixed && /^\p{Lu}/u.test(first);
-    out.push({ raw, bare, start: m.index, w: measureText(raw), cap, initial });
+    out.push({ raw, bare, start: m.index, w: measureText(raw), cap, initial, list: false });
     initial = /[.!?:…]$/.test(raw);
+  }
+  // "Berlin, Munich and Frankfurt": a name with a comma, a name after it, and an "and"/"or" before a name within the
+  // next few words is a list (its commas are no clause breaks)
+  for (let i = 0; i + 1 < out.length; i++) {
+    const t = out[i];
+    if (!t.cap || !t.raw.endsWith(',') || !out[i + 1].cap) continue;
+    for (let k = i + 2; k < Math.min(out.length - 1, i + 5); k++) {
+      if ((out[k].bare === 'AND' || out[k].bare === 'OR') && out[k + 1].cap) {
+        t.list = true;
+        break;
+      }
+      if (!out[k].cap) break;
+    }
   }
   return out;
 }
@@ -85,12 +100,16 @@ function boundary(a, b) {
   // an abbreviation's dot ends nothing: "The now-former Lt. / governor" once paged a caption on "LT." (TECH BYTES 5 Oct)
   const abbr = last === '.' && abbreviationDot(a.raw);
   if (!abbr && (last === '.' || last === '!' || last === '?' || last === '…')) return 0;
+  // a comma inside a list of names is not a clause: "Stations in Berlin, / Munich and Frankfurt" splits the list
+  if (last === ',' && a.list) return 1.6;
   if (last === ',' || last === ';' || last === ':' || DASH.has(a.raw) || DASH.has(b.raw)) return 0.4;
   if (last === ')' || b.raw[0] === '(') return 0.7;
   let c = 1.2;
   // between two content words ("water | vapour", "historic | centre") is the
   // worst ordinary break: compounds and adjective + noun pairs live there
   if (CLAUSE_START.has(b.bare)) c -= 0.6;
+  // "Munich / and Frankfurt": the last name of a list stays with the one before it
+  else if ((b.bare === 'AND' || b.bare === 'OR') && a.cap && !a.initial) c += 1;
   else if (PHRASE_START.has(b.bare)) c -= 0.5;
   if (abbr || WEAK_END.has(a.bare)) c += 2;
   else if (SOFT_END.has(a.bare)) c += 0.6;

@@ -23,7 +23,7 @@ import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, d
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
-import { drawLinkGraphics, drawFileCredit } from './remote.js';
+import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
 import { drawRecreation } from './recreation.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -150,6 +150,8 @@ export class Graphics {
     this.maxStory = -1;
     this.figureKey = '';
     this.figures = [];
+    this.seenRundown = null;
+    this.seenNumbers = new Map();
     this.tickerIn = { items: null, b: null, next: null, mode: '', ref: null, figures: null };
     this.tickerList = [];
     this.tickerKey = 0;
@@ -201,6 +203,12 @@ export class Graphics {
     }
     const keep = this.pg.tagHold === Infinity;
     if (this.tagIn !== null && this.tagOut === null && (mode !== 'news' || (!keep && (t >= this.tagIn + this.pg.tagHold || t >= this.tagUntil)))) this.tagOut = t;
+    // a programme that keeps its name up (NEWS IN 60) gets it back after whatever took it off (a breaking card):
+    // it wipes in again a beat after the news graphics return, for the rest of the episode
+    else if (keep && mode === 'news' && this.tagIn !== null && this.tagOut !== null && t >= this.tagOut + PROGRAM_TAG.delay) {
+      this.tagIn = t;
+      this.tagOut = null;
+    }
 
     const top = this.captionsOnTop(scene);
     const capsBelow = this.captions.active && !top;
@@ -230,8 +238,12 @@ export class Graphics {
     // ...nor IN PLAIN ENGLISH: its card is the term and its plain words, the line Ada reads over it
     if (text && scene.shot === 'fact' && scene.card?.term?.term) text = null;
     const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
-    // while a strap is up the caption shows one line at a time: the bottom third stays light
-    const perPage = !top && (this.strapUp() || rec) ? 1 : 2;
+    // two lines a page everywhere, above the strap too (owner: captions changed too fast): a sentence in one-line
+    // pages flipped every 2.4 s in median and left scraps on screen for 1.4 s ("within days."); two-line pages hold
+    // about 3.5 s, as broadcast subtitles do. Over a two-way, two lines above a two-line strap would cover the box
+    // labels and the rule under the boxes: there (and only then) the caption pages a line at a time
+    const settledTop = this.strap.cur && !scene.recreation ? this.strap.cur.barY - STRAP.tagH : STRAP.tagY;
+    const perPage = scene.shot === 'twoway' && !top && settledTop - CAPTION.gap - 2 * CAPTION.pitch < TWO_WAY_CLEAR ? 1 : 2;
     this.captions.update(t, text, scene.subtitleSince ?? null, frame?.speaking ? frame.charIndex : null, perPage);
 
     this.updateTickerList(t, scene);
@@ -348,19 +360,30 @@ export class Graphics {
     return this.dupSkip;
   }
 
-  /** Figures of the stories already aired, for MONEY MINUTE's bottom line (cached by key). */
+  /**
+   * Figures of the stories already aired, for MONEY MINUTE's bottom line (cached by key). The running order
+   * carries no figures (the server's rundown is headlines), so each story's grounded numbers are read off its
+   * segment while it airs (scene.segPlan.ctx.seg) and join the bottom line once the next story has started.
+   */
   airedFigures(scene) {
     if (Array.isArray(scene.tickerFigures)) return scene.tickerFigures;
     const rundown = Array.isArray(scene.rundown) ? scene.rundown : null;
     if (!rundown) return null;
+    if (rundown !== this.seenRundown) {
+      this.seenRundown = rundown;
+      this.seenNumbers = new Map(); // storyId -> numbers[], in air order
+    }
+    const seg = scene.segPlan?.ctx?.seg;
+    if (seg && seg.storyId && Array.isArray(seg.numbers) && seg.numbers.length && !this.seenNumbers.has(seg.storyId)) this.seenNumbers.set(seg.storyId, seg.numbers);
     // the story on air and anything after it never appear (no figure before its turn)
     const cur = scene.storyId ? rundown.findIndex((r) => r?.storyId === scene.storyId) : -1;
     const upTo = cur >= 0 ? cur : this.maxStory + 1;
-    const key = `${upTo}`;
+    const key = `${upTo}|${this.seenNumbers.size}`;
     if (key === this.figureKey && this.figuresRundown === rundown) return this.figures;
     const out = [];
     for (let i = 0; i < upTo && i < rundown.length; i++) {
-      const nums = Array.isArray(rundown[i]?.numbers) ? rundown[i].numbers : [];
+      const id = rundown[i]?.storyId;
+      const nums = Array.isArray(rundown[i]?.numbers) ? rundown[i].numbers : (id && this.seenNumbers.get(id)) || [];
       for (const n of nums) if (n && n.value && n.label) out.push(n);
     }
     this.figureKey = key;

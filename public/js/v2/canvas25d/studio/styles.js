@@ -56,7 +56,8 @@ const BASE = {
   floor: 'black',
   wallMaxL: 45, // mean L* ceiling of the wall content (ART_DIRECTION values)
   wallField: ['navy', 'ink'], // idle field: top colour → bottom colour (Bayer)
-  wallBand: [0.2, 0.6], // where the field's top colour falls to its bottom colour (share of the height): navy only up top
+  wallBand: [0, 0.72], // where the field's top colour falls to its bottom colour (share of the height): navy only up top,
+  // fading over most of the screen's height (a gradient, never a stripe)
   pictureMat: 0, // world units of black mat around wall pictures (TECH BYTES: 2 px in the wide)
   values: { face: [55, 73], headZone: [18, 45], wall: 45 },
 };
@@ -200,7 +201,7 @@ const DEFS = {
     wallIdle: 'week',
     sky: 3,
     wallField: ['ink', 'maroon'],
-    wallBand: [0.74, 0.94],
+    wallBand: [0.62, 1],
     tintNames: ['maroon', 'brown', 'rust', 'darkRed'],
     tintMax: 0.1,
     values: { face: [55, 73], headZone: [18, 45], wall: 45, tintMax: 0.1 },
