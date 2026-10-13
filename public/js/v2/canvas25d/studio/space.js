@@ -87,20 +87,77 @@ const onEarth = (X, Y) => {
   return (X - e.X) * (X - e.X) + (Y - e.Y) * (Y - e.Y) < e.R * e.R;
 };
 
+// The sky's slow fields, baked once in world units (one texel per unit) and read back with a bilinear sample:
+// the Milky Way's brightness (its dust lanes cut in), the nebula's density and the night side's cloud. Their noise
+// used to be evaluated per pixel on every redraw of the set, 15-60 ms on a cut; the bake is done once, in slices
+// (warmSky), and a frame reads three numbers per pixel at most. The fields are smooth at a texel, so the picture
+// is the one the noise drew.
+const FIELD = { X0: -258, Y0: -136, w: 518, h: 194, rows: 0, band: null, neb: null, cloud: null };
+const BAND_L = Math.hypot(SKY.milky.X1 - SKY.milky.X0, SKY.milky.Y1 - SKY.milky.Y0);
+const BAND_UX = (SKY.milky.X1 - SKY.milky.X0) / BAND_L, BAND_UY = (SKY.milky.Y1 - SKY.milky.Y0) / BAND_L;
+/** Bake `n` more rows of the fields; true when they are all baked. */
+function bakeRows(n) {
+  const f = FIELD;
+  if (!f.band) {
+    f.band = new Float32Array(f.w * f.h);
+    f.neb = new Float32Array(f.w * f.h);
+    f.cloud = new Float32Array(f.w * f.h);
+  }
+  const m = SKY.milky, nb = SKY.nebula;
+  const end = Math.min(f.h, f.rows + n);
+  for (let j = f.rows; j < end; j++) {
+    const Y = f.Y0 + j;
+    for (let i = 0; i < f.w; i++) {
+      const X = f.X0 + i, o = j * f.w + i;
+      // the Milky Way: a soft band (its heart brighter), cut by dark dust lanes; -1 off its ends
+      const along = (X - m.X0) * BAND_UX + (Y - m.Y0) * BAND_UY, across = -(X - m.X0) * BAND_UY + (Y - m.Y0) * BAND_UX;
+      const band = 1 - Math.abs(across) / m.hw;
+      if (band > -0.1 && along > -2 && along < BAND_L + 2) {
+        const dust = fbm(along * 0.035, across * 0.09 + 2);
+        f.band[o] = band * (0.55 + 0.6 * fbm(along * 0.02 + 7, across * 0.05)) - (dust > 0.62 ? (dust - 0.62) * 3 : 0);
+      } else f.band[o] = -1;
+      const nx = (X - nb.X) / nb.rx, ny = (Y - nb.Y) / nb.ry;
+      const nd = nx * nx + ny * ny;
+      f.neb[o] = nd < 1.7 ? (fbm(X * 0.05 + 1, Y * 0.07 + 4) * (1.6 - nd)) / 1.6 : 0;
+      f.cloud[o] = Y > -40 ? fbm(X * 0.03, Y * 0.12 + 9) : 0;
+    }
+  }
+  f.rows = end;
+  return end >= f.h;
+}
+/** The sky's warm-up as small tasks (set.js runs them in idle slices): 24 rows of the fields each. */
+export function skyWarmTasks() {
+  const out = [];
+  for (let j = 0; j < FIELD.h; j += 24) out.push(() => bakeRows(24));
+  return out;
+}
+/** A baked field at a world point (bilinear; 0 outside the bake). */
+function field(arr, X, Y) {
+  const fx = X - FIELD.X0 - 0.5, fy = Y - FIELD.Y0 - 0.5;
+  const i = Math.floor(fx), j = Math.floor(fy);
+  if (i < 0 || j < 0 || i >= FIELD.w - 1 || j >= FIELD.h - 1) return arr === FIELD.band ? -1 : 0;
+  const u = fx - i, v = fy - j, o = j * FIELD.w + i;
+  const a = arr[o], b = arr[o + 1], c = arr[o + FIELD.w], d = arr[o + FIELD.w + 1];
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
 export function drawSpace(fr, cam, box, soft) {
   const k = kAt(cam, SET.wallZ);
   const px = fr.px;
   const xa = Math.max(0, box.x0), xb = Math.min(W, box.x1), ya = Math.max(0, box.y0), yb = Math.min(H, box.y1);
   if (xb <= xa || yb <= ya) return;
+  if (FIELD.rows < FIELD.h) bakeRows(FIELD.h); // a first frame before the warm-up got there bakes the rest now
   const e = SKY.earth, m = SKY.milky, nb = SKY.nebula;
-  const L = Math.hypot(m.X1 - m.X0, m.Y1 - m.Y0), ux = (m.X1 - m.X0) / L, uy = (m.Y1 - m.Y0) / L;
+  const band0 = soft ? 0.46 : 0.38;
   for (let y = ya; y < yb; y++) {
     const Y = cam.y + (y + 0.5 - cam.hy) / k;
     const row = y * W;
+    const dY = Y - e.Y;
     for (let x = xa; x < xb; x++) {
       const X = cam.x + (x + 0.5 - 192) / k;
       // the Earth: its night side, the atmosphere's lit edge, then its glow fading into space
-      const dE = Math.hypot(X - e.X, Y - e.Y) - e.R; // < 0 inside the disc
+      const dX = X - e.X;
+      const dE = Math.sqrt(dX * dX + dY * dY) - e.R; // < 0 inside the disc
       const b = bay(x, y);
       if (dE < 0) {
         // the night side: ink near the limb (the airglow), black further in, a few city lights and cloud
@@ -108,7 +165,7 @@ export function drawSpace(fr, cam, box, soft) {
         if (dE > -1.4 / k - 0.6 && !soft) c = C.cyan;
         else if (dE > -2.4 && !soft) c = C.blue;
         if (soft && dE > -3) c = C.blue;
-        if (!soft && dE < -6 && fbm(X * 0.03, Y * 0.12 + 9) > 0.68 && c === C.black) c = C.ink; // cloud
+        if (!soft && dE < -6 && c === C.black && field(FIELD.cloud, X, Y) > 0.68) c = C.ink; // cloud
         px[row + x] = c;
         continue;
       }
@@ -120,19 +177,16 @@ export function drawSpace(fr, cam, box, soft) {
       }
       let c = C.black;
       // the Milky Way: a soft band (ink, its heart a sparse slate), cut by dark dust lanes
-      const along = (X - m.X0) * ux + (Y - m.Y0) * uy, across = -(X - m.X0) * uy + (Y - m.Y0) * ux;
-      const band = 1 - Math.abs(across) / m.hw;
-      if (band > 0 && along > 0 && along < L) {
-        const dust = fbm(along * 0.035, across * 0.09 + 2);
-        const v = band * (0.55 + 0.6 * fbm(along * 0.02 + 7, across * 0.05)) - (dust > 0.62 ? (dust - 0.62) * 3 : 0);
+      const across = -(X - m.X0) * BAND_UY + (Y - m.Y0) * BAND_UX;
+      if (across < m.hw && across > -m.hw) {
+        const v = field(FIELD.band, X, Y);
         if (v > 0.72 && b < (v - 0.72) * 2.4 && !soft) c = C.slate;
-        else if (v > 0.38 + (soft ? 0.08 : 0)) c = v > 0.5 || b < (v - 0.38) / 0.12 ? C.ink : C.black;
+        else if (v > band0) c = v > 0.5 || b < (v - 0.38) / 0.12 ? C.ink : C.black;
       }
       // the nebula: purple and maroon wisps, a few magenta knots (never a bright patch)
       const nx = (X - nb.X) / nb.rx, ny = (Y - nb.Y) / nb.ry;
-      const nd = nx * nx + ny * ny;
-      if (nd < 1.6) {
-        const f = fbm(X * 0.05 + 1, Y * 0.07 + 4) * (1.6 - nd) / 1.6;
+      if (nx * nx + ny * ny < 1.6) {
+        const f = field(FIELD.neb, X, Y);
         if (f > 0.4) c = f > 0.52 && b < (f - 0.52) * 4 && !soft ? C.magenta : f > 0.46 ? C.purple : b < (f - 0.4) / 0.06 ? C.purple : c === C.black ? C.maroon : c;
         else if (f > 0.3 && c === C.black && b < (f - 0.3) / 0.1) c = C.maroon;
       }

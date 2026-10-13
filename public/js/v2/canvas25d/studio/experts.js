@@ -16,6 +16,7 @@
 // and off, turbines, stars, LEDs, the heart monitor), slow and small, never pulling the eye from the speaker.
 //
 //   drawExpertStudio(px, name, t)   the studio `name` into a 384x216 u32 frame at time t (s); false if unknown
+//   warmExpertStudio(name)          build a studio's cached layer ahead of its first shot (idle time)
 //   EXPERT_STUDIOS                  the names
 //   STUDIO_KIT                      the toolkit below, for other virtual sets in the same style (studio/press.js)
 import { C, bayer } from '../pixbuf.js';
@@ -540,8 +541,12 @@ function observatory(px, r, st) {
   const [[ax, ay], [bx, by]] = OBS.scope;
   const len = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / len, uy = (by - ay) / len, nx = -uy, ny = ux;
   const tube = (ox, oy, rad, from, to, tone) => {
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
+    // only the rows and columns the segment can reach (its two ends grown by the radius)
+    const ex0 = ax + ox + ux * from, ey0 = ay + oy + uy * from, ex1 = ax + ox + ux * to, ey1 = ay + oy + uy * to;
+    const xa = Math.max(0, Math.floor(Math.min(ex0, ex1) - rad - 1)), xb = Math.min(W, Math.ceil(Math.max(ex0, ex1) + rad + 2));
+    const ya = Math.max(0, Math.floor(Math.min(ey0, ey1) - rad - 1)), yb = Math.min(H, Math.ceil(Math.max(ey0, ey1) + rad + 2));
+    for (let y = ya; y < yb; y++) {
+      for (let x = xa; x < xb; x++) {
         const qx = x - ax - ox, qy = y - ay - oy;
         const along = qx * ux + qy * uy, across = qx * nx + qy * ny;
         if (along < from || along > to || Math.abs(across) > rad) continue;
@@ -963,10 +968,9 @@ export const STUDIO_KIT = { rng, put, rect, bands, relight, falloff, seg, disc, 
 
 const BUILT = new Map(); // name -> { px, st }
 
-/** The studio `name` into px (u32, 384x216) at time t (s). False when there is no such studio. */
-export function drawExpertStudio(px, name, t = 0) {
+function built(name) {
   const def = STUDIOS[name];
-  if (!def) return false;
+  if (!def) return null;
   let b = BUILT.get(name);
   if (!b) {
     const layer = new Uint32Array(W * H);
@@ -975,6 +979,22 @@ export function drawExpertStudio(px, name, t = 0) {
     b = { px: layer, st };
     BUILT.set(name, b);
   }
+  return b;
+}
+
+/**
+ * Build a studio's layer ahead of its first shot (set.js queues the episode's experts in idle time): the first
+ * frame of a two-way or a location shot then only copies it. True when the studio exists.
+ */
+export function warmExpertStudio(name) {
+  return !!built(name);
+}
+
+/** The studio `name` into px (u32, 384x216) at time t (s). False when there is no such studio. */
+export function drawExpertStudio(px, name, t = 0) {
+  const def = STUDIOS[name];
+  if (!def) return false;
+  const b = built(name);
   px.set(b.px);
   live = true;
   try {
