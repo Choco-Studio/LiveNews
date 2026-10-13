@@ -84,7 +84,10 @@ air.
   - betting, odds, tips and match predictions;
   - hardship: closures, job losses, shortages, a struggling club or firm;
   - a named person's failure or embarrassment: a flop, a bad review, a gaffe (a game never laughs at a real person);
-  - reviews and first-person pieces ("as awesome as I hoped").
+  - reviews and first-person pieces ("as awesome as I hoped");
+  - notices, job adverts, countdowns and promotions ("Job opportunities: NASA office of general counsel", "48 hours to…");
+  - anything that is not a headline: a headline says what happened, so a picture caption with no verb ("Transporter-18
+    SmallSats Encapsulation") is not one.
 - **What the archive holds**, measured on 12 Oct. That is the development channel's ten hours, 14:00–24:00 London, five
   programmes and 269 distinct real stories:
   - 112 were read grave or serious;
@@ -95,16 +98,22 @@ air.
   That leaves **30 usable stories in ten hours**, all with a picture: **4 with a usable place** (§4.1), **4 figures (2
   usable)** and **7 quotes, none with the speaker's role**. With the morning of 13 Oct the pool at 14:00 was 50 stories,
   6 of them with usable places.
+- **The list is matched with care.** Harm, disasters, crime, conflict and betting count anywhere in a story. The other
+  kinds are judged on its subject (headline, title, opening sentences): "The government says…" in a tunnel story's second
+  sentence does not make it politics. Senses that only look excluded pass: deep time and history ("Roman troops"), cells
+  ("destroys fat cells"), sky and space ("asteroid collisions"), "earns a draw", "bets on nostalgia". (Step 1's log,
+  `docs/roadmap/critique/pay-attention-desk.md`, has what the lists caught and missed on real data.)
 - **A story is asked at most once in seven days**; once asked it may still appear as an option. A story asked in an
   edition is never an option earlier in the same edition.
 - **At weekends**, no story that SEVEN DAYS told in its latest edition: the viewer has just heard it.
 
 ### 3.2 Nothing false on the screen
 
-- **Every option is real**, from an eligible event:
-  - three real headlines (PICTURE THIS);
-  - three real places of one kind (WHERE IN THE WORLD?);
-  - real headlines (TODAY OR NOT TODAY?).
+- **Every option is real**:
+  - three real headlines of eligible events (PICTURE THIS);
+  - three real countries (WHERE IN THE WORLD?): the week's eligible story places first, then a fixed list of 49
+    well-known countries in seven regions, never one named by a story the week left out;
+  - real headlines of eligible events (TODAY OR NOT TODAY?).
   
   **No invented headline, place, figure, quote or statement, ever**, including as a wrong answer.
 - **The words are the channel's own.** A question shows the aired headline verbatim inside a fixed frame ("Which story is
@@ -125,7 +134,9 @@ air.
 - **Corrections.** When a story's figure or place changed between airings, the question uses the latest aired version and
   says when ("AS REPORTED AT 18:00"). A figure that aired with two different values in one hour is not used.
 - **No give-aways**:
-  - WHERE's headline never names the place, its country or its people (`server/gazetteer.js` `placeSupported`);
+  - WHERE's headline never shows the place, its country or its people (`server/gazetteer.js` `placeSupported`). When the
+    headline names them, those words are masked with one mask's length for every name ("F1 in ▮▮▮▮▮: There's new fastest
+    car now"), and the reveal shows the headline whole;
   - TODAY OR NOT TODAY's headlines name no day, date or year, and no "tomorrow" or "tonight".
 
 ### 3.3 When the quiz does not air
@@ -182,14 +193,15 @@ The host never calls the game live and never suggests a real contest.
 
 | Round | How it plays | Options | Scoring | Each question | The plan needs (in the pairing's pool) |
 |---|---|---|---|---|---|
-| **PICTURE THIS** | A story's picture, beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines from three different desks | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with pictures; 6 more headlines |
+| **PICTURE THIS** | A story's picture, beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines, at most two from one desk (13 Oct's pool: 20 technology, 13 science, 2 world), none sharing a name with another | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with pictures; 6 more headlines |
 | **LETTER BY LETTER** | A real headline as letter tiles. Every word's first letter, the digits and the punctuation show at once; then a quarter, a half and three quarters of the other letters, on the beat, in a seeded order that never leaves a word unrevealed past the second stage. The first to buzz says the headline | None | 3 / 2 / 1 by stage; a stall locks that player out for the headline | ~20 s | 3 stories |
-| **WHERE IN THE WORLD?** | The headline in its frame; three pins on the world map (`scenes/worldmap.js`); the zoom to the right one | Three real places from the week's stories, all of one kind (three countries or three cities), in three regions | 2 points | ~21 s | 3 stories with a usable place, 6 more places |
+| **WHERE IN THE WORLD?** | The headline in its frame, its place masked if it names it; three pins on the world map (`scenes/worldmap.js`); the zoom to the right one | Three countries in three regions (§3.2). An answer is never another question's wrong pin, and no wrong pin shows more than twice in a round | 2 points | ~21 s | 3 stories with a usable place, 6 more places |
 | **TODAY OR NOT TODAY?** | A quickfire of six real headlines | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline | 3 for TODAY, 3 for EARLIER |
 | **HOW MANY?** (when the week allows) | The aired sentence with its figure masked (§3.2) | None: each player says a guess, shown as GUESS | Closest 2 points; exactly right 3, but only for a figure that aired without "about", "around", "nearly" or "up to" | ~19 s | 3 usable figures |
 
-- **A usable place** is a story's place that is named in its aired text (`placeSupported`) but not in the headline
-  used, and where the story happens (an event at a place, not a company's home country).
+- **A usable place** is a story's place, named in its aired words where the story happens: after "in", "at", "off"…, as
+  the place's own ("Egypt's…") or as a dateline. A company's home country ("Indian brand CMF…") is no "where". When the
+  headline names the place, it is masked (§3.2).
 - **A usable figure** appears verbatim in the aired text, and its label's words appear in the same sentence. It is never
   the price of a person (§3.1).
 - **WHO SAID IT?** was designed and dropped (round 5 of the critique):
