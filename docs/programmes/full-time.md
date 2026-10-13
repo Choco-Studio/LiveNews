@@ -258,7 +258,7 @@ are different programmes. A shape fixes the order; a segment without material is
   colder) as for the press room. RECREATION and the source on screen throughout. The system's rules hold (a public adult in
   a public role; never a victim, a relative or a child; never on a court case, abuse or a death). At most one an edition.
 
-## 6. Look and sound (graphics and set built; open and sound to build)
+## 6. Look and sound (graphics, set, open and sound built)
 
 - **Accent orange** (`P.orange`; dark type on it, already in the graphics' dark-ink set). Distinct from NEWS IN 60's yellow
   and the RECREATION tag's yellow by hue and by its place on screen.
@@ -409,7 +409,9 @@ are different programmes. A shape fixes the order; a segment without material is
    (`director.js` `playBoardSegment`: SCORE CENTRE fills the frame, COMING UP holds the calendar, a row or a leaf as
    its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.* The set is built (§6; its critique
-   passed at 9.8 in round 8, `docs/roadmap/critique/full-time-set.md`).
+   passed at 9.8 in round 8, `docs/roadmap/critique/full-time-set.md`). The open, its theme, the bed, SCORE CENTRE's
+   ticks and the scoreline sting are built (§6; both critiques passed at 9.8 in round 4,
+   `docs/roadmap/critique/full-time-open.md` and `full-time-sound.md`); the owner chooses the sting by ear.
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
    *Looks built (§2): three candidates each, A on air in both renderers; critique in
    `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*
