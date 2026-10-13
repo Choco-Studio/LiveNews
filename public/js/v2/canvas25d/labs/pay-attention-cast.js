@@ -165,7 +165,7 @@ const bg = (ctx) => {
 
 /** The 'candidates' sheet. */
 function sheetCandidates(ctx, mk) {
-  const rowH = 360, x0 = 12;
+  const rowH = 380, x0 = 12;
   ctx.canvas.width = 1500;
   ctx.canvas.height = 70 + HOST_IDS.length * rowH;
   bg(ctx);
@@ -186,9 +186,9 @@ function sheetCandidates(ctx, mk) {
     }
     for (const talk of [false, true]) {
       // the single (s 3.4): the whole head at 4x
-      const f = renderSolo(id, 3.4, 190, talk ? T_TALK : T_NEUTRAL, talk);
-      const cw = 64, ch = 80;
-      const sx = Math.round(f.head.cx - cw / 2), sy = Math.round(Math.max(0, f.head.cy - ch * 0.58));
+      const f = renderSolo(id, 3.4, 196, talk ? T_TALK : T_NEUTRAL, talk);
+      const cw = 66, ch = 88;
+      const sx = Math.round(f.head.cx - cw / 2), sy = Math.round(Math.max(0, f.head.cy - 54));
       blit(ctx, toCanvas(f.px, mk), sx, sy, cw, ch, x, y + 22, 4);
       x += cw * 4 + 8;
     }
@@ -196,8 +196,8 @@ function sheetCandidates(ctx, mk) {
     const f = renderFrame({ host: id, A: 'penny', B: 'nova', shot: 'wide', talk: 'host' }, T_TALK);
     const h = f.heads.find((k) => k.role === 'host');
     const c = toCanvas(f.px, mk);
-    blit(ctx, c, Math.round(h.cx - 30), Math.round(h.cy - 22), 60, 80, x, y + 22, 1);
-    blit(ctx, c, Math.round(h.cx - 16), Math.round(h.cy - 16), 32, 52, x + 66, y + 22, 4);
+    blit(ctx, c, Math.round(h.cx - 30), Math.round(h.cy - 24), 60, 80, x, y + 22, 1);
+    blit(ctx, c, Math.round(h.cx - 16), Math.round(h.cy - 18), 32, 52, x + 66, y + 22, 4);
   });
   return [ctx.canvas.width, ctx.canvas.height];
 }
@@ -217,8 +217,8 @@ function sheetContestants(ctx, mk) {
     label(ctx, host ? `HOST ${letterOf(id)}` : `${id}${LATER.includes(id) ? ' (later)' : ''}`, x, y + 10, host ? '#feae34' : '#c0cbdc');
     const wide = renderSolo(id, 1, 140, T_TALK, true);
     const c = toCanvas(wide.px, mk);
-    blit(ctx, c, Math.round(wide.head.cx - 20), Math.round(wide.head.cy - 16), 40, 54, x, y + 16, 1);
-    blit(ctx, c, Math.round(wide.head.cx - 20), Math.round(wide.head.cy - 16), 40, 54, x, y + 78, 4);
+    blit(ctx, c, Math.round(wide.head.cx - 20), Math.round(wide.head.cy - 18), 40, 54, x, y + 16, 1);
+    blit(ctx, c, Math.round(wide.head.cx - 20), Math.round(wide.head.cy - 18), 40, 54, x, y + 78, 4);
   });
   return [ctx.canvas.width, ctx.canvas.height];
 }
@@ -264,7 +264,7 @@ const APEX = { nod: 0.55, point_partner: 1.0, look_partner: 1.0, point_screen: 1
 /** The 'gestures' sheet: the quizmaster's allowed gestures on each candidate (2x, at the apex). */
 function sheetGestures(ctx, mk) {
   const gs = HOST_GESTURES.allow;
-  const cw = 96, ch = 110, z = 2;
+  const cw = 150, ch = 110, z = 2;
   ctx.canvas.width = 24 + gs.length * (cw * z + 8);
   ctx.canvas.height = 50 + HOST_IDS.length * (ch * z + 26);
   bg(ctx);
@@ -277,7 +277,7 @@ function sheetGestures(ctx, mk) {
       drawDesks([it]);
       const x = 12 + c * (cw * z + 8), y = 34 + r * (ch * z + 26);
       label(ctx, `${letterOf(id)} ${g}`, x, y + 12);
-      blit(ctx, toCanvas(new Uint32Array(frame.px), mk), Math.round(h.cx - cw / 2), Math.round(h.cy - 26), cw, ch, x, y + 18, z);
+      blit(ctx, toCanvas(new Uint32Array(frame.px), mk), Math.round(h.cx - cw / 2), Math.round(h.cy - 34), cw, ch, x, y + 18, z);
     });
   });
   return [ctx.canvas.width, ctx.canvas.height];
@@ -288,9 +288,9 @@ async function sheetLegacy(ctx, mk) {
   const [{ drawAnchor, drawHands, HOST_OLD }, { drawCloseup }] = await Promise.all([import('../../../anchors.js'), import('../../../scenes/portraits.js')]);
   const letters = ['A', 'B', 'C'];
   ctx.canvas.width = 24 + 3 * (W + 12);
-  ctx.canvas.height = 260 + (H + 28);
+  ctx.canvas.height = 260 + (H + 28) + 330;
   bg(ctx);
-  label(ctx, 'PAY ATTENTION in the old renderer: wide sprites (host between Penny and Nova) and close-up portraits, candidates A / B / C', 12, 22, '#feae34', 14);
+  label(ctx, 'PAY ATTENTION in the old renderer: wide sprites (host between Penny and Nova), close-up portraits at 1x and their heads at 3x, candidates A / B / C', 12, 22, '#feae34', 14);
   const { LOOKS } = await import('../../../anchors.js');
   letters.forEach((l, i) => {
     const c = mk(W, H);
@@ -319,6 +319,8 @@ async function sheetLegacy(ctx, mk) {
     const x = 12 + i * (W + 12), y = 250;
     label(ctx, `close-up host ${l}`, x, y + 12);
     blit(ctx, c, 0, 0, W, H, x, y + 18, 1);
+    // the head and shoulders at 2x
+    blit(ctx, c, 70, 20, 120, 100, x + 12, y + H + 30, 3);
   });
   return [ctx.canvas.width, ctx.canvas.height];
 }

@@ -2,6 +2,7 @@
 """Calibrate and measure the GLOBIT 24 voices (dev tool).
 
   python3 tools/voice/measure.py calibrate          # rewrite tone.json
+  python3 tools/voice/measure.py tone-add NAME ...  # add the curves of voices outside the English set (same target)
   python3 tools/voice/measure.py samples --out DIR  # 8 presenter lines + report
   python3 tools/voice/measure.py rates              # speaking rate per preset
 
@@ -147,6 +148,32 @@ def cmd_calibrate(args):
     print('wrote tone.json')
 
 
+def tone_curve(ltas, target):
+    """calibrate's correction for one voice: 70% of the difference to the target, clamped, smoothed, 0 at 1.25 kHz."""
+    corr = np.clip(0.7 * (np.asarray(target) - np.asarray(ltas)), -4.0, 3.0)
+    corr[0] = 0.0
+    smooth = corr.copy()
+    smooth[1:-1] = 0.25 * corr[:-2] + 0.5 * corr[1:-1] + 0.25 * corr[2:]
+    smooth[0] = 0.0
+    return [round(float(v), 1) for v in smooth]
+
+
+def cmd_tone_add(args):
+    """Curves for voices outside the English set a cast voice blends (PAY ATTENTION's host: non-English Kokoro
+    voices read with English phonemes), against tone.json's own target, so no English voice's curve changes."""
+    eng = make_engine()
+    path = os.path.join(HERE, 'tone.json')
+    doc = json.load(open(path, encoding='utf-8'))
+    for name in args.names:
+        audio, sr, _ = eng.speak({'text': CALIBRATION_TEXT, 'voice': name, 'raw': True, 'tone': False})
+        doc['voices'][name] = tone_curve(metrics.third_octave_ltas(audio, sr, TONE_BANDS), doc['target'])
+        print(f'{name:14s}', ' '.join(f'{v:5.1f}' for v in doc['voices'][name]), flush=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, indent=1)
+        f.write('\n')
+    print('wrote tone.json')
+
+
 def overall_wpm(reply):
     return 60 * len(reply['words']) / reply['duration'] if reply['duration'] else 0.0
 
@@ -246,8 +273,10 @@ def main():
     s = sub.add_parser('samples')
     s.add_argument('--out', required=True)
     s.add_argument('--only', help='comma-separated presenter ids')
+    t = sub.add_parser('tone-add')
+    t.add_argument('names', nargs='+')
     args = ap.parse_args()
-    {'calibrate': cmd_calibrate, 'rates': cmd_rates, 'samples': cmd_samples}[args.cmd](args)
+    {'calibrate': cmd_calibrate, 'rates': cmd_rates, 'samples': cmd_samples, 'tone-add': cmd_tone_add}[args.cmd](args)
 
 
 if __name__ == '__main__':

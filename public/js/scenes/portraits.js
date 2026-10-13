@@ -450,7 +450,7 @@ const HOST_FACE_W = {
   persona: { bob: 0.9, shift: 0.8, sway: 0.6, look: 0.8 },
 };
 Object.assign(CAST, {
-  // A: two high afro puffs, warm medium-brown skin, a gold stud, a coral-red blazer over a black scoop top
+  // A: two high afro puffs, warm medium-brown skin, a gold stud, a crimson blazer over a black scoop top
   'qm-a': {
     ...HOST_FACE_W,
     headTop: 40,
@@ -459,7 +459,7 @@ Object.assign(CAST, {
     iris: [P.maroon, P.black],
     lips: lips(P.maroon, P.black, P.tanShade, P.tan),
     hair: 'qmPuffs', outfit: 'qmBlazer', earrings: 'studGold',
-    cloth: [P.pink, P.pink, P.red, P.darkRed, P.maroon, P.black], cuff: P.ink,
+    cloth: [P.pink, P.red, P.darkRed, P.darkRed, P.maroon, P.black], cuff: P.ink,
   },
   // B: a glossy black pompadour with a silver streak, olive skin, a cream dinner jacket with black satin lapels, a
   // purple bow tie
@@ -1133,18 +1133,26 @@ const HAIR = {
         front.set(x, y, H, 0);
       }
     }
-    for (const s2 of [-1, 1]) back.disc(s2 * 14 - (s2 < 0 ? 1 : 0), -6, 10, H, 0);
+    // each puff a cloud of coils: a round core and a ring of small lobes round it (a smooth disc read as an ear)
+    for (const s2 of [-1, 1]) {
+      const pcx = s2 * 15 - (s2 < 0 ? 1 : 0), pcy = -6;
+      back.disc(pcx, pcy, 8, H, 0);
+      for (let a = 0; a < 12; a++) {
+        const ang = (a / 12) * Math.PI * 2 + s2 * 0.3;
+        back.disc(Math.round(pcx + Math.cos(ang) * 8), Math.round(pcy + Math.sin(ang) * 7.5), 2 + (a % 3 === 0 ? 1 : 0), H, 0);
+      }
+    }
     lightHair(back, K, [H], 4, -40);
     lightHair(front, K, [H], 2, 2, back);
-    // the coils: a crescent on each cluster's key side, a crease on its far side
-    for (let gy = -18; gy < 6; gy += 4) {
-      for (let gx = -26; gx < 26; gx += 4) {
-        const cx = gx + ((gy / 4) % 2 ? 2 : 0) + Math.floor(hash(gx + 9, gy) * 3) - 1;
-        const cy = gy + Math.floor(hash(gy, gx + 9) * 3) - 1;
+    // the coils: a crescent on each cluster's key side, a crease on its far side, close together
+    for (let gy = -19; gy < 6; gy += 3) {
+      for (let gx = -28; gx < 28; gx += 3) {
+        const cx = gx + ((gy / 3) % 2 ? 1 : 0) + Math.floor(hash(gx + 9, gy) * 3) - 1;
+        const cy = gy + Math.floor(hash(gy, gx + 9) * 2);
         if (back.mat(cx, cy) !== H || back.tone(cx, cy) === RIM) continue;
         const l = -side;
-        back.pts([[cx + l, cy - 1], [cx, cy - 1], [cx + l, cy]], -1, [H]);
-        back.pts([[cx - l, cy + 1], [cx - l * 2, cy]], 1, [H]);
+        back.pts([[cx + l, cy - 1], [cx, cy - 1]], -1, [H]);
+        back.pts([[cx - l, cy + 1]], 1, [H]);
       }
     }
     // the part: a line of scalp from the hairline toward the gap
@@ -1688,7 +1696,7 @@ const OUTFITS = {
     for (let y = C + 6; y < C + 80; y++) for (let x = -30; x < 0; x += 4) body.setTone(sx(x), y, (y + x) % 7 < 4 ? 1 : 0, [K.CLOTH]);
   },
 
-  // PAY ATTENTION, host A: a coral-red blazer over a black scoop top (Lola's cut in her own colours).
+  // PAY ATTENTION, host A: a crimson blazer over a black scoop top (Lola's cut in her own colours).
   qmBlazer(K) {
     OUTFITS.lola(K);
     const { body } = K;
@@ -1741,7 +1749,7 @@ const OUTFITS = {
     body.each((x, y) => {
       if (body.mat(x, y) !== S) return;
       const far = side * (x + 0.5) > 6 + Math.max(0, y - C) * 0.5;
-      if (y < chinBottom + 6 && Math.abs(x + 0.5) < 16) body.setTone(x, y, 2); // the jaw's shadow
+      if (y < chinBottom + 5 && Math.abs(x + 0.5) < 13 - Math.max(0, y - chinBottom) * 1.5) body.setTone(x, y, 1); // the jaw's shadow
       else if (far) body.setTone(x, y, 1);
       if (!body.mat(x, y + 1)) body.setTone(x, y, 2);
     });

@@ -17,6 +17,7 @@ import { clamp } from '../space.js';
 import { GROUPS } from '../character.js';
 import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT, dec } from './kit-a.js';
 import { tier, hashInt, fastAtan2, LOOK } from './wardrobe-b.js';
+import { pruneSpecks } from './hair-sport.js';
 
 const LXY = new LocalXY();
 const HWL = new HeadWidthLUT();
@@ -166,7 +167,7 @@ export function drawPuffs(buf, L, m, head, s, sk) {
     const fx = x - yawX;
     const afx = Math.abs(fx);
     // a clean rounded hairline, a little lower at the temples, then straight down in front of the ear
-    const hl = H.top + 3.55 + pitchShift + 0.03 * fx * fx;
+    const hl = H.top + 3.3 + pitchShift + 0.03 * fx * fx;
     if (y > hl && Math.abs(x) < hw - 0.45) return -1;
     if (y > H.craniumY + 1.2 && Math.abs(x) < hw - 0.2) return -1;
     let t = toneN(mt, (x / RV) * 0.9, clamp(dy / (RV * 1.1), -1, 1) * 0.9);
@@ -187,6 +188,8 @@ export function drawPuffs(buf, L, m, head, s, sk) {
     return strokeTone(t, clumpTone(t, across, along, CO_BACK), md);
   });
   const g = head.gb + GROUPS.hair;
+  // the coils' crescents and creases ending in a single pixel are specks, not coils (the craft rule: no orphans)
+  if (tr >= 1) pruneSpecks(buf, x0, y0, x1, y1, g, mt, [md]);
   selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, mt, m.hairEdge);
   if (s >= 1.35) {
     // the hair light: short arcs on the far puff's top right, and a touch on the near puff's crown
@@ -286,7 +289,7 @@ export function drawPompadour(buf, L, m, head, s, sk) {
         const k = (d + hwS) / (2 * hwS);
         if (k > 0.78) return (m.streak << 4) | 2;
         const sep = tr === 2 && ((d * 1.3 + (hl - y) * 0.15 + 20) % 1) < 0.22 && k > 0.2;
-        return (m.streak << 4) | (sep ? 2 : t === 0 && k < 0.45 ? 0 : 1);
+        return (m.streak << 4) | (sep ? 2 : t === 0 && k < 0.24 ? 0 : 1);
       }
     }
     // the wide: the gloss as one short band across the roll's lit side (a whole lit half read as grey hair at 1x)
@@ -378,7 +381,7 @@ export function drawHijab(buf, L, m, head, s) {
       t = toneN(mt, (x / RV) * 0.9, (dy / RV) * 0.95);
       if (t === 0) {
         const rr = Math.sqrt(x * x + dy * dy) / RV, ang = fastAtan2(x, -dy);
-        t = tr > 0 && rr > 0.62 && rr < 0.9 && ang > -1.2 && ang < -0.2 ? 0 : 1;
+        t = tr > 0 && rr > 0.7 && rr < 0.86 && ang > -1.1 && ang < -0.3 ? 0 : 1;
       }
     } else if (y > H.chinY + jaw - 0.6 && Math.abs(x) < HW.at(y - 1.9) + 0.9) t = 2; // the jaw's shadow on the cloth
     else t = (y > H.chinY + jaw - 1 ? scarfFar(x, y + L.headAt[1]) : x > 0) ? 2 : 1; // under the jaw: as the drape
@@ -389,7 +392,8 @@ export function drawHijab(buf, L, m, head, s) {
     if (tr === 0) return t === 0 ? 1 : t;
     // folds down each panel (close-ups), soft: a shade line with a lit line beside it on the key side
     if (tr === 2 && y > cyc + 1.2) {
-      for (const fxp of [-(hw + 0.55), hw + 0.45]) {
+      const hwF = HW.at(Math.min(y, H.cheekY + 1)); // down the panels beside the face, never under the chin
+      for (const fxp of [-(hwF + 0.55), hwF + 0.45]) {
         const fold = fxp + (fxp < 0 ? -0.5 : 0.4) * k * 2.2;
         const dd = x - fold;
         if (Math.abs(dd) < 0.5 * px1 + 0.05) return Math.min(3, t + 1);

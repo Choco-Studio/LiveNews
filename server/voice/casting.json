@@ -262,7 +262,7 @@
    "colon": 0.3,
    "dash": 0.2
   },
-  "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). No component any presenter, correspondent, expert, the continuity announcer or an advert uses: every English Kokoro voice is taken, so the host's are non-English voices read with English phonemes (as Clara, Amara, Leo and Ines blend theirs). Measured on the casting's own copy against every voice in this file (40-band mel cepstrum, coefficients 1-12, mean distance; PocketSphinx word error rate): the cast's closest pairs that share a component are 32 (Clara-Ines af_sky, Kai-Max am_puck), the closest that share none 45-47. A: jf_gongitsune with 30% pf_dora, en-US: a bright, quick, warm alto-soprano (median F0 ~207 Hz, IQR 4.5 st), nearest Clara 74, Amara 80, Ines 80, Lola 88; WER 0.15 (the cast 0.02-0.27). Pauses its own: a beat before an answer (colon 0.30, ellipsis 0.55) and after a question (0.44), the rest a game's quick pace.",
+  "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). No component any presenter, correspondent, expert, the continuity announcer or an advert uses: every English Kokoro voice is taken, so the host's are non-English voices read with English phonemes (as Clara, Amara, Leo and Ines blend theirs), each with its tonal match in tools/voice/tone.json (measure.py tone-add: without it the host sat about 3 dB duller than the cast from 2 kHz up). Measured with that match on the casting's own copy against every voice in this file (40-band mel cepstrum, coefficients 1-12, mean distance; PocketSphinx word error rate): the cast's closest pairs that share a component are 32 (Clara-Ines af_sky, Kai-Max am_puck), the closest that share none 45-47. A: jf_gongitsune with 30% pf_dora, en-US: a bright, quick, warm voice (median F0 ~207 Hz, IQR 4.5 st), nearest Rhea 71, Amara 74, Clara 76; WER 0.15 (the cast 0.02-0.27). Pauses its own: a beat before an answer (colon 0.30, ellipsis 0.55) and after a question (0.44), the rest a game's quick pace.",
   "candidates": {
    "A": {
     "voice": "jf_gongitsune:0.7+pf_dora:0.3",
@@ -271,25 +271,25 @@
     "gender": "female",
     "pitch": 1.12,
     "rate": 1.08,
-    "notes": "bright and quick, American; F0 ~207 Hz, IQR 4.5 st; nearest Clara 74; WER 0.15"
+    "notes": "bright and quick, American; F0 ~207 Hz, IQR 4.5 st; nearest Rhea 71, Amara 74, Clara 76; WER 0.15"
    },
    "B": {
     "voice": "hm_psi",
-    "speed": 1.12,
+    "speed": 1.08,
     "lang": "en-us",
     "gender": "male",
     "pitch": 1.08,
     "rate": 1.1,
-    "notes": "a light, lively baritone, American with a warm colour; F0 ~136 Hz, IQR 6.7 st (the widest melody of the male voices: Max and Tomas 6.5); nearest Omar 75, Leo 75; WER 0.19"
+    "notes": "a light, lively baritone, American with a warm colour; F0 ~136 Hz, IQR 6.6 st (the widest melody of the male voices: Max and Tomas 6.5); nearest Leo 69, Paco 75, Mika 76; WER 0.14"
    },
    "C": {
-    "voice": "jf_nezumi:0.55+pf_dora:0.45",
+    "voice": "jf_nezumi:0.65+pf_dora:0.35",
     "speed": 1.06,
     "lang": "en-gb",
     "gender": "female",
     "pitch": 1.06,
     "rate": 1.06,
-    "notes": "clear and even, British; F0 ~209 Hz, IQR 3.8 st; nearest Lola 68 (another accent), Clara 73; WER 0.20; 56 from candidate A"
+    "notes": "clear and even, British; F0 ~214 Hz, IQR 3.6 st; nearest Rosa 61 (FULL TIME's analyst, no component shared), Rhea 69, Lola 73; WER 0.20; 56 from candidate A"
    }
   }
  }

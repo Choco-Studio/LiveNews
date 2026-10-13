@@ -37,8 +37,8 @@ function drawPuffsAndStud(buf, L, m, head, s, sk) {
 
 /**
  * HOST A, "the puffs": hair parted in the centre and drawn back into two high afro puffs, warm medium-brown skin, a
- * small gold stud, a coral-red blazer over a black scoop top. At 1x: two dark clouds on top of the head, a red jacket
- * with a black V. Lively: the most expressive head and the readiest smile of the three.
+ * small gold stud, a crimson blazer over a black scoop top. At 1x: two dark clouds on top of the head, a crimson
+ * jacket with a black V. Lively: the most expressive head and the readiest smile of the three.
  */
 const HOST_A = deriveLook(lola, {
   id: 'qm-a',
@@ -59,7 +59,8 @@ const HOST_A = deriveLook(lola, {
   earrings: P.yellow,
   outfit: 'blazer',
   neckline: 'scoop',
-  jacket: { ramp: [P.pink, P.red, P.darkRed, P.maroon], line: P.black },
+  // crimson: a red that lets the face lead (the brighter red shouted in the host's singles, and on the purple board)
+  jacket: { ramp: [P.red, P.darkRed, P.maroon, P.black], line: P.black },
   shirt: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   cuff: P.ink,
   props: ['papers'],
@@ -112,7 +113,7 @@ const HOST_B = deriveLook(paco, {
   bow: { w: 3.1, h: 1.25, y: 1.0 },
   bowRamp: [P.magenta, P.purple, P.maroon], // the bow's colours where it is painted on the shirt (the wide)
   // cream, never white (ART_DIRECTION: white for collars and glints), shaded cool so the face stays the warmest
-  jacket: { ramp: [P.cream, P.cream, P.fog, P.steel], line: P.steel },
+  jacket: { ramp: [P.cream, P.cream, P.silver, P.fog], line: P.steel },
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel },
   cuff: P.white,
   props: ['papers'],
@@ -178,7 +179,7 @@ export const HOST_CANDIDATES = { A: HOST_A, B: HOST_B, C: HOST_C };
 
 /** One line per candidate for the owner's sheet (docs/programmes/pay-attention.md §2). */
 export const CANDIDATE_NOTES = {
-  A: 'the puffs: hair parted in the centre and drawn back into two high afro puffs, warm medium-brown skin, a gold stud, a coral-red blazer over a black scoop top',
+  A: 'the puffs: hair parted in the centre and drawn back into two high afro puffs, warm medium-brown skin, a gold stud, a crimson blazer over a black scoop top',
   B: 'the bow tie: a glossy black pompadour swept up from a side part with one silver streak, clean-shaven, olive skin, a cream dinner jacket with black satin lapels, white shirt, purple bow tie and pocket square',
   C: 'the hijab: an azure hijab framing the face and draped over the shoulders, light tan skin, a black tailored jacket over a white blouse, a gold pin',
 };

@@ -265,8 +265,8 @@ export const FULL_TIME_OLD = { kai: KAI_OLD, rosa: ROSA_OLD };
 // designs, v2/canvas25d/cast/pay-attention.js, in this renderer's terms); HOST_LOOK picks the provisional one.
 const HOST_BASE = { brow: P.black, shirt: P.white, shirtShade: P.silver, prop: 'papers', phase: 3.3, quirk: 'gaze' };
 const HOST_OLD_LOOKS = {
-  // A: two high afro puffs, warm medium-brown skin, a gold stud, a coral-red blazer over a black scoop top
-  A: { ...HOST_BASE, name: 'QUINN QUERY', style: 'puffs', skin: P.skinShade, skinShade: P.tanShade, hair: P.ink, hairHi: P.slate, hairShade: P.black, lipstick: P.maroon, body: 'blazer', suit: P.red, suitShade: P.darkRed, suitHi: P.pink, suitDeep: P.maroon, shirt: P.black, shirtShade: P.ink, cuff: P.ink, earrings: P.yellow, earringStyle: 'stud' },
+  // A: two high afro puffs, warm medium-brown skin, a gold stud, a crimson blazer over a black scoop top
+  A: { ...HOST_BASE, name: 'QUINN QUERY', style: 'puffs', skin: P.skinShade, skinShade: P.tanShade, hair: P.black, hairHi: P.slate, hairShade: P.ink, lipstick: P.maroon, body: 'blazer', suit: P.darkRed, suitShade: P.maroon, suitHi: P.red, suitDeep: P.black, shirt: P.black, shirtShade: P.ink, cuff: P.ink, earrings: P.yellow, earringStyle: 'stud' },
   // B: a glossy black pompadour with a silver streak, olive skin, a cream dinner jacket with black satin lapels, a purple
   // bow tie and square
   B: { ...HOST_BASE, name: 'THEO TALLY', style: 'pompadour', skin: P.tan, skinShade: P.tanShade, hair: P.ink, hairHi: P.steel, hairShade: P.black, temples: P.fog, templesHi: P.silver, body: 'dinner', suit: P.cream, suitShade: P.fog, suitHi: P.cream, suitDeep: P.steel, tie: P.purple, tieShade: P.maroon, pocket: P.magenta, pocketShade: P.purple, cuff: P.white },
@@ -867,11 +867,11 @@ const BACK_CURLS = sym(
 // hair parted in the centre and drawn back into two high afro puffs (narrow face; the ears show)
 const HAIR_PUFFS = spr(
   [
-    '..hHHj........hHHj..',
-    '.hHHHHj......hHHHHj.',
-    '.HhHHHj......HhHHHj.',
-    '.hHHHHj......hHHHHj.',
-    '..jHHjHHHHHHHHjHHj..',
+    '..hjHh........hjHh..',
+    '.hHhjHj......hHhjHj.',
+    '.HjHhHj......HjHhHj.',
+    '.jHhHjj......jHhHjj.',
+    '..jHjjHHHHHHHHjHjj..',
     '....HhhHHsHHHHHj....',
     '...HhHHHHHHHHHHHj...',
     '...hH..........Hj...',
