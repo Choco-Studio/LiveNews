@@ -108,9 +108,13 @@
        * The bed engine as music/live.js runs it (sharedStings, the soft story bed) on a timeline of cues [[t, moment, opts]]
        * with the house voices [[t, clip]] ducking it; stem 'music' leaves the voices out but keeps the ducking.
        */
-      async function renderBed({ cues = [[0, 'headlines', { segment: 1 }]], voice = [], seconds = 20, stem = 'mix', programId = 'full-time', seed = 'lab' } = {}) {
+      async function renderBed({ cues = [[0, 'headlines', { segment: 1 }]], voice = [], ticks = [], tunes = [], seconds = 20, stem = 'mix', programId = 'full-time', seed = 'lab' } = {}) {
         const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
-        const engine = new LofiEngine(ctx, ctx.destination, { sharedStings: true, bedUnderStories: 'soft', seed, noteLog: true });
+        // (stem 'voice': the voices alone, the engine playing into a muted bus)
+        const musicOut = ctx.createGain();
+        musicOut.gain.value = stem === 'voice' ? 0 : 1;
+        musicOut.connect(ctx.destination);
+        const engine = new LofiEngine(ctx, musicOut, { sharedStings: true, bedUnderStories: 'soft', seed, noteLog: true });
         const regions = await regionsOf(voice);
         engine.speechPlan = regions;
         const events = [];
@@ -120,15 +124,43 @@
           events.push({ t: b, speak: false });
         }
         events.sort((x, y) => x.t - y.t || (x.cue ? -1 : 1));
-        for (const e of events) {
-          engine.pump(e.t + LOOKAHEAD);
-          if (e.cue) engine.cue(e.cue, e.opts, e.t);
-          else engine.setSpeaking(e.speak, e.t);
+        // scheduled as the render goes (suspending every few seconds), as on air: minutes of bed scheduled up front
+        // would hold tens of thousands of waiting nodes in the graph and render many times slower
+        let next = 0;
+        const runUntil = (T) => {
+          while (next < events.length && events[next].t <= T) {
+            const e = events[next++];
+            engine.pump(e.t + LOOKAHEAD);
+            if (e.cue) engine.cue(e.cue, e.opts, e.t);
+            else engine.setSpeaking(e.speak, e.t);
+          }
+          engine.pump(Math.min(T + LOOKAHEAD, seconds + 2));
+        };
+        const STEP = 4;
+        runUntil(STEP);
+        for (let T = STEP; T < seconds; T += STEP) {
+          ctx.suspend(T).then(() => {
+            runUntil(T + STEP);
+            ctx.resume();
+          });
         }
-        engine.pump(seconds + 2);
         if (stem !== 'music') await placeVoice(ctx, voice);
+        // SCORE CENTRE's row ticks (audio.sfx in the director: the audio stream's cue, ducked by its own depth)
+        for (const t of ticks) {
+          const duck = regions.map(([a, b]) => [a - t, b - t]).filter(([, b]) => b > 0);
+          const r = await renderTune(cueFor('scoreTick', 'full-time'), { seconds: 1, volume: 0.5, startAt: 0, duck, sampleRate: SR });
+          if (stem !== 'voice') mixIn(ctx, r.buffer, t);
+        }
+        // the open's theme and the sign-off's tail (audio.sfx('outro')) through the audio stream's mixer, ducked under the voices
+        for (const [t, kind] of tunes) {
+          const tune = kind === 'open' ? themeFor('full-time', { duration: openLength('full-time') }) : cueFor('outro', 'full-time');
+          const duck = regions.map(([a, b]) => [a - t, b - t]).filter(([, b]) => b > 0);
+          const r = await renderTune(tune, { seconds: kind === 'open' ? openLength('full-time') + 1.6 : 5, volume: kind === 'open' ? 0.6 : 0.5, startAt: 0, stopAt: kind === 'open' ? openLength('full-time') : undefined, duck, sampleRate: SR });
+          if (stem !== 'voice') mixIn(ctx, r.buffer, t);
+        }
         const out = await ctx.startRendering();
         window.__lastLog = engine.log;
+        window.__lastNotes = engine.notes;
         return pack(out);
       }
 
@@ -208,6 +240,7 @@
       window.__audio = {
         render: async (opts = {}) => (RENDER[opts.what || 'theme'] || renderTheme)(opts),
         log: () => window.__lastLog,
+        notes: () => window.__lastNotes,
       };
 
       // --------------------------------------------------------------------- UI
