@@ -1507,3 +1507,35 @@ test('knuckles (close-ups): valleys and caps as clean clusters, never a lone pix
     }
   }
 });
+
+test('relaxed hands live: irregular finger micro-shifts (never a loop), and the joined pose meets fingertip to fingertip', () => {
+  const a = actor('paco', { side: 1, seed: 11 });
+  const starts = [];
+  let prev = null, moving = false, maxOff = 0, joined = 0;
+  const rest = poseAt(actor('paco', { side: 1, seed: 11, armIdle: false }), 1).arms.R.hand.curl.slice();
+  for (let t = 6; t < 186; t += 1 / 30) {
+    const sk = poseAt(a, t);
+    const cur = sk.arms.R.hand.curl;
+    if (prev) {
+      const d = Math.max(...cur.map((v, q) => Math.abs(v - prev[q])));
+      if (d > 0.002 && !moving) starts.push(t);
+      moving = d > 0.002;
+    }
+    prev = cur.slice();
+    // the idle offsets stay small: relaxed fingers, never a fist or a flat board (the index's tap on the desk aside)
+    for (let q = 2; q < 5; q++) maxOff = Math.max(maxOff, Math.abs(cur[q] - rest[q]));
+    // the joined pose: fingertips level and side by side, never into each other
+    if (a._c.touch > 0.99) {
+      joined++;
+      const c = tipContact(a.look, sk, 3.4);
+      assert.ok(Math.abs(c.dy) < 0.4 && c.sep >= 1.2 * c.r, `joined hands at ${t.toFixed(2)}: dy ${c.dy.toFixed(2)}, gap ${c.sep.toFixed(2)} px`);
+    }
+  }
+  const gaps = starts.slice(1).map((t, i) => t - starts[i]);
+  const mean = gaps.reduce((x, y) => x + y, 0) / gaps.length;
+  const sd = Math.sqrt(gaps.reduce((x, y) => x + (y - mean) ** 2, 0) / gaps.length);
+  assert.ok(starts.length >= 20, `${starts.length} finger changes in 3 minutes`);
+  assert.ok(sd / mean > 0.35, `the changes come at irregular moments (cv ${(sd / mean).toFixed(2)})`);
+  assert.ok(maxOff <= 0.3, `idle curl offsets up to ${maxOff.toFixed(2)}`);
+  assert.ok(joined > 0, 'the joined pose airs within three minutes');
+});

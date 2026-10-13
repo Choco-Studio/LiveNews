@@ -344,6 +344,7 @@ function newSkeleton() {
 }
 
 const TWN = [0, 0, 0], TWF = [0, 0, 0]; // wrist targets of the near and far arm
+const LIFT = [0, 0]; // each arm's lift (shoulder and breath) in this solve
 const ANCHOR = [0, 0];
 // a head frame in BODY space (head-local units → body units) for glasses.js glassesAnchor
 const BODY_HEAD = {
@@ -413,9 +414,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     TW[0] = arm.shoulder[0] + w[0] * m * armScale;
     TW[1] = arm.shoulder[1] + w[1] * armScale + lift * 0.6;
     TW[2] = w[2] * armScale;
-    arm.desk[0] = TW[0];
-    arm.desk[1] = T.shoulderJoint[1] + w[1] * armScale;
-    arm.desk[2] = TW[2];
+    LIFT[pass] = lift;
     arm.plant = clamp(pass === 0 ? c.plant : c.plantF, 0, 1);
     const d = pass === 0 ? c.dir : c.dirF;
     const dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
@@ -440,6 +439,11 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   if (touch > 0.001) touchHands(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, touch, c.tipSettle || 0, c.tipGap || 0);
   for (let pass = 0; pass < 2; pass++) {
     const arm = sk.arms[pass === 0 ? near : far];
+    const TW = pass === 0 ? TWN : TWF;
+    // the target on the desk: the same without the shoulders' and the breath's lift (the body moves, the desk not)
+    arm.desk[0] = TW[0];
+    arm.desk[1] = TW[1] + LIFT[pass] * 0.4;
+    arm.desk[2] = TW[2];
     const pole = pass === 0 ? c.pole : c.poleF;
     arm.pole[0] = pole[0] * m;
     arm.pole[1] = pole[1];
