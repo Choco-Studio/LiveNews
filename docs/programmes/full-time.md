@@ -258,7 +258,7 @@ are different programmes. A shape fixes the order; a segment without material is
   colder) as for the press room. RECREATION and the source on screen throughout. The system's rules hold (a public adult in
   a public role; never a victim, a relative or a child; never on a court case, abuse or a death). At most one an edition.
 
-## 6. Look and sound (graphics and set built; open and sound to build)
+## 6. Look and sound (graphics, set, open and sound built)
 
 - **Accent orange** (`P.orange`; dark type on it, already in the graphics' dark-ink set). Distinct from NEWS IN 60's yellow
   and the RECREATION tag's yellow by hue and by its place on screen.
@@ -322,11 +322,41 @@ are different programmes. A shape fixes the order; a segment without material is
   camera sweeps down to the centre circle; the scoreboard flips to FULL TIME on the referee's final whistle — three
   blasts, the last long (the common "two short and one long" is the same call) — played by the brass; the emblem is a
   stopwatch at 90:00 that becomes the plate.
+  - **Built**:
+    - the cue sheet `'full-time'` in `public/js/scenes/opens/cues.js` (10.3 s; the clock 89:55 → 90:00 on the first
+      blast; the flip on the long one);
+    - the stadium, ray-cast pixel by pixel, in `public/js/scenes/opens/fulltimetitles.js`: mown stripes in solid bands
+      (`P.green`/`P.midGreen` lit, `P.darkGreen`/`P.deepGreen` before the light); the far stand with stairs, a concourse
+      and three lit exits; a still cut closer on each blast (wide, mid, the board's clock at the emblem's place, FULL
+      TIME at 2x beside it), never a zoom; the far stand's scarves up on the long blast;
+    - the emblem, a digital stopwatch, in `public/js/scenes/opens/sport.js`;
+    - the theme in `public/js/audio/themes.js` (`fullTimeTitles`): the whistle's three blasts on the brass, the
+      signature then the colour #5 rising to the 6th on the hit, E-flat;
+    - the lab at `public/lab/opens.html?id=full-time`.
+
+    Critique: `docs/roadmap/critique/full-time-open.md` (final round 9.8).
 - **Music.** The bed: 116 BPM, punchy drums, bass and muted guitar. SCORE CENTRE: a ticking bed of its own, a tick per row.
   The lead's scoreline card: a crowd swell, if the A/B test says it sounds like a crowd and not like rain; otherwise a
   brass stab and a timpani hit. After a grave story the music rule holds (nothing under it nor in the segment after),
   but SCORE CENTRE's ticks stay as quiet sound effects: they mark the rows, they are not music. The sign-off: the theme's tail, except after grave news (the cue sheet's rule: never under
   grave news nor in the segment after it).
+  - **Built**:
+    - **The bed:** the song `'full-time'` in `music/proposals/lofi/palettes.js`. It has a punchy kit (`DRUMS.punchy`,
+      the rig's `punchKick`/`punchSnare`), the bass in eighths, the palm-muted guitar (`mute`) and a low pad, with its
+      moments.
+    - **SCORE CENTRE:** the `scores` moment is its ticking bed. The row tick is `audio.sfx('scoreTick')`, from the
+      director's `playBoardSegment` as each row flips in. The bed's own ticks leave room for it (`LofiEngine.rowTick`,
+      asked through `music/live.js`): none within 150 ms of a row's tick.
+    - **The scoreline sting:** `STINGS.scoreSting`, ducked under the voice, with both candidates kept (`scoreCrowd`,
+      `scoreBrass`). The A/B picked the crowd swell (`SCORE_STING`). The director cues it when the lead's scoreline card
+      is cut to (`seg.scoreSting`).
+    - **The rules:** the cue sheet's `SPORT` policy in `cuesheet.js` holds the grave rules for the beds and the sting.
+      `signoffAllowed` holds back the tail after grave news, asked by the director through `music/live.js`.
+    - **The tail:** `buildOutro('full-time')` in `audio/themes.js`.
+    - **Lab and tests:** `public/lab/full-time-sound.html`; tests in `test/full-time-sound.test.js`.
+
+    Critique, with the A/B's evidence: `docs/roadmap/critique/full-time-sound.md` (final round 9.8; the owner chooses
+    between the two sting candidates by ear).
 - **Graphics**: the strap's tag is the sport (FOOTBALL, F1, TENNIS, CRICKET, RUGBY, BASKETBALL, BASEBALL, BOXING, CYCLING,
   GOLF, ATHLETICS; NFL, NBA, MLB only when the link says the league: the London Lions against the Trail Blazers is
   BASKETBALL); the **scoreline card** (vertical rows or the horizontal home–away board, §3.5; scores at 3x; FT, DRAW and a
@@ -379,7 +409,9 @@ are different programmes. A shape fixes the order; a segment without material is
    (`director.js` `playBoardSegment`: SCORE CENTRE fills the frame, COMING UP holds the calendar, a row or a leaf as
    its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.* The set is built (§6; its critique
-   passed at 9.8 in round 8, `docs/roadmap/critique/full-time-set.md`).
+   passed at 9.8 in round 8, `docs/roadmap/critique/full-time-set.md`). The open, its theme, the bed, SCORE CENTRE's
+   ticks and the scoreline sting are built (§6; both critiques passed at 9.8 in round 4,
+   `docs/roadmap/critique/full-time-open.md` and `full-time-sound.md`); the owner chooses the sting by ear.
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
    *Looks built (§2): three candidates each, A on air in both renderers; critique in
    `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*

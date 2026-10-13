@@ -244,7 +244,8 @@ export class Director {
       m.cue('item');
       const heavy = grave || Boolean(seg.breaking);
       const moment = heavy ? 'story' : seg.feature === 'roundup' ? 'roundup' : seg.feature === 'lighter' ? 'finally' : seg.feature === 'number' ? 'number' : 'story';
-      m.cue(moment, { emotion, grave, breaking: Boolean(seg.breaking), segment });
+      // (feature: FULL TIME's SCORE CENTRE and COMING UP have beds of their own, full-time.md §6)
+      m.cue(moment, { emotion, grave, breaking: Boolean(seg.breaking), segment, feature: seg.feature });
     } else if (seg.type === 'chat') m.cue('chat', { emotion, grave, segment });
     else if (seg.type === 'weather') m.cue('weather', { kind: seg.kind, emotion, segment });
     else if (seg.type === 'outro') m.cue('outro', { emotion, segment });
@@ -679,6 +680,15 @@ export class Director {
       ? { scores, title: seg.scoresTitle || seg.headline, source: seg.source, rowTimes: times, night: !(hour >= 5.5 && hour < 19) }
       : { fixtures, title: seg.kicker || 'COMING UP', source: seg.source, leafTimes: times };
     const shot = scores ? 'scores' : 'fact';
+    // full-time.md §6: SCORE CENTRE's tick as each row flips onto the board, a sound effect (audio.sfx, not the beds' music:
+    // it stays after grave news); a row due before the board is on air flips in, with its tick, on the board's cut. The
+    // bed's own tick leaves room for it (music.rowTick: when it sounds, up to 0.12 s later); returns that extra delay
+    const tick = () => {
+      if (!scores) return 0;
+      const lead = this.music.rowTick?.(0.03) ?? 0.03;
+      this.audio.sfx('scoreTick', { programId: s.program?.id, startAt: performance.now() + lead * 1000 });
+      return Math.max(0, lead - 0.03);
+    };
     // the board cuts in once the shot on air has held its minimum (as every cut); the voice never waits for it: the
     // intro line starts over the shot on air, as a story's first words do (an item read before the cut is on the board
     // from its first frame)
@@ -688,6 +698,7 @@ export class Director {
       this.setShot(shot, { focus: seg.anchor, storyId: null, card, wall: { mode: 'logo' }, framing: null, cameraMove: null });
       this.lastBoard = scores ? 'scores' : 'fixtures';
       since = s.shotSince;
+      if (times.some(Number.isFinite)) tick();
     };
     const wait = cutWait(s.program?.id, s.shotSince, now());
     const pending = wait > 0.05 ? this.cutWhenClear(wait, go) : (go(), null);
@@ -696,12 +707,15 @@ export class Director {
     if (marked.length === items.length) {
       // (an item whose line starts the segment is on the board from the first frame)
       for (const m of marked) if (m.c <= 0) times[m.i] = 0;
+      if (since !== null && marked.some((m) => m.c <= 0)) tick();
       const later = marked.filter((m) => m.c > 0);
       await this.say(seg, null, {
         direct: true,
         marks: later.map((m) => m.c),
         onMark: (k) => {
-          if (later[k]) times[later[k].i] = at();
+          if (!later[k]) return;
+          // (the row flips in with its tick)
+          times[later[k].i] = at() + (since !== null ? tick() : 0);
         },
       });
     } else {
@@ -710,7 +724,12 @@ export class Director {
       const last = splitSentences(seg.text).length - 1;
       await this.say(seg, (i) => {
         if (i < 1) return;
-        for (let k = i - 1; k < times.length && (k === i - 1 || i === last); k++) times[k] = Math.min(times[k], at());
+        let fresh = false;
+        for (let k = i - 1; k < times.length && (k === i - 1 || i === last); k++) {
+          fresh ||= !Number.isFinite(times[k]);
+          times[k] = Math.min(times[k], at());
+        }
+        if (fresh && since !== null) tick();
       }, { direct: true });
     }
     // (a segment shorter than the wait: the board still airs, at the end of the voice)
@@ -719,6 +738,7 @@ export class Director {
       go();
     }
     // every item on the board by the end, whatever the voice did
+    if (times.some((x) => !Number.isFinite(x))) tick();
     for (let i = 0; i < times.length; i++) if (!Number.isFinite(times[i])) times[i] = at();
     return true;
   }
@@ -947,8 +967,9 @@ export class Director {
           await this.say(seg);
           // world-now.md: the sign-off holds on the wide with the programme's sign-off cue under it (the brass 3→1),
           // then the stinger to the end card; the cue starts 0.15 s after the last word (a sting never overlaps
-          // speech), so the hold is never dead air
-          this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() + 150 });
+          // speech), so the hold is never dead air. full-time.md §6: FULL TIME's cue is the theme's tail, never after
+          // grave news (the cue sheet's rule, asked of music/live.js; every other programme's always plays)
+          if (this.music.signoffAllowed?.(s.program?.id) !== false) this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() + 150 });
           await sleep(pace(s).holds.signoff * 1000); // the sign-off's hold on the wide (world-now.md 1.5 s)
           await this.stinger(() => {
             this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
@@ -1225,12 +1246,19 @@ export class Director {
     // the story's board (pace pickBoard): its strongest that is not the type shown last (full-time.md §5: boards
     // rotate); BY THE NUMBERS before every board but FROM → TO and FULL TIME's scoreline and chalkboard, as before
     const picked = pickBoard(seg, s.program?.id, this.lastBoard);
+    let stung = false; // (FULL TIME's scoreline sting, once a story)
     const board = picked && ['change', 'score', 'chalk'].includes(picked.kind) ? null : numbersBoard(seg, s.program?.id);
     const cardFor = (beat) => {
       if (beat === 'map') return { ...seg.location };
       if (beat !== 'fact') return null;
       // (the type on air is remembered when the card is cut to, not when it is planned)
       this.lastBoard = board ? 'numbers' : picked ? picked.kind : 'fact';
+      // full-time.md §6: the lead's scoreline card lands on the scoreline sting, once (the cue sheet holds it back on or
+      // after grave news)
+      if (picked?.kind === 'score' && !board && seg.scoreSting && !stung) {
+        stung = true;
+        this.music.cue('scoreSting', { grave: seg.emotion === 'serious' || seg.emotion === 'sad' });
+      }
       if (board) return { numbers: board, label: boardTitle('numbers', seg), source: seg.source }; // two or three spoken figures (pace shots.numbers); SEVEN DAYS's THE WEEK IN NUMBERS keeps its name
       // FROM → TO, the scoreline, the chalkboard, WHO'S WHO, IN PROPORTION, WHAT HAPPENS NEXT, WHAT WE KNOW, HOW WE GOT
       // HERE: { [kind]: value } (cards.js drawFactCard draws each by its field)

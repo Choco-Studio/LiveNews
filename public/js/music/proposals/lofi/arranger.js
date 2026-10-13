@@ -59,8 +59,16 @@ const COMP = {
   float: [[[0, 3.9]], [[0, 1.9], [2, 1.9]]],
   stabs: [[[0.5, 0.3], [1.5, 0.3], [2.5, 0.3], [3.5, 0.3]], [[0, 0.3], [0.5, 0.3], [1.5, 0.3], [2.5, 0.3], [3, 0.3], [3.5, 0.3]]],
   andTwoFour: [[[1.5, 0.4], [3.5, 0.4]]], // Money Minute: short chords on the "and" of 2 and 4
+  // FULL TIME's muted guitar: chops on the off-beats with a sixteenth pushing into the backbeat now and then
+  chops: [
+    [[0.5, 0.2], [1.5, 0.2], [2.5, 0.2], [2.75, 0.15], [3.5, 0.2]],
+    [[0.5, 0.2], [1.25, 0.15], [1.5, 0.2], [2.5, 0.2], [3.5, 0.2], [3.75, 0.15]],
+    [[0.5, 0.2], [1.5, 0.2], [2.25, 0.15], [2.5, 0.2], [3.5, 0.2]],
+  ],
+  // and its ticking bed's: a chop on the "and" of 2 and 4 only
+  sparse: [[[1.5, 0.2], [3.5, 0.2]], [[1.5, 0.2], [3.25, 0.15], [3.5, 0.2]]],
 };
-const PALETTE_COMP = { ep: 'lofi', pluck: 'bouncy', pulse: 'stabs' };
+const PALETTE_COMP = { ep: 'lofi', pluck: 'bouncy', pulse: 'stabs', mute: 'chops' };
 
 const DRUMS = {
   boombap: {
@@ -96,6 +104,16 @@ const DRUMS = {
     hats: { step: 0.5, vel: [0.55, 0.35, 0.45, 0.35, 0.55, 0.35, 0.45, 0.4], open: 0 },
   },
   none: { brush: false, kick: [], snare: [], ghosts: [], hats: { step: 1, vel: [0], open: 0 } },
+  // FULL TIME (full-time.md §6, "punchy drums"): the kick on 1 and 3 with a push on the "and" of 2, a cracking backbeat,
+  // eighth hats leaning on the off-beats, an open hat now and then into the next bar
+  punchy: {
+    brush: false,
+    punch: true,
+    kick: [[0, 1], [1.5, 0.55, 0.55], [2, 0.9], [3.75, 0.35, 0.22]],
+    snare: [[1, 0.95], [3, 0.95]],
+    ghosts: [[1.75, 0.14, 0.3], [3.25, 0.14, 0.25]],
+    hats: { step: 0.5, vel: [0.7, 0.55, 0.62, 0.55, 0.7, 0.55, 0.62, 0.6], open: 0.2 },
+  },
   bounce: {
     brush: false,
     kick: [[0, 1], [0.75, 0.5, 0.4], [2, 0.8], [2.5, 0.6, 0.5]],
@@ -105,6 +123,7 @@ const DRUMS = {
   },
 };
 
+const PUNCH = Object.freeze({ punch: true }); // FULL TIME's kit: the rig's punchy kick and snare
 const isOn = (arr, prev, layer) => (arr.layers[layer] || 0) > 0 || (prev?.layers[layer] || 0) > 0;
 
 /** Swing the off-beat 8ths (and, more lightly, the 16ths). */
@@ -363,13 +382,14 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       for (const [at, vel, p] of kit.kick) {
         if (breather && at > 0) continue;
         if (p && !r.chance(p)) continue;
-        out.push({ inst: 'kick', layer: 'kick', at, vel: vel * human() });
+        out.push({ inst: 'kick', layer: 'kick', at, vel: vel * human(), p: kit.punch ? PUNCH : undefined });
       }
     }
     if (isOn(arr, prev, 'snare') && !breather) {
-      for (const [at, vel] of kit.snare) out.push({ inst: 'snare', layer: 'snare', at, vel: vel * human(), p: { brush: kit.brush } });
-      for (const [at, vel, p] of kit.ghosts) if (r.chance(p)) out.push({ inst: 'snare', layer: 'snare', at, vel: vel * human(), p: { brush: kit.brush } });
-      if (n % 8 === 7) for (const [at, vel] of [[3.25, 0.18], [3.5, 0.26], [3.75, 0.34]]) out.push({ inst: 'snare', layer: 'snare', at, vel, p: { brush: kit.brush } });
+      const sp = kit.punch ? PUNCH : { brush: kit.brush };
+      for (const [at, vel] of kit.snare) out.push({ inst: 'snare', layer: 'snare', at, vel: vel * human(), p: sp });
+      for (const [at, vel, p] of kit.ghosts) if (r.chance(p)) out.push({ inst: 'snare', layer: 'snare', at, vel: vel * human(), p: kit.punch ? { brush: false } : sp });
+      if (n % 8 === 7) for (const [at, vel] of [[3.25, 0.18], [3.5, 0.26], [3.75, 0.34]]) out.push({ inst: 'snare', layer: 'snare', at, vel, p: sp });
     }
     if (isOn(arr, prev, 'hat') && !breather) {
       const { step, vel, open } = kit.hats;
@@ -380,15 +400,17 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
         out.push({ inst: 'hat', layer: 'hat', at: i * step, vel: v * human(), open: isOpen });
       }
     }
+    // (a moment may bring its own percussion: FULL TIME's SCORE CENTRE ticks)
+    const percStyle = arr.perc ?? pal.perc;
     if (isOn(arr, prev, 'perc')) {
-      if (pal.perc === 'clock') {
+      if (percStyle === 'clock') {
         // tock on 1 and 3, tick on 2 and 4: a clock rather than a race
         for (let b = 0; b < 4; b++) out.push({ inst: 'clock', layer: 'perc', at: b, vel: (b % 2 ? 0.6 : 0.8) * human(), tok: b % 2 === 0 });
-      } else if (pal.perc === 'none') {
+      } else if (percStyle === 'none') {
         // nothing
-      } else if (pal.perc === 'tick') {
+      } else if (percStyle === 'tick') {
         for (let i = 0; i < 8; i++) out.push({ inst: 'tick', layer: 'perc', at: i * 0.5, vel: (i % 2 ? 0.55 : 0.8) * human(), tok: i % 2 === 1 });
-      } else if (pal.perc === 'rim') {
+      } else if (percStyle === 'rim') {
         for (const at of [0.75, 2.75]) if (r.chance(0.8)) out.push({ inst: 'rim', layer: 'perc', at, vel: 0.6 * human() });
         if (r.chance(0.3)) out.push({ inst: 'rim', layer: 'perc', at: 3.5, vel: 0.4 });
       } else if (!breather) {

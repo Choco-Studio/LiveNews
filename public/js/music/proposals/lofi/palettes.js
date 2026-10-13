@@ -27,6 +27,7 @@ export const PROGRAMMES = {
   'news-60': { title: 'NEWS IN 60', tonic: 67, scale: 'major', colour: COLOUR.sixty, bpm: 120 },
   'world-weather': { title: 'WORLD WEATHER', tonic: 60, scale: 'major', colour: COLOUR.weather, bpm: 92 },
   'seven-days': { title: 'SEVEN DAYS', tonic: 58, scale: 'major', colour: COLOUR.week, bpm: 84 },
+  'full-time': { title: 'FULL TIME', tonic: 63, scale: 'major', colour: COLOUR.home, bpm: 116 },
   channel: { title: 'GLOBIT 24', tonic: 62, scale: 'major', colour: COLOUR.home, bpm: 84 },
 };
 
@@ -282,6 +283,49 @@ export const PALETTES = {
       finally: { energy: 0.45, gain: -5.5, lp: 2500, pocket: 0, bright: 1, comp: 'lofi', layers: { keys: 0.7, bass: 0.6, lead: 0.6 }, lead: 'sparse' },
       chat: { energy: 0.4, gain: -6, lp: 2400, pocket: 0, bright: 1, comp: 'long', layers: { keys: 0.65, bass: 0.6, lead: 0.5 }, lead: 'sparse' },
       signoff: { energy: 0.4, gain: -6.5, lp: 2200, pocket: 0, bright: 0.95, comp: 'long', layers: { pad: 0.7, keys: 0.6, bass: 0.6 } },
+    },
+  },
+
+  // ------------------------------------------------------- FULL TIME (E-flat major)
+  // full-time.md §6: "The bed: 116 BPM, punchy drums, bass and muted guitar." In the open's key, straight (no swing): a
+  // punchy kit (the rig's punch kick and cracking snare), the bass driving in eighths, a palm-muted guitar chopping the
+  // off-beats, a low pad under it all; no melody (the brass is the theme's). Its chords lean on 6ths, minor 11ths, the
+  // lydian IV and a suspended V (no maj7 or add9, whose later-pass colour would be a 6/9 the parser reads as a slash).
+  // Its moments: the groove under the headlines and the greeting; a very soft pad and bass under a light story (the
+  // owner's soft switch); SCORE CENTRE's ticking bed (eighth ticks over the bass and a chop on 2 and 4, no kit); a
+  // lighter groove for the chats, THE NUMBER, the moment of the day and COMING UP; the sign-off, out on the bar line
+  // where the theme's tail takes over. Grave news: nothing under it nor in the segment after (the cue sheet).
+  'full-time': {
+    programme: 'full-time', title: 'FULL TIME', key: 'E-flat major', tonic: 63, scale: 'major', bpm: 116, swing: 0.5, trim: 0,
+    mood: 'the day in sport: a punchy kit, the bass driving in eighths, a palm-muted guitar on the off-beats; never shouty',
+    sections: {
+      A: ['Eb6', 'Cm11', 'Ab6', 'Bb9sus'],
+      A2: ['Eb6', 'Gm7', 'Abmaj7#11', 'Bb9sus'],
+      B: ['Cm11', 'Ab6', 'Fm11', 'Bb9sus'],
+    },
+    form: ['A', 'A2', 'A', 'B'],
+    colour: COLOUR.home,
+    keys: { inst: 'mute', lo: 55, vel: 0.8, bright: 2400, decay: 0.05, roll: 0.008 },
+    pad: { wave: 'pulse25', lo: 50, lpTo: 850, attack: 0.9 },
+    bass: { style: 'pulse8', wave: 'triangle', lp: 700 },
+    drums: 'punchy',
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'up', oct: 12 },
+    lead: { inst: 'pluck', oct: 12 },
+    perc: 'none', tex: 0,
+    fx: { reverb: 0.12, echo: 0.04, tremolo: 0 },
+    duckDb: -6,
+    moments: {
+      headlines: { energy: 0.75, gain: -6, lp: 3400, pocket: 0, bright: 1, layers: { kick: 0.85, snare: 0.7, hat: 0.6, bass: 0.85, keys: 0.8, pad: 0.4 }, entry: 'instant' },
+      greeting: { energy: 0.65, gain: -7, lp: 3000, pocket: 0, bright: 1, layers: { kick: 0.7, snare: 0.55, hat: 0.5, bass: 0.8, keys: 0.7, pad: 0.4 } },
+      // the owner's soft switch only: a pad and a long bass, below 1.3 kHz, under a light story
+      story: { energy: 0.25, gain: -12, lp: 1300, pocket: 0, bright: 0.8, bass: 'long', layers: { pad: 0.75, bass: 0.6 } },
+      // SCORE CENTRE: a ticking bed of its own (eighth ticks, the bass's eighths, a chop on 2 and 4, the pad; no kit)
+      scores: { energy: 0.5, gain: -8, lp: 2600, pocket: 0, bright: 0.95, perc: 'tick', comp: 'sparse', layers: { perc: 0.8, bass: 0.7, keys: 0.55, pad: 0.5 } },
+      chat: { energy: 0.45, gain: -9, lp: 2400, pocket: 0, bright: 0.9, layers: { hat: 0.45, bass: 0.65, keys: 0.6, pad: 0.45 } },
+      number: { energy: 0.5, gain: -9, lp: 2600, pocket: 0, bright: 0.95, layers: { kick: 0.45, hat: 0.5, bass: 0.7, keys: 0.6, pad: 0.4 } },
+      moment: { energy: 0.6, gain: -8, lp: 3000, pocket: 0, bright: 1, layers: { kick: 0.6, snare: 0.45, hat: 0.5, bass: 0.75, keys: 0.7, pad: 0.4 } },
+      ahead: { energy: 0.55, gain: -8, lp: 2800, pocket: 0, bright: 1, layers: { kick: 0.55, snare: 0.4, hat: 0.5, bass: 0.75, keys: 0.65, pad: 0.4 } },
+      signoff: { energy: 0.55, gain: -8, lp: 2800, pocket: 0, bright: 1, layers: { kick: 0.6, snare: 0.5, hat: 0.5, bass: 0.75, keys: 0.6, pad: 0.4 } },
     },
   },
 

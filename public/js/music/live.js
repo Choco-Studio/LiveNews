@@ -8,6 +8,7 @@
 // Every call is guarded: music never takes the picture or the playout down.
 
 import { LofiEngine } from './proposals/lofi/engine.js';
+import { SEGMENT_MOMENTS, isGrave, signoffAllowed } from './proposals/lofi/cuesheet.js';
 
 // accents only for the programmes whose bible uses them (a programme policy answers an unknown moment with silence)
 const ACCENTS = {
@@ -36,6 +37,9 @@ export class LiveMusic {
     this.speaking = false;
     this.timer = 0;
     this.errors = 0;
+    // the cue sheet's grave memory, kept here too (the engine keeps its own) so the director may ask it with the beds off
+    this.segment = 0;
+    this.graveSeg = null;
   }
 
   /** The engine, started on first use once the AudioContext exists (after the viewer's unlock). */
@@ -70,6 +74,7 @@ export class LiveMusic {
   /** cue(moment, opts) now, in the cue sheet's vocabulary (see music/proposals/lofi/cuesheet.js). */
   cue(moment, opts = {}) {
     const programId = opts.programId ?? this.program;
+    this.remember(moment, { ...opts, programId });
     if (ACCENTS[moment] && !ACCENTS[moment].has(programId)) return false;
     const e = this.ensure();
     if (!e) return false;
@@ -77,6 +82,34 @@ export class LiveMusic {
       e.cue(moment, { ...opts, programId }, this.audio.context.currentTime);
       return true;
     });
+  }
+
+  /** The grave memory (the engine's rule): which segment is grave, so the one after it stays dry. */
+  remember(moment, opts) {
+    if (moment === 'leadin' || moment === 'open') this.graveSeg = null;
+    if (!SEGMENT_MOMENTS.has(moment) || (moment === 'headlines' && opts.line > 0)) return;
+    this.segment = opts.segment ?? this.segment + 1;
+    if (moment === 'story' && (isGrave(opts) || opts.breaking) && opts.programId !== 'news-60') this.graveSeg = this.segment;
+  }
+
+  /**
+   * SCORE CENTRE's row tick (full-time.md §6): in how many seconds it should sound, `lead` or a little later, so the bed's
+   * own tick leaves room for it (LofiEngine.rowTick). Without a bed: `lead`.
+   */
+  rowTick(lead = 0.03) {
+    const e = this.engine;
+    const ctx = this.audio?.context;
+    if (!e || !ctx || typeof e.rowTick !== 'function') return lead;
+    const at = this.guard(() => e.rowTick(ctx.currentTime + lead));
+    return typeof at === 'number' ? Math.max(lead, at - ctx.currentTime) : lead;
+  }
+
+  /**
+   * May the programme's sign-off cue play now (audio.sfx('outro'), after the sign-off's last word)? FULL TIME's is the
+   * theme's tail, never in the segment after grave news (full-time.md §6); every other programme's always plays.
+   */
+  signoffAllowed(programId = this.program) {
+    return signoffAllowed(programId, { afterGrave: this.graveSeg != null && this.segment === this.graveSeg + 1 });
   }
 
   guard(fn) {

@@ -76,6 +76,7 @@ class Bed {
     this.entry = arr.entry || entry;
     this.nodes = [];
     this.sources = [];
+    this.ticks = []; // the bed's own ticks to come: { t, g (their gain), note } (rowTick may silence one)
     this.lastFadeIn = -Infinity;
     const g = (v) => {
       const n = ctx.createGain();
@@ -296,14 +297,22 @@ class Bed {
       if (voiceFree && (e.layer === 'lead' || e.layer === 'arp') && this.engine.voiceNear(t)) continue;
       const dest = this.layer[e.layer];
       const dur = (e.dur || 0.25) * this.spb;
-      this.engine.noteLog(t, e.layer, e.inst);
+      const note = this.engine.noteLog(t, e.layer, e.inst);
       switch (e.inst) {
-        case 'kick': rig.kick(t, e.vel, dest); break;
+        case 'kick': rig.kick(t, e.vel, dest, e.p); break;
         case 'snare': rig.snare(t, e.vel, dest, e.p); break;
         case 'hat': rig.hat(t, e.vel, dest, e.open); break;
         case 'shaker': rig.shaker(t, e.vel, dest); break;
         case 'rim': rig.rim(t, e.vel, dest); break;
-        case 'tick': rig.tick(t, e.vel, dest, e.tok); break;
+        case 'tick': {
+          // (each tick through a gain of its own, so a SCORE CENTRE row's tick can take its place: LofiEngine.rowTick)
+          const g = this.engine.ctx.createGain();
+          g.connect(dest);
+          rig.tick(t, e.vel, g, e.tok);
+          this.ticks.push({ t, g, note });
+          if (this.ticks.length > 48) this.ticks.shift();
+          break;
+        }
         case 'clock': rig.clock(t, e.vel, dest, e.tok); break;
         default:
           if (typeof rig[e.inst] === 'function') rig[e.inst](t, e.midi, dur, e.vel, dest, e.p || {});
@@ -362,6 +371,23 @@ export class LofiEngine {
     hv.gain.value = 0.18;
     this.headBus.connect(hv).connect(this.rig.reverbIn);
     this.headlineVoice = null;
+    this.duckedStings = new Set(); // stings that sit under a voice (FULL TIME's scoreline sting): they duck with the beds
+  }
+
+  /**
+   * A sting bus that ducks under the voice like a bed (level in the clear, `under` while anyone speaks): for a sting the
+   * bible lands on a picture inside a sentence (FULL TIME's scoreline card). Returns the gain node.
+   */
+  duckedSting(level, under) {
+    const g = this.ctx.createGain();
+    g.gain.value = this.speaking ? under : level;
+    g.__level = level;
+    g.__under = under;
+    g.connect(this.stingBus);
+    this.registerSting(g);
+    this.duckedStings.add(g);
+    if (this.duckedStings.size > 8) this.duckedStings.delete(this.duckedStings.values().next().value);
+    return g;
   }
 
   /** Layer level of an arrangement (a `solo` set mutes the other layers: lab diagnostics). */
@@ -377,7 +403,31 @@ export class LofiEngine {
   }
 
   noteLog(t, layer, inst) {
-    if (this.notes && this.notes.length < 20000) this.notes.push({ t, layer, inst });
+    if (!this.notes || this.notes.length >= 20000) return null;
+    const note = { t, layer, inst };
+    this.notes.push(note);
+    return note;
+  }
+
+  /**
+   * FULL TIME's SCORE CENTRE (full-time.md §6): a row's tick (the director's audio.sfx('scoreTick')) asked for at `at`.
+   * The bed's own ticks leave room for it, none within `gap` of it: a bed tick still to come is silenced; one that has
+   * just sounded moves the row's tick to `gap` after it. Returns the time the row's tick sounds.
+   */
+  rowTick(at, gap = 0.15) {
+    const now = this.ctx.currentTime;
+    for (const bed of this.beds) {
+      for (const k of bed.ticks) if (!k.off && k.t <= now + 0.005 && k.t <= at && at - k.t < gap) at = k.t + gap;
+    }
+    for (const bed of this.beds) {
+      for (const k of bed.ticks) {
+        if (k.off || k.t <= now + 0.005 || Math.abs(k.t - at) >= gap) continue;
+        k.off = true;
+        k.g.gain.setValueAtTime(0, Math.max(now, k.t - 0.01));
+        if (k.note) k.note.cancelled = true;
+      }
+    }
+    return at;
   }
 
   registerSting(g) {
@@ -428,8 +478,11 @@ export class LofiEngine {
     }
     if (moment === 'leadin' || moment === 'open') this.graveSeg = null;
     const afterGrave = this.graveSeg != null && (this.segment === this.graveSeg + 1);
+    // (a cue that is no segment of its own, such as FULL TIME's scoreline sting, may arrive just before its segment's
+    // cue: "near" covers the grave segment and the one after it either way)
+    const graveNear = this.graveSeg != null && this.segment - this.graveSeg <= 1;
     const action = resolveCue(moment, opts, {
-      afterGrave, current: this.bed && this.bed.endAt === Infinity ? this.bed.id : null,
+      afterGrave, graveNear, current: this.bed && this.bed.endAt === Infinity ? this.bed.id : null,
       gravePad: this.gravePad, sharedStings: this.sharedStings, bedUnderStories: this.bedUnderStories,
     });
     this.pump(at + LOOKAHEAD);
@@ -605,6 +658,10 @@ export class LofiEngine {
     if (on === this.speaking) return;
     this.speaking = on;
     for (const bed of this.beds) bed.duckTo(on, at);
+    for (const g of this.duckedStings) {
+      if (on) targetTo(g.gain, g.__under, at, MIX.duckAttack);
+      else targetTo(g.gain, g.__level, at + MIX.duckHold, MIX.duckRelease);
+    }
     const hd = dbToGain(MIX.headline.level + (on ? MIX.headline.duckDb : 0));
     if (on) targetTo(this.headBus.gain, hd, at, MIX.duckAttack);
     else targetTo(this.headBus.gain, hd, at + MIX.duckHold, MIX.duckRelease);

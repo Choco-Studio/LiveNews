@@ -1,0 +1,223 @@
+# FULL TIME title sequence: critique log
+
+The brief (`docs/programmes/full-time.md` §6): "The open (≈10 s, 120 BPM). A dark ground; the floodlights bang on bank
+by bank on the beat (a low thunk each); the camera sweeps down to the centre circle; the scoreboard flips to FULL TIME
+on the referee's final whistle — three blasts, the last long — played by the brass; the emblem is a stopwatch at 90:00
+that becomes the plate." No real broadcaster's or club's jingle, no anthem, no quotation of an existing theme.
+
+Method: `docs/roadmap/QUALITY_LOOP.md`. A hostile panel: a broadcast composer and sound designer, a senior broadcast
+director, a lead pixel artist and a first-time viewer. Renders only. Each category is scored 0–10, and a round's score
+is its lowest category. The bar is above 9.7 in every category.
+
+**Rubric:**
+- picture craft (read at 1x, pixel craft, shimmer);
+- timing to the music;
+- clarity of the FULL TIME plate;
+- distinctness from the other opens.
+
+The sound of the open (the theme) is scored in `full-time-sound.md`.
+
+**Where it is:**
+- the cue sheet, shared by the picture and the theme: `public/js/scenes/opens/cues.js` (`'full-time'`);
+- the stadium: `public/js/scenes/opens/fulltimetitles.js`;
+- the emblem, a digital stopwatch: `public/js/scenes/opens/sport.js`;
+- the theme: `public/js/audio/themes.js` (`fullTimeTitles`);
+- the lab: `public/lab/opens.html?id=full-time` (`window.__lab.render(t)`);
+- tests: `test/full-time-sound.test.js`.
+
+**Renders:** 30 fps frames from the lab, viewed at 1x and 3x, contact sheets every 0.1–0.5 s, and A→B→A flicker
+maps. Recordings with the theme are in `/tmp/full-time-sound/`:
+- `full-time-open.mp4` is the final one (round 4);
+- `full-time-open-r3.mp4` is round 3;
+- `full-time-open-r1.mp4` is round 1.
+
+## The sequence as built (round 4; one beat grid, 120 BPM; times in seconds from the cut)
+
+| Beat | Time | Picture | Music |
+|---|---|---|---|
+| 0–3 | 0–1.5 | A dark stadium from high behind the near stand: the pitch's mown stripes in dark and deep green, its lines just made out in slate, the towers dark. The board's clock reads 89:55 and ticks a second every two beats. | A sub on E-flat and a dark fifth. The clock's dry tick each second. |
+| 3, 4, 5, 6 | 1.5, 2.0, 2.5, 3.0 | One bank a beat. Its head flashes white with a big halo, then settles. A crisp quarter of the grass turns to green and mid green stripes, and its stands come up with it. | A low thunk each: timpani, the section and a felt kick, climbing the E-flat chord (the band's count-in). |
+| 6.5–10 | 3.25–5.0 | The camera sweeps down over the low near terrace, into the bowl, and lands on the wide over the centre circle on the first blast, the board over the far stand. | The groove: kick, backbeat, the bass in eighths, the guitar's chops, the brass stabs. |
+| 10 | 5.0 | The wide. The clock reaches 90:00 and the board's rim flashes orange. The far stand's stairs, rows and heads draw in as the camera lands. | Blast 1 on the brass (B-flat), the band hitting it. |
+| 11 | 5.5 | Cut to the mid: the board between its two floodlights, the far stand with its stairs, concourse and three lit exits, the goal and the stripes. The rim flashes again. | Blast 2. |
+| 12 (+2) | 6.0 | Cut to the board's clock: the watch at centre stage at the emblem's size, the panel flipping to FULL TIME beside it at 2x, a floodlight upper left, the far stand's rows below. Half a beat later the front rows hold their scarves up: a band of orange and white across the stand, held to the cut. | The long blast, with a pea whistle's flutter, over Abmaj9; then an air swell and a snare fill. |
+| 15 | 7.5 | The stadium drops away round the watch in three frames through the screen's matrix (a match cut on the clock): the stopwatch alone at 90:00 on the open's field. | The signature on the brass, trumpets an octave up. |
+| 15.7–19 | 7.85–9.5 | The package's reveal: the plate comes out of the watch. FULL TIME, THE DAY IN SPORT, WITH KAI SPRITE & ROSA RALLY. | The colour (B, the #5) over an augmented chord, rising to C (the 6th) on Eb6/9 on the hit. |
+| 19 | 9.5–10.3 | Still. | The hit rings to the cut. |
+
+(The scores of rounds 1 and 2 were given afterwards, from each round's renders, which are kept; round 3's is the
+panel's verdict on the final renders.)
+
+## Round 1: first full draft. Score 8.4 (lowest: picture craft)
+
+Defects:
+1. Frames took 82 ms (median). The ray caster ran per pixel with closures, so it would drop frames on air.
+2. The near stand was full height with a roof. From the high opening camera it hid the near half of the pitch, so the
+   floods lit nothing the viewer could see.
+3. The dark phase was too bright: the stands read before their banks came on, so the bang had nothing to reveal.
+4. The crowd drew rows and heads at every distance. Far away they were noise, and they shimmered in every move.
+5. The halos were red and dotted, like a warning light, not a floodlight.
+6. The lamp grid in each head was re-sampled as the head grew, so it aliased into stripes during the sweep.
+7. The theme's thunks were louder than the groove (scored in `full-time-sound.md`).
+
+## Round 2: score 9.3 (lowest: picture craft)
+
+Fixed from round 1:
+- the renderer works per row: a mode-7 ground (one distance per row), stands culled by their screen box, no closures,
+  so the median frame is 9–10 ms;
+- a low near terrace with no roof, so the whole pitch shows from the opening camera;
+- darker levels before each bank;
+- the crowd's detail by distance: rows and heads near, rows alone further away, a flat dithered tone far away;
+- cool white halos, in the sky only;
+- the lamp grid is in whole pixels, its cells growing a pixel at a time.
+
+Defects:
+1. Each bank lit its quarter with a soft edge 14–22 m wide. That edge dithered as a wide checkerboard across the pitch
+   and the stands for whole seconds during the floods.
+2. The roofs, fascias, walls, apron and sky were dithered middle tones, which read as more wide checkerboards.
+3. Ad boards less than 3 px tall read as dotted lines.
+4. The dark grass stripes were 0.62 of a step down. Stripes and dither together made a checkerboard of stripes.
+5. The unlit tiers showed a grey crowd before their bank came on.
+6. The push-in turned the camera towards the watch (yaw and pitch). The board skewed under a watch drawn square: the
+   two read as a sticker on a slanted board.
+7. Shimmer: 211,000 A→B→A flickers over the open (the other opens: 105,000–158,000). The flicker maps put it in the
+   side tiers during the sweep and everywhere during the push.
+8. From the air the far heads had no halo: the glow was only drawn on sky, and from the high camera there is no sky in
+   the frame.
+9. The 95th-percentile frame took 25 ms.
+
+## Round 3: score 9.6 (lowest: picture craft)
+
+Fixed from round 2:
+- **Crisp quarters.** Each bank lights its quarter with an edge of 2.5–4 m, so each bang lights a clean quarter and
+  the four together light the pitch evenly.
+- **Whole steps.** Roofs, fascias, walls, the apron and the sky's bands take whole palette steps by the light of their
+  own quarter, never a dithered middle tone.
+- **Thin ad boards** (under 3 px) are all orange band.
+- **Lighter stripes.** The dark stripes are 0.26 of a step down: a texture, not a checkerboard.
+- **Black until lit.** A tier is black until its quarter's bank comes on.
+- **A zoom, not a turn.** The push-in is a zoom with a lens shift: the focal length grows to the emblem's size while
+  the frame's centre moves so the watch eases to centre stage. Nothing moves in depth against anything else, and the
+  board stays square to the watch.
+- **Detail that waits for stillness.** The crowd's rows and heads only draw while the picture is nearly still. They
+  fade back to the flat tone as the camera's speed passes 2–10 m/s, or as the zoom's rate passes 0.15–0.6 per second.
+- **Halos from the air.** A halo is at least 22 px across. It glows over the night: the sky, or the dark land beyond
+  the stadium when the camera looks down on it.
+
+Evidence:
+- **Flicker:** 120,831 A→B→A over the open, in the range of the other opens. Per second: 0, 38, 45, 24,005, 39,598,
+  54, 10,521, 41,702, 4,522, 346, 0.
+- **Frame times:** median 7.9 ms, 95th percentile 16.4 ms, max 58 ms (the first frame warming its caches).
+- **The hand-over is exact.** At the settle the stadium's watch sits at centre stage at the emblem's size: 1e-6 px and
+  1e-6 of scale (tested). Painted at its last stadium place and at the emblem's place it is the same pixels: 0 of
+  1,500+ differ (tested). The digits and pusher are the same as the emblem's settled watch, so there is no pop at the
+  switch.
+- **The camera never turns:** its forward vector has no sideways component on any frame (tested).
+- **Timing** (frames checked against the theme's note list): the banks land on 1.5, 2.0, 2.5 and 3.0 s with their
+  thunks; the clock's tick is on each second to 90:00 at 5.0 s; the rim flashes at 5.0 and 5.5 s; the flip is at
+  6.0 s; the cut is on the signature's downbeat at 7.5 s; the reveal is at 7.85 s; the hit is at 9.5 s; the cut to the
+  studio is at 10.3 s.
+
+Final scores:
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Picture craft | 9.6 | See the four items under this table. |
+| Timing to the music | 9.8 | Every event lands on the beat it scores. The hold over the circle (5.0–6.75 s) carries the whistle and the flip, but the camera is dead still there; the director would take a slow creep. |
+| Clarity of the FULL TIME plate | 9.8 | On the board, FULL TIME first reads in 5 px type on the LED grid (6.0–6.9 s). It is doubled during the push and is then the package's plate. A first-time viewer reads the board's 90:00 before the text. |
+| Distinctness | 9.8 | The only open with a place you could stand in, at night, in the channel's orange; the only emblem with digits. The night sky with halos shares a palette with the city sequences' night frames. |
+
+What keeps picture craft at 9.6:
+1. **The crowd is still.** At the final whistle a real ground stands up, and this one does not move. Motion in the
+   crowd would shimmer (the set's bible rules out a twinkling crowd). One flicker-safe reaction was tried and dropped:
+   on the long blast more seats filled and scarves went up, each seat changing once. It could not be seen at 1x,
+   because from the held shot the side tiers are at a grazing angle and draw as rows, not heads.
+2. **Shimmer in the push.** The push (6.75–7.6 s) still shimmers at about 42,000 A→B→A in its second: the grass's
+   dither and the lines crawl under a fast zoom.
+3. **Clipped halos.** A near head's halo stops in a straight edge where it meets a stand's roof.
+4. **A flat end stand.** The stand behind the far goal is a flat speckle with no rows at that distance. This is honest
+   (the rows are under a pixel there), but it reads as a dark mass.
+
+The round's score is 9.6. That is under the bar in picture craft, and it is reported as such. The next steps for a
+fourth round:
+- a flicker-safe reaction of the crowd at the flip (a static change, such as scarves held up, appearing once with the
+  long blast);
+- a footprint filter on the stripes' edges for the zoom;
+- a halo that also lights a roof it overlaps.
+
+## Round 4 (final): score 9.8
+
+The coordinator's notes on round 3 were taken as this round's defect list:
+1. **Shimmer and a dead camera, together.** The push still shimmered (42,000 A→B→A in its second), and the camera
+   stood still from 5.0 to 6.75 s.
+2. **A flat lime pitch.** The grass was `P.green` everywhere, its stripes a dither a quarter of a step down.
+3. **A flat speckle for a far stand.**
+4. **A halo cut straight by a roof.**
+5. **FULL TIME on the board too small.** Round 3's log called the board's line 5 px; that was wrong. The board's face is
+   7 px tall at 1x (measured on the frames), but it is still small for the shot that has to carry it.
+6. **A still crowd at the final whistle.**
+
+Fixed:
+- **Cut-ins on the whistle, no zoom.** One still framing per blast, cut on the beat:
+  - the wide, where the sweep lands (blast 1, 5.0 s);
+  - the mid (blast 2, 5.5 s): the board between its floodlights, the far stand, the goal;
+  - the board's clock (the long blast, 6.0 s): the watch at centre stage at the emblem's size.
+
+  Each is a camera on the same axis, a little nearer and on a longer lens: 8 m nearer for the mid, and 20 m (just short
+  of the halfway line) for the clock, so the far goal's crossbar falls below the frame instead of leaving a sliver at its
+  foot. Each watch lands on whole pixels. Nothing is scaled between frames, and the whistle now has a picture on every
+  blast.
+- **The pitch** is mown stripes in solid bands, using the palette's two new greens. Under the lights the stripes are
+  `P.green` and `P.midGreen`; in the quarters not yet lit they are `P.darkGreen` and `P.deepGreen`, so each bank visibly
+  lights a quarter of grass. The quarter's edge is a few metres of dither. Stripes finer than 3 px (only the far end, from
+  the air) dither by their share. Lines in the dark are solid slate, never dotted.
+- **The far stand is built:**
+  - a stair every 12 m;
+  - a concourse across it at row 12;
+  - three lit exits cut through the rows under it (a black lintel and jambs, a cream opening with an amber sill);
+  - the roof's fascia;
+  - rows, with heads where a row is 2 px or more.
+
+  The level of detail follows two footprints, up the slope and along the stand, so a stand seen edge on is texture,
+  not noise. Fine features only draw while the camera is at rest, or when they are 3 px or more in a move.
+- **Halos and the towers in front.** A halo lies over whatever stands behind its tower (sky, land, roofs, the stands'
+  dark faces) wherever it is brighter. Anything nearer than the head hides it, and coloured surfaces keep their colour.
+  The near halos are now whole discs over the side stands' roofs.
+- **FULL TIME at 2x.** In the last cut-in it is the board's 7 px face at 2x (14 px). Tested: every pixel of the line at
+  twice the face.
+- **The crowd at the final whistle.** Half a beat into the long blast, the far stand's fifth row holds up its scarves: a
+  band of orange and white two to three pixels deep across the stand, held to the cut. It reads at 1x (the frame at
+  6.5 s), and it changes once, so it does not twinkle. Tested: no orange in the bottom rows before, more than 150 orange
+  and 150 white pixels after, the same at the cut.
+
+Evidence:
+- **Flicker:** 56,906 A→B→A over the open, against 105,000–158,000 for the other opens. Per second: 0, 780, 2,597,
+  20,689, 27,866, 28, 0, 78, 4,522, 346, 0. All of it is in the floods' flashes and the sweep; from the first blast to
+  the cut there is none but the panel's own animation. By colour pair, the sweep's flicker is mostly the ad boards' 1 px
+  orange band, the stripes' edges and the pitch's lines crawling under the move.
+- **Frame times:** median 9.2 ms, 95th percentile 17.3 ms.
+- **Tests:**
+  - the cut-ins: a still framing between the blasts, and the watch a quarter larger at least on each cut, on whole
+    pixels;
+  - the stripes: over 97 % of the stripes' pixels have their own colour beside them; dark greens only before the
+    floods; both pairs with one bank on;
+  - FULL TIME at 2x, and the scarves band;
+  - the exact hand-over (0 pixels differ).
+
+Final scores:
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Picture craft | 9.8 | See the three items under this table. |
+| Timing to the music | 9.8 | A picture on every blast; the scarves half a beat into the long one; the cut on the signature's downbeat. The sweep stops dead on blast 1 (eased over the last tenth of a second): a director might ask for a longer landing. |
+| Clarity of the FULL TIME plate | 9.9 | FULL TIME at 14 px beside the watch for 1.5 s, then the package's plate. |
+| Distinctness | 9.8 | Unchanged: the only open with a place you could stand in, in the channel's orange, and the only emblem with digits. |
+
+What keeps picture craft from 10:
+1. **The sweep still shimmers:** about 48,000 A→B→A over its 1.75 s. The 1 px ad band and the lines crawl under a
+   crane move; the only cure would be stepping the move at 15 Hz.
+2. **The scarves band is small:** a single band at the foot of the clock's shot.
+3. **The upper rows of the far stand** are about 1.5 px apart in the wide and mid, so they read as a fine ruling
+   rather than seats.
+
+The round's score is 9.8, above the bar in every category.
