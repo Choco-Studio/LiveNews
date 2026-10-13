@@ -10,6 +10,7 @@
 // `robot: true` switches to UNIT-8's mechanical renderer.
 import { P } from './palette.js';
 import { FULL_TIME_LOOK } from './full-time-looks.js';
+import { HOST_LOOK } from './pay-attention-looks.js';
 
 const PACO = {
   name: 'PACO PÍXEL',
@@ -260,6 +261,21 @@ const ROSA_OLD = {
 /** The FULL TIME candidates in this renderer (labs): { kai: { A, B, C }, rosa: { A, B, C } }. */
 export const FULL_TIME_OLD = { kai: KAI_OLD, rosa: ROSA_OLD };
 
+// PAY ATTENTION (docs/programmes/pay-attention.md §2): the quizmaster, three candidates for the owner (the v2 cast's
+// designs, v2/canvas25d/cast/pay-attention.js, in this renderer's terms); HOST_LOOK picks the provisional one.
+const HOST_BASE = { brow: P.black, shirt: P.white, shirtShade: P.silver, prop: 'papers', phase: 3.3, quirk: 'gaze' };
+const HOST_OLD_LOOKS = {
+  // A: two high afro puffs, warm medium-brown skin, a gold stud, a coral-red blazer over a black scoop top
+  A: { ...HOST_BASE, name: 'QUINN QUERY', style: 'puffs', skin: P.skinShade, skinShade: P.tanShade, hair: P.ink, hairHi: P.slate, hairShade: P.black, lipstick: P.maroon, body: 'blazer', suit: P.red, suitShade: P.darkRed, suitHi: P.pink, suitDeep: P.maroon, shirt: P.black, shirtShade: P.ink, cuff: P.ink, earrings: P.yellow, earringStyle: 'stud' },
+  // B: a glossy black pompadour with a silver streak, olive skin, a cream dinner jacket with black satin lapels, a purple
+  // bow tie and square
+  B: { ...HOST_BASE, name: 'THEO TALLY', style: 'pompadour', skin: P.tan, skinShade: P.tanShade, hair: P.ink, hairHi: P.steel, hairShade: P.black, temples: P.fog, templesHi: P.silver, body: 'dinner', suit: P.cream, suitShade: P.fog, suitHi: P.cream, suitDeep: P.steel, tie: P.purple, tieShade: P.maroon, pocket: P.magenta, pocketShade: P.purple, cuff: P.white },
+  // C: an azure hijab framing the face and draped over the shoulders, a black jacket over a white blouse, a gold pin
+  C: { ...HOST_BASE, name: 'LAYLA LEVEL', style: 'hijab', skin: P.skin, skinShade: P.tan, hair: P.blue, hairHi: P.cyan, hairShade: P.navy, lipstick: P.brown, body: 'hijab', suit: P.ink, suitShade: P.black, suitHi: P.slate, suitDeep: P.black, pin: P.yellow, pinShade: P.orange, cuff: P.white },
+};
+/** The PAY ATTENTION host's candidates in this renderer (labs): { A, B, C }. */
+export const HOST_OLD = HOST_OLD_LOOKS;
+
 // 'A' and 'B' are kept as aliases of the original pair.
 export const LOOKS = {
   A: PACO,
@@ -274,6 +290,7 @@ export const LOOKS = {
   sam: SAM,
   kai: KAI_OLD[FULL_TIME_LOOK.kai] || KAI_OLD.A,
   rosa: ROSA_OLD[FULL_TIME_LOOK.rosa] || ROSA_OLD.A,
+  qm: HOST_OLD_LOOKS[HOST_LOOK] || HOST_OLD_LOOKS.A,
 };
 
 // ---------------------------------------------------------------------------
@@ -845,6 +862,78 @@ const BACK_CURLS = sym(
   -2,
 );
 
+// --- PAY ATTENTION (pay-attention.md §2) -----------------------------------------
+
+// hair parted in the centre and drawn back into two high afro puffs (narrow face; the ears show)
+const HAIR_PUFFS = spr(
+  [
+    '..hHHj........hHHj..',
+    '.hHHHHj......hHHHHj.',
+    '.HhHHHj......HhHHHj.',
+    '.hHHHHj......hHHHHj.',
+    '..jHHjHHHHHHHHjHHj..',
+    '....HhhHHsHHHHHj....',
+    '...HhHHHHHHHHHHHj...',
+    '...hH..........Hj...',
+    '...h............j...',
+  ],
+  -10,
+  -5,
+);
+// a glossy black pompadour from a side part on the key side, one silver streak (g, G) swept up with it, the sides
+// tapered (wide face)
+const HAIR_POMP = spr(
+  [
+    '......hJJHHj........',
+    '....hhJHHgHHHj......',
+    '...hJHHHgGHHHHj.....',
+    '..hHHHHHgHHHHHHj....',
+    '..hHHHHgGHHHHHHHj...',
+    '..HhjHHgHHHHHHHHj...',
+    '..Hj.HgHHHHHHHHHj...',
+    '..H..............j..',
+    '..j..............j..',
+  ],
+  -10,
+  -5,
+);
+// a hijab: over the crown, down beside the face (the ears covered), under the chin and over the shoulders; the gold
+// pin (5) at the key-side temple (28-wide grid, drawn after the face and the body)
+const HAIR_HIJAB = spr(
+  [
+    '..........hhHHHHHj..........',
+    '.......hhHHHHHHHHHHj........',
+    '......hHHHHHHHHHHHHHj.......',
+    '.....hHHHHHHHHHHHHHHHj......',
+    '....hHHHHHHHHHHHHHHHHjj.....',
+    '....hHHHHHHHHHHHHHHHHHj.....',
+    '....hHHhhhhhhhhhhhhHHHj.....',
+    '....hHHh............jHHj....',
+    '....hH5h............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHh............jHHj....',
+    '....hHHHh..........jjHHj....',
+    '....hHHHHh........jjHHHj....',
+    '....hHHHHHH......jjHHHHj....',
+    '....hHHHHHHHjjjjjjHHHHHj....',
+    '...hHHHHHHHHHHHHHjjHHHHjj...',
+    '..hHHHHHHHHHHHHHHjjHHHHHjj..',
+    '.hHHHHHHHHHHHHHHHHjjHHHHHjj.',
+    'hHHHHHHHHHHHHHHHHHHjjHHHHHjj',
+    'hHHHHHHHHHHHHHHHHHHHjjHHHHjj',
+    '.hHHHHHHHHHHHHHHHHHHHjjHHHj.',
+    '...hHHHHHHHHHHHHHHHHHHjjj...',
+    '......hhHHHHHHHHHHjjjj......',
+  ],
+  -14,
+  -3,
+);
+
 const STYLES = {
   short: { face: 'wide', hair: HAIR_SHORT },
   spiky: { face: 'wide', hair: HAIR_SPIKY },
@@ -859,6 +948,9 @@ const STYLES = {
   highpony: { face: 'narrow', hair: HAIR_SLEEK, back: TAIL_HOOK, ears: true, earring: [-8, 11] },
   cornrows: { face: 'narrow', hair: HAIR_ROWS, ears: true, earring: [-8, 10] },
   curlband: { face: 'narrow', hair: HAIR_CURLBAND, back: BACK_CURLS },
+  puffs: { face: 'narrow', hair: HAIR_PUFFS, ears: true, earring: [-8, 10] },
+  pompadour: { face: 'wide', hair: HAIR_POMP },
+  hijab: { face: 'narrow', hair: HAIR_HIJAB },
 };
 
 // --- glasses ---------------------------------------------------------------
@@ -1159,6 +1251,26 @@ const ROLLNECK = sym(
   -3,
 );
 
+// PAY ATTENTION, host B: a dinner jacket with black satin lapels (0) over a white shirt; the bow tie is an extra
+const DINNER = sym([
+  '............VU0OO...',
+  '..........VVUU00OOOO',
+  '........VVUUUUU00OOO',
+  '......VUUUUUUUUU0OOO',
+  '.....VUUUUUUUUUU00OO',
+  '....VUUUUUUUUUUUU0OO',
+  '....UUUUUUUUUUUUU00O',
+  '....UUUuUUUUUUUUUU0O',
+  '....UUUuUUUUUUUUUU00',
+  '....UUUuUUUUUUUUUUU0',
+  '....UUUuUUUUUUUUUUU0',
+  '....UUUuUUUUUUUUUUUD',
+  '...UUUUuUUUUUUUUUUUU',
+  ...FILL('...UUUUuUUUUUUUUUUUU', 17),
+]);
+const BOW_TIE = spr(['RR..RR', 'RrRRrR', 'RR..RR'], -3, 0);
+const LAPEL_PIN = spr(['BB'], 5, 9);
+
 const LAPEL_MIC = spr(['mn', 'mm'], -8, 5);
 const POCKET_SQUARE = spr(['XX', 'XxX', 'uuuuu'], 7, 6);
 const NECKLACE = spr(['Y....Y', '.Y..Y.', '..YY..', '..yy..'], -3, 1);
@@ -1177,6 +1289,8 @@ const BODIES = {
   bomber: { sprite: BOMBER, extras: [] },
   track: { sprite: TRACK, extras: [] },
   rollneck: { sprite: ROLLNECK, extras: [] },
+  dinner: { sprite: DINNER, extras: [[null, BOW_TIE], ['pocket', POCKET_SQUARE]] },
+  hijab: { sprite: BLOUSE, extras: [['pin', LAPEL_PIN]] },
 };
 
 // ---------------------------------------------------------------------------

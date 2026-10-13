@@ -8,6 +8,7 @@
 import { P } from '../palette.js';
 import { zoneTime } from '../util.js';
 import { FULL_TIME_LOOK } from '../full-time-looks.js';
+import { HOST_LOOK } from '../pay-attention-looks.js';
 
 const W = 384;
 const H = 216;
@@ -438,7 +439,56 @@ Object.assign(CAST, {
     cloth: [P.blue, P.blue, P.navy, P.ink, P.black, P.black], stripe: [P.white, P.white, P.silver], cuff: P.navy,
   },
 });
-const ALIAS = { A: 'paco', B: 'lola', kai: `kai-${(FULL_TIME_LOOK.kai || 'A').toLowerCase()}`, rosa: `rosa-${(FULL_TIME_LOOK.rosa || 'A').toLowerCase()}` };
+// PAY ATTENTION (pay-attention.md §2): the quizmaster, three candidates for the owner (the v2 cast's designs,
+// v2/canvas25d/cast/pay-attention.js); `qm` aliases the candidate HOST_LOOK puts on air.
+const HOST_FACE_W = {
+  native: -1,
+  headTop: 38,
+  face: { hw: 21, crownR: 23, cheekEnd: 41, cheekHW: 20, chinY: 61, chinHW: 8 },
+  eyeY: 35, eyeX: 4, browY: 29, noseY: 47, mouthY: 55, earY: 31, neckHW: 9, collar: 10, nose: 'small',
+  brow: [P.black, P.black], lash: P.black, lashes: true,
+  persona: { bob: 0.9, shift: 0.8, sway: 0.6, look: 0.8 },
+};
+Object.assign(CAST, {
+  // A: two high afro puffs, warm medium-brown skin, a gold stud, a coral-red blazer over a black scoop top
+  'qm-a': {
+    ...HOST_FACE_W,
+    headTop: 40,
+    skin: [P.skin, P.tan, P.skinShade, P.tanShade, P.brown, P.maroon],
+    hairRamp: BLACK_HAIR,
+    iris: [P.maroon, P.black],
+    lips: lips(P.maroon, P.black, P.tanShade, P.tan),
+    hair: 'qmPuffs', outfit: 'qmBlazer', earrings: 'studGold',
+    cloth: [P.pink, P.pink, P.red, P.darkRed, P.maroon, P.black], cuff: P.ink,
+  },
+  // B: a glossy black pompadour with a silver streak, olive skin, a cream dinner jacket with black satin lapels, a
+  // purple bow tie
+  'qm-b': {
+    ...KAI_FACE,
+    headTop: 40,
+    skin: [P.cream, P.skin, P.tan, P.tanShade, P.brown, P.maroon],
+    hairRamp: BLACK_HAIR,
+    iris: [P.tanShade, P.brown],
+    lips: lips(P.tanShade, P.brown, P.tanShade, P.tan),
+    hair: 'qmPomp', outfit: 'qmDinner',
+    cloth: [P.white, P.cream, P.cream, P.fog, P.steel, P.slate], cuff: P.white,
+    persona: { bob: 0.9, shift: 0.7, sway: 0.5, look: 0.8 },
+  },
+  // C: an azure hijab framing the face and draped over the shoulders, a black jacket over a white blouse, a gold pin
+  'qm-c': {
+    ...HOST_FACE_W,
+    ears: false,
+    skin: [P.cream, P.cream, P.skin, P.tan, P.tanShade, P.brown],
+    hairRamp: BLACK_HAIR,
+    scarfRamp: [P.white, P.cyan, P.blue, P.navy, P.ink, P.black],
+    brow: [P.maroon, P.black], iris: [P.tanShade, P.brown],
+    lips: lips(P.tanShade, P.brown, P.skinShade, P.skin),
+    hair: 'qmHijab', outfit: 'qmHijab',
+    cloth: DARK_CLOTH, cuff: P.white,
+    persona: { bob: 0.5, shift: 0.5, sway: 0.4, look: 0.6 },
+  },
+});
+const ALIAS = { A: 'paco', B: 'lola', kai: `kai-${(FULL_TIME_LOOK.kai || 'A').toLowerCase()}`, rosa: `rosa-${(FULL_TIME_LOOK.rosa || 'A').toLowerCase()}`, qm: `qm-${(HOST_LOOK || 'A').toLowerCase()}` };
 
 function faceProfile(f) {
   const rows = [];
@@ -1066,6 +1116,112 @@ const HAIR = {
     });
     front.pts([[px(-8), 2], [px(-7), 2]].map(([x, y]) => [side > 0 ? x : x - 1, y + 1]), -2, [BAND]);
   },
+
+  // PAY ATTENTION, host A: hair parted in the centre and drawn back close to the skull into two high afro puffs, one
+  // each side of the crown, a gap between them; coils as crescents lit on the key side.
+  qmPuffs(K) {
+    const { front, back, side, hwAt, sx } = K;
+    const H = K.mat(K.D.hairRamp);
+    const SC = K.mat([K.D.skin[2], K.D.skin[3], K.D.skin[3], K.D.skin[4], K.D.skin[5], K.D.skin[5]]);
+    for (let y = -1; y <= 30; y++) {
+      const hw = domeHW(K, y, 1, 1);
+      for (let x = -hw; x < hw; x++) {
+        const ax = Math.abs(x + 0.5);
+        const hl = 11 + Math.round((ax / 20) ** 2 * 8);
+        const temple = ax > hwAt(y) - 2 && y < K.D.earY - 3;
+        if (y > hl && !temple) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    for (const s2 of [-1, 1]) back.disc(s2 * 14 - (s2 < 0 ? 1 : 0), -6, 10, H, 0);
+    lightHair(back, K, [H], 4, -40);
+    lightHair(front, K, [H], 2, 2, back);
+    // the coils: a crescent on each cluster's key side, a crease on its far side
+    for (let gy = -18; gy < 6; gy += 4) {
+      for (let gx = -26; gx < 26; gx += 4) {
+        const cx = gx + ((gy / 4) % 2 ? 2 : 0) + Math.floor(hash(gx + 9, gy) * 3) - 1;
+        const cy = gy + Math.floor(hash(gy, gx + 9) * 3) - 1;
+        if (back.mat(cx, cy) !== H || back.tone(cx, cy) === RIM) continue;
+        const l = -side;
+        back.pts([[cx + l, cy - 1], [cx, cy - 1], [cx + l, cy]], -1, [H]);
+        back.pts([[cx - l, cy + 1], [cx - l * 2, cy]], 1, [H]);
+      }
+    }
+    // the part: a line of scalp from the hairline toward the gap
+    for (let y = 2; y < 11; y++) front.set(side > 0 ? -1 : 0, y, SC, 0);
+    for (const [a, b, c, d] of [[-12, 11, -9, 2], [-5, 10, -4, 1], [5, 10, 4, 1], [12, 11, 9, 2]]) front.toneLine(sx(a), b, sx(c), d, 1, [H]);
+  },
+
+  // Host B: a glossy black pompadour from a side part on the key side, swept up into a tall rounded front and back,
+  // the sides tapered; a sheen band of strokes across the front, a glint on its crest, one silver streak.
+  qmPomp(K) {
+    const { front, side, hwAt, sx } = K;
+    const H = K.mat(K.D.hairRamp, P.silver);
+    for (let y = -11; y <= 30; y++) {
+      for (let x = -26; x < 26; x++) {
+        const ax = Math.abs(x + 0.5);
+        const dx = (x + 0.5 - 1) / 24, dy = (y + 0.5 - 12) / 23;
+        const inMass = y < 12 ? dx * dx + dy * dy <= 1 : ax < hwAt(y) + 1;
+        if (!inMass) continue;
+        const hl = 11 + Math.round((ax / 22) ** 2 * 5);
+        const sides = ax > hwAt(Math.max(0, y)) - 2 && y < K.D.earY;
+        if (y > hl && !sides) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    lightHair(front, K, [H], 3, 2);
+    front.each((x, y) => {
+      if (front.mat(x, y) === H && y > 14 && front.tone(x, y) !== RIM && Math.abs(x + 0.5) > hwAt(y) - 2) front.setTone(x, y, 1); // tapered
+    });
+    // strands rising from the hairline and sweeping back; left of the part combed down toward the ear
+    for (const [a, b, c, d] of [[-5, 10, -3, -6], [0, 10, 1, -9], [5, 10, 6, -8], [10, 11, 11, -5], [15, 12, 15, -1], [-13, 9, -17, 18], [-11, 4, -15, 14]]) front.toneLine(sx(a), b, sx(c), d, 1, [H]);
+    for (let y = -2; y < 10; y++) front.setTone(sx(-9), y, 2, [H]); // the part
+    // the sheen: a band of short lit strokes across the front, a silver glint on the crest
+    for (let x = -14; x < 10; x++) {
+      const y = Math.round(-1 + ((x + 2) / 12) ** 2 * 3);
+      if ((x + 40) % 3 !== 2) front.setTone(sx(x), y, -1, [H]);
+    }
+    front.pts([[sx(-6), -7], [sx(-5), -8], [sx(-4), -8], [sx(-3), -9]], -2, [H]);
+    // the silver streak: a lock beside the part, swept up and leaning with the rest, narrowing over the top
+    const ST = K.mat([P.white, P.white, P.silver, P.fog, P.steel, P.slate], P.white);
+    for (let y = -6; y < 11; y++) {
+      const c = -6 + Math.round((10 - y) * 0.28), w = y > 4 ? 3 : y > -2 ? 2 : 1;
+      for (let k = 0; k < w; k++) if (front.mat(sx(c + k), y) === H) front.set(sx(c + k), y, ST, k === w - 1 && w > 1 ? 1 : 0);
+    }
+  },
+
+  // Host C: a hijab: the crown and the panels beside the face, the folded edge round the face lit on the key side;
+  // the drape under the chin and over the shoulders is the outfit's (qmHijab), behind the head.
+  qmHijab(K) {
+    const { front, side, hwAt, sx, chinBottom } = K;
+    const S = K.mat(K.D.scarfRamp, P.silver);
+    const PIN = K.mat([P.white, P.cream, P.yellow, P.orange, P.rust, P.brown], P.cream);
+    for (let y = -6; y <= chinBottom - 1; y++) {
+      const outer = y < 0 ? domeHW(K, y, 6, 4) : hwAt(Math.min(y, K.D.face.cheekEnd)) + 5 + Math.round(Math.max(0, y - 30) * 0.12);
+      for (let x = -outer; x < outer; x++) {
+        const ax = Math.abs(x + 0.5);
+        const open = y > 10 && (y < K.D.face.cheekEnd ? ax < hwAt(y) - 2 : ax < hwAt(y) - 1);
+        if (open) continue;
+        front.set(x, y, S, 0);
+      }
+    }
+    lightHair(front, K, [S], 4, 2);
+    // the folded edge round the face: a lit line on the key side, shade on the far side
+    front.each((x, y) => {
+      if (front.mat(x, y) !== S || front.tone(x, y) === RIM || y < 10) return;
+      const inner = !front.mat(x + 1, y) || !front.mat(x - 1, y) || !front.mat(x, y + 1);
+      if (inner && Math.abs(x + 0.5) < hwAt(Math.min(y, chinBottom)) + 1) front.setTone(x, y, side * (x + 0.5) < 0 ? -1 : 2);
+    });
+    for (let x = -14; x < 14; x++) if (front.mat(x, 10) === S) front.setTone(x, 10, side * (x + 0.5) < 2 ? -1 : 1);
+    // the dome's sheen and two soft folds down each panel
+    for (let x = -18; x < -4; x++) front.setTone(sx(x), Math.round(1 + ((x + 11) / 8) ** 2 * 3), -1, [S]);
+    for (const s2 of [-1, 1]) front.toneLine(s2 * 24 - (s2 < 0 ? 1 : 0), 26, s2 * 26 - (s2 < 0 ? 1 : 0), chinBottom - 2, s2 === side ? 2 : 1, [S]);
+    // the gold pin at the key-side temple
+    front.set(sx(-21), 14, PIN, 0);
+    front.set(sx(-20), 14, PIN, 1);
+    front.set(sx(-21), 15, PIN, 1);
+    front.set(sx(-22), 13, PIN, -1);
+  },
 };
 
 // FULL TIME, Kai A: a full beard trimmed square, the moustache joined, a flat base under the chin; part of the head
@@ -1530,6 +1686,72 @@ const OUTFITS = {
       body.setTone(sx(D.neckHW + 1), y, 1);
     }
     for (let y = C + 6; y < C + 80; y++) for (let x = -30; x < 0; x += 4) body.setTone(sx(x), y, (y + x) % 7 < 4 ? 1 : 0, [K.CLOTH]);
+  },
+
+  // PAY ATTENTION, host A: a coral-red blazer over a black scoop top (Lola's cut in her own colours).
+  qmBlazer(K) {
+    OUTFITS.lola(K);
+    const { body } = K;
+    const TOP = K.mat([P.slate, P.slate, P.ink, P.black, P.black, P.black], P.slate);
+    body.each((x, y) => {
+      const m = body.mat(x, y);
+      if (m && m !== K.CLOTH && m !== K.SKIN && body.mat(x, y) !== TOP && !K.clothMats.includes(m)) body.set(x, y, TOP, Math.max(0, body.tone(x, y)));
+    });
+  },
+
+  // Host B: a cream dinner jacket with black satin lapels over a white shirt, a purple bow tie, a purple pocket square.
+  qmDinner(K) {
+    const { body, C, side, sx, lineX, D } = K;
+    const nhw = D.neckHW;
+    const SHIRT = K.mat([P.white, P.white, P.white, P.silver, P.fog, P.steel]);
+    const SATIN = K.mat([P.steel, P.slate, P.ink, P.black, P.black, P.black], P.slate);
+    const BOW = K.mat([P.pink, P.magenta, P.magenta, P.purple, P.maroon, P.black], P.pink);
+    body.poly(shoulders(K, 76), K.CLOTH);
+    body.poly([[-11, C - 1], [11, C - 1], [3, C + 66], [-3, C + 66]], SHIRT);
+    for (let y = C - 1; y < C + 70; y++) for (let x = 0; x < 12; x++) body.setTone(sx(x), y, x > 3 ? 1 : 0, [SHIRT]);
+    lapels(K, SATIN, { inTop: 12, inBot: 3, outer: 28, gorge: 20, bottom: 66 });
+    for (let y = C - 12; y < C + 2; y++) for (let x = -nhw + 1; x < nhw - 1; x++) body.set(x, y, K.SKIN, side * (x + 0.5) > 4 ? 2 : 1);
+    for (const s2 of [-1, 1]) {
+      const lit = s2 !== side;
+      body.poly([[s2 * 1, C + 1], [s2 * 10, C - 12], [s2 * 14, C - 10], [s2 * 15, C - 6], [s2 * 11, C + 7], [s2 * 4, C + 5]], SHIRT, lit ? 0 : 1);
+      body.toneLine(lineX(s2, 15), C - 6, lineX(s2, 11), C + 7, lit ? 1 : 2, [SHIRT]);
+    }
+    // the bow tie: two wings flaring from a knot at the collar
+    for (const s2 of [-1, 1]) {
+      const lit = s2 !== side;
+      body.poly([[s2 * 2, C - 1], [s2 * 11, C - 4], [s2 * 12, C + 1], [s2 * 11, C + 6], [s2 * 2, C + 4]], BOW, lit ? 0 : 1);
+      body.toneLine(lineX(s2, 11), C - 3, lineX(s2, 11), C + 5, lit ? 1 : 2, [BOW]);
+    }
+    body.rect(-2, C - 2, 4, 6, BOW, 1);
+    body.pts([[sx(-2), C - 1], [sx(-1), C - 1]], 0, [BOW]);
+    body.pts([[sx(1), C + 3], [sx(0), C + 3]], 2, [BOW]);
+    // the pocket square in the bow's cloth
+    for (let k = 0; k < 12; k++) body.setTone(sx(30 + k), C + 37 - Math.floor(k / 6), 3, [K.CLOTH]);
+    for (const [x, y, tn] of [[31, 36, 0], [32, 35, 0], [33, 36, 1], [35, 35, 0], [36, 34, 0], [37, 35, 1], [32, 36, 0], [36, 35, 1]]) body.set(sx(x), C + y, BOW, tn);
+  },
+
+  // Host C: a black tailored jacket over a white blouse (Penny's cut), under the hijab's drape round the neck and
+  // over the shoulders (behind the head, so the chin falls on the cloth).
+  qmHijab(K) {
+    OUTFITS.penny(K);
+    const { body, C, side, chinBottom } = K;
+    const S = K.mat(K.D.scarfRamp, P.silver);
+    const pts = mirrorPts([[-14, chinBottom - 14], [-24, chinBottom - 6], [-27, C - 6], [-34, C + 2], [-40, C + 10], [-41, C + 16], [-34, C + 21], [-20, C + 25], [-8, C + 27]]);
+    body.poly(pts, S, 0);
+    body.each((x, y) => {
+      if (body.mat(x, y) !== S) return;
+      const far = side * (x + 0.5) > 6 + Math.max(0, y - C) * 0.5;
+      if (y < chinBottom + 6 && Math.abs(x + 0.5) < 16) body.setTone(x, y, 2); // the jaw's shadow
+      else if (far) body.setTone(x, y, 1);
+      if (!body.mat(x, y + 1)) body.setTone(x, y, 2);
+    });
+    for (const s2 of [-1, 1]) body.toneLine(s2 * 10, C - 2, s2 * 18, C + 22, s2 === side ? 2 : 1, [S]);
+    body.each((x, y) => {
+      if (body.edge(x, y, side, 0, [S])) body.setTone(x, y, RIM);
+    });
+    const PIN = K.mat([P.white, P.cream, P.yellow, P.orange, P.rust, P.brown], P.cream);
+    body.set(K.sx(-24), C + 40, PIN, 0);
+    body.set(K.sx(-23), C + 40, PIN, 1);
   },
 };
 
@@ -2606,8 +2828,9 @@ function blitHead(ctx, layer, x, y, tilt, seam, jawSeam = Infinity, jaw = 0) {
 
 /**
  * Draw the whole 384x216 close-up frame for presenter `id`
- * ('paco' | 'lola' | 'max' | 'ada' | 'nova' | 'unit8' | 'penny' | 'sam' | 'kai' | 'rosa', with
- * 'A' = paco and 'B' = lola as aliases; kai and rosa alias the FULL TIME candidate on air, 'kai-a' … 'rosa-c').
+ * ('paco' | 'lola' | 'max' | 'ada' | 'nova' | 'unit8' | 'penny' | 'sam' | 'kai' | 'rosa' | 'qm', with
+ * 'A' = paco and 'B' = lola as aliases; kai and rosa alias the FULL TIME candidate on air, 'kai-a' … 'rosa-c'; qm
+ * aliases PAY ATTENTION's provisional host, 'qm-a' … 'qm-c').
  * state: { t, speaking, emotion, mouth (0..2), blink, look (-1..1), bob, gesture, action }
  */
 export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null } = {}) {

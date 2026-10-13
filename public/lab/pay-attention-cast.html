@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay Attention Cast</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #sheet { display: block; image-rendering: pixelated; }
+  .voices { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px; background: #181425; border-bottom: 1px solid #3a4466; }
+  .voices figure { margin: 0; }
+  .voices figcaption { color: #feae34; margin-bottom: 4px; }
+  .voices small { display: block; color: #8b9bb4; max-width: 360px; }
+</style>
+</head>
+<body>
+<!-- PAY ATTENTION's host (docs/programmes/pay-attention.md §2, build step 6): the owner's comparison sheets of the
+     quizmaster's three candidate looks, beside the eight contestants, at 1x and 4x, seated and talking, and the old
+     renderer. ?sheet=candidates | contestants | quiz | quiz-2x | onair | gestures | legacy. window.__lab.sheet(name)
+     redraws; window.__ready resolves when drawn. See public/js/v2/canvas25d/labs/pay-attention-cast.js. -->
+<div class="bar"><select id="pick"></select><span id="info"></span></div>
+<!-- the three voice candidates (server/voice/casting.json qm.candidates), as the station renders them: the same lines -->
+<div class="voices">
+  <figure><figcaption>Voice A (provisional): bright and quick, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-a.ogg"></audio><small>jf_gongitsune 70% + pf_dora 30%, en-US, speed 1.08</small></figure>
+  <figure><figcaption>Voice B: a light, lively baritone, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-b.ogg"></audio><small>hm_psi, en-US, speed 1.12</small></figure>
+  <figure><figcaption>Voice C: clear and even, British</figcaption><audio controls preload="none" src="pay-attention-voices/host-c.ogg"></audio><small>jf_nezumi 55% + pf_dora 45%, en-GB, speed 1.06</small></figure>
+</div>
+<canvas id="sheet" width="16" height="16"></canvas>
+<script type="module">
+import { createPayAttentionLab, SHEETS } from '../js/v2/canvas25d/labs/pay-attention-cast.js';
+const lab = createPayAttentionLab();
+const canvas = document.getElementById('sheet');
+const pick = document.getElementById('pick');
+for (const n of SHEETS) pick.add(new Option(n, n));
+const params = new URLSearchParams(location.search);
+pick.value = params.get('sheet') || 'candidates';
+async function draw(name) {
+  const t0 = performance.now();
+  const [w, h] = await lab.sheet(name, canvas);
+  document.getElementById('info').textContent = `${name}: ${w} x ${h}, ${Math.round(performance.now() - t0)} ms`;
+}
+window.__lab = { sheet: draw };
+pick.onchange = () => draw(pick.value);
+window.__ready = draw(pick.value);
+</script>
+</body>
+</html>
