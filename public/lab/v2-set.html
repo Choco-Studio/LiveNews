@@ -79,7 +79,7 @@
   };
 
   for (const n of lab.PROGRAMMES) $('programme').add(new Option(n, n));
-  for (const n of lab.FRAMINGS) $('framing').add(new Option(n, n));
+  for (const n of [...lab.FRAMINGS, ...lab.B_FRAMINGS]) $('framing').add(new Option(n, n));
   for (const n of lab.WALLS) $('wall').add(new Option(n, n));
   for (const k of ['programme', 'framing', 'wall', 'phase']) {
     if (params.has(k)) lab.set({ [k]: params.get(k) });

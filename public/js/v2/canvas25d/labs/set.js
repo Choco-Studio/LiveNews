@@ -57,6 +57,9 @@ export const CASTS = {
 };
 export const PROGRAMMES = [...STYLE_IDS, 'generic'];
 export const FRAMINGS = ['wide', 'two', 'single-a', 'single-b', 'solo', 'mcu-l', 'mcu-r', 'ots'];
+/** A duo's singles on presenter B (the director's mcu-r and over-the-shoulder on B; kept out of FRAMINGS, which the
+ *  older checks walk for every programme). */
+export const B_FRAMINGS = ['mcu-b', 'ots-b'];
 export const WALLS = ['idle', 'picture', 'map', 'figure', 'plate'];
 
 export const LAB = {
@@ -123,6 +126,10 @@ export function cameraFor(name, prog = LAB.programme) {
       case 'mcu-r':
       case 'ots':
         return camFraming(name, o);
+      case 'mcu-b':
+        return camFraming('mcu-r', { ...o, focus: solo ? 'A' : 'B' });
+      case 'ots-b':
+        return camFraming('ots', { ...o, focus: solo ? 'A' : 'B', side: solo ? -1 : undefined });
       default:
         return camFraming('wide', o);
     }
@@ -165,9 +172,9 @@ function camAtTime(t) {
   // a move is a dolly from the framing: reuse CAMERA's cameraAt on the equivalent spec
   if (!CAM) return base;
   try {
-    SPEC.framing = L.framing === 'single-a' || L.framing === 'single-b' ? (cast.B ? 'single' : 'mcu') : L.framing === 'solo' ? (cast.B ? 'mcu-l' : 'solo-mcu') : L.framing;
+    SPEC.framing = L.framing === 'single-a' || L.framing === 'single-b' ? (cast.B ? 'single' : 'mcu') : L.framing === 'solo' ? (cast.B ? 'mcu-l' : 'solo-mcu') : L.framing === 'mcu-b' ? 'mcu-r' : L.framing === 'ots-b' ? 'ots' : L.framing;
     SPEC.cast = cast;
-    SPEC.focus = L.framing === 'single-b' ? 'B' : 'A';
+    SPEC.focus = L.framing === 'single-b' || ((L.framing === 'mcu-b' || L.framing === 'ots-b') && cast.B) ? 'B' : 'A';
     SPEC.solo = !cast.B;
     SPEC.programId = prog;
     SPEC.move = L.move;
