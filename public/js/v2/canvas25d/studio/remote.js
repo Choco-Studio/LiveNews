@@ -20,8 +20,12 @@ const W = 384, H = 216;
 
 /** The correspondent in a location shot: neck base on screen and scale (an MCU: hands below the frame). */
 export const REMOTE = { x: 124, y: 122, s: 3.6, headX: 124 };
-/** The two boxes of the two-way (16:9), and where a head sits inside one. */
-export const TWOWAY = { w: 176, h: 99, y: 44, left: 12, right: 196, headX: 88, headY: 40 };
+/**
+ * The two boxes of the two-way (16:9), and where a head sits inside one. They stand high in the frame (10 px under
+ * the top row): their labels and the accent rule under them stay clear of a two-line caption over the strap
+ * (its top at y 136), which ran across the box labels when they ended at y 143.
+ */
+export const TWOWAY = { w: 176, h: 99, y: 32, left: 12, right: 196, headX: 88, headY: 40 };
 
 // ------------------------------------------------------------------------------------------------ backdrops
 

@@ -564,6 +564,48 @@ function drawChip(b, cx, cy, s) {
   R(-8, -8, -7, -7, C.steel);
 }
 
+/**
+ * The open's traces, still: from each of the chip's 16 pins a slate trace runs out, turns once (the outer pins
+ * away from the axis) and ends on a via. Two tones on the ink field, kept inside the free box `f` and above `yMax`
+ * (clear of the wall's dark foot): a trace that cannot fit whole is shortened, and left out when even its
+ * shortest run does not fit (never a trace cut off at the box's edge). So the idle wall is a board that fills its
+ * panel rather than one emblem in an empty one. Static, deterministic (never animated).
+ */
+const TRACE_RUN = [11, 19, 15, 23]; // per pin, out from the pins' ends (1x)
+const TRACE_TURN = [9, 6, 6, 9]; // the run after the turn
+const TRACE_SIDES = [[0, -1, 1, 0], [-1, 0, 0, 1], [0, 1, 1, 0], [1, 0, 0, 1]]; // out (dx, dy), along (ax, ay)
+function drawChipTraces(b, cx, cy, s, f, yMax) {
+  const x0 = Math.max(0, Math.ceil(f.x0)), x1 = Math.min(b.w, Math.floor(f.x1));
+  const y0 = Math.max(0, Math.ceil(f.y0)), y1 = Math.min(b.h, Math.floor(Math.min(f.y1, yMax)));
+  // a block of 1x units (u0, v0)-(u1, v1) around the centre, in px: inside the clip box (1 px in) or not drawn
+  const fits = (u0, v0, u1, v1) => cx + u0 * s >= x0 + 1 && cx + u1 * s <= x1 - 1 && cy + v0 * s >= y0 + 1 && cy + v1 * s <= y1 - 1;
+  const box = (u0, v0, u1, v1, c) => rect(b, cx + u0 * s, cy + v0 * s, cx + u1 * s, cy + v1 * s, c);
+  for (const [dx, dy, ax, ay] of TRACE_SIDES) {
+    for (let i = 0; i < 4; i++) {
+      const o = -6 + i * 4; // the pin's offset along the side (1x), as drawChip
+      const turn = i < 2 ? -1 : 1; // outer pins bend away from the axis
+      const side = TRACE_TURN[i];
+      // the pin's outer end, the first run, the turn and the via (1x units around the centre)
+      const ux = o * ax + 13 * dx, uy = o * ay + 13 * dy;
+      // the longest run that fits with its turn, else straight out (a fan of parallel traces where the box is low)
+      for (let k = 0, run = TRACE_RUN[(i + dx + 2 * dy + 3) & 3]; run >= 5; k ^= 1, run = k ? run : run - 2) {
+        const ex = ux + run * dx, ey = uy + run * dy;
+        const bend = k ? 0 : side * turn;
+        const vx = ex + bend * ax, vy = ey + bend * ay;
+        const r1 = [Math.min(ux, ex), Math.min(uy, ey), Math.max(ux, ex) + 1, Math.max(uy, ey) + 1];
+        const r2 = [Math.min(ex, vx), Math.min(ey, vy), Math.max(ex, vx) + 1, Math.max(ey, vy) + 1];
+        const pad = [vx - 1, vy - 1, vx + 2, vy + 2];
+        if (!fits(...r1) || !fits(...r2) || !fits(...pad)) continue;
+        box(...r1, C.slate);
+        box(...r2, C.slate);
+        box(...pad, C.slate); // the via: a 3x3 slate pad with an ink hole
+        box(vx, vy, vx + 1, vy + 1, C.ink);
+        break;
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // COSMOS idle: baked starfield + a still ringed planet whose light swings
 
@@ -2108,6 +2150,7 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       const cx = Math.round((f.x0 + f.x1) / 2);
       // in the wall's upper half (tech-bytes.md §3.4), clear of the top edge
       const cy = Math.round(f.y0 + Math.max((reserve ? 13 : 15) * ts + 1, Math.min(fh * 0.36, fh - 14 * ts)));
+      drawChipTraces(b, cx, cy, ts, f, Math.min(f.y1 - reserve, b.h - Math.round(8 * cs)));
       drawChip(b, cx, cy, ts);
       IDLE.cx = cx;
       IDLE.cy = cy;

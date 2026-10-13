@@ -13,7 +13,7 @@ import { drawText, measureText } from '../font.js';
 import { rect, TOP, W } from './layout.js';
 
 export const LINK_SHOTS = new Set(['location', 'twoway', 'broll']);
-const TWO = { y: 44, h: 99, w: 176, left: 12, right: 196 }; // studio/remote.js TWOWAY
+const TWO = { y: 32, h: 99, w: 176, left: 12, right: 196 }; // studio/remote.js TWOWAY
 const STUDIO_CITY = 'LONDON';
 
 /** A black tag with white text, right-aligned at `right` (a small accent square in front). */
