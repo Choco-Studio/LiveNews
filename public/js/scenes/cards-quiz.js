@@ -38,6 +38,10 @@ const PW = SAFE.right - SAFE.left; // 358
 const PY = SAFE.top;
 const PH = SAFE.bottom - SAFE.top; // 106
 
+// every question board's header: the micro kicker's caps on rows 31..35, the frame's (2x) on rows 38..51
+const KICKER_Y = PY + 3;
+const FRAME_Y = PY + 10;
+
 /** The bed runs at 112 BPM; the countdown ticks on its half notes (pay-attention.md §6), one cell of the bar each. */
 export const HALF_NOTE = 120 / 112;
 
@@ -201,7 +205,7 @@ function opsOf(line) {
     flush();
     wd.segs.forEach((sg, j) => {
       if (j) cx += 1;
-      ops.push({ k: sg.k, s: sg.s, x: cx, w: sg.w });
+      ops.push({ k: sg.k, s: sg.s, x: cx, w: sg.w, padL: sg.padL || 0 });
       cx += sg.w;
     });
   });
@@ -220,8 +224,8 @@ function drawLine(ctx, line, x, y, color) {
       ctx.fillRect(x + op.x, y - 2, op.w, 11);
     } else {
       ctx.fillStyle = P.yellow;
-      ctx.fillRect(x + op.x - 1, y - 2, op.w + 2, 11);
-      drawText(ctx, op.s, x + op.x, y, S.black);
+      ctx.fillRect(x + op.x, y - 2, op.w, 11);
+      drawText(ctx, op.s, x + op.x + op.padL, y, S.black);
     }
   }
 }
@@ -422,8 +426,10 @@ export function kickerOf({ type, k = 0, n = 0, double = null, sudden = false, de
 
 // The question column on the left (the kicker, the frame at 2x, the picture, the countdown and the credit under it) and
 // the three tiles on the right, each with a gutter for the lock-in marks. Every tile has room for three 1x lines.
-const PIC = Object.freeze({ x: CX, y: 56, w: 128, h: 64 });
-const FOOT_Y = 123; // the countdown bar (y 124..126) and, at the reveal, the credit's two micro lines (y 123..127, 129..133)
+const PIC = Object.freeze({ x: CX, y: FRAME_Y + 17, w: 128, h: 64 }); // its slate frame on rows 54..119, two clear under the frame
+// the countdown bar (rows 122..124, the stake beside it) and, at the reveal, the credit's two micro lines: caps on rows
+// 121..125 and 127..131, a comma's tail on 132, one row clear of the board's last (133)
+const FOOT_Y = PIC.y + PIC.h + 2;
 const GUTTER_X = TILE.x + TILE.w + 3; // the lock-in marks (MARK_W to the content's right edge)
 /** The picture's steps: blocks across and down and each block's size in pixels (128 x 64: every block whole). */
 export function pictureSteps(steps = [8, 16, 32, 64]) {
@@ -579,8 +585,8 @@ export function drawQuestionBoard(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
-    rise(ctx, o.kicker || kickerOf({ type: 'picture' }), CX, PY + 3, seg(dt, 0.2, 0.35), S.microFog);
-    rise(ctx, o.frame || frameOf('picture'), CX, PY + 11, seg(dt, 0.25, 0.35), S.white2);
+    rise(ctx, o.kicker || kickerOf({ type: 'picture' }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
+    rise(ctx, o.frame || frameOf('picture'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     // the picture in its slate frame: a step on each beat, the full picture at the reveal
     ctx.fillStyle = P.slate;
     ctx.fillRect(PIC.x - 1, PIC.y - 1, PIC.w + 2, PIC.h + 2);
@@ -669,8 +675,8 @@ export function drawLettersBoard(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
-    rise(ctx, o.kicker || kickerOf({ type: 'letters', desk: q.desk }), CX, PY + 3, seg(dt, 0.2, 0.35), S.microFog);
-    rise(ctx, o.frame || frameOf('letters'), CX, PY + 11, seg(dt, 0.25, 0.35), S.white2);
+    rise(ctx, o.kicker || kickerOf({ type: 'letters', desk: q.desk }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
+    rise(ctx, o.frame || frameOf('letters'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     // the buzzer lamps, right of the frame: unlit, lit gold on a buzz, back to slate and OUT on a stall
     const players = o.players?.length ? o.players : [{ seat: 'A', name: '' }, { seat: 'B', name: '' }];
     let lx = CR;
@@ -681,8 +687,8 @@ export function drawLettersBoard(ctx, dt, o = {}) {
       const outW = out ? measureText('OUT', 1, 'micro') + 3 : 0;
       lx -= w + outW;
       if (dt >= 0.4) {
-        drawMark(ctx, pl.seat, pl.name, lx, PY + 15, b && !out ? 'lit' : 'off');
-        if (out) drawText(ctx, 'OUT', lx + w + 3, PY + 16, S.microFog);
+        drawMark(ctx, pl.seat, pl.name, lx, FRAME_Y + 4, b && !out ? 'lit' : 'off');
+        if (out) drawText(ctx, 'OUT', lx + w + 3, FRAME_Y + 5, S.microFog);
       }
       lx -= 14;
     });
@@ -737,7 +743,8 @@ export function drawLettersBoard(ctx, dt, o = {}) {
 
 // ---------------------------------------------------------------- WHERE IN THE WORLD?
 
-const MAP = Object.freeze({ x: CX + COL_W + 5, y: PY + 3, w: CR - (CX + COL_W + 5), h: PH - 6 });
+/** The map's rectangle on the WHERE board (pins and tags stay inside it). */
+export const MAP = Object.freeze({ x: CX + COL_W + 5, y: PY + 3, w: CR - (CX + COL_W + 5), h: PH - 6 });
 
 const NAMED = new WeakMap();
 /** The lock-ins with the players' names, seat A first (kept per lock list: the board asks every frame). */
@@ -919,8 +926,8 @@ export function drawWhereBoard(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
-    rise(ctx, o.kicker || kickerOf({ type: 'where' }), CX, PY + 3, seg(dt, 0.2, 0.35), S.microFog);
-    rise(ctx, o.frame || frameOf('where'), CX, PY + 11, seg(dt, 0.25, 0.35), S.white2);
+    rise(ctx, o.kicker || kickerOf({ type: 'where' }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
+    rise(ctx, o.frame || frameOf('where'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     // the headline: masked until the reveal, then whole with the hidden words lit
     const H1 = revealed && q.masked ? layoutText(q.masked, COL_W, HEAD.lines, q.words) : layoutText(q.masked || q.words, COL_W, HEAD.lines);
     drawLines(ctx, H1, CX, HEAD.y, P.white, dt, revealed && q.masked ? revealAt : 0.35);
@@ -1014,8 +1021,8 @@ export function drawHowManyBoard(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
-    rise(ctx, o.kicker || kickerOf({ type: 'howmany' }), CX, PY + 3, seg(dt, 0.2, 0.35), S.microFog);
-    rise(ctx, o.frame || frameOf('howmany'), CX, PY + 11, seg(dt, 0.25, 0.35), S.white2);
+    rise(ctx, o.kicker || kickerOf({ type: 'howmany' }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
+    rise(ctx, o.frame || frameOf('howmany'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     const L = revealed ? layoutText(q.masked, CW, SENT.lines, q.sentence) : layoutText(q.masked, CW, SENT.lines);
     drawLines(ctx, L, CX, SENT.y, P.white, dt, revealed ? revealAt : 0.35);
     // the guesses, side by side, each at its moment: shape and name, GUESS, the number as the player said it
@@ -1040,10 +1047,21 @@ export function drawHowManyBoard(ctx, dt, o = {}) {
         const scored = revealed && (g.points || 0) > 0;
         if (scored) {
           const gp = ease(dt, revealAt + 0.45, 0.2);
-          const gw = Math.round((textW(said, 1) + 4) * gp);
+          const pw = textW(said, 1) + 4;
+          const gw = Math.round(pw * gp);
           ctx.fillStyle = P.yellow;
           if (gw >= 1) ctx.fillRect(vx - 2, gy - 2, gw, 11);
-          drawText(ctx, said, vx, gy, gp >= 1 ? S.black : S.white);
+          // (the number black where the plate has reached it, white beyond: never white type on gold)
+          for (const [x0, w0, st] of [[vx - 2, gw, S.black], [vx - 2 + gw, pw - gw + 2, S.white]]) {
+            if (w0 < 1) continue;
+            ctx.save();
+            try {
+              clipRect(ctx, x0, gy - 3, w0, 12);
+              drawText(ctx, said, vx, gy, st);
+            } finally {
+              ctx.restore();
+            }
+          }
           if (gp >= 1) drawText(ctx, `+${g.points}`, vx + textW(said, 1) + 6, gy, S.white);
         } else drawText(ctx, said, vx, gy, revealed ? S.silver : S.white);
       } finally {
@@ -1076,8 +1094,8 @@ export function drawTodayBoard(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
-    rise(ctx, o.kicker || kickerOf({ type: 'today', k: (o.index ?? 0) + 1, n: total }), CX, PY + 3, seg(dt, 0.2, 0.35), S.microFog);
-    rise(ctx, o.frame || frameOf('today'), CX, PY + 11, seg(dt, 0.25, 0.35), S.white2);
+    rise(ctx, o.kicker || kickerOf({ type: 'today', k: (o.index ?? 0) + 1, n: total }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
+    rise(ctx, o.frame || frameOf('today'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     // the headline card: purple in its fog rim, the headline in white
     const L = layoutText(it.words, CW - 2 * CARD.pad - 2, CARD.lines);
     const ch = L.h + 2 * CARD.pad + 2;
@@ -1383,7 +1401,7 @@ const RULES = {
   where: 'THE RIGHT PIN: 2 POINTS',
   today: 'ONE POINT A HEADLINE',
   howmany: 'THE CLOSEST GUESS: 2 POINTS',
-  howmanyExact: 'THE CLOSEST GUESS 2 · EXACTLY RIGHT 3',
+  howmanyExact: 'THE CLOSEST GUESS 2, EXACTLY RIGHT 3', // (a comma: the 1x bullet reads as a plus)
 };
 /** A round's card: o = { type, k (1..3), sudden (the tie-break), exact (HOW MANY?) }. "ROUND TWO", the title at 2x, its scoring. */
 export function drawRoundCard(ctx, dt, o = {}) {

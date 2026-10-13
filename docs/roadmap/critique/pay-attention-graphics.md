@@ -16,8 +16,9 @@ hostile critique above 9.7.**
 - The accent registered: `PROGRAM_ACCENT['pay-attention']` in `scenes/cards.js` and `THEME_ACCENT.quiz` in `cast.js`.
   The top row's programme tag takes the fog rim purple needs on the dark set (`graphics/bug.js`).
 - `public/lab/quiz.html`: 27 boards, each on its own clock (`?moment=`, `?t=`, a scrubber, play), at 1x, 2x and 4x, with
-  the overlay toggle (the channel's top row and a two-line caption, as on air).
-- `test/pay-attention-graphics.test.js`: 16 tests.
+  the overlay toggle (the channel's top row and a two-line caption, as on air). Since round 5 its boards live in
+  `public/lab/quiz-cases.js`, which the tests draw too.
+- `test/pay-attention-graphics.test.js`: 17 tests.
 
 The panel is the design critique's: a lead pixel artist, a senior broadcast director, a standards and legal editor, a
 senior quiz-show producer and a first-time viewer. Each category is scored 0–10, and **the round's score is the lowest
@@ -215,7 +216,90 @@ HOW MANY? and TODAY. Filmstrips were made of the reveal, the map's move and the 
 | Data robustness | 9.8 | a name wider than 32 px would be cut in the gutter (none in the cast: UNIT-8 is exactly 32). Without its picture, PICTURE THIS shows a dark slot: the director must not air it so |
 | Consistency and performance | 9.8 | the map rebuilds its 213 × 101 base every frame of the 1.4 s move, as the locator does on its own fly. `preparePicture` costs a few milliseconds on the board's first frame unless the director calls it ahead |
 
-**Round score: 9.75. Passed.**
+**Round score: 9.75. Passed.** Round 5 shows this pass was wrong.
+
+## Round 5 — a fault the reviewer found after the pass
+
+**The fault.** The reviewer checked the lab at 4x after the merge (`?only=picture&scale=4&moment=reveal`). On the three
+PICTURE THIS boards, the credit's second line, "AS TOLD ON TECH BYTES, TODAY 20:32", was cut by the board's bottom edge.
+
+- The line's caps sat on rows 129–133, flush with the board's last row (133). Its comma's tail fell on row 134, outside
+  the board, and so was cut.
+- While the line rose into place at the reveal, its mask reached past the board, so the edge cut a good part of it.
+- WHERE's question column uses the same foot, so the same fault was on its four boards.
+
+**Why rounds 1–4 missed it:**
+
+- The safe-area test checked each text image's top and its caps against y 134. It never checked the glyphs themselves
+  against the board's own edges, comma tails included.
+- The visual passes looked at the reveal mid-rise at 2x. The settled frames showed the caps whole, and the one cut row
+  read as part of the line.
+- A source line is a standards matter on this channel (every answer shows its source and when it aired), so this was a
+  real fault. **Round 4's 9.75 should not have passed.** With this fault the board would have scored 9.4 on legibility and
+  9.5 on pixel art.
+
+**The new test**, the 17th: every text on every lab board is whole inside its board.
+
+- It draws the lab's own 27 boards (`public/lab/quiz-cases.js`) at their seven moments and every 0.2 s of their clocks:
+  22,080 texts.
+- The fake canvas keeps the clip state, and each text is measured by its actual glyph pixels (accents and comma tails
+  included). Under its own masks only (a rising line's, a wipe's), every glyph must lie:
+  - inside its board;
+  - inside y 28–134;
+  - inside the map, for text on the map.
+- The board's and the map's clips do not count as masks: a glyph they would cut fails.
+- A lit (gold) span must leave a column of air before and after the white type beside it.
+
+**Before the fixes the test found 276 faults on eleven boards:**
+
+1. The credit's second line beyond the board, on the seven boards with the question column: PICTURE THIS, its 72-character
+   case, DOUBLE OR NOTHING, and the four WHERE boards.
+2. **The colon glued to the lit place** in "F1 IN SINGAPORE:", the reviewer's second point. The gold box ended on the
+   column just before the colon.
+3. **White type on gold on HOW MANY?** For 0.2 s at the reveal, the scorer's number stayed white while its gold plate
+   wiped under it: white on gold is 1.7:1. Four boards.
+
+**The visual pass** was every board at 1x with the overlay and at 4x, at the lock-ins, the reveal and settled. It found
+two faults the test cannot see:
+
+4. **The round card read "THE CLOSEST GUESS 2 • EXACTLY RIGHT 3"**, the 1x bullet a plus sign. This is round 1's trap
+   again, in a string added in round 4.
+5. **The first version of fix 2 read "$1.3  BILLION"** with a double space: each word of the lit span had taken its own
+   air. It was seen at 4x before the commit.
+
+**What changed:**
+
+1. **One header for every question board**: the kicker's caps on rows 31–35 and the frame's (2x) on 38–51
+   (`KICKER_Y`, `FRAME_Y`).
+2. **The question column re-spaced:**
+   - two clear rows under the frame;
+   - the picture's slate frame on rows 54–119;
+   - the countdown on 122–124, the stake beside it;
+   - at the reveal the credit's caps on 121–125 and 127–131, a comma's tail on 132, and one row clear of the board's last
+     (133).
+   - WHERE's column takes the same foot.
+3. **A lit span carries a column of air at its two ends**, counted in its measured width, so the desk's fit counts it too.
+   Between the words of one span there is only the lit space.
+4. **HOW MANY?'s plate turns the number black as it passes**: black where the plate has reached it, white beyond. White
+   is never on gold.
+5. **The round card's rule takes a comma.** Bullets remain only in the micro face, where the bullet is a square dot.
+
+**Checks after the fixes:**
+
+- All 17 tests pass, the strict one with no fault.
+- Nothing of the week's pool is refused by the wider lit spans: 41 events, none refused.
+- The whole lab was read again at 1x with the overlay and at 4x.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Legibility at 1x and 4x | 9.8 | the credit and the kicker are in the micro face, 5 px caps. A three-line tile holds its text 2 px inside the rim. The question column's credit has one clear row under it, the least of any board |
+| Editorial fidelity | 9.8 | as round 4: the board does not re-check the scoring rules; "WHICH STORY?" is a shortened frame; a source no line holds would be cut with dots (none comes near) |
+| Broadcast craft | 9.75 | the lamps' column is empty while the options are read; every time is the lab's own until step 4 |
+| Pixel art | 9.75 | real photographs are unseen through the steps. The strict test sees text only: the shapes, pins, plates and tiles are checked by eye, and the eye missed round 5's fault once |
+| Data robustness | 9.8 | as round 4: a name wider than 32 px would be cut; no picture means a dark slot |
+| Consistency and performance | 9.8 | as round 4: the map's base is rebuilt every frame of its 1.4 s move; `preparePicture` should be called ahead |
+
+**Round score: 9.75. Passed again, on a test that would have caught the fault.**
 
 ## Carried to step 4 (the director)
 
