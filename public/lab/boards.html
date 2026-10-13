@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: more boards</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(768px, 1fr)); gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { width: 768px; height: 432px; image-rendering: pixelated; display: block; background: #000; }
+  figcaption { padding: 4px 0; color: #8a8fa3; }
+</style>
+</head>
+<body>
+<h1>SHARE · WHAT HAPPENS NEXT · WHO'S WHO</h1>
+<p>The three boards a story earns from its own text (sentences from the 12 Oct live desk), each in a programme's accent. ?dt=seconds shows them at that moment.</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { drawShare, drawNext, drawWho } from '/js/scenes/cards-more.js';
+const q = new URLSearchParams(location.search);
+const dt = Number(q.get('dt') ?? 3);
+const DAY = 86_400_000;
+const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+const today = Math.floor(Date.now() / DAY) * DAY;
+const BOARDS = [
+  ['SHARE · WORLD NOW', P.red, drawShare, { share: { value: '65%', fraction: 0.65, lead: 'ISRAEL RESTRICTS ACCESS TO', label: 'OF GAZA' }, source: 'Al Jazeera' }],
+  ['SHARE · MONEY MINUTE', P.green, drawShare, { share: { value: '95%', fraction: 0.95, lead: '', label: 'OF LIGHT COMMERCIAL VEHICLES ARE STILL POWERED BY DIESEL', qualifier: 'ABOUT' }, source: 'BBC Business' }],
+  ['SHARE · TECH BYTES (people)', P.cyan, drawShare, { share: { value: '6 IN 10', fraction: 0.6, lead: '', label: 'ELECTRIC CARS MADE IN FRANCE ARE EXPORTED' }, source: 'Euronews' }],
+  ['SHARE · COSMOS (word fraction)', P.magenta, drawShare, { share: { value: 'TWO-THIRDS', fraction: 0.667, lead: '', label: 'OF THE SURFACE IS COVERED IN ICE' }, source: 'NASA' }],
+  ['WHAT HAPPENS NEXT · MONEY MINUTE', P.green, drawNext, { next: { when: '28 OCTOBER', date: iso(today + 15 * DAY), what: 'The Budget will take place' }, source: 'BBC Business' }],
+  ['WHAT HAPPENS NEXT · WORLD NOW (today)', P.red, drawNext, { next: { when: 'MONDAY', date: iso(today), what: 'The matter is due to be discussed in the assembly' }, source: 'BBC News' }],
+  ['WHAT HAPPENS NEXT · TECH BYTES (loose date)', P.cyan, drawNext, { next: { when: 'NEXT WEEK', date: null, what: 'Apple will announce a new smart home hub' }, source: 'The Verge' }],
+  ["WHO'S WHO · WORLD NOW (three)", P.red, drawWho, { who: [{ name: 'Asif Ali Zardari', role: 'PAKISTANI PRESIDENT' }, { name: 'Imran Khan', role: 'FORMER PRIME MINISTER' }, { name: 'Shehbaz Sharif', role: 'PRIME MINISTER' }], source: 'Al Jazeera' }],
+  ["WHO'S WHO · TECH BYTES (two)", P.cyan, drawWho, { who: [{ name: 'Donald Trump', role: 'PRESIDENT' }, { name: 'Jensen Huang', role: 'NVIDIA CEO' }], source: 'The Verge' }],
+  ["WHO'S WHO · WORLD NOW (long roles)", P.red, drawWho, { who: [{ name: 'Gyanesh Kumar', role: 'CHIEF ELECTION COMMISSIONER' }, { name: 'Surya Kant', role: 'CHIEF JUSTICE' }, { name: 'Mallikarjun Kharge', role: 'CONGRESS PRESIDENT' }], source: 'Al Jazeera' }],
+];
+const grid = document.getElementById('grid');
+for (const [name, acc, draw, o] of BOARDS) {
+  const fig = document.createElement('figure');
+  const cv = document.createElement('canvas');
+  cv.width = 384;
+  cv.height = 216;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  // the card field: graded black to ink, as the fact cards' ground
+  const g = ctx.createRadialGradient(192, 82, 10, 192, 82, 300);
+  g.addColorStop(0, P.ink);
+  g.addColorStop(1, P.black);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 384, 216);
+  // the safe area (top row and captions) the board must leave clear
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(0, 0, 384, 24);
+  ctx.fillRect(0, 136, 384, 80);
+  draw(ctx, dt, o, acc);
+  const cap = document.createElement('figcaption');
+  cap.textContent = `${name} · dt ${dt}s`;
+  fig.append(cv, cap);
+  grid.append(fig);
+}
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

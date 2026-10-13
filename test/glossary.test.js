@@ -56,10 +56,10 @@ test('within the chat budget, at most two, and only on a programme that asks for
   assert.equal(explainTerms(segs, { program: { ...program, terms: { explainer: 'paco' } }, presenters }).terms, 0, 'the explainer must be in the cast');
 });
 
-test('TECH BYTES asks for it, with Ada as the explainer, and its boards (WHAT WE KNOW, HOW WE GOT HERE, FROM → TO)', () => {
+test('TECH BYTES asks for it, with Ada as the explainer, and its boards (WHAT WE KNOW, HOW WE GOT HERE, FROM → TO, IN PROPORTION, WHAT HAPPENS NEXT, WHO’S WHO)', () => {
   const tb = loadChannel().programs['tech-bytes'];
   assert.deepEqual(tb.terms, { explainer: 'ada' });
-  assert.deepEqual(tb.boards, ['known', 'timeline', 'change']);
+  assert.deepEqual(tb.boards, ['known', 'timeline', 'change', 'share', 'next', 'who']);
 });
 
 test('two lines in one programme never share a phrasing', () => {

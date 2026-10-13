@@ -14,6 +14,7 @@ import { ALSO_LEAN, LIGHT, contentWords, extractFigures, fixNameTypos, sentences
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
+import { nextFrom, shareFrom, whoFrom } from '../boards.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 import { expertFor, answerFrame } from '../experts.js';
 
@@ -1224,7 +1225,7 @@ export function createMockProvider() {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured, experts, analysisTurn })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(Date.now()), recent, featured, experts, analysisTurn })), usage };
     },
   };
 }
@@ -2038,6 +2039,22 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (program?.boards?.includes('timeline') && !story.known && !inRoundup && !isNumber && !isLighter && !quick) {
       const steps = timelinePoints([...info.prevOf.keys()]);
       if (steps.length >= 2) story.timeline = steps;
+    }
+    // SHARE: a part of a whole the story states ("65 percent of Gaza"); WHAT HAPPENS NEXT: a dated step still to come
+    // (the article's own sentences: a schedule often sits deep in it); WHO'S WHO: the people it names with their
+    // public roles. Each airs only if the presenter says the share, the date or the names (the validator checks).
+    if (program?.boards?.includes('share') && !inRoundup && !isNumber) {
+      const share = shareFrom(info.sentences);
+      if (share) story.share = share;
+    }
+    if (program?.boards?.includes('next') && !inRoundup && !isNumber && !isLighter && !quick) {
+      const at = now instanceof Date ? now.getTime() : Date.now();
+      const next = nextFrom(info.sentences, { published: s.published || at, now: at });
+      if (next) story.next = next;
+    }
+    if (program?.boards?.includes('who') && !inRoundup && !isNumber && !isLighter && !quick) {
+      const who = whoFrom(`${s.summary || ''} ${s.body || ''}`);
+      if (who) story.who = who;
     }
     if (inRoundup) story.feature = 'roundup';
     else if (isNumber) story.feature = 'number';

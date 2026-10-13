@@ -8,6 +8,8 @@ import { DESKS } from './correspondents.js';
 import { EXPERT_DESKS } from './experts.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
+// the boards a programme may show (cards.js draws each): WHAT WE KNOW, HOW WE GOT HERE, FROM → TO, SHARE, WHAT HAPPENS NEXT, WHO'S WHO
+const BOARDS = ['known', 'timeline', 'change', 'share', 'next', 'who'];
 
 /**
  * Channel definition: presenters, programmes and the rotation (the schedule).
@@ -98,7 +100,7 @@ export function validateChannel(ch) {
     if (p.resident !== undefined && !(typeof p.resident === 'string' && (p.experts || []).includes(p.resident))) throw new Error(`programme "${id}" has a "resident" who is not one of its experts`);
     // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points; HOW WE GOT
     // HERE: its dated "timeline" steps; FROM → TO: a figure's "change").
-    if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known' || b === 'timeline' || b === 'change'))) throw new Error(`programme "${id}" has "boards" other than "known", "timeline" and "change"`);
+    if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => BOARDS.includes(b)))) throw new Error(`programme "${id}" has "boards" other than ${BOARDS.map((b) => `"${b}"`).join(', ')}`);
     // Optional: IN PLAIN ENGLISH (server/glossary.js): a presenter of the programme translates a story's jargon.
     if (p.terms !== undefined && !(p.terms && typeof p.terms === 'object' && typeof p.terms.explainer === 'string' && (p.presenters || []).includes(p.terms.explainer))) throw new Error(`programme "${id}" has "terms" without one of its presenters as "explainer"`);
     if (p.terms?.set !== undefined && !['tech', 'science', 'money'].includes(p.terms.set)) throw new Error(`programme "${id}" has a "terms" set other than "tech", "science" or "money"`);

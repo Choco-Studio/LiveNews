@@ -11,6 +11,7 @@ import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 import { askLine, deskOf, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 import { EXPERT_DESKS, expertFor, introLine as expertIntro, questionLine as expertQuestion, followLine as expertFollow, thanksLine as expertThanks, expertKicker } from './experts.js';
+import { NEXT_LIMITS, SHARE_LIMITS, WHO_LIMITS, normalizeNext, normalizeShare, normalizeWho, saysPerson, saysShare, saysWhen } from './boards.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -120,6 +121,27 @@ function changeRule(program) {
 - FROM → TO: for a main story whose candidate says one figure moved from one value to another ("raised its main rate from 4.5% to 4.75%", "profit fell to $870 million from $1.2 billion"), add "change": {"from": the old value, "to": the new value, both written as the candidate writes them, "label": what moved, at most ${LIMITS.label} characters ("MAIN INTEREST RATE")}; the presenter says both values. Otherwise "change": null.`;
 }
 
+/** SHARE (programme "boards": ["share"]): a part of a whole, as the story says it. */
+function shareRule(program) {
+  if (!program?.boards?.includes('share')) return '';
+  return `
+- SHARE: for a main story whose candidate states a part of a whole ("57% of players", "one in seven properties", "two-thirds of Gaza"), add "share": {"value": the share exactly as the candidate writes it ("57%", "one in seven", "two-thirds"), "lead": the words before it in that same statement, at most ${SHARE_LIMITS.leadWords} words ("Women make up"), or "" when the statement starts with the share, "label": the words after it, at most ${SHARE_LIMITS.labelWords} words ("of players", "properties are at risk of flooding")}; lead, share and label read together as the candidate's own statement, with no other figure in them; the presenter says the share. Never a rise or a fall ("up 5%"). Otherwise "share": null.`;
+}
+
+/** WHAT HAPPENS NEXT (programme "boards": ["next"]): a dated step ahead, as the story says it. */
+function nextRule(program) {
+  if (!program?.boards?.includes('next')) return '';
+  return `
+- WHAT HAPPENS NEXT: for a main story whose candidate dates a step still to come ("The Budget will take place on 28 October", "The vote is due on Thursday"), add "next": {"when": the date as the candidate writes it, upper case ("28 OCTOBER", "THURSDAY", "NEXT WEEK"), "what": the step in the candidate's words without the date, at most ${NEXT_LIMITS.words} words ("The Budget will take place")}; the presenter says that date. Never a court date, a sentencing, a funeral, a guess or a condition ("could", "if"). Otherwise "next": null.`;
+}
+
+/** WHO'S WHO (programme "boards": ["who"]): the people a story names, each with the public role it gives them. */
+function whoRule(program) {
+  if (!program?.boards?.includes('who')) return '';
+  return `
+- WHO'S WHO: for a main story whose candidate names two or three people in public life with their roles ("Interior Minister Laurent Nuñez", "Matteo Bruni, the Vatican spokesperson"), add "who": [{"name": the name as written, "role": the role the candidate gives them, at most ${WHO_LIMITS.role} characters}]; the presenter names each of them. Never a private person, a victim, a witness, a suspect or a relative. Otherwise "who": null.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -156,7 +178,13 @@ const TIMELINE_SCHEMA = `,
      "timeline": [{"when": "2019", "what": "one step for the HOW WE GOT HERE board, max ${'${TIMELINE_MAX}'} characters"}] | null`;
 const CHANGE_SCHEMA = `,
      "change": {"from": "4.5%", "to": "4.75%", "label": "WHAT MOVED"} | null`;
-const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, analyses = false, timeline = false, change = false) => `{
+const SHARE_SCHEMA = `,
+     "share": {"value": "57%", "lead": "WOMEN MAKE UP", "label": "OF PLAYERS"} | null`;
+const NEXT_SCHEMA = `,
+     "next": {"when": "28 OCTOBER", "what": "The Budget will take place"} | null`;
+const WHO_SCHEMA = `,
+     "who": [{"name": "Laurent Nuñez", "role": "INTERIOR MINISTER"}] | null`;
+const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, analyses = false, timeline = false, change = false, more = {}) => `{
   "title": "short episode title",
   "segments": [
     {"type": "intro", "anchor": "A", "emotion": "neutral", "text": "the intro (see MAKE IT WORTH WATCHING)"},
@@ -169,7 +197,7 @@ const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, anal
      "numbers": [{"value": "40,000", "label": "PASSENGERS A DAY", "qualifier": "ABOUT|MORE THAN|NEARLY|UP TO|AT LEAST|LESS THAN" | null}] | null,
      "quote": {"text": "exact words quoted in the summary", "by": "speaker named in the summary" | null} | null,
      "map": [{"place": "COUNTRY", "lat": 0.0, "lon": 0.0}] | null,
-     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${timeline ? TIMELINE_SCHEMA : ''}${change ? CHANGE_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}${analyses ? ANALYSIS_SCHEMA : ''}},
+     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${timeline ? TIMELINE_SCHEMA : ''}${change ? CHANGE_SCHEMA : ''}${more.share ? SHARE_SCHEMA : ''}${more.next ? NEXT_SCHEMA : ''}${more.who ? WHO_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}${analyses ? ANALYSIS_SCHEMA : ''}},
     {"type": "chat", "anchor": ${slots}, "emotion": "...", "text": "one or two sentence reaction or hand-over"},
     {"type": "outro", "anchor": "A", "emotion": "neutral", "text": "brief sign-off"}
   ]
@@ -250,7 +278,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}${timelineRule(program)}${changeRule(program)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}${timelineRule(program)}${changeRule(program)}${shareRule(program)}${nextRule(program)}${whoRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -289,7 +317,7 @@ STAGE DIRECTIONS (make the presenters move naturally)
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
-${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program), !!analysisRule(program, experts), !!timelineRule(program), !!changeRule(program))}
+${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program), !!analysisRule(program, experts), !!timelineRule(program), !!changeRule(program), { share: !!shareRule(program), next: !!nextRule(program), who: !!whoRule(program) })}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
@@ -323,7 +351,7 @@ Check every story segment against its SOURCE (matched by storyId):
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
 - A story's "analysis" (an expert's answers to the presenter's questions) follows the same rules: every sentence supported by that story's source, explained and attributed, never a claim to have seen or spoken to anyone, no opinion or prediction the source does not make; remove a sentence that breaks them.
-- Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis", "known", "timeline" or "change"), segment order, presenters and storyIds. Do not add new stories.
+- Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis", "known", "timeline", "change", "share", "next" or "who"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
 
@@ -1667,6 +1695,9 @@ export function normalizeBulletin(
       d.known = program?.boards?.includes('known') ? normalizeKnown(seg.known, source, names.concat(outlets || [])) : null;
       d.timeline = program?.boards?.includes('timeline') ? normalizeTimeline(seg.timeline, source, names.concat(outlets || [])) : null;
       d.change = program?.boards?.includes('change') ? normalizeChange(seg.change, source) : null;
+      d.share = program?.boards?.includes('share') ? normalizeShare(seg.share, source) : null;
+      d.next = program?.boards?.includes('next') ? normalizeNext(seg.next, source, sentencesIn(source), { published: story.published || Date.now(), now: Date.now() }) : null;
+      d.who = program?.boards?.includes('who') ? normalizeWho(seg.who, source) : null;
       let fact = clipWords(seg.fact, LIMITS.fact) || null;
       if (fact && !claimGrounded(fact, source)) fact = null;
       d.fact = fact;
@@ -1935,6 +1966,13 @@ export function normalizeBulletin(
     if (steps?.length >= 2) out.timeline = steps;
     // FROM → TO: only a figure whose old and new values the presenter both says
     if (d.change && !inRoundup && d.feature !== 'number' && mentionsValue(text, d.change.from) && mentionsValue(text, d.change.to)) out.change = d.change;
+    // SHARE, WHAT HAPPENS NEXT, WHO'S WHO: a main story's, and only what the presenter says (the share, the date, the
+    // people by name), never on the number of the day or a round-up item
+    const main = !inRoundup && d.feature !== 'number';
+    if (d.share && main && saysShare(text, d.share.value)) out.share = d.share;
+    if (d.next && main && d.feature !== 'lighter' && saysWhen(text, d.next.when)) out.next = d.next;
+    const who = d.who && main && d.feature !== 'lighter' ? d.who.filter((p) => saysPerson(text, p.name)) : null;
+    if (who?.length >= 2) out.who = who;
     if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipWords(d.quote.by, LIMITS.by) : null };
     if (d.map && !inRoundup) out.map = d.map;
     if (d.feature) out.feature = d.feature;
