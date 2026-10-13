@@ -18,6 +18,9 @@
 //                 air marked yellow) on the right, a thin yellow band on the desk
 //   SEVEN DAYS    the weekend edition of WORLD NOW's room: the same glass, the city held at the golden hour, the
 //                 week bar over the screen (MON to SUN, the weekend lit), coral light lines and desk slits
+//   FULL TIME     no glass, no room: the pitchside platform (pitch.js: the ground by the hour behind it), the canopy
+//                 with its orange cove and two studio lights, the slim columns, the curved black desk, one orange edge
+//                 light
 // Everything is drawn in world units (the back wall Z = SET.wallZ, the pillars SET.flatsZ, WORLD NOW's city its
 // own far plane), so the camera's moves and zooms carry it; every pixel is a palette colour; out of focus
 // (cam.soft) lights turn to bokeh. What moves (windows, beacons, pulses, stars, the cursor, the desk line's

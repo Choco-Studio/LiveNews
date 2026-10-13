@@ -12,7 +12,7 @@
 //   setStyle(id)   the same, and it becomes the default style for calls that
 //                  pass none (the old drawBackground(frame, cam, t) form)
 //   STYLE_IDS      the studio programmes of config/channel.json (WORLD WEATHER
-//                  airs from its own weather centre)
+//                  airs from its own weather centre) and its drafts (FULL TIME)
 //
 // Light is described in "ramp positions" on the neutral ramp
 // black 0, ink 1, slate 2, steel 3, fog 4: the set bakes them into a texture
