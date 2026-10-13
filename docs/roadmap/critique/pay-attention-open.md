@@ -167,3 +167,103 @@ Its studio is simpler than the set's, which round 3 already said and still score
 | Distinctness | 9.8 | 9.4 |
 
 **Round score: 8.8. Reopened.** It is to be rebuilt on the richer set from the set's round 5.
+
+---
+
+## Round 5 — rebuilt in the studio itself
+
+The open is now shot in the quiz studio of the set's round 5: the v2 renderer draws the set itself
+(`payattentiontitles.js` calls `drawBackground`, `drawDesk` and `drawQuizLive`), and a camera moves through it. The cue
+sheet, the 112 BPM grid, the theme's sync, the emblem and the plate rules are unchanged. The lock-up credit "WITH THE
+HOST" stays a placeholder.
+
+### The sequence as built (round 5)
+
+| Beat | Time | Picture | Music |
+|---|---|---|---|
+| 0–2 | 0–1.07 | The studio with its lights out, seen from high at the back of the room, the camera already moving: a crane down through the rig hung over the front of the studio (a ladder truss with its par cans, which rises past the lens and out of the frame) and a push down the room. Only the room's lights glimmer: the dim bulbs of the marquee and of the players' shapes, the strips, the stage's ring. The two moving heads search the dark, their beams swinging in from outside together. | An A-flat sub and an open fifth; two soft snaps count in. |
+| 2, 3, 4, 5 | 1.07–2.68 | The lamps strike in turn, one a beat: A's circle, B's square, A, B. Each strike lights the lamp and its player's shape on the wall in gold and lifts the room a step for a fifth of a beat. Each striker's head swings onto its desk in the last third of the beat before and stops dead on the strike: a follow spot, the other head dark. The camera keeps coming down and in. | A ping per lamp, the signature an octave up, left and right. |
+| 6 | 3.21 | The camera lands on the quiz's wide on the downbeat as the room's light comes on: the soffit, the cove, the strips, the marquee, the ring of light, the podiums' bands. Both heads fire inward and sweep out, stopping dead at rest on the next beat. The board shows the emblem over a row of blank tiles. | The band comes in with a flam. |
+| 6.5–7.5 | 3.48–4.02 | The board's letters flip in one by one, left to right, tile by tile, to PAY ATTENTION (white over silver). | The mallet run up the scale. |
+| 8 | 4.29 | A cut to the board at twice the wide's scale: the emblem and the name at 2x in the marquee frame, the strips at its sides. | F minor over the pedal. |
+| 10 | 5.36 | A cut to the emblem: the two lamps, lit, alone on the open's field. | The signature on the lead. |
+| 11.5–14 | 6.2–7.5 | The package: the emblem glides to its slot and the plate wipes out of it. | The colour, then the hit. |
+| 14 | 7.5–8.3 | Still. | The hit rings to the cut. |
+
+The dark is the lit studio taken down the palette's ramps, a step at a time (`color.js` DARKER): three steps in the
+dark, two while the lamps strike, one on a strike. So the dark room and the lit room are the same room, and each lamp's
+strike lifts it.
+
+Faults found while building it, fixed before the panel looked (not scored):
+
+1. A cubic ease made a dead start: the first beat barely moved. The move now runs from the cut and lands softly on the
+   downbeat.
+2. The letter tiles sat on a fixed 6-px advance, which left a gap at the I ("ATTENTI ON") and merged the blank tiles
+   into two bars. Now each tile takes the face's own advance and its letter's width, with the face's 1-px gap between
+   tiles.
+3. The rig's zigzag web crawled under the crane (the flicker map showed it). It is now a ladder truss, whose vertical
+   struts slide along themselves.
+4. In the dark the network plate's white letters were the brightest thing in the frame. Paint (white, silver) now goes
+   two steps further down than the lights do.
+5. The par cans read as hooks in the dark. They now have slate bodies with a lit side.
+6. The dark half was still but for the lamps. The heads now search the dark, then follow-spot each strike.
+
+## Round 6 — the panel from scratch, beside the network's opens
+
+How it was looked at:
+- 30 fps frames (250), viewed at 1x and 3x, and contact sheets beside FULL TIME's and WORLD NOW's opens;
+- A→B→A flicker counts with a map of where the flips fall;
+- frame times in Chromium;
+- the open recorded with its theme (`pay-attention-open-r5.mp4`).
+
+At 1x it now plays as a sequence with a camera in a place: from the rig's height down into the dark studio, the
+buzzers striking under follow spots, the lights coming up on the downbeat, the board answering in flipping letters. It
+is darker than FULL TIME's floodlit stadium by its brief ("a dark stage"), and as eventful.
+
+Evidence:
+- **Flicker:** 62,642 A→B→A over the open (FULL TIME 56,906; the other opens 105,000–158,000). Per second: 42,400,
+  11,899, 5,150, 273, 19, 4, 2,495, 402, 0.
+  - The first second is the rig passing the lens: by the map, about 40,000 of its flips lie along the truss's own path,
+    a near object moving at 30 fps with no blur.
+  - The second and third seconds are the camera's move and the heads' swings.
+  - The room itself never crawls: its lights are fixed world points.
+- **Frame times** (Chromium, the lab): median 0.5 ms, 95th percentile 3.9 ms, the slowest 16.5 ms (the first frame and
+  the cut to the close). FULL TIME: 7.6 ms, 11.3 ms and 51 ms on the same machine.
+- **Tests** (`test/pay-attention-sound.test.js`, 24; `test/opens.test.js`):
+  - the camera moves from the cut, one way, lands on the wide on the downbeat, then cuts to the board at exactly twice
+    the scale;
+  - the letters flip left to right inside the flip's beat: blank tiles before, every pixel of the name after, 1x in the
+    wide and 2x in the close;
+  - the light comes up in steps, the strikes lift it, and the follow spots stop dead on their strikes;
+  - palette only: purple inside its rims, gold only in the lamps and the players' shapes, red only on the plate;
+  - the emblem's hand-over, the plaque centred in the plate, and the lock-up still from the hit to the cut.
+
+Still open (the panel, round 6):
+1. **The rig's pass strobes** in the first second: about 40,000 A→B→A along the truss's path. This is a near object's
+   motion, not a crawl, but at 30 fps with no blur a pixel artist sees it step (pixel artist).
+2. **The dark studio reads as line art**: the lit room taken down the ramps keeps its outlines, so the first beats are
+   a wireframe of the room rather than black with lights. The marquee's dimmed bulbs go amber (tanShade) (director).
+3. **The follow spots are cones on the wall's plane** from the tower heads: they point at the desks' outer ends, a spot
+   "on the player" by suggestion (director).
+4. **The close is a cut**, not a move (director).
+5. **"WITH THE HOST"** stays a placeholder until step 6 names the host (quiz producer).
+6. **The letters flip at 1x in the wide**: the flip is the open's climax, 7 px tall; the close gives the name at 2x
+   (pixel artist).
+7. **8.3 s against "≈8 s"**: the hit lands at 7.5 s, then the package holds still, as every open does (quiz producer).
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Picture craft | 9.8 | 1, 2, 6 |
+| Timing to the music | 9.9 | — (every event on a beat: a ping and a spot per strike, the lights on the downbeat, the heads stopping on the next, the run on the flip, the signature on the emblem's cut, the hit on the lock-up) |
+| Clarity of the PAY ATTENTION plate | 9.8 | 5 |
+| Distinctness | 9.8 | — (the only open shot in its own studio, with the network's set renderer; a lamp test under follow spots is a known game-show figure, made the channel's by the shapes) |
+| The promise of a game | 9.8 | 3, 4 |
+
+**Round score: 9.8. Passed** (the gate is above 9.7).
+
+What keeps each category from 10, in one line each:
+- **Picture craft**: the rig's strobing pass; the dark as a wireframe; the flip at 1x.
+- **Timing to the music**: nothing the panel would move.
+- **Clarity of the plate**: the placeholder credit until step 6.
+- **Distinctness**: the lamp test is a familiar figure.
+- **The promise of a game**: spots that suggest the players rather than find them; an empty studio waiting for its cast.

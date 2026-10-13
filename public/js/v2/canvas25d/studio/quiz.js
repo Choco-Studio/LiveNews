@@ -1,11 +1,14 @@
-// PAY ATTENTION's quiz studio (docs/programmes/pay-attention.md §6, build step 5): a low stage in a dark room. The
-// question board is the network's main screen (SET.screen) in a purple frame with a 1-px fog rim; the host's podium in
-// the centre in front of it; two contestant desks either side, each with its player's shape lamp (a circle on seat A,
-// a square on seat B: players are told apart by shape and name, never by colour alone, never by a letter) and a score
-// display in pixel digits; two moving heads on the back wall, at its outer edges, that sweep slowly between questions
-// and hold still during one. Light: white and gold only (gold = a lit lamp); purple only as fills, on the desk fronts
-// and the board's frame, always with its fog rim. Nothing here borrows TECH BYTES's purple-and-magenta rings or LEDs or
-// COSMOS's purple glow (public/js/set.js THEMES.tech / .space).
+// PAY ATTENTION's quiz studio (docs/programmes/pay-attention.md §6, build step 5): a low stage in a dark room, cut with
+// white and gold light. The question board is the network's main screen (SET.screen) in a purple frame with a 1-px fog
+// rim and a marquee of warm-white bulbs, on an ink backing panel between two white light strips; the host's podium in
+// the centre in front of it; two contestant desks either side, each with its player's shape lamp (a circle on seat A, a
+// square on seat B: players are told apart by shape and name, never by colour alone, never by a letter), a score display
+// in pixel digits and white edge strips at its cabinet's corners over a slatted plinth; each player's shape again in
+// bulbs on the wall above their desk (gold while their lamp is lit); two truss towers at the wall's sides carrying the
+// moving heads, which sweep slowly between questions and hold still during one; a white soffit along the top, a cove
+// at the wall's foot; the stage's lit edge curving round the podium. Light: white and gold only (gold = a lit lamp);
+// purple only as fills, on the desk fronts and the board's frame, always with its fog rim. Nothing here borrows TECH
+// BYTES's purple-and-magenta rings or LEDs or COSMOS's purple glow (public/js/set.js THEMES.tech / .space).
 //
 //   QUIZ                       the geometry (world units: cm, X right, Y down from the desk top, Z away from the lens)
 //   QUIZ_SEATS                 the three seated anchors for the director (step 4): host centre, A left, B right
@@ -13,10 +16,12 @@
 //   setQuizState(o, t)         the director's hook: { question, lamps: { A, B }, scores: { A, B } } at time t
 //   quizState()                the state as the set holds it (a copy)
 //   sweepClock(t), beamAngle(t)  the moving heads' sweep (seconds of sweep; the beam's inward angle, radians)
+//   quizIdlePhase(t)           the board's idle lamp test (wall.js), still during a question
 //   beamOf(cam, side, t)       a moving head's lens and beam on screen (tests: clear of every head)
+//   shapeBulbs / marqueeBulbs  the bulbs' places on screen; stageEdgeRows(cam) the stage edge's row per column
 //   quizRoom / quizFloor       the dressing (dressing.js DRESS / FLOORS)
 //   rasterQuizDesks(...)       the podium and the two desks, instead of the network's curved desk (set.js drawDesk)
-//   LIVE_DRAW['pay-attention'] the moving heads, the lit lamps and the scores, every frame over the cached set
+//   drawQuizLive(...)          the moving heads, the lit lamps and shapes and the scores (LIVE_DRAW; the open drives it)
 import { C } from '../pixbuf.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { LIVE_DRAW } from './live.js';
@@ -52,10 +57,30 @@ export const QUIZ = Object.freeze({
   plate: Object.freeze({ hw: 27, y0: 3.2, y1: 15.6 }),
   // the question board's purple frame round the screen's bezel (world units on the wall)
   frame: 9,
-  // the low stage: its front edge (a white LED nosing) in front of the desks, the riser under it
-  stageZ: 833,
-  // the two moving heads on the back wall (X mirrored), their beams' length and spread in wall units
+  // the low stage: its front edge (a white LED nosing) straight in front of the desks, curving forward round the
+  // podium in a half circle (centre Z apronZ, radius apronR), the riser under it
+  stage: Object.freeze({ Z: 870, apronZ: 914, apronR: 100 }),
+  // a desk's front: the cabinet down to Y 17 (its lit corners, the band, the plate), a recessed plinth under it (black,
+  // ink slats every `pitch` cm, set back `inset` cm at each end)
+  cabinet: 17,
+  plinth: Object.freeze({ inset: 2.5, pitch: 9 }),
+  // the two moving heads (X mirrored), standing on the truss towers' top plates; their beams' length and spread
   heads: Object.freeze({ X: 226, Y: -104, length: 62, spread: 14 * DEG, r: 5.6 }),
+  // the truss towers at the wall's sides (on the wall), carrying the heads: centre X, half width, top plate
+  towers: Object.freeze({ X: 226, hw: 7, top: -95 }),
+  // each player's shape in bulbs above their desk: A's ring (radius r), B's square (half side hs), n bulbs of `bulb` cm
+  // (clear of the top row in the wide, wholly above the frame in the players' singles)
+  shapes: Object.freeze({ X: 170, Y: -106, r: 14, hs: 12, n: 16, bulb: 3 }),
+  // the white light strips framing the board (X mirrored), from `top` to the cove
+  strips: Object.freeze({ X: 104, top: -120 }),
+  // the marquee in the board's frame: a bulb every `pitch` cm along the frame's centre line
+  marquee: Object.freeze({ pitch: 8, bulb: 2.6 }),
+  // the cove light along the wall's foot (Y), to X ±X
+  cove: Object.freeze({ Y: 49.5, X: 262 }),
+  // the soffit's white light along the top of the wall (Y: y 3 in the wide, over the graphics' top row)
+  soffit: Object.freeze({ Y: -153 }),
+  // the board's backing panel: an ink panel behind the host, the frame on it, from the frame's top to the floor
+  backing: Object.freeze({ X: 94 }),
 });
 
 /**
@@ -70,7 +95,7 @@ export const QUIZ_SEATS = QUIZ.seats;
 // The moving heads sweep while there is no question and hold still during one. The sweep runs on its own clock, which
 // slows to a stop over RAMP s when a question starts and picks up again over RAMP s when it ends, so the beams never jump:
 // a pure function of t and the question marks the director has set.
-const SWEEP = Object.freeze({ period: 16, ramp: 0.8, centre: -13 * DEG, amp: 14 * DEG });
+const SWEEP = Object.freeze({ period: 16, ramp: 0.8, centre: -30 * DEG, amp: 12 * DEG });
 const STATE = { question: false, lamps: { A: false, B: false }, scores: { A: null, B: null }, marks: [], base: { t: 0, s: 0, v: 1 } };
 
 /**
@@ -147,6 +172,17 @@ export function sweepClock(t) {
 export const beamAngle = (t) => SWEEP.centre + SWEEP.amp * Math.sin((2 * Math.PI * sweepClock(t)) / SWEEP.period);
 export const BEAM_RANGE = Object.freeze([SWEEP.centre - SWEEP.amp, SWEEP.centre + SWEEP.amp]);
 
+/**
+ * The board's idle animation (wall.js): its emblem's lamp test, the circle lit for a beat at 112 BPM, then the square,
+ * once every 8 s of the sweep's clock, so it stands still with the moving heads; during a question both lamps are dark.
+ * 0 dark, 1 the circle lit, 2 the square lit.
+ */
+export function quizIdlePhase(t) {
+  if (STATE.question) return 0;
+  const u = (((sweepClock(t) % 8) + 8) % 8);
+  return u < 0.536 ? 1 : u < 1.072 ? 2 : 0;
+}
+
 // ------------------------------------------------------------------------------------------------- the framings
 
 /**
@@ -155,8 +191,8 @@ export const BEAM_RANGE = Object.freeze([SWEEP.centre - SWEEP.amp, SWEEP.centre 
  * desks): in the solo wide itself the board's frame rose into the graphics' top row, where the programme's purple tag
  * (8 s after the open and after breaks) merged with the purple frame and the clock's plate cut the right pool; here the
  * frame's top is 6 px under the row, the desks' fronts and the podium's plate end above the graphics zone (y 150) and
- * the stage's lit nosing sits in the wide's free rows (y 198, under the captions, over the ticker); 'host' the network's centred
- * single on the solo seat; 'player-a' / 'player-b' a single on a contestant, on their own side of the frame, the board
+ * the stage's lit edge runs under the desks at y 193 and curves round the podium to y 201, over the ticker; 'host' the
+ * network's centred single on the solo seat; 'player-a' / 'player-b' a single on a contestant, on their own side of the frame, the board
  * beside them toward the centre. Cameras as camera.js makes them ({ x, y, z, zoom, hy, soft }).
  */
 export function quizCamera(name, metrics = null) {
@@ -187,54 +223,297 @@ function rectZ(fr, cam, Z, X0, Y0, X1, Y1, c) {
 
 // ------------------------------------------------------------------------------------------------- the room (dressing)
 
+// a 1-px line between two screen points (Bresenham), clipped to the frame
+function line(fr, xa, ya, xb, yb, c, lit = false) {
+  xa = Math.round(xa);
+  ya = Math.round(ya);
+  xb = Math.round(xb);
+  yb = Math.round(yb);
+  const dx = Math.abs(xb - xa), dy = -Math.abs(yb - ya), sx = xa < xb ? 1 : -1, sy = ya < yb ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    if (xa >= 0 && xa < W && ya >= 0 && ya < H) {
+      if (lit) lift(fr, xa, ya, c);
+      else fr.px[ya * W + xa] = c;
+    }
+    if (xa === xb && ya === yb) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      xa += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      ya += sy;
+    }
+  }
+}
+const put = (fr, x, y, c) => {
+  if (x >= 0 && x < W && y >= 0 && y < H) fr.px[y * W + x] = c;
+};
+
 /**
- * The room behind the desks (the back wall's light is the style's bake: black, a soft pool behind each contestant):
- * the question board's frame, purple with its fog rim, round the screen's black bezel, hung from the grid on two black
- * drop pipes; the moving heads' wall brackets (their heads and beams move: the live layer).
+ * The bulbs of a player's shape on the back wall (above their desk): A's ring, B's square, `QUIZ.shapes.n` bulbs each,
+ * in screen px for a camera ({ x, y, n }: the bulb's top-left and its size, 1-2 px).
  */
-export function quizRoom(fr, cam, style, soft) {
-  const S = SET.screen, m = QUIZ.frame, Zw = SET.wallZ;
-  const k = kAt(cam, Zw);
-  // the frame: purple fill, its 1-px fog rim (purple alone on the dark set is 2.0:1 against black and would vanish), in
-  // the singles too (the board's own words stay fog there); whole pixels at the frame's own edges, so the rim is one
-  // pixel at every scale. (No drop pipes: black on the black wall, they showed only as two notches in the ceiling line.)
-  const x0 = Math.round(sxOf(cam, k, S.x0 - m)), x1 = Math.round(sxOf(cam, k, S.x1 + m));
-  const y0 = Math.round(syOf(cam, k, S.y0 - m)), y1 = Math.round(syOf(cam, k, S.y1 + m));
-  if (x1 > 0 && x0 < W && y1 > 0 && y0 < H) {
-    fr.span(x0, y0, x1, y1, C.fog);
-    fr.span(x0 + 1, y0 + 1, x1 - 1, y1 - 1, C.purple);
+export function shapeBulbs(cam, id) {
+  const S = QUIZ.shapes, k = kAt(cam, SET.wallZ);
+  const X = (id === 'A' ? -1 : 1) * S.X;
+  const n = Math.max(1, Math.min(2, Math.round(S.bulb * k)));
+  const out = [];
+  for (let i = 0; i < S.n; i++) {
+    let u, v;
+    if (id === 'A') {
+      const a = (i / S.n) * 2 * Math.PI;
+      u = S.r * Math.sin(a);
+      v = -S.r * Math.cos(a);
+    } else {
+      // round the square's perimeter from its top-left corner, a bulb on each corner
+      const per = 8 * S.hs, d = (i / S.n) * per, side = Math.floor(d / (2 * S.hs)), f = d - side * 2 * S.hs;
+      [u, v] = [[-S.hs + f, -S.hs], [S.hs, -S.hs + f], [S.hs - f, S.hs], [-S.hs, S.hs - f]][side];
+    }
+    out.push({ x: Math.round(sxOf(cam, k, X + u) - n / 2), y: Math.round(syOf(cam, k, S.Y + v) - n / 2), n });
   }
-  // the moving heads' brackets: a short black arm off the wall each side (the head itself turns: the live layer)
-  for (const sx of [-1, 1]) {
-    const X = sx * QUIZ.heads.X, Y = QUIZ.heads.Y;
-    rectZ(fr, cam, Zw, X - 3, Y - 9, X + 3, Y - 6, C.black);
-    if (!soft) rectZ(fr, cam, Zw, X - 3, Y - 9, X + 3, Y - 8.2, C.ink);
+  return out;
+}
+
+/** The bulbs set into the board's purple frame (a marquee round the question board), screen px ({ x, y, n }). */
+export function marqueeBulbs(cam) {
+  const Sc = SET.screen, m = QUIZ.frame, k = kAt(cam, SET.wallZ);
+  const X0 = Sc.x0 - m / 2, X1 = Sc.x1 + m / 2, Y0 = Sc.y0 - m / 2, Y1 = Sc.y1 + m / 2;
+  const wq = X1 - X0, hq = Y1 - Y0;
+  const nx = Math.max(2, Math.round(wq / QUIZ.marquee.pitch)), ny = Math.max(2, Math.round(hq / QUIZ.marquee.pitch));
+  const n = Math.max(1, Math.min(2, Math.round(QUIZ.marquee.bulb * k)));
+  const out = [];
+  const at = (X, Y) => out.push({ x: Math.round(sxOf(cam, k, X) - n / 2), y: Math.round(syOf(cam, k, Y) - n / 2), n });
+  for (let i = 0; i < nx; i++) {
+    at(X0 + (i * wq) / nx, Y0);
+    at(X1 - (i * wq) / nx, Y1);
   }
+  for (let j = 0; j < ny; j++) {
+    at(X1, Y0 + (j * hq) / ny);
+    at(X0, Y1 - (j * hq) / ny);
+  }
+  return out;
+}
+
+// a column on the right side: the left one's mirror when the camera is on the centre line (pixel-exact symmetry),
+// else its own projection
+const mirrorX = (cam, s, left, own) => (s > 0 && cam.x === 0 ? W - 1 - left : own);
+
+function bulb(fr, b, c) {
+  for (let y = b.y; y < b.y + b.n; y++) for (let x = b.x; x < b.x + b.n; x++) put(fr, x, y, c);
 }
 
 /**
- * The stage: its deck black and glossy from the back wall's foot (one ink row, the skirting) to the camera (the
- * network's floor dithers ink toward the wall; between the quiz's desks that band showed as a strip of carpet), and its
- * front edge in front of the desks: a white LED nosing, the riser black under it.
+ * The quiz studio's back wall, in front of the wall's own light (black, a soft pool from above behind each contestant):
+ *   - the wall's foot: a white cove light along it, its glow up the wall in three flat steps;
+ *   - two white light strips framing the board, floor to board-top, each a fog core with a steel and a slate glow;
+ *   - two truss towers at the wall's sides, each carrying its moving head on a top plate (the heads: the live layer);
+ *   - each player's shape in bulbs above their desk, on an ink fixture: A's ring, B's square (warm white; gold while the
+ *     player's lamp is lit: the live layer);
+ *   - the question board's frame, purple with its fog rim, a marquee of warm-white bulbs set into it.
+ * Out of focus (the singles) every light keeps its place a step dimmer and the fine structure (the truss's web, the
+ * fixtures' outlines) goes. Lights only ever lift the dark (lift): a light never darkens what it falls on.
+ */
+export function quizRoom(fr, cam, style, soft) {
+  const Sc = SET.screen, m = QUIZ.frame, Zw = SET.wallZ;
+  const k = kAt(cam, Zw);
+  const yw = Math.round(syOf(cam, k, SET.floorY));
+  // the soffit: a white line along the top of the wall, its light falling down it in two flat steps
+  {
+    const ys = Math.round(syOf(cam, k, QUIZ.soffit.Y));
+    if (ys >= 0 && ys < H) {
+      const steps = soft ? [C.slate, C.ink] : [C.fog, C.steel, C.slate];
+      for (let x = 0; x < W; x++) for (let i = 0; i < steps.length; i++) if (ys + i < H) lift(fr, x, ys + i, steps[i]);
+      for (let x = 0; x < W; x++) if (ys - 1 >= 0) fr.px[(ys - 1) * W + x] = C.black;
+    }
+  }
+  // the board's backing panel behind the host: ink, its top edge catching the light (steel), its sides slate (mirrored:
+  // the set is symmetric); from the frame's top to the floor
+  {
+    const Bk = QUIZ.backing;
+    const xa = Math.round(sxOf(cam, k, -Bk.X)), xb = Math.round(sxOf(cam, k, Bk.X));
+    const ya = Math.round(syOf(cam, k, Sc.y0 - m)), yb = Math.min(H, yw);
+    if (xb > 0 && xa < W && yb > ya) {
+      fr.span(xa, ya, xb, yb, C.ink);
+      if (!soft) {
+        fr.span(xa, ya + 1, xa + 1, yb, C.slate);
+        fr.span(xb - 1, ya + 1, xb, yb, C.slate);
+        fr.span(xa, ya, xb, ya + 1, C.steel);
+      }
+    }
+  }
+  // the cove at the wall's foot (white), its glow up the wall: steel, slate, ink (flat steps)
+  {
+    const yc = Math.round(syOf(cam, k, QUIZ.cove.Y));
+    const xa = Math.max(0, Math.round(sxOf(cam, k, -QUIZ.cove.X))), xb = Math.min(W, Math.round(sxOf(cam, k, QUIZ.cove.X)));
+    if (yc > 0 && yc < Math.min(yw, H)) {
+      const glow = soft ? [C.slate, C.ink] : [C.fog, C.steel, C.slate, C.ink, C.ink];
+      for (let x = xa; x < xb; x++) for (let i = 0; i < glow.length; i++) if (yc - i >= 0) lift(fr, x, yc - i, glow[i]);
+    }
+  }
+  // the light strips framing the board
+  for (const s of [-1, 1]) {
+    const x = mirrorX(cam, s, Math.round(sxOf(cam, k, -QUIZ.strips.X)), Math.round(sxOf(cam, k, s * QUIZ.strips.X)));
+    const ya = Math.max(0, Math.round(syOf(cam, k, QUIZ.strips.top))), yb = Math.min(H, Math.min(yw, Math.round(syOf(cam, k, QUIZ.cove.Y))));
+    if (x < -3 || x > W + 2) continue;
+    // (a fog core, its glow on the wall in flat steps: steel, slate, then a wide ink halo)
+    for (let y = ya; y < yb; y++) {
+      lift(fr, x, y, soft ? C.steel : C.fog);
+      for (const o of [-1, 1]) lift(fr, x + o, y, soft ? C.slate : C.steel);
+      for (const o of [-2, 2]) lift(fr, x + o, y, soft ? C.ink : C.slate);
+      if (!soft) for (const o of [-5, -4, -3, 3, 4, 5]) lift(fr, x + o, y, C.ink);
+    }
+    // the strip's end caps (black housings)
+    for (const o of [-1, 0, 1]) {
+      put(fr, x + o, ya - 1, C.black);
+      put(fr, x + o, yb, C.black);
+    }
+  }
+  // the truss towers, each with its moving head's top plate (the outer chord catches the light, mirrored)
+  for (const s of [-1, 1]) {
+    const T = QUIZ.towers, X = s * T.X;
+    // (on the centre line the right tower is the left one mirrored to the pixel: the set is symmetric)
+    const la = Math.round(sxOf(cam, k, -T.X - T.hw)), lb = Math.round(sxOf(cam, k, -T.X + T.hw));
+    const xa = cam.x === 0 && s > 0 ? W - 1 - lb : Math.round(sxOf(cam, k, X - T.hw));
+    const xb = cam.x === 0 && s > 0 ? W - 1 - la : Math.round(sxOf(cam, k, X + T.hw));
+    const ya = Math.round(syOf(cam, k, T.top)), yb = Math.min(H, yw);
+    if (xb < -1 || xa > W) continue;
+    if (!soft) {
+      // the web: a zigzag between the chords, a diagonal per bay (bays as tall as the tower is wide)
+      const bay = Math.max(3, xb - xa);
+      let flip = false;
+      for (let y = ya + 2; y < yb - 1; y += bay) {
+        line(fr, flip ? xb : xa, y, flip ? xa : xb, Math.min(yb - 1, y + bay), C.ink);
+        flip = !flip;
+      }
+    }
+    for (let y = ya; y < yb; y++) {
+      put(fr, xa, y, soft ? C.ink : s < 0 ? C.steel : C.slate);
+      put(fr, xb, y, soft ? C.ink : s < 0 ? C.slate : C.steel);
+    }
+    // the top plate and the foot plate
+    for (let x = xa - 1; x <= xb + 1; x++) {
+      put(fr, x, ya, soft ? C.ink : C.slate);
+      put(fr, x, yb - 1, C.ink);
+    }
+  }
+  // the players' shapes: an ink fixture line, the bulbs on it (warm white; out of focus a step dimmer)
+  for (const id of ['A', 'B']) {
+    const S = QUIZ.shapes, X = (id === 'A' ? -1 : 1) * S.X;
+    if (!soft) {
+      if (id === 'A') {
+        const steps = Math.max(24, Math.round(2 * Math.PI * S.r * k * 1.5));
+        let px0 = null;
+        for (let i = 0; i <= steps; i++) {
+          const a = (i / steps) * 2 * Math.PI;
+          const p = [sxOf(cam, k, X + S.r * Math.sin(a)), syOf(cam, k, S.Y - S.r * Math.cos(a))];
+          if (px0) line(fr, px0[0], px0[1], p[0], p[1], C.ink);
+          px0 = p;
+        }
+      } else {
+        const x0 = sxOf(cam, k, X - S.hs), x1 = sxOf(cam, k, X + S.hs), y0 = syOf(cam, k, S.Y - S.hs), y1 = syOf(cam, k, S.Y + S.hs);
+        line(fr, x0, y0, x1, y0, C.ink);
+        line(fr, x1, y0, x1, y1, C.ink);
+        line(fr, x1, y1, x0, y1, C.ink);
+        line(fr, x0, y1, x0, y0, C.ink);
+      }
+    }
+    for (const b of shapeBulbs(cam, id)) bulb(fr, b, soft ? C.fog : C.cream);
+  }
+  // the board's frame: purple fill, its 1-px fog rim (purple alone on the dark set is 2.0:1 against black and would
+  // vanish), whole pixels at the frame's own edges, so the rim is one pixel at every scale; the marquee's bulbs on it
+  const x0 = Math.round(sxOf(cam, k, Sc.x0 - m)), x1 = Math.round(sxOf(cam, k, Sc.x1 + m));
+  const y0 = Math.round(syOf(cam, k, Sc.y0 - m)), y1 = Math.round(syOf(cam, k, Sc.y1 + m));
+  if (x1 > 0 && x0 < W && y1 > 0 && y0 < H) {
+    fr.span(x0, y0, x1, y1, C.fog);
+    fr.span(x0 + 1, y0 + 1, x1 - 1, y1 - 1, C.purple);
+    for (const b of marqueeBulbs(cam)) bulb(fr, b, soft ? C.fog : C.cream);
+  }
+}
+
+/** The stage's front edge on screen for a camera: the row of the straight edge, and the apron's curve as (x, y) points. */
+export function stageEdge(cam) {
+  const St = QUIZ.stage;
+  const kS = kAt(cam, St.Z);
+  const yS = syOf(cam, kS, SET.floorY);
+  // the apron: a half circle round the podium, from where it leaves the straight edge to where it joins it again
+  const c0 = (St.apronZ - St.Z) / St.apronR;
+  const th0 = Math.acos(Math.max(-1, Math.min(1, c0)));
+  const pts = [];
+  const steps = 160;
+  for (let i = 0; i <= steps; i++) {
+    const th = -th0 + (2 * th0 * i) / steps;
+    const X = St.apronR * Math.sin(th), Z = St.apronZ - St.apronR * Math.cos(th);
+    const kk = kAt(cam, Z);
+    pts.push([sxOf(cam, kk, X), syOf(cam, kk, SET.floorY)]);
+  }
+  return { yS, pts, xa: pts[0][0], xb: pts[pts.length - 1][0] };
+}
+
+/** The stage's front edge's row in each screen column (-1 where it is off screen): the line quizFloor lights. */
+export function stageEdgeRows(cam) {
+  const E = stageEdge(cam);
+  const edge = new Int16Array(W).fill(-1);
+  const yS = Math.round(E.yS);
+  for (let x = 0; x < W; x++) if (x < E.xa || x > E.xb) edge[x] = yS;
+  for (let i = 1; i < E.pts.length; i++) {
+    const [xa, ya] = E.pts[i - 1], [xb, yb] = E.pts[i];
+    const xs = Math.round(Math.min(xa, xb)), xe = Math.round(Math.max(xa, xb));
+    for (let x = Math.max(0, xs); x <= Math.min(W - 1, xe); x++) {
+      const u = xe === xs ? 0 : (x - xs) / (xe - xs);
+      const y = Math.round(xa < xb ? ya + (yb - ya) * u : yb + (ya - yb) * u);
+      edge[x] = Math.max(edge[x], y);
+    }
+  }
+  return edge;
+}
+
+/**
+ * The stage: its deck black and glossy from the back wall's foot (one ink row, the skirting) to its front edge; on the
+ * gloss, flat 1-px reflections in ink (the graphics zone keeps to black and ink): the cove's line, the strips' feet,
+ * each desk's foot. The front edge is the zone's one light line: a white LED nosing, straight across the stage in front
+ * of the desks and curving forward round the host's podium in a half circle (the ring of light round the host), its
+ * light falling down the riser's top in slate, then its reflection in ink; the riser black under it.
  */
 export function quizFloor(fr, cam, style, soft) {
   const kw = kAt(cam, SET.wallZ);
   const yw = Math.max(0, Math.round(syOf(cam, kw, SET.floorY)));
   for (let y = yw; y < H; y++) fr.px.fill(y === yw ? C.ink : C.black, y * W, y * W + W);
-  const k = kAt(cam, QUIZ.stageZ);
-  const y = Math.round(syOf(cam, k, SET.floorY));
-  if (y < 0 || y >= H) return;
-  // (white light, kept low: the diodes fog and steel by turns, their light falling down the riser's top in slate then ink,
-  // broken under each desk's ends: a fixture on the stage's edge, not a ruled line across the picture)
-  const x0 = Math.max(0, Math.round(sxOf(cam, k, -420))), x1 = Math.min(W, Math.round(sxOf(cam, k, 420)));
-  const breaks = new Set();
-  for (const b of BOXES) for (const X of [b.X - b.hw, b.X + b.hw]) breaks.add(Math.floor(sxOf(cam, k, X)));
-  for (let x = x0; x < x1; x++) {
-    const gap = breaks.has(x);
-    fr.px[y * W + x] = gap ? C.black : soft ? C.slate : (x & 1) ? C.steel : C.fog;
-    if (y + 1 < H) fr.px[(y + 1) * W + x] = gap ? C.black : soft ? C.ink : C.slate;
-    if (y + 2 < H) fr.px[(y + 2) * W + x] = gap || soft ? C.black : C.ink;
-    for (let yy = y + 3; yy < H; yy++) fr.px[yy * W + x] = C.black;
+  if (yw >= H) return;
+  // the cove's reflection (two rows under the skirting), the strips' feet reflected (a short streak under each)
+  {
+    const yc = Math.round(syOf(cam, kw, QUIZ.cove.Y));
+    const yr = yw + Math.max(1, yw - yc);
+    const xa = Math.max(0, Math.round(sxOf(cam, kw, -QUIZ.cove.X))), xb = Math.min(W, Math.round(sxOf(cam, kw, QUIZ.cove.X)));
+    if (yr < H && !soft) fr.px.fill(C.ink, yr * W + xa, yr * W + xb);
+    for (const s of [-1, 1]) {
+      const x = Math.round(sxOf(cam, kw, s * QUIZ.strips.X));
+      for (let y = yw + 1; y < Math.min(H, yw + 1 + Math.round(8 * kw)); y++) put(fr, x, y, C.ink);
+    }
+  }
+  // each desk's foot on the gloss: an ink row under its front, a pixel in from its ends
+  for (const b of BOXES) {
+    const kf = kAt(cam, b.Z);
+    const yF = Math.round(syOf(cam, kf, SET.deskH));
+    const xa = Math.round(sxOf(cam, kf, b.X - b.hw)), xb = Math.round(sxOf(cam, kf, b.X + b.hw));
+    if (yF + 1 >= H) continue;
+    for (let x = Math.max(0, xa + 1); x < Math.min(W, xb - 1); x++) put(fr, x, yF + 1, C.ink);
+  }
+  // the front edge: the straight run and the apron's half circle, one continuous line of diodes (fog and steel by
+  // turns), slate under it, then the ink reflection; the riser black below
+  const edge = stageEdgeRows(cam);
+  for (let x = 0; x < W; x++) {
+    const y = edge[x];
+    if (y < 0 || y >= H) continue;
+    // the curve's steps: where the edge drops from one column to the next, the drop is lit too (a continuous line)
+    const prev = x > 0 && edge[x - 1] >= 0 ? edge[x - 1] : y;
+    for (let yy = Math.min(prev, y); yy <= y; yy++) put(fr, x, yy, soft ? C.slate : (x & 1) ? C.steel : C.fog);
+    put(fr, x, y + 1, soft ? C.ink : C.slate);
+    put(fr, x, y + 2, C.black);
+    put(fr, x, y + 3, soft ? C.black : C.ink);
+    for (let yy = y + 4; yy < H; yy++) fr.px[yy * W + x] = C.black;
   }
 }
 
@@ -283,7 +562,10 @@ export function rasterQuizDesks(fr, cam, clipRows, style, plate) {
         const k = (y + 0.5 - cam.hy) / (0 - cam.y);
         if (!(k > 0)) continue;
         const xa = Math.max(0, Math.round(sxOf(cam, k, X0))), xb = Math.min(W, Math.round(sxOf(cam, k, X1)));
-        if (xb > xa) px.fill(C.black, y * W + xa, y * W + xb);
+        if (xb > xa) px.fill(C.ink, y * W + xa, y * W + xb);
+        // the key's pool on the top, under the hands: slate over the middle of the top, ink at its ends
+        const pa = Math.max(xa, Math.round(sxOf(cam, k, b.X - 0.62 * b.hw))), pb = Math.min(xb, Math.round(sxOf(cam, k, b.X + 0.62 * b.hw)));
+        if (pb > pa) px.fill(C.slate, y * W + pa, y * W + pb);
         for (let x = xa; x < xb; x++) if (y < clipRows[x]) clipRows[x] = y;
       }
     }
@@ -300,27 +582,21 @@ export function rasterQuizDesks(fr, cam, clipRows, style, plate) {
         if (ya < clipRows[x]) clipRows[x] = Math.max(0, ya);
       }
     }
-    // the front: a matte ink panel (it stands off the black stage, in the graphics zone too: black and ink only there);
-    // the top's front edge lit (one row, silver), a black reveal under it
+    // the front: the cabinet (the top's front edge silver, a black reveal under it, an ink panel lit at both corners by
+    // a white edge strip, holding the band or the plate), its overhang's black shadow, then the plinth set back under
+    // it: black with ink slats (in the graphics zone: black and ink only)
     if (fx1 <= 0 || fx0 >= W) continue;
-    fr.span(fx0, yT, fx1, yF, C.ink);
+    const yC = Math.min(yF, Math.round(syOf(cam, kf, QUIZ.cabinet)));
+    fr.span(fx0, yT, fx1, yC, C.ink);
     if (yT >= 0 && yT < H) fr.span(fx0, yT, fx1, yT + 1, C.silver);
     if (yT + 1 >= 0 && yT + 1 < H) fr.span(fx0, yT + 1, fx1, yT + 2, C.black);
     for (let x = Math.max(0, fx0); x < Math.min(W, fx1); x++) if (yT < clipRows[x]) clipRows[x] = Math.max(0, yT);
-    // the front's kick: a black band at its foot (in the graphics zone: black and ink only)
-    const yK = Math.round(syOf(cam, kf, SET.deskH - 6));
-    if (yK < yF) fr.span(fx0, Math.max(0, yK), fx1, yF, C.black);
-    // the front's left edge catches the key (camera-left): one slate column down the front's top section (to the groove
-    // under the band; the podium's, to its plate's foot), never into the graphics zone; its modules' joints, two recessed
-    // seams (black) a third of the way in from each end, under the band (a desk built in panels, not a box)
-    const yS = Math.round(syOf(cam, kf, b.id === 'host' ? 1.4 : QUIZ.fascia.y1 + 0.8));
-    const yE = b.id === 'host' ? Math.round(syOf(cam, kf, QUIZ.plate.y1 + 0.8)) : yS + 1;
-    if (fx0 >= 0 && fx0 < W) for (let y = Math.max(0, yT + 2); y < Math.min(150, yK, yE); y++) fr.px[y * W + fx0] = C.slate;
-    if (b.id !== 'host') {
-      for (const f of [-1 / 3, 1 / 3]) {
-        const x = Math.round(sxOf(cam, kf, b.X + f * 2 * b.hw));
-        if (x > fx0 && x < fx1 - 1) fr.span(x, Math.max(0, yS + 1), x + 1, Math.max(yS + 1, yK), C.black);
-      }
+    for (const x of [fx0, fx1 - 1]) if (x >= 0 && x < W) for (let y = Math.max(0, yT + 2); y < Math.min(H, yC); y++) px[y * W + x] = C.fog;
+    if (yC < yF) {
+      fr.span(fx0, yC, fx1, yF, C.black);
+      const ix = Math.max(1, Math.round(QUIZ.plinth.inset * kf));
+      const pitch = Math.max(2, Math.round(QUIZ.plinth.pitch * kf));
+      for (let x = fx0 + ix + Math.floor(pitch / 2); x < fx1 - ix; x += pitch) if (x >= 0 && x < W) for (let y = Math.max(0, yC + 2); y < Math.min(H, yF); y++) px[y * W + x] = C.ink;
     }
     if (b.id === 'host') {
       // the network's red plate, centred high on the podium (above the captions in the wide)
@@ -422,12 +698,14 @@ export function scoreRect(cam, id) {
 /** The score's digits (white, pixel digits from the channel's body face) in their window: two digits, right-aligned. */
 export function paintScore(fr, sw, value) {
   if (value == null) return;
-  const text = String(Math.max(0, Math.min(99, value | 0)));
+  paintDigits(fr, sw, String(Math.max(0, Math.min(99, value | 0))), C.white);
+}
+// digits right-aligned in the window's two-digit field (the units digit always in the same place)
+function paintDigits(fr, sw, text, c) {
   const s = sw.s;
   const t = textPixels(text, 'body');
-  // right-aligned in a two-digit field (the units digit always in the same place)
   const x = sw.x1 - 2 * s - t.width * s, y = sw.y0 + s;
-  for (const [gx, gy] of t.pixels) fr.span(x + gx * s, y + gy * s, x + (gx + 1) * s, y + (gy + 1) * s, C.white);
+  for (const [gx, gy] of t.pixels) fr.span(x + gx * s, y + gy * s, x + (gx + 1) * s, y + (gy + 1) * s, c);
 }
 
 // ------------------------------------------------------------------------------------------------ the moving heads
@@ -436,10 +714,9 @@ export function paintScore(fr, sw, value) {
  * A moving head on screen for a camera at time t: its lens (screen px), the beam's direction (unit vector, y down),
  * its length and spread in px, and the head's pixel size. side -1 is the left head (on the wall at -X), +1 the right.
  */
-export function beamOf(cam, side, t) {
+export function beamOf(cam, side, t, a = beamAngle(t)) {
   const k = kAt(cam, SET.wallZ);
   const X = side * QUIZ.heads.X, Y = QUIZ.heads.Y;
-  const a = beamAngle(t);
   // inward: the left head's beam leans toward +x, the right head's toward -x (mirrored)
   const dx = -side * Math.sin(a), dy = Math.cos(a);
   const s = Math.max(1, Math.round(k * 1.3));
@@ -482,8 +759,8 @@ function drawBeam(fr, bm, clipRows, soft) {
   }
 }
 
-// the moving head, hung from its bracket: the black yoke (a bar under the bracket, an arm down each side), the head
-// between the arms (a slate barrel, its rim steel where the key catches it, up and to the left), its lens on the barrel's
+// the moving head, standing on its tower's top plate: the black yoke (a bar under the barrel, an arm up each side to
+// its axis), the head between the arms (a slate barrel, its rim steel where the key catches it, up and to the left), its lens on the barrel's
 // face turned along the beam (a silver disc, a white heart), so the fixture is seen to turn with its light
 function drawHead(fr, bm, soft) {
   const { lx, ly, dx, dy, k } = bm;
@@ -493,10 +770,10 @@ function drawHead(fr, bm, soft) {
   const put = (x, y, c) => {
     if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c;
   };
-  // the yoke: a bar over the barrel, the arms down its sides to its axis
-  const ax = Math.round(r + 1.4), top = Math.round(hy - r - 2);
-  for (let x = Math.round(hx) - ax; x <= Math.round(hx) + ax; x++) put(x, top, C.black);
-  for (let y = top; y <= Math.round(hy) + 1; y++) {
+  // the yoke: a bar under the barrel, the arms up its sides to its axis
+  const ax = Math.round(r + 1.4), bot = Math.round(hy + r + 2);
+  for (let x = Math.round(hx) - ax; x <= Math.round(hx) + ax; x++) put(x, bot, C.black);
+  for (let y = Math.round(hy) - 1; y <= bot; y++) {
     put(Math.round(hx) - ax, y, C.black);
     put(Math.round(hx) + ax, y, C.black);
   }
@@ -518,17 +795,34 @@ function drawHead(fr, bm, soft) {
 
 // ------------------------------------------------------------------------------------------- what moves (live layer)
 
-LIVE_DRAW['pay-attention'] = (fr, cam, t, style, clipRows, soft, wall) => {
-  // the moving heads: their beams, then the heads over them (static while a question is on: the clock stands still)
+const LIVE_ALL = Object.freeze({ beams: true, heads: true, desks: true });
+/**
+ * What moves, over the cached set: the moving heads (their beams, then the heads), the lamps lit (gold) with their
+ * players' shapes on the back wall gold too, and the scores on the displays. `st` is the quiz's state (the director's,
+ * by default) and `angle` the beams' angle (by default the sweep's, which stands still during a question); the open
+ * drives both itself (`parts`: which of the beams, the heads and the desks' lamps and scores to draw; for the open, each
+ * head's own angle as [left, right], which beams are on, and a longer throw).
+ */
+export function drawQuizLive(fr, cam, t, clipRows, soft, st = STATE, angle = beamAngle(t), parts = LIVE_ALL) {
   for (const side of [-1, 1]) {
-    const bm = beamOf(cam, side, t);
+    // (the open aims each head on its own: angle [left, right], parts.sides which beams are on, parts.reach a longer throw)
+    const a = Array.isArray(angle) ? angle[side < 0 ? 0 : 1] : angle;
+    const bm = beamOf(cam, side, t, a);
     if (bm.lx < -20 || bm.lx > W + 20) continue;
-    drawBeam(fr, bm, clipRows, cam.soft > 0.5);
-    drawHead(fr, bm, cam.soft > 0.5);
+    if (parts.reach) bm.len *= parts.reach;
+    if (parts.beams && (!parts.sides || parts.sides[side < 0 ? 0 : 1])) drawBeam(fr, bm, clipRows, soft);
+    if (parts.heads) drawHead(fr, bm, soft);
   }
-  // the lamps lit (gold) and the scores on the displays
+  if (!parts.desks) return;
   for (const id of ['A', 'B']) {
-    if (STATE.lamps[id]) paintLamp(fr, lampRect(cam, id), id, true);
-    paintScore(fr, scoreRect(cam, id), STATE.scores[id]);
+    if (st.lamps[id]) {
+      paintLamp(fr, lampRect(cam, id), id, true);
+      // the shape's bulbs, where the cached set still shows them (nothing stands in front of them)
+      const was = soft ? C.fog : C.cream;
+      for (const b of shapeBulbs(cam, id)) for (let y = b.y; y < b.y + b.n; y++) for (let x = b.x; x < b.x + b.n; x++) if (x >= 0 && x < W && y >= 0 && y < H && fr.px[y * W + x] === was) fr.px[y * W + x] = C.yellow;
+    }
+    paintScore(fr, scoreRect(cam, id), st.scores[id]);
   }
-};
+}
+
+LIVE_DRAW['pay-attention'] = (fr, cam, t, style, clipRows) => drawQuizLive(fr, cam, t, clipRows, cam.soft > 0.5);

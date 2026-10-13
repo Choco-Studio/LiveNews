@@ -1,9 +1,11 @@
 // PAY ATTENTION's set, the quiz studio (docs/programmes/pay-attention.md §6, build step 5; critique log
 // docs/roadmap/critique/pay-attention-set.md): a low stage in a dark room, the question board (the network's screen) in a
-// purple frame with its fog rim, the host's podium in the centre, two contestant desks with their shape lamps (a circle
-// on seat A, a square on seat B) and score displays in pixel digits, two moving heads on the back wall that sweep between
-// questions and hold still during one. Palette only, purple only as fills with their rims, white and gold light only,
-// nothing of TECH BYTES's rings and LEDs or COSMOS's glow; the seats' geometry for the director; the frame's cost.
+// purple frame with its fog rim and a marquee of bulbs, on a backing panel between two white light strips; the host's
+// podium in the centre, two contestant desks with their shape lamps (a circle on seat A, a square on seat B), score
+// displays in pixel digits and lit corners; each player's shape in bulbs on the back wall; two truss towers carrying the
+// moving heads, which sweep between questions and hold still during one; the soffit and the cove; the stage's lit edge
+// curving round the host. Palette only, purple only as fills with their rims, white and gold light only, nothing of TECH
+// BYTES's rings and LEDs or COSMOS's glow; the seats' geometry for the director; the frame's cost.
 // Rendered in node through the quiz set's lab (no DOM: no text or logo).
 import { describe, test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +13,7 @@ import fs from 'node:fs';
 import { C } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, STYLE_IDS, BUILT_STYLE_IDS } from '../public/js/v2/canvas25d/studio/styles.js';
 import { wallRect, wallFromScene, setLive, setQuizState as setFromSet, quizState } from '../public/js/v2/canvas25d/studio/set.js';
-import { QUIZ, QUIZ_SEATS, quizCamera, setQuizState, resetQuizState, sweepClock, beamAngle, beamOf, BEAM_RANGE, lampRect, scoreRect, deskRect } from '../public/js/v2/canvas25d/studio/quiz.js';
+import { QUIZ, QUIZ_SEATS, quizCamera, setQuizState, resetQuizState, sweepClock, beamAngle, beamOf, BEAM_RANGE, lampRect, scoreRect, deskRect, stageEdgeRows, shapeBulbs, marqueeBulbs, quizIdlePhase } from '../public/js/v2/canvas25d/studio/quiz.js';
 import { SET, kAt, sxOf, syOf } from '../public/js/v2/canvas25d/studio/geometry.js';
 import { isPalette, nameOf, lstarOf, NEUTRAL } from '../public/js/v2/canvas25d/studio/color.js';
 import * as lab from '../public/js/v2/canvas25d/labs/pay-attention-set.js';
@@ -83,17 +85,23 @@ describe('PAY ATTENTION: pixel discipline', () => {
     }
   });
 
-  test('the graphics zone (y 150-216) in the wide: black and ink, but for the stage\'s one light line (its white nosing and its fall, three rows)', () => {
+  test('the graphics zone (y 150-216) in the wide: black and ink, but for the stage\'s one light line (its white diodes and the slate under them), straight across and curving round the host', () => {
     const px = shot({ framing: 'wide', scores: { A: 3, B: 4 }, lamps: { A: true } });
-    const rows = new Map();
+    const cam = lab.cameraFor('wide');
+    const edge = stageEdgeRows(cam);
+    let lit = 0, stray = 0;
     for (let y = 150; y < H; y++) for (let x = 0; x < W; x++) {
       const n = nameOf(px[y * W + x]);
       if (n === 'black' || n === 'ink') continue;
-      rows.set(y, (rows.get(y) || new Set()).add(n));
+      const top = Math.min(edge[x], x > 0 ? edge[x - 1] : edge[x]);
+      if (['fog', 'steel', 'slate'].includes(n) && y >= top && y <= edge[x] + 1) lit++;
+      else stray++;
     }
-    const ys = [...rows.keys()].sort((a, b) => a - b);
-    assert.ok(ys.length <= 2 && (ys.length === 0 || ys.at(-1) - ys[0] <= 2), `light rows ${ys.join(',')}`);
-    for (const [, set] of rows) for (const n of set) assert.ok(['fog', 'steel', 'slate'].includes(n), `the nosing's white light only (${n})`);
+    assert.equal(stray, 0, `${stray} light pixels off the stage's edge`);
+    assert.ok(lit > W, `the edge lit across the frame (${lit} px)`);
+    // a line, not an area: at most two light pixels a column but where the curve steps
+    const centre = edge[192], side = edge[20];
+    assert.ok(centre > side + 4 && centre < 202, `the curve round the host (${side} at the side, ${centre} in front of the podium, over the ticker)`);
   });
 
   test('purple only as fills: on the desks\' fronts and the board\'s frame, each inside its one-pixel fog rim; nowhere else on the set', () => {
@@ -128,19 +136,27 @@ describe('PAY ATTENTION: pixel discipline', () => {
     const pod = deskRect(cam, 'host');
     const kf = pod.kf, P = QUIZ.plate;
     const plate = { x0: Math.round(sxOf(cam, kf, -P.hw)) - 1, x1: Math.round(sxOf(cam, kf, P.hw)) + 1, y0: Math.round(syOf(cam, kf, P.y0)) - 1, y1: Math.round(syOf(cam, kf, P.y1)) + 1 };
+    // the bulbs: warm white (cream) in the marquee and in the players' shapes; a lit player's shape gold
+    const bulbs = [...marqueeBulbs(cam), ...shapeBulbs(cam, 'A'), ...shapeBulbs(cam, 'B')].map((b) => ({ x0: b.x, y0: b.y, x1: b.x + b.n, y1: b.y + b.n }));
     const found = {};
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       if (inBox(x, y, r)) continue; // the board's own content
       const n = nameOf(px[y * W + x]);
       if (NEUTRAL.has(n) || n === 'purple') continue;
       if (['yellow', 'cream', 'orange'].includes(n) && lamps.some((b) => inBox(x, y, b))) continue;
+      if (['cream', 'yellow'].includes(n) && bulbs.some((b) => inBox(x, y, b))) continue;
       if (['red', 'darkRed'].includes(n) && inBox(x, y, plate)) continue;
       found[n] = (found[n] || 0) + 1;
     }
     assert.deepEqual(found, {}, 'no other colour on the set');
+    // gold only where a lamp is lit: with both lamps dark the shapes are warm white
+    const dark = shot({ framing: 'wide', lamps: { A: false, B: false } });
+    let gold = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!inBox(x, y, r) && nameOf(dark[y * W + x]) === 'yellow') gold++;
+    assert.equal(gold, 0, 'no gold on the set with the lamps dark');
   });
 
-  test('the set is symmetric about x = 192 (8x8 block L* within 3), outside what differs by design: the board\'s content, the plate, the lamps, the score windows', () => {
+  test('the set is symmetric about x = 192 (8x8 block L* within 3), outside what differs by design: the board\'s content, the plate, the lamps, the score windows, the players\' shapes', () => {
     setLive(true);
     const px = shot({ framing: 'wide', question: true, at: 0 }, 6);
     const cam = lab.cameraFor('wide');
@@ -152,6 +168,10 @@ describe('PAY ATTENTION: pixel discipline', () => {
     }
     const pod = deskRect(cam, 'host');
     skip.push({ x0: Math.floor(pod.x0), x1: Math.ceil(pod.x1), y0: Math.floor(pod.yTop) + 2, y1: Math.ceil(pod.yTop) + 24 });
+    for (const id of ['A', 'B']) {
+      const bs = shapeBulbs(cam, id);
+      skip.push({ x0: Math.min(...bs.map((b) => b.x)) - 2, x1: Math.max(...bs.map((b) => b.x + b.n)) + 2, y0: Math.min(...bs.map((b) => b.y)) - 2, y1: Math.max(...bs.map((b) => b.y + b.n)) + 2 });
+    }
     const mirrorSkip = skip.map((b) => ({ x0: W - b.x1, x1: W - b.x0, y0: b.y0, y1: b.y1 }));
     const blockL = (bx, by) => {
       let s = 0;
@@ -166,8 +186,44 @@ describe('PAY ATTENTION: pixel discipline', () => {
       n++;
       if (Math.abs(blockL(bx, by) - blockL(W - 8 - bx, by)) > 3) bad++;
     }
-    assert.ok(n > 300, `${n} blocks compared`);
+    assert.ok(n > 250, `${n} blocks compared`);
     assert.equal(bad, 0, `${bad} of ${n} blocks asymmetric`);
+  });
+});
+
+describe('PAY ATTENTION: the room', () => {
+  test('a game-show studio at 1x: the soffit\'s white line, the board on its backing panel between two light strips, a marquee of bulbs in the frame, each player\'s shape in bulbs on the wall, two truss towers carrying the heads, the cove at the wall\'s foot', () => {
+    const px = shot({ framing: 'wide' });
+    const cam = lab.cameraFor('wide');
+    const k = kAt(cam, SET.wallZ);
+    const at = (x, y) => nameOf(px[y * W + x]);
+    // the soffit: a white (fog) row across the top, over the graphics' top row
+    const ys = Math.round(syOf(cam, k, QUIZ.soffit.Y));
+    let fog = 0;
+    for (let x = 0; x < W; x++) if (at(x, ys) === 'fog') fog++;
+    assert.ok(ys < 8 && fog > W * 0.9, `the soffit at y ${ys} (${fog} px)`);
+    // the strips: a fog core down each side of the board, mirrored
+    for (const s of [-1, 1]) {
+      const x = s < 0 ? Math.round(sxOf(cam, k, -QUIZ.strips.X)) : W - 1 - Math.round(sxOf(cam, k, -QUIZ.strips.X));
+      let n = 0;
+      for (let y = 30; y < 140; y++) if (at(x, y) === 'fog') n++;
+      assert.ok(n > 100, `strip ${s} (${n} px)`);
+    }
+    // the bulbs: the marquee's warm white in the purple frame, sixteen in each player's shape
+    const mq = marqueeBulbs(cam);
+    assert.ok(mq.length > 40 && mq.every((b) => at(b.x, b.y) === 'cream'), `the marquee (${mq.length} bulbs)`);
+    for (const id of ['A', 'B']) assert.equal(shapeBulbs(cam, id).filter((b) => at(b.x, b.y) === 'cream').length, QUIZ.shapes.n, `${id}'s shape`);
+    // the towers: their chords from the head's plate down to the wall's foot, behind the desks
+    for (const s of [-1, 1]) {
+      const xa = Math.round(sxOf(cam, k, s * QUIZ.towers.X - QUIZ.towers.hw));
+      const xo = s < 0 ? xa : W - 1 - Math.round(sxOf(cam, k, -QUIZ.towers.X - QUIZ.towers.hw));
+      let n = 0;
+      for (let y = 50; y < 120; y++) if (['steel', 'slate'].includes(at(xo, y))) n++;
+      assert.ok(n > 60, `tower ${s}'s chord (${n} px)`);
+    }
+    // the cove: a white line along the wall's foot, between the desks
+    const yc = Math.round(syOf(cam, k, QUIZ.cove.Y));
+    assert.equal(at(124, yc), 'fog', 'the cove');
   });
 });
 
@@ -217,7 +273,7 @@ describe('PAY ATTENTION: the desks', () => {
     assert.equal(setFromSet, setQuizState, 'the hook is re-exported by studio/set.js');
   });
 
-  test('the podium carries the network\'s red plate; the desks\' tops catch the key in silver, their fronts stand off the black stage', () => {
+  test('the podium carries the network\'s red plate; the desks\' tops catch the key in silver, a pool of light on each top, white edge strips at the cabinets\' corners, a slatted plinth under each', () => {
     const px = shot({ framing: 'wide' });
     const cam = lab.cameraFor('wide');
     const pod = deskRect(cam, 'host');
@@ -228,7 +284,13 @@ describe('PAY ATTENTION: the desks', () => {
       const d = deskRect(cam, id);
       const y = Math.round(d.yTop), x = Math.round((d.x0 + d.x1) / 2) + (id === 'host' ? 30 : 0);
       assert.equal(nameOf(px[y * W + x]), 'silver', `${id}: the top's lit edge`);
-      assert.equal(nameOf(px[(Math.round(d.yFoot) - 10) * W + x]), 'ink', `${id}: the front stands off the stage`);
+      assert.equal(nameOf(px[(y - 1) * W + Math.round((d.x0 + d.x1) / 2)]), 'slate', `${id}: the key's pool on the top`);
+      const yc = Math.round(syOf(cam, d.kf, QUIZ.cabinet));
+      for (const xe of [Math.round(d.x0), Math.round(d.x1) - 1]) assert.equal(nameOf(px[(y + 4) * W + xe]), 'fog', `${id}: the cabinet's lit corner`);
+      // the plinth: black with ink slats, set under the cabinet (in the graphics zone: black and ink only)
+      const row = new Set();
+      for (let xx = Math.ceil(d.x0) + 2; xx < Math.floor(d.x1) - 2; xx++) row.add(nameOf(px[(yc + 8) * W + xx]));
+      assert.deepEqual([...row].sort(), ['black', 'ink'], `${id}: the slatted plinth`);
     }
   });
 });
@@ -372,13 +434,23 @@ describe('PAY ATTENTION: the seats (for the director)', () => {
 });
 
 describe('PAY ATTENTION: the board', () => {
-  test('the board at rest: the programme\'s name and the two players\' marks in fog, no gold and no purple on it; a story\'s picture fills it', () => {
-    const px = shot({ framing: 'wide' });
+  test('the board at rest: the emblem (the two lamps on their plaque, its fog rim) beside the name; every 8 s its lamps test, circle then square, and during a question they stay dark; a story\'s picture fills it', () => {
     const r = wallRect(lab.cameraFor('wide'));
-    const seen = {};
-    for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) { const n = nameOf(px[y * W + x]); seen[n] = (seen[n] || 0) + 1; }
-    assert.ok(seen.fog > 80, `the name and the marks (${seen.fog} fog px)`);
-    for (const n of ['yellow', 'purple', 'cream', 'orange']) assert.ok(!seen[n], `no ${n} on the board`);
+    const census = (px) => {
+      const seen = {};
+      for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) { const n = nameOf(px[y * W + x]); seen[n] = (seen[n] || 0) + 1; }
+      return seen;
+    };
+    resetQuizState();
+    assert.deepEqual([quizIdlePhase(0.2), quizIdlePhase(0.8), quizIdlePhase(4)], [1, 2, 0], 'the lamp test: the circle, the square, then dark');
+    const dark = census(shot({ framing: 'wide' }, 4));
+    assert.ok(dark.white > 60 && dark.silver > 40, `the name, white over silver (${dark.white}, ${dark.silver})`);
+    assert.ok(dark.purple > 100 && dark.fog > 40, `the plaque, purple in its fog rim (${dark.purple}, ${dark.fog})`);
+    for (const n of ['yellow', 'cream', 'orange']) assert.ok(!dark[n], `no ${n} on the board between tests`);
+    const test1 = census(shot({ framing: 'wide' }, 0.2)), test2 = census(shot({ framing: 'wide' }, 0.8));
+    assert.ok(test1.yellow > 10 && test2.yellow > 10, `the lamps light in the test (${test1.yellow}, ${test2.yellow})`);
+    const q = census(shot({ framing: 'wide', question: true, at: 0 }, 0.2));
+    assert.ok(!q.yellow, 'still and dark during a question');
     // the scene's rules: a picture or the board at rest, laid out round the host (solo) whatever the cast
     const img = { full: { width: 4, height: 4, data: new Uint8ClampedArray(64).fill(120) } };
     const scene = (o) => ({ program: { id: 'pay-attention' }, cast: { A: 'penny', B: 'nova' }, storyId: 's1', images: new Map([['s1', img]]), segPlan: { ctx: { seg: { type: 'story', storyId: 's1', ...o } } } });

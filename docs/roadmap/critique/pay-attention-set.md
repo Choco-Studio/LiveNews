@@ -249,3 +249,139 @@ COSMOS, FULL TIME's pitchside). Round 3's 9.8 does not hold against them:
 
 **Round score: 8.6. Reopened.** The rest of round 3's work stands: the seats, the framings, the moving-head hook, the
 rules on purple and gold, and the shapes and lamps.
+
+---
+
+## Round 5 — the studio rebuilt (the reviewer's five points)
+
+What changed, point by point (round 4's numbering). Everything stays inside §6: a dark room, white and gold light only,
+purple only as fills with their fog rims, the moving heads still during a question, the shapes and lamps on the desks.
+
+1. **The back wall in layers** (`quiz.js` `quizRoom`), back to front:
+   - a white soffit along the top of the wall (y 3 in the wide, over the graphics' top row), its light falling in two
+     steps;
+   - a white cove along the wall's foot;
+   - two truss towers at the wall's sides (a box truss, the outer chord catching the light), each carrying its moving
+     head on a top plate: the rig;
+   - each player's shape in sixteen warm-white bulbs above their desk, on an ink fixture: A's ring, B's square;
+   - an ink backing panel behind the host, the board's frame on it, and two white light strips framing it, each a fog
+     core with a steel and slate glow and a wide ink halo;
+   - the board's frame, purple with its fog rim, with a marquee of warm-white bulbs set into it.
+2. **The floor**: the stage's front edge is now a ring of light round the host: a white LED nosing straight across in
+   front of the desks, curving forward round the podium in a half circle (y 193 at the sides, 201 in front of the
+   podium, over the ticker). On the gloss: flat ink reflections of the cove, the strips' feet and each desk's foot.
+3. **The desks**: each is a cabinet (a silver top edge, white edge strips at both corners, the purple band holding the
+   shape lamp and the score, or the network's plate), its overhang's black shadow, and a plinth set back under it,
+   black with ink slats. A pool of the key's light on each desk's top, under the hands.
+4. **The board's idle is a designed graphic**: the emblem (the two players' lamps, circle and square, on a purple plaque
+   with its fog rim, the open's lamps) beside the name, white over silver, as the open's board shows it. Every 8 s the
+   emblem tests its lamps: the circle lit gold for a beat, then the square. The test runs on the moving heads' clock, so
+   it stands still with them, and during a question both lamps are dark (`quizIdlePhase`).
+5. **Light design**: the pools behind the players stay (the light from above on the heads' backs). The towers' heads and
+   beams now sweep outward, clear of the towers. A lit lamp lights its player's shape on the wall in gold too, so the
+   lock-in reads across the studio.
+
+The API is unchanged for step 4: `QUIZ_SEATS`, `quizCamera`, `setQuizState`, `quizState` and the sting names. The live
+layer is now `drawQuizLive`, which the open drives with its own state; `LIVE_DRAW['pay-attention']` still calls it with
+the director's.
+
+Faults found while building it, fixed before the panel looked (not scored):
+
+1. The beams lay over the towers, because the old sweep ran straight down the heads' new mounts. The sweep moved
+   outward (centre −30°, ±12°).
+2. The light strips read as grey poles (a fog line with a narrow glow). They now have a wider glow and an ink halo.
+3. A ghost "88" in the score windows read as part of the score ("87"). It was removed: a quiz producer never risks a
+   misread score.
+4. The players' shapes peeked into the players' singles as a row of bulbs beside the clock's plate. They are smaller
+   and higher now, wholly above those frames.
+5. The shapes' top bulbs and the strips' tops stood within 4 px of the graphics' top row. Both were lowered (the
+   top-row test caught them).
+6. The backing panel's and the towers' lit edges (the key from the left) broke the set's symmetry in 23 blocks. They
+   are mirrored to the pixel now.
+7. The desks' feet's reflections drew brackets (corner streaks under each end). They are now a single ink row.
+8. The board's name ran to the bezel in the wide (2 px of air). It now needs 12 px of air. The name goes in two lines
+   beside the emblem in the wide, and in a column under it in the host's narrow side box.
+
+## Round 6 — the panel from scratch, beside the network's sets
+
+How it was looked at:
+- the quiz's wide side by side with NEWS IN 60, MONEY MINUTE, COSMOS, WORLD NOW (night) and FULL TIME (night) at 1x and
+  3x;
+- every framing at 3–4x, with and without the network's top row (`?onair=1`), and 6x crops of the rig, the desks and
+  the floor;
+- the board's three idle states (circle lit, square lit, both dark during a question);
+- the numbers from node.
+
+At 1x the quiz now holds its own beside the others: a game-show studio read at a glance (the marquee board, the rig
+and its beams, the lit podiums, the players' shapes in bulbs, the ring of light round the host). It stays the network's
+darkest set, as its bible asks.
+
+Still open (the panel, round 6):
+
+1. **The pools are dithered shields**: posterised washes with a Bayer edge, a checker at 4x. They are the network's
+   light language, but the least designed thing on the wall (pixel artist).
+2. **The floor's gloss is nearly invisible**: the graphics zone allows only black, ink and one light line, so the
+   reflections are ink on black. True reflections of the desks' lights would fall below the frame. The ring of light
+   carries the floor (director).
+3. **The beams aim into the frame's dark corners**: they light haze, not a target (director).
+4. **The bulbs are 2 px squares**: bulbs at 1x, squares at 4x (pixel artist).
+5. **Two parallel verticals each side of the board** (the strip and the backing panel's edge), 6 px apart (pixel
+   artist).
+6. **The players' singles show less of the room** than the wide: a pool, a strip and the board, its emblem and name at
+   1x on a large black screen (director).
+7. **Two ambient motions**: the beams' sweep and the board's lamp test. The board is wall content, which may move, but
+   a strict reading of the motion budget allows one set effect (director).
+8. **The cast are stand-ins** until step 6.
+9. **The rule on player B's single** is no longer needed. The programme tag now carries its fog rim (graphics), so over
+   that single's frame band it reads as its own box (checked on air, 6x crop).
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Composition and depth | 9.8 | 2, 6 |
+| Light | 9.8 | 1, 3 |
+| Pixel craft and palette | 9.8 | 1, 4, 5 |
+| Presenters' integration | 9.8 | 6, 8 |
+| Motion discipline | 9.8 | 7 (both stand still during a question) |
+| Game legibility | 9.9 | — (a lock-in lights the lamp and the player's shape on the wall; the scores on lit desks) |
+| Distinctness | 9.9 | — (no other set on the network is a game-show studio; nothing of TECH BYTES or COSMOS) |
+| Performance | 9.8 | 0.68 ms uncached in the wide (three times round 3's), under the network's 1 ms; cached 0.01 ms |
+
+**Round score: 9.8. Passed** (the gate is above 9.7).
+
+What keeps each category from 10, in one line each:
+- **Composition and depth**: an invisible gloss on the floor; the singles show less of the room than the wide.
+- **Light**: the pools' posterised edges; beams that light nothing in particular.
+- **Pixel craft and palette**: square bulbs; the pools' checker; the double verticals beside the board.
+- **Presenters' integration**: the singles' plainer backgrounds; stand-ins.
+- **Motion discipline**: two ambient motions, both still during a question.
+- **Game legibility**: nothing the panel would change.
+- **Distinctness**: nothing the panel would change.
+- **Performance**: the uncached frame now costs three times what it did.
+
+## Evidence (round 6)
+
+Renders (Chromium; regenerate with `public/lab/pay-attention-set.html?still=1&framing=<f>&scores=7,12&lamps=A&t=<t>`,
+`&onair=1` for the top row, `&question=1` for the held heads, `&zoom=4`): the comparison sheet with the network's five
+other sets, the four framings on air, the board's three idle states and the 6x crops are listed in the step's report.
+
+Numbers (node, `labs/pay-attention-set.js`, the stand-in cast, the board at rest):
+
+| | Wide | Host | Player A | Player B |
+|---|---|---|---|---|
+| faces L* (Penny / Nova / Sam) | 63.6 / 56.3 / 65.9 | — / — / 67.1 | 64.1 | 44.0 (Nova's own dark skin ramp) |
+| head zone L* (mean) | 17.1, 17.0 (players), 24.7 (host) | 0 (the board's black) | 15.5 | 15.0 |
+| wall L* (mean) | 11.4 | 8.3 | 8.8 | 8.8 |
+| background uncached / cached, desk (ms) | 0.68 / 0.012, 0.22 | 0.17 / 0.010, 0.04 | 0.25 / 0.014, 0.04 | 0.23 / 0.010, 0.01 |
+
+- 0 bright patches near a head; every face at least 20 L* over its head zone.
+- Palette only.
+  - Purple only inside the fog-rimmed fronts and frame.
+  - Warm white (cream) only in the bulbs.
+  - Gold only in a lit lamp and its player's shape; with the lamps dark there is no gold on the set.
+  - Red only on the network's plate.
+  - The graphics zone is black and ink but for the ring of light (its diodes and the slate under them).
+- Symmetry: 0 asymmetric 8x8 blocks outside what differs by design (the board's content, the plate, the lamps, the
+  score windows, the players' shapes).
+- Top row: nothing but the dark wall within 4 px of the bug's or the clock's box at any point of the sweep.
+- Tests: `test/pay-attention-set.test.js` 20/20 (new: the room's elements, the ring of light, the bulbs, the lamp
+  test); `test/v2-set.test.js` and `test/full-time-set.test.js` pass unchanged.

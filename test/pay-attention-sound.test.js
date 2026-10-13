@@ -20,6 +20,10 @@ import { CUES, hitOf, durationOf } from '../public/js/scenes/opens/cues.js';
 import { P } from '../public/js/palette.js';
 import { u32 } from '../public/js/gfx/index.js';
 import { textPixels } from '../public/js/font.js';
+import { quizCamera } from '../public/js/v2/canvas25d/studio/quiz.js';
+import { kAt, SET } from '../public/js/v2/canvas25d/studio/geometry.js';
+import { wallRect } from '../public/js/v2/canvas25d/studio/set.js';
+import { lstarOf } from '../public/js/v2/canvas25d/studio/color.js';
 
 const NAME = new Map(Object.entries(P).map(([k, v]) => [u32(v), k]));
 function colours(d, y0 = 0, y1 = 216, x0 = 0, x1 = 384) {
@@ -93,41 +97,87 @@ describe('PAY ATTENTION: the open', () => {
     assert.ok(a.yellow > 20 && !b.yellow, 'the circle\'s desk lights first, on the left');
   });
 
-  test('the question board flips to PAY ATTENTION: blank before its turn, edge-on at the half, the two words after, at 2x in the wide', () => {
-    assert.equal(titles.flipAt(Q.flip - 0.01), 0);
-    assert.equal(titles.flipAt(Q.flip + Q.flipLen), 1);
-    const B = titles.QUIZ_BOARD;
-    const inBoard = (d) => colours(d, B.v0 + B.frame, B.v1 - B.frame, B.u0 + B.frame, B.u1 - B.frame);
-    const before = inBoard(titles.payAttentionFrame(Q.flip - 0.1));
-    assert.ok(!before.white && !before.silver, 'blank');
-    const after = inBoard(titles.payAttentionFrame(Q.flip + Q.flipLen + 0.2));
-    const words = textPixels('PAY', 'body').pixels.length + textPixels('ATTENTION', 'body').pixels.length;
-    assert.equal((after.white || 0) + (after.silver || 0), words * 4, 'every pixel of the two words at 2x (white over silver)');
-    // the close: a still framing on the board, twice the wide (a cut, never a zoom)
-    assert.equal(titles.payAttentionFraming(Q.close - 0.01), 0);
-    assert.equal(titles.payAttentionFraming(Q.close + 0.01), 1);
-    assert.deepEqual(titles.FRAMINGS.map((f) => f.k), [1, 2]);
-    // the wide creeps in on the dark stage (5 %, eased, one way), then holds from the room's light to the close
-    let last = 0;
-    for (let bb = 0; bb < Q.both; bb += 0.05) {
-      const k = titles.framingOf(bb).k;
-      assert.ok(k >= last - 1e-12, 'one way');
-      last = k;
+  test('the camera moves through the studio: from high at the back of the room, down through the rig and in, landing on the quiz\'s wide on the room\'s light; then a cut to the board at twice the scale', () => {
+    const wide = quizCamera('wide');
+    // under way from the cut (no dead start), one way, landing exactly on the wide on the downbeat
+    assert.ok(titles.moveAt(1) > 0.25, `moving from the start (${titles.moveAt(1).toFixed(2)} by beat 1)`);
+    let last = -1;
+    for (let bb = 0; bb <= Q.both; bb += 0.05) {
+      const u = titles.moveAt(bb);
+      assert.ok(u >= last - 1e-12, 'one way');
+      last = u;
     }
-    assert.ok(Math.abs(titles.framingOf(Q.both).k - 1.05) < 1e-9 && Math.abs(titles.framingOf(Q.close - 0.01).k - 1.05) < 1e-9, 'held');
-    assert.equal(titles.framingOf(Q.close + 0.5).k, 2, 'the close: still');
-    const close = titles.payAttentionFrame(Q.close + 0.5);
-    const c = colours(close);
-    assert.equal((c.white || 0) + (c.silver || 0), words * 16, 'the words at 4x in the close');
+    assert.deepEqual(titles.cameraAt(Q.both), wide, 'the wide on the downbeat');
+    assert.deepEqual(titles.cameraAt(Q.close - 0.01), wide, 'held to the close');
+    const c0 = { ...titles.cameraAt(0) };
+    assert.ok(c0.y < wide.y - 150 && c0.z < wide.z - 300, `from high (${c0.y}) at the back (${c0.z})`);
+    // a cut to the board: twice the wide's scale on the wall, still for two beats
+    const close = titles.cameraAt(Q.close + 0.01);
+    assert.ok(Math.abs(kAt(close, SET.wallZ) / kAt(wide, SET.wallZ) - 2) < 1e-9, 'twice the wide');
+    assert.equal(titles.cameraAt(Q.close + 1.9), close, 'still');
   });
 
-  test('purple only as fills with their fog rims (the board\'s frame, the desks\' fronts), gold only in the lamps; nothing of TECH BYTES or COSMOS', () => {
+  test('the board\'s letters flip in one by one, left to right, to PAY ATTENTION under the emblem: blank tiles before, every pixel of the name after (1x in the wide, 2x in the close)', () => {
+    const L = titles.QUIZ_LETTERS;
+    for (let i = 1; i < L.length; i++) assert.ok(titles.flipStart(i) > titles.flipStart(i - 1), 'left to right');
+    assert.ok(titles.flipStart(0) >= Q.flip && titles.flipStart(L.length - 1) + 0.24 <= Q.flip + Q.flipLen + 1e-9, 'inside the flip\'s beat');
+    const r = (b) => wallRect(titles.cameraAt(b));
+    const inBoard = (b) => {
+      const w = r(b);
+      return colours(titles.payAttentionFrame(b), w.y0, w.y1, w.x0, w.x1);
+    };
+    const dark = inBoard(Q.both - 0.1);
+    assert.ok(!dark.white && !dark.silver && !dark.yellow, 'nothing on the board before the light');
+    const tiles = inBoard(Q.flip - 0.05);
+    assert.ok(tiles.ink > 100 && !tiles.white, `the blank tiles (${tiles.ink} ink px)`);
+    assert.ok(tiles.yellow > 10 && tiles.purple > 20, 'the emblem over them: the two lamps on their plaque');
+    const name = textPixels('PAY ATTENTION', 'body').pixels.length;
+    const after = inBoard(Q.flip + Q.flipLen + 0.1);
+    assert.equal((after.white || 0) + (after.silver || 0), name, 'every pixel of the name at 1x (white over silver)');
+    const close = inBoard(Q.close + 0.5);
+    assert.equal((close.white || 0) + (close.silver || 0), name * 4, 'at 2x in the close');
+    // a tile mid-turn is squashed (edge-on at its half turn)
+    const mid = (titles.flipStart(5) + 0.12);
+    assert.ok(titles.tileAt(5, mid) > 0.4 && titles.tileAt(5, mid) < 0.6);
+  });
+
+  test('the studio lights up in steps: dark, lifted on each lamp\'s strike, full on the downbeat; the moving heads fire inward and sweep out, stopping dead on the next beat', () => {
+    assert.equal(titles.darkAt(0.5), 3);
+    for (const b of Q.lamps) {
+      assert.equal(titles.darkAt(b + 0.05), 1, `lifted on the strike at ${b}`);
+      assert.equal(titles.darkAt(b + 0.5), 2);
+    }
+    assert.equal(titles.darkAt(Q.both), 0);
+    assert.equal(titles.beamAt(Q.both - 0.01), null, 'no beams in the dark');
+    assert.ok(titles.beamAt(Q.both) > 0, 'fired inward');
+    assert.ok(Math.abs(titles.beamAt(Q.both + 1) - titles.BEAM_REST) < 1e-9 && Math.abs(titles.beamAt(Q.both + 1.7) - titles.BEAM_REST) < 1e-9, 'at rest from the next beat');
+    // the frame's mean light rises with the steps
+    const mean = (b) => {
+      const d = titles.payAttentionFrame(b);
+      let s = 0;
+      for (const c of d) s += lstarOf(c);
+      return s / d.length;
+    };
+    const m0 = mean(1), m1 = mean(Q.lamps[0] + 0.05), m2 = mean(Q.lamps[0] + 0.5), m3 = mean(Q.both + 0.5);
+    assert.ok(m2 < m1 && m0 < m3 && m1 < m3, `dark ${m0.toFixed(1)}, strike ${m1.toFixed(1)}, lamps ${m2.toFixed(1)}, light ${m3.toFixed(1)}`);
+    // in the dark the heads are the room's light: both search it, then each strike's head swings onto its desk in the
+    // last third of a beat and stops dead on the strike (a follow spot on the player who buzzed), the other dark
+    assert.deepEqual(titles.beamsAt(1).sides, [true, true], 'searching');
+    assert.deepEqual(titles.beamsAt(Q.lamps[0] + 0.1).sides, [true, false], 'A\'s head on A');
+    assert.deepEqual(titles.beamsAt(Q.lamps[1] + 0.1).sides, [false, true], 'B\'s head on B');
+    const swing = titles.beamsAt(Q.lamps[1] - 0.1);
+    assert.deepEqual(swing.sides, [true, true], 'B\'s head swinging in before its strike');
+    const spot = titles.beamsAt(Q.lamps[1]).angle[1];
+    assert.ok(swing.angle[1] < spot, 'still on its way');
+    assert.equal(titles.beamsAt(Q.lamps[1] + 0.6).angle[1], spot, 'and stopped on the strike');
+  });
+
+  test('palette only: purple only as fills with their fog rims, gold only in the lamps and their players\' shapes, red only on the network\'s plate; nothing of TECH BYTES or COSMOS', () => {
     for (const b of [1, 2.5, 4.5, 6.2, 7, 8.5, 9.5]) {
       const d = titles.payAttentionFrame(b);
       const c = colours(d);
-      for (const n of ['magenta', 'cyan', 'pink', 'blue', 'navy', 'green', 'red', '?']) assert.ok(!c[n], `beat ${b}: ${n}`);
-      // every purple pixel's dark neighbour is across its rim: no purple pixel touches black or ink directly, but for
-      // the score windows and the lamps' housings set into the desks' fronts
+      for (const n of ['magenta', 'cyan', 'pink', 'blue', 'navy', 'green', '?']) assert.ok(!c[n], `beat ${b}: ${n}`);
+      // every purple pixel's light neighbour is its fog rim or a bulb: no purple pixel meets the room's slate or steel
       let bare = 0;
       for (let y = 1; y < 215; y++) for (let x = 1; x < 383; x++) {
         if (d[y * 384 + x] !== u32(P.purple)) continue;
@@ -137,24 +187,15 @@ describe('PAY ATTENTION: the open', () => {
         }
       }
       assert.equal(bare, 0, `beat ${b}: purple against the room without its rim`);
+      // red only on the podium's plate (the network's), in the lower middle of the frame
+      if (c.red) {
+        let out = 0;
+        for (let y = 0; y < 216; y++) for (let x = 0; x < 384; x++) if (NAME.get(d[y * 384 + x]) === 'red' && (x < 120 || x > 264 || y < 100)) out++;
+        assert.equal(out, 0, `beat ${b}: red off the plate`);
+      }
     }
-    // exactly: once lit, the outer ring of the board's frame and of each desk's band is fog, all round (the wide)
-    const d = titles.payAttentionFrame(Q.both + 0.5);
-    const B = titles.QUIZ_BOARD, D = titles.QUIZ_DESKS;
-    const F = { ...titles.framingOf(Q.both + 0.5) }; // the wide on air (its creep included)
-    const box = (u0, v0, u1, v1) => [u0, v0, u1, v1].map((v, i) => Math.round(i % 2 ? 108 + (v - F.cy) * F.k : 192 + (v - F.cx) * F.k));
-    const boxes = [box(B.u0, B.v0, B.u1, B.v1), ...['A', 'B'].map((id) => box(D[id].u0 + 4, D[id].v0 + 3, D[id].u1 - 4, D[id].v0 + 19))];
-    for (const [x0, y0, x1, y1] of boxes) {
-      let bad = 0;
-      for (let x = x0; x < x1; x++) for (const y of [y0, y1 - 1]) if (NAME.get(d[y * 384 + x]) !== 'fog') bad++;
-      for (let y = y0; y < y1; y++) for (const x of [x0, x1 - 1]) if (NAME.get(d[y * 384 + x]) !== 'fog') bad++;
-      assert.equal(bad, 0, `the rim of [${x0},${y0},${x1},${y1}]`);
-      assert.ok(NAME.get(d[(y0 + 1) * 384 + x0 + 1]) === 'purple', 'purple inside it');
-    }
-    // and no purple outside those boxes
-    let stray = 0;
-    for (let y = 0; y < 216; y++) for (let x = 0; x < 384; x++) if (d[y * 384 + x] === u32(P.purple) && !boxes.some(([x0, y0, x1, y1]) => x >= x0 && x < x1 && y >= y0 && y < y1)) stray++;
-    assert.equal(stray, 0);
+    // gold only where a lamp is lit: none in the dark, before the first strike
+    assert.ok(!colours(titles.payAttentionFrame(1.5)).yellow, 'no gold before the first lamp');
   });
 
   test('the two lamps become the emblem: the cut lands it at centre stage at the package\'s size, so the plate wipes out of it with no pop', () => {
