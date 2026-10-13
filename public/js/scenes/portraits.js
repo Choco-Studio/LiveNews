@@ -7,6 +7,7 @@
 // frame with integer rectangles only.
 import { P } from '../palette.js';
 import { zoneTime } from '../util.js';
+import { FULL_TIME_LOOK } from '../full-time-looks.js';
 
 const W = 384;
 const H = 216;
@@ -357,7 +358,87 @@ const CAST = {
     persona: { bob: 0.5, shift: 0.6, sway: 1, look: 0.5, lean: 1 },
   },
 };
-const ALIAS = { A: 'paco', B: 'lola' };
+// FULL TIME (full-time.md §2): Kai Sprite and Rosa Rally, three candidates each for the owner (the v2 cast's designs,
+// v2/canvas25d/cast/full-time.js); `kai` and `rosa` are aliases of the candidate FULL_TIME_LOOK puts on air.
+const KAI_FACE = {
+  native: 1,
+  headTop: 37,
+  face: { hw: 23, crownR: 24, cheekEnd: 42, cheekHW: 22, chinY: 62, chinHW: 10 },
+  eyeY: 36, eyeX: 5, browY: 30, noseY: 49, mouthY: 57, earY: 32, neckHW: 12, collar: 14, nose: 'wide',
+  brow: [P.black, P.black], lash: P.black, iris: [P.brown, P.maroon],
+  persona: { bob: 1.0, shift: 0.8, sway: 0.6, look: 0.8, bounce: 1 },
+};
+const ROSA_FACE = {
+  native: -1,
+  headTop: 38,
+  face: { hw: 21, crownR: 23, cheekEnd: 40, cheekHW: 20, chinY: 62, chinHW: 7 },
+  eyeY: 35, eyeX: 4, browY: 29, noseY: 47, mouthY: 56, earY: 31, neckHW: 9, collar: 10, nose: 'small',
+  brow: [P.black, P.black], lash: P.black, lashes: true, iris: [P.brown, P.maroon],
+  persona: { bob: 0.4, shift: 0.4, sway: 0.3, look: 0.5 },
+};
+const BLACK_HAIR = [P.slate, P.ink, P.black, P.black, P.black, P.black];
+Object.assign(CAST, {
+  // A: clean-shaven head, full black beard trimmed square, navy bomber with an orange rib collar
+  'kai-a': {
+    ...KAI_FACE,
+    skin: [P.cream, P.skin, P.tan, P.tanShade, P.brown, P.maroon],
+    hairRamp: BLACK_HAIR,
+    lips: lips(P.tanShade, P.brown, P.tanShade, P.tan),
+    hair: 'kaiShaved', facial: 'fullBeard', outfit: 'bomber',
+    cloth: [P.steel, P.navy, P.navy, P.ink, P.black, P.black], cuff: P.orange,
+  },
+  // B: a black top knot, faded sides, brown skin, a rust quarter-zip
+  'kai-b': {
+    ...KAI_FACE,
+    skin: [P.skin, P.tan, P.skinShade, P.tanShade, P.brown, P.maroon],
+    hairRamp: BLACK_HAIR,
+    lips: lips(P.brown, P.maroon, P.tanShade, P.tan),
+    hair: 'kaiKnot', outfit: 'track',
+    cloth: [P.orange, P.rust, P.rust, P.brown, P.maroon, P.black], cuff: P.rust,
+  },
+  // C: espresso curtains from a middle part, light skin, a near-black suit with an open collar
+  'kai-c': {
+    ...KAI_FACE,
+    ears: false,
+    skin: [P.cream, P.cream, P.skin, P.skinShade, P.brown, P.maroon],
+    hairRamp: [P.tanShade, P.brown, P.maroon, P.black, P.black, P.black],
+    brow: [P.maroon, P.black], iris: [P.tanShade, P.brown],
+    lips: lips(P.skinShade, P.brown, P.skinShade, P.skin),
+    hair: 'kaiCurtains', outfit: 'sam',
+    cloth: [P.slate, P.ink, P.ink, P.black, P.black, P.black], cuff: P.white,
+  },
+  // A: near-black hair drawn back to a high ponytail, a charcoal track top with an orange stripe down each sleeve
+  'rosa-a': {
+    ...ROSA_FACE,
+    skin: [P.cream, P.cream, P.skin, P.tan, P.tanShade, P.brown],
+    hairRamp: [P.tanShade, P.brown, P.maroon, P.black, P.black, P.black],
+    lips: lips(P.tanShade, P.brown, P.skinShade, P.skin),
+    hair: 'rosaPony', outfit: 'track', earrings: 'hoop',
+    cloth: [P.steel, P.steel, P.slate, P.ink, P.black, P.black], stripe: [P.yellow, P.orange, P.rust], cuff: P.ink,
+  },
+  // B: cornrows straight back, deep brown skin, a cream roll-neck, gold studs
+  'rosa-b': {
+    ...ROSA_FACE,
+    skin: [P.tan, P.tan, P.tanShade, P.brown, P.maroon, P.black],
+    hairRamp: BLACK_HAIR,
+    iris: [P.maroon, P.black],
+    lips: lips(P.maroon, P.black, P.brown, P.tanShade),
+    hair: 'rosaRows', outfit: 'rollneck', earrings: 'studGold',
+    cloth: [P.white, P.white, P.cream, P.fog, P.steel, P.slate], cuff: P.cream,
+  },
+  // C: dark brown curls under a thin orange headband, olive skin, a royal blue track top with white stripes
+  'rosa-c': {
+    ...ROSA_FACE,
+    ears: false,
+    skin: [P.cream, P.skin, P.tan, P.tanShade, P.brown, P.maroon],
+    hairRamp: [P.tan, P.tanShade, P.brown, P.maroon, P.black, P.black],
+    brow: [P.maroon, P.black], iris: [P.tanShade, P.brown],
+    lips: lips(P.tanShade, P.brown, P.skinShade, P.skin),
+    hair: 'rosaCurls', outfit: 'track',
+    cloth: [P.blue, P.blue, P.navy, P.ink, P.black, P.black], stripe: [P.white, P.white, P.silver], cuff: P.navy,
+  },
+});
+const ALIAS = { A: 'paco', B: 'lola', kai: `kai-${(FULL_TIME_LOOK.kai || 'A').toLowerCase()}`, rosa: `rosa-${(FULL_TIME_LOOK.rosa || 'A').toLowerCase()}` };
 
 function faceProfile(f) {
   const rows = [];
@@ -418,6 +499,7 @@ function buildPresenter(id, side, acc) {
     buildFace(K);
     HAIR[D.hair](K);
     if (D.facial === 'beard') buildBeard(K);
+    if (D.facial === 'fullBeard') buildFullBeard(K);
     finishFace(K);
     if (D.glasses) buildGlasses(K, D.glasses);
     buildNeck(K);
@@ -788,7 +870,236 @@ const HAIR = {
     }
     front.pts([[sx(-8), 1], [sx(-7), 1], [sx(-3), 0]], -2, [H]);
   },
+
+  // FULL TIME, Kai A: a clean-shaven head. Only light: the dome's sheen along the key side, a specular inside it.
+  kaiShaved(K) {
+    const { head, sx } = K;
+    for (let x = -17; x < -2; x++) {
+      const y = Math.round(3 + ((x + 10) / 8) ** 2 * 3);
+      head.setTone(sx(x), y, -1, [K.SKIN]);
+      if (x > -15 && x < -5) head.setTone(sx(x), y + 1, -1, [K.SKIN]);
+    }
+    head.pts([[sx(-11), 3], [sx(-10), 3], [sx(-9), 3]], -2, [K.SKIN]);
+  },
+
+  // Kai B: hair drawn back to a small knot on the crown, the sides faded short.
+  kaiKnot(K) {
+    const { front, back, hwAt, sx } = K;
+    const H = K.mat(K.D.hairRamp);
+    for (let y = -1; y <= 32; y++) {
+      const hw = domeHW(K, y, 1, 1);
+      for (let x = -hw; x < hw; x++) {
+        const ax = Math.abs(x + 0.5);
+        const hl = 11 + Math.round((ax / 22) ** 2 * 6);
+        const sides = ax > hwAt(y) - (y < 20 ? 3 : 2) && y < K.D.earY;
+        if (y > hl && !sides) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    back.disc(0, -8, 6, H, 0);
+    lightHair(back, K, [H], 3, -40);
+    lightHair(front, K, [H], 2, 2, back);
+    for (let x = -4; x < 4; x++) back.setTone(x, -2, 2, [H]); // the elastic
+    front.each((x, y) => {
+      if (front.mat(x, y) === H && y > 15 && front.tone(x, y) !== RIM && Math.abs(x + 0.5) > hwAt(y) - 3) front.setTone(x, y, 1); // faded
+    });
+    for (const [a, b, c, d] of [[-12, 11, -4, 0], [-4, 10, -1, 0], [5, 10, 2, 0], [13, 12, 5, 1]]) front.toneLine(sx(a), b, sx(c), d, 1, [H]);
+    for (let x = -16; x < 0; x++) {
+      const y = Math.round(3 + ((x + 7) / 10) ** 2 * 3);
+      if ((x + 40) % 3 !== 2) front.setTone(sx(x), y, -1, [H]);
+    }
+    back.pts([[sx(-3), -12], [sx(-2), -13], [sx(-1), -13], [sx(-4), -11]], -1, [H]);
+  },
+
+  // Kai C: ear-length curtains from a middle part, over the temples and the ears.
+  kaiCurtains(K) {
+    const { front, side, hwAt, sx } = K;
+    const H = K.mat(K.D.hairRamp);
+    const end = K.D.earY + 14;
+    for (let y = -3; y <= end; y++) {
+      const hw = domeHW(K, y, 3, 2) + (y > 22 ? 1 : 0);
+      for (let x = -hw; x < hw; x++) {
+        const ax = Math.abs(x + 0.5);
+        const curtain = 9 + Math.round(Math.pow(Math.min(1, ax / 19), 1.3) * 20);
+        const beside = ax > hwAt(Math.min(y, K.chinBottom)) - 3;
+        if (y > curtain && !beside) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    lightHair(front, K, [H], 3, 2);
+    for (let y = -1; y < 10; y++) front.setTone(side > 0 ? -1 : 0, y, 2, [H]); // the part
+    for (const [a, b, c, d] of [[-3, 2, -14, 18], [-8, 2, -19, 26], [3, 2, 13, 18], [8, 3, 19, 28], [-1, 3, -7, 14], [1, 3, 7, 14]]) front.toneLine(sx(a), b, sx(c), d, 1, [H]);
+    for (let x = -18; x < -3; x++) {
+      const y = Math.round(5 + ((x + 10) / 8) ** 2 * 3);
+      if ((x + 40) % 4 !== 3) front.setTone(sx(x), y, -1, [H]);
+    }
+    front.each((x, y) => {
+      if (front.mat(x, y) === H && y > end - 2 && front.tone(x, y) !== RIM) front.setTone(x, y, 1); // the ends in shade
+    });
+  },
+
+  // Rosa A: sleek hair drawn back (a rounded hairline, no parting) to a high ponytail that hooks over the crown to
+  // the rim side and falls behind the head.
+  rosaPony(K) {
+    const { front, back, side, hwAt, px, sx } = K;
+    const H = K.mat(K.D.hairRamp);
+    for (let y = -3; y <= 30; y++) {
+      const hw = domeHW(K, y, 2, 1);
+      for (let x = -hw; x < hw; x++) {
+        const ax = Math.abs(x + 0.5);
+        const hl = 10 + Math.round((ax / 20) ** 2 * 9);
+        const temple = ax > hwAt(y) - 2 && y < K.D.earY - 2;
+        if (y > hl && !temple) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    front.disc(sx(3), -3, 5, H, 0); // the gathered hair at the tie
+    const tail = [[4, -6, 4], [10, -13, 5], [18, -15, 6], [25, -9, 6], [28, 1, 6], [29, 13, 5], [28, 25, 4], [26, 35, 3], [24, 41, 2]];
+    for (let i = 0; i + 1 < tail.length; i++) {
+      const [x1, y1, r1] = tail[i];
+      const [x2, y2, r2] = tail[i + 1];
+      const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1));
+      for (let k = 0; k <= n; k++) {
+        const u = k / n;
+        back.disc(Math.round(px(x1 + (x2 - x1) * u)) - (side > 0 ? 0 : 1), Math.round(y1 + (y2 - y1) * u), Math.round(r1 + (r2 - r1) * u), H, 0);
+      }
+    }
+    lightHair(back, K, [H], 3, -40);
+    lightHair(front, K, [H], 3, 2, back);
+    // the lift: a band of strokes on the key side converging toward the tie
+    for (let x = -18; x < 4; x++) {
+      const y = Math.round(4 + ((x + 6) / 14) ** 2 * 5);
+      if ((x + 40) % 4 !== 3) front.setTone(sx(x), y, -1, [H]);
+      if (x > -13 && x < -4 && (x + 40) % 4 === 1) front.setTone(sx(x), y + 1, -2, [H]);
+    }
+    for (const s2 of [[-13, 12, -6, 2], [-5, 10, -1, 1], [6, 10, 3, 1], [14, 12, 7, 2]]) front.toneLine(sx(s2[0]), s2[1], sx(s2[2]), s2[3], 1, [H]);
+    for (let i = 0; i < 4; i++) back.toneLine(sx(27), 4 + i * 10, sx(29), 7 + i * 10, 1, [H]);
+  },
+
+  // Rosa B: cornrows straight back over the dome, the scalp between the rows, the braids' crossings as ticks.
+  rosaRows(K) {
+    const { front, side, hwAt } = K;
+    const H = K.mat(K.D.hairRamp);
+    const SC = K.mat([K.D.skin[1], K.D.skin[2], K.D.skin[3], K.D.skin[4], K.D.skin[5], K.D.skin[5]]);
+    const hlAt = (ax) => 11 + Math.round((ax / 20) ** 2 * 9);
+    for (let y = -1; y <= 30; y++) {
+      const hw = domeHW(K, y, 1, 1);
+      for (let x = -hw; x < hw; x++) {
+        const ax = Math.abs(x + 0.5);
+        const temple = ax > hwAt(y) - 2 && y < K.D.earY - 2;
+        if (y > hlAt(ax) && !temple) continue;
+        front.set(x, y, H, 0);
+      }
+    }
+    lightHair(front, K, [H], 3, 2);
+    const vp = -40;
+    for (let k = -6; k <= 6; k++) {
+      const x0 = k * 4 + 2;
+      for (let y = 0; y <= 30; y++) {
+        const x = Math.round((x0 * (y - vp)) / (14 - vp));
+        if (front.mat(x, y) === H && front.tone(x, y) !== RIM && y < hlAt(Math.abs(x + 0.5))) front.set(x, y, SC, side * (x + 0.5) > 0 ? 1 : 0);
+      }
+      for (let y = 1; y <= 28; y += 3) {
+        const xm = Math.round(((x0 + 2) * (y - vp)) / (14 - vp));
+        front.setTone(xm, y, -1, [H]);
+        front.setTone(xm + side, y + 1, 1, [H]);
+      }
+    }
+  },
+
+  // Rosa C: shoulder-length curls held off the face by a thin orange headband over the crown.
+  rosaCurls(K) {
+    const { front, back, side, hwAt, px } = K;
+    const H = K.mat(K.D.hairRamp);
+    const BAND = K.mat([P.white, P.yellow, P.orange, P.rust, P.brown, P.maroon], P.yellow);
+    const cy0 = 24, rx = 31, ry = 36;
+    for (let y = -14; y < 62; y++) {
+      for (let x = -40; x < 40; x++) {
+        const dx = (x + 0.5) / (rx + Math.max(0, y - 30) * 0.12);
+        const dy = (y + 0.5 - cy0) / ry;
+        if (dx * dx + dy * dy <= 1 && y < 60) back.set(x, y, H, 0);
+      }
+    }
+    for (let a = 0; a < 44; a++) {
+      const ang = (a / 44) * Math.PI * 2;
+      const bx = Math.round(Math.cos(ang) * (rx - 1));
+      const by = Math.round(cy0 + Math.sin(ang) * (ry - 2));
+      if (by > 58) continue;
+      back.disc(bx, by, 4 + (a % 3 === 0 ? 1 : 0), H, 0);
+    }
+    const hlAt = (ax) => 12 + Math.round((ax / 20) ** 2 * 8);
+    back.each((x, y) => {
+      if (back.mat(x, y) !== H) return;
+      const ax = Math.abs(x + 0.5);
+      const overSkull = y >= -2 && ax < hwAt(Math.max(0, y)) + 2;
+      if ((y < hlAt(ax) && overSkull) || (y >= 0 && y < K.D.earY + 24 && ax > hwAt(y) - 3 && ax < hwAt(y) + 4)) front.set(x, y, H, 0);
+    });
+    const band = (x) => 3 + Math.round(((x + 0.5) / 22) ** 2 * 7);
+    const curl = (buf, smooth) => {
+      for (let gy = -16; gy < 60; gy += 6) {
+        for (let gx = -40; gx < 40; gx += 6) {
+          const cx = gx + ((gy / 6) % 2 ? 3 : 0) + Math.floor(hash(gx + 5, gy) * 3) - 1;
+          const cy = gy + Math.floor(hash(gy, gx + 5) * 3) - 1;
+          if (buf.mat(cx, cy) !== H || (smooth && smooth(cx, cy))) continue;
+          const l = -side;
+          buf.pts([[cx + l, cy - 1], [cx, cy - 2], [cx - l, cy - 2]], -1, [H]);
+          buf.pts([[cx - l * 2, cy - 1], [cx - l * 2, cy], [cx - l, cy + 1]], 1, [H]);
+        }
+      }
+    };
+    // between the band and the hairline the hair lies back smooth
+    const smooth = (x, y) => y > band(x) + 1 && y < hlAt(Math.abs(x + 0.5)) + 1 && Math.abs(x + 0.5) < hwAt(Math.max(0, y)) - 2;
+    curl(back);
+    curl(front, smooth);
+    lightHair(back, K, [H], 4, 0);
+    lightHair(front, K, [H], 4, 0, back);
+    back.each((x, y) => {
+      if (back.mat(x, y) === H && y > 10 && Math.abs(x + 0.5) < hwAt(Math.min(y, K.chinBottom)) + 4) back.setTone(x, y, 2);
+    });
+    for (let x = -25; x < 25; x++) {
+      const y0 = band(x);
+      if (Math.abs(x + 0.5) > hwAt(Math.max(0, y0)) + 3) continue;
+      for (let k = 0; k < 3; k++) front.set(x, y0 + k - 1, BAND, k === 0 ? -1 : k === 2 ? 1 : 0);
+    }
+    front.each((x, y) => {
+      if (front.mat(x, y) === BAND && !front.mat(x + side, y)) front.setTone(x, y, 1);
+    });
+    front.pts([[px(-8), 2], [px(-7), 2]].map(([x, y]) => [side > 0 ? x : x - 1, y + 1]), -2, [BAND]);
+  },
 };
+
+// FULL TIME, Kai A: a full beard trimmed square, the moustache joined, a flat base under the chin; part of the head
+// layer so it moves with the jaw. Black, lit strands on the key side, the far side and the base in shade.
+function buildFullBeard(K) {
+  const { D, head, side, chinBottom, hwAt } = K;
+  const B = K.mat([P.steel, P.slate, P.ink, P.black, P.black, P.black]);
+  const y0 = D.eyeY + 2, y1 = D.mouthY - 3;
+  for (let y = D.earY - 1; y <= chinBottom + 4; y++) {
+    const hw = hwAt(Math.min(y, chinBottom));
+    const ext = y > chinBottom ? D.face.chinHW + 6 - Math.max(0, y - chinBottom - 2) * 2 : hw + (y > D.mouthY - 2 ? 1 : 0);
+    for (let x = -ext - 1; x <= ext; x++) {
+      const ax = Math.abs(x + 0.5);
+      if (ax > ext) continue;
+      const edge = hw - ax;
+      const reach = y < y0 ? 3 : 3 + (11 - 3) * Math.min(1, (y - y0) / Math.max(1, y1 - y0));
+      const cheek = edge < reach;
+      const stache = y >= D.mouthY - 4 && y < D.mouthY && ax < 10;
+      const chin = y >= D.mouthY + 3;
+      const lipsHere = y >= D.mouthY - 1 && y <= D.mouthY + 2 && ax < 7.5;
+      if (!(cheek || stache || chin) || lipsHere) continue;
+      if (y <= chinBottom && !head.mat(x, y) && !(y > D.mouthY - 2 && edge > -1.5)) continue;
+      head.set(x, y, B, 0);
+    }
+  }
+  head.each((x, y) => {
+    if (head.mat(x, y) !== B) return;
+    const k = side * (x + 0.5);
+    if (y > chinBottom + 2 || k > 9) head.setTone(x, y, 1);
+    if (head.edge(x, y, side, 0)) head.setTone(x, y, RIM);
+    else if (k < -3 && (x * 3 + y * 7) % 5 === 0 && head.mat(x, y - 1) === B) head.setTone(x, y, -1);
+    if (head.mat(x, y - 1) === K.SKIN) head.setTone(x, y - 1, 1, [K.SKIN]);
+  });
+}
 
 // Neat beard (Sam), part of the head layer so it moves with the jaw.
 function buildBeard(K) {
@@ -1155,7 +1466,90 @@ const OUTFITS = {
     }
     for (const y of [C + 24, C + 38]) body.set(sx(-1), y, SH, 2);
   },
+
+  // FULL TIME, Kai A: a navy bomber with an orange rib collar round the neck, zipped half open over a white tee.
+  bomber(K) {
+    const { body, C, side, sx, lineX, D } = K;
+    const TEE = K.mat([P.white, P.white, P.white, P.silver, P.fog, P.steel]);
+    const RIB = K.mat([P.yellow, P.yellow, P.orange, P.rust, P.brown, P.maroon], P.yellow);
+    const ZIP = K.mat([P.white, P.white, P.silver, P.fog, P.steel, P.slate]);
+    body.poly(shoulders(K, 72, 2), K.CLOTH);
+    zipFront(K, TEE, ZIP, 10, 40);
+    // the rib collar: a band round the neck, its ends at the V's top
+    const nw = D.neckHW;
+    for (let y = C - 18; y < C + 2; y++) {
+      for (let x = -nw - 10; x < nw + 10; x++) {
+        const ax = Math.abs(x + 0.5);
+        const ox = ax / (nw + 9), oy = (y + 0.5 - (C - 9)) / 11;
+        const ix = ax / (nw + 1), iy = (y + 0.5 - (C - 12)) / 9;
+        if (ox * ox + oy * oy > 1 || ix * ix + iy * iy <= 1) continue;
+        if (y > C - 9 && ax < 10 - (y - C) * 0.15) continue; // the open zip
+        const lit = side * (x + 0.5) < 0;
+        body.set(x, y, RIB, (x + 40) % 2 === 0 ? (lit ? -1 : 1) : lit ? 0 : 1);
+      }
+    }
+  },
+
+  // Kai B, Rosa A, Rosa C: a zip track top (a funnel collar up the neck) half open over a white tee, a stripe down
+  // each sleeve when the design has one.
+  track(K) {
+    const { body, C, side, D } = K;
+    const TEE = K.mat([P.white, P.white, P.white, P.silver, P.fog, P.steel]);
+    const ZIP = K.mat([P.white, P.white, P.silver, P.fog, P.steel, P.slate]);
+    body.poly(shoulders(K, 70, 2), K.CLOTH);
+    zipFront(K, TEE, ZIP, 8, 36);
+    const nw = D.neckHW;
+    for (const s2 of [-1, 1]) {
+      const lit = s2 !== side;
+      body.poly([[s2 * (nw - 2), C - 20], [s2 * (nw + 4), C - 23], [s2 * (nw + 13), C - 8], [s2 * 9, C - 3], [s2 * (nw - 3), C - 6]], K.CLOTH, lit ? 0 : 1);
+      for (let y = C - 22; y < C - 4; y++) body.setTone(s2 < 0 ? -nw + 2 - (y < C - 12 ? 0 : 1) : nw - 3 + (y < C - 12 ? 0 : 1), y, lit ? 1 : 2, [K.CLOTH]); // the inside
+    }
+    if (D.stripe) {
+      const ST = K.mat([D.stripe[0], D.stripe[0], D.stripe[1], D.stripe[2], D.stripe[2], D.stripe[2]], D.stripe[0]);
+      for (let y = C - 4; y < C + 110; y++) {
+        for (const s2 of [-1, 1]) {
+          let xo = s2 * 80;
+          while (Math.abs(xo) > 0 && body.mat(xo, y) !== K.CLOTH) xo -= s2;
+          if (!xo) continue;
+          for (let k = 4; k < 7; k++) body.set(xo - s2 * k, y, ST, s2 === side ? 1 : 0);
+        }
+      }
+    }
+  },
+
+  // Rosa B: a cream roll-neck knit, no jacket: the roll up the neck, fine ribs.
+  rollneck(K) {
+    const { body, C, side, sx, D, chinBottom } = K;
+    body.poly(shoulders(K, 66, 1), K.CLOTH);
+    for (let y = chinBottom + 4; y < C + 3; y++) {
+      const hw = D.neckHW + 3 + (y > C - 6 ? 2 : 0);
+      for (let x = -hw; x < hw; x++) body.set(x, y, K.CLOTH, y === C - 6 ? 2 : (x + 40) % 3 === 0 ? 1 : 0);
+    }
+    for (let y = chinBottom + 4; y < C + 3; y++) {
+      body.setTone(sx(D.neckHW + 2), y, 1);
+      body.setTone(sx(D.neckHW + 1), y, 1);
+    }
+    for (let y = C + 6; y < C + 80; y++) for (let x = -30; x < 0; x += 4) body.setTone(sx(x), y, (y + x) % 7 < 4 ? 1 : 0, [K.CLOTH]);
+  },
 };
+
+// The V of a half-open zip front over a white tee: the tee and its crew neck, the fronts with the zip's teeth down
+// each edge of the V, the closed zip below it. `top` the V's half-width at the collar, `depth` how far it opens.
+function zipFront(K, TEE, ZIP, top, depth) {
+  const { body, C, side, sx, lineX } = K;
+  body.poly([[-top, C - 6], [top, C - 6], [2, C + depth], [-2, C + depth]], TEE);
+  for (let x = -top - 1; x < top + 1; x++) {
+    const y = C - 1 + Math.round(((x + 0.5) / (top + 1)) ** 2 * -3);
+    body.set(x, y, TEE, side * (x + 0.5) > 3 ? 2 : 1);
+  }
+  for (let y = C - 8; y < C + depth + 2; y++) for (let x = 2; x < top + 2; x++) body.setTone(sx(x), y, x > 5 ? 2 : 1, [TEE]);
+  for (const s2 of [-1, 1]) {
+    const lit = s2 !== side;
+    body.poly([[s2 * top, C - 8], [s2 * 26, C - 6], [s2 * 26, C + 72], [s2 * 1, C + 72], [s2 * 2, C + depth]], K.CLOTH, lit ? 0 : 1);
+    for (let y = C - 2; y < C + depth; y += 2) body.set(lineX(s2, Math.round(top - ((y - C + 2) / (depth + 2)) * (top - 2))), y, ZIP, lit ? 0 : 1);
+  }
+  for (let y = C + depth; y < C + 72; y++) body.set(sx(0), y, ZIP, y % 2 ? 1 : 2);
+}
 
 // Torso lighting shared by every outfit: far-side band, lit shoulder tops,
 // creases at the armpits, sleeve seams and the rim light.
@@ -2212,8 +2606,8 @@ function blitHead(ctx, layer, x, y, tilt, seam, jawSeam = Infinity, jaw = 0) {
 
 /**
  * Draw the whole 384x216 close-up frame for presenter `id`
- * ('paco' | 'lola' | 'max' | 'ada' | 'nova' | 'unit8' | 'penny' | 'sam', with
- * 'A' = paco and 'B' = lola as aliases).
+ * ('paco' | 'lola' | 'max' | 'ada' | 'nova' | 'unit8' | 'penny' | 'sam' | 'kai' | 'rosa', with
+ * 'A' = paco and 'B' = lola as aliases; kai and rosa alias the FULL TIME candidate on air, 'kai-a' … 'rosa-c').
  * state: { t, speaking, emotion, mouth (0..2), blink, look (-1..1), bob, gesture, action }
  */
 export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null } = {}) {
@@ -2379,6 +2773,16 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
       rect(ctx, dx - 1, ey + 4, 3, 1, P.orange);
       rect(ctx, dx, ey + 5, 1, 1, P.orange);
       rect(ctx, dx - (rim > 0 ? 1 : -1), ey + 2, 1, 1, P.white);
+    }
+  } else if (D.earrings === 'hoop') {
+    // small gold hoops hanging from the lobes (FULL TIME's Rosa A)
+    for (const s2 of [-1, 1]) {
+      const ex = s2 < 0 ? hx - D.face.cheekHW - 2 : hx + D.face.cheekHW;
+      const ey = hy + D.earY + 13;
+      rect(ctx, ex, ey, 2, 1, P.yellow);
+      rect(ctx, ex - 1, ey + 1, 1, 2, P.yellow);
+      rect(ctx, ex + 2, ey + 1, 1, 2, P.orange);
+      rect(ctx, ex, ey + 3, 2, 1, P.orange);
     }
   } else if (D.earrings) {
     const [c0, c1] = D.earrings === 'silver' ? [P.silver, P.white] : [P.yellow, P.white];

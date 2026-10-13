@@ -9,6 +9,7 @@
 // out falls back to a sensible default, so new presenters need few fields.
 // `robot: true` switches to UNIT-8's mechanical renderer.
 import { P } from './palette.js';
+import { FULL_TIME_LOOK } from './full-time-looks.js';
 
 const PACO = {
   name: 'PACO PÍXEL',
@@ -215,6 +216,50 @@ const SAM = {
   quirk: 'sip',
 };
 
+// FULL TIME (docs/programmes/full-time.md §2): Kai Sprite and Rosa Rally, three candidates each for the owner (the
+// v2 cast's designs, v2/canvas25d/cast/full-time.js, in this renderer's terms); FULL_TIME_LOOK picks the one on air.
+const KAI_BASE = {
+  name: 'KAI SPRITE',
+  skin: P.tan,
+  skinShade: P.tanShade,
+  brow: P.black,
+  shirt: P.white,
+  shirtShade: P.silver,
+  prop: 'papers',
+  phase: 1.4,
+  quirk: 'bounce',
+};
+const KAI_OLD = {
+  // A: clean-shaven head, full black beard trimmed square, navy bomber with an orange rib collar and cuffs
+  A: { ...KAI_BASE, style: 'shaved', hair: P.black, hairHi: P.slate, hairShine: P.skin, mustacheColor: P.ink, beard: true, beardStyle: 'full', body: 'bomber', suit: P.navy, suitShade: P.ink, suitHi: P.navy, suitDeep: P.black, cuff: P.orange },
+  // B: a black top knot, clean-shaven, brown skin, a rust quarter-zip over a white tee
+  B: { ...KAI_BASE, style: 'topknot', skin: P.skinShade, skinShade: P.tanShade, hair: P.ink, hairHi: P.slate, hairShade: P.black, body: 'track', suit: P.rust, suitShade: P.brown, suitHi: P.rust, suitDeep: P.maroon, cuff: P.rust },
+  // C: espresso curtains from a middle part, light skin, a near-black suit, an open white collar
+  C: { ...KAI_BASE, style: 'curtains', skin: P.skin, skinShade: P.skinShade, hair: P.maroon, hairHi: P.brown, hairShade: P.black, brow: P.maroon, body: 'open', suit: P.ink, suitShade: P.black, suitHi: P.slate, suitDeep: P.black, shirt: P.white, shirtShade: P.silver, pocket: P.white, pocketShade: P.silver },
+};
+const ROSA_BASE = {
+  name: 'ROSA RALLY',
+  skin: P.skin,
+  skinShade: P.tan,
+  brow: P.black,
+  shirt: P.white,
+  shirtShade: P.silver,
+  lipstick: P.brown,
+  prop: 'pen',
+  phase: 2.6,
+  quirk: 'gaze',
+};
+const ROSA_OLD = {
+  // A: near-black hair drawn back to a high ponytail, a charcoal track top with an orange stripe down each sleeve
+  A: { ...ROSA_BASE, style: 'highpony', hair: P.maroon, hairHi: P.brown, hairShade: P.black, body: 'track', suit: P.slate, suitShade: P.ink, suitHi: P.steel, suitDeep: P.black, cuff: P.ink, stripe: P.orange, earrings: P.yellow, earringStyle: 'hoop' },
+  // B: cornrows straight back, deep brown skin, a cream roll-neck, gold studs
+  B: { ...ROSA_BASE, style: 'cornrows', skin: P.tanShade, skinShade: P.brown, hair: P.ink, hairHi: P.slate, hairShade: P.black, lipstick: P.maroon, body: 'rollneck', suit: P.cream, suitShade: P.fog, suitHi: P.white, suitDeep: P.steel, shirt: P.cream, shirtShade: P.fog, cuff: P.cream, earrings: P.yellow, earringStyle: 'stud' },
+  // C: dark brown curls under a thin orange headband, olive skin, a royal blue track top with white stripes
+  C: { ...ROSA_BASE, style: 'curlband', skin: P.tan, skinShade: P.tanShade, hair: P.brown, hairHi: P.tanShade, hairShade: P.maroon, accent: P.orange, body: 'track', suit: P.blue, suitShade: P.navy, suitHi: P.blue, suitDeep: P.ink, cuff: P.navy, stripe: P.white },
+};
+/** The FULL TIME candidates in this renderer (labs): { kai: { A, B, C }, rosa: { A, B, C } }. */
+export const FULL_TIME_OLD = { kai: KAI_OLD, rosa: ROSA_OLD };
+
 // 'A' and 'B' are kept as aliases of the original pair.
 export const LOOKS = {
   A: PACO,
@@ -227,6 +272,8 @@ export const LOOKS = {
   unit8: UNIT8,
   penny: PENNY,
   sam: SAM,
+  kai: KAI_OLD[FULL_TIME_LOOK.kai] || KAI_OLD.A,
+  rosa: ROSA_OLD[FULL_TIME_LOOK.rosa] || ROSA_OLD.A,
 };
 
 // ---------------------------------------------------------------------------
@@ -372,6 +419,7 @@ function palette(L) {
     q: P.fog,
     v: P.steel,
     I: P.ink,
+    t: L.stripe || L.suit || P.navy,
   };
   PALS.set(L, p);
   return p;
@@ -650,6 +698,153 @@ const HAIR_BUN = spr(
   -4,
 );
 
+// --- FULL TIME (full-time.md §2) ----------------------------------------------
+
+// a clean-shaven head: only the dome's sheen (J), the skull is the head sprite
+const HAIR_SHAVED = spr(['', '......JJ', '.....J'], -10, 0);
+// a full beard trimmed square, the moustache joined, a flat base under the chin
+const BEARD_FULL = spr(
+  [
+    '..Z..............Z..',
+    '..ZZ............ZZ..',
+    '..ZZZ..........ZZZ..',
+    '..ZZZZ........ZZZZ..',
+    '..ZZZZZZZZZZZZZZZZ..',
+    '..ZZZZ........ZZZZ..',
+    '..ZZZZZ......ZZZZZ..',
+    '..ZZZZZZZZZZZZZZZZ..',
+    '...ZZZZZZZZZZZZZZ...',
+    '...ZZZZZZZZZZZZZZ...',
+    '....zZZZZZZZZZZZ....',
+  ],
+  -10,
+  8,
+);
+// hair drawn back to a small knot on the crown, the sides faded short
+const HAIR_KNOT = spr(
+  [
+    '........HHhH........',
+    '.......HhHHHj.......',
+    '........jjjj........',
+    '.....HhhHHHHHH......',
+    '...HhhHHHHHHHHHj....',
+    '..HhHHHHHHHHHHHHj...',
+    '..HhHHHHHHHHHHHHHj..',
+    '..jH............Hj..',
+    '..j..............j..',
+  ],
+  -10,
+  -5,
+);
+// ear-length curtains from a middle part
+const HAIR_CURTAINS = spr(
+  [
+    '.......HHHHHH.......',
+    '.....HhhhHjHHHH.....',
+    '....HhhHHHjHHHHHj...',
+    '...HhHHHHjjHHHHHHj..',
+    '..HhHHHHH..HHHHHHj..',
+    '..HhHHHH....HHHHHj..',
+    '..HhHH........HHHj..',
+    '.HhHH..........HHjj.',
+    '.HHj............jHj.',
+    '.HHj............jHj.',
+    '.jHj............jHj.',
+    '..j..............j..',
+  ],
+  -10,
+  -3,
+);
+// sleek hair drawn back (no parting, a clean rounded hairline) ...
+const HAIR_SLEEK = spr(
+  [
+    '.......HHhHH........',
+    '.....HhhhHHHHj......',
+    '....HhhHHHHHHHj.....',
+    '...HhHHHHHHHHHHj....',
+    '..HhHHHHHHHHHHHHj...',
+    '..hHHH......HHHHj...',
+    '..hH..........HHj...',
+    '..H............Hj...',
+    '..H.............j...',
+  ],
+  -10,
+  -4,
+);
+// ... to a high ponytail that hooks over the crown and falls behind the head on the right (behind the head)
+const TAIL_HOOK = spr(
+  [
+    '..............HHh.....',
+    '............HHHHhj....',
+    '.............jHHHhj...',
+    '...............jHHh...',
+    '................jHHh..',
+    '................jHHh..',
+    '................jHHh..',
+    '.................jHh..',
+    '.................jHh..',
+    '.................jHh..',
+    '................jHh...',
+    '................jh....',
+  ],
+  -10,
+  -5,
+);
+// cornrows straight back over the dome
+const HAIR_ROWS = spr(
+  [
+    '......jHHjHHjH......',
+    '....HjHHjHHjHHjH....',
+    '...HHjHHjHHjHHjHj...',
+    '..HHjHHjHHjHHjHHjH..',
+    '..HH............Hj..',
+    '..H..............j..',
+  ],
+  -10,
+  -1,
+);
+// curls held back by a thin headband (P): smooth from the hairline to the band, curls behind it and down the sides
+const HAIR_CURLBAND = spr(
+  [
+    '...HHH.HHHH.HHH.....',
+    '..HhHHHhHHHHhHHHH...',
+    '.HhHHHHHHHHHHHHHHH..',
+    '.HPPPPPPPPPPPPPPPPj.',
+    'HhHHHHHHHHHHHHHHHjH.',
+    'HhHHjHHHHHHHHHHjHHH.',
+    'HHhj............jHHH',
+    'HhHj............jHhH',
+    '.HHj............jHH.',
+    'HhHj............jHhH',
+    'HHHj............jHHH',
+    '.HHj............jHH.',
+    'HhHHj..........jHhHH',
+    '.HHHH..........HHHj.',
+    '..jjj..........jjj..',
+  ],
+  -10,
+  -5,
+);
+const BACK_CURLS = sym(
+  [
+    '..jjjjjjjjj',
+    '.jjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    'jjjjjjjjjjj',
+    '.jjjjjjjjjj',
+    '..jjjjjjjjj',
+    '...jjjjjjjj',
+  ],
+  -2,
+);
+
 const STYLES = {
   short: { face: 'wide', hair: HAIR_SHORT },
   spiky: { face: 'wide', hair: HAIR_SPIKY },
@@ -658,6 +853,12 @@ const STYLES = {
   curly: { face: 'narrow', hair: HAIR_CURLY, back: BACK_CURLY, earring: [-8, 12] },
   ponytail: { face: 'narrow', hair: HAIR_PONY, back: TAIL_TOP, sway: TAIL_LOW },
   bun: { face: 'narrow', hair: HAIR_BUN, ears: true },
+  shaved: { face: 'wide', hair: HAIR_SHAVED },
+  topknot: { face: 'wide', hair: HAIR_KNOT },
+  curtains: { face: 'wide', hair: HAIR_CURTAINS },
+  highpony: { face: 'narrow', hair: HAIR_SLEEK, back: TAIL_HOOK, ears: true, earring: [-8, 11] },
+  cornrows: { face: 'narrow', hair: HAIR_ROWS, ears: true, earring: [-8, 10] },
+  curlband: { face: 'narrow', hair: HAIR_CURLBAND, back: BACK_CURLS },
 };
 
 // --- glasses ---------------------------------------------------------------
@@ -900,6 +1101,64 @@ const FLIGHT = sym([
   ...FILL('...UUUUuUUUUUUUUDOOO', 17),
 ]);
 
+// FULL TIME: a bomber with an orange rib collar (4) round the neck, half open over a white crew tee
+const BOMBER = sym([
+  '............V4444...',
+  '..........VVU4444OOO',
+  '........VVUUUU444OOO',
+  '......VUUUUUUUUU4OOO',
+  '.....VUUUUUUUUUUDOOO',
+  '....VUUUUUUUUUUUUDOO',
+  '....UUUUUUUUUUUUUDOO',
+  '....UUUuUUUUUUUUUUDO',
+  '....UUUuUUUUUUUUUUDO',
+  '....UUUuUUUUUUUUUUUD',
+  '....UUUuUUUUUUUUUUUD',
+  '....UUUuUUUUUUUUUUUD',
+  '...UUUUuUUUUUUUUUUUD',
+  ...FILL('...UUUUuUUUUUUUUUUUD', 17),
+]);
+// a zip track top: a funnel collar up the neck, half open over a white crew tee
+const TRACK = sym(
+  [
+    '..............VU....',
+    '............VUUUU...',
+    '..........VVUUUUUOOO',
+    '........VVUUUUUUUOOO',
+    '......VUUUUUUUUUUDOO',
+    '.....VUUUUUUUUUUUDOO',
+    '....VUUUUUUUUUUUUUDO',
+    '....UUUUUUUUUUUUUUDO',
+    '....UUUuUUUUUUUUUUUD',
+    '....UUUuUUUUUUUUUUUD',
+    '....UUUuUUUUUUUUUUUD',
+    '...UUUUuUUUUUUUUUUUD',
+    ...FILL('...UUUUuUUUUUUUUUUUD', 18),
+  ],
+  -1,
+);
+// a roll-neck knit, no jacket
+const ROLLNECK = sym(
+  [
+    '................oOOO',
+    '................OOOO',
+    '................oooo',
+    '.............VUUUUUU',
+    '...........VVUUUUUUU',
+    '.........VVUUUUUUUUU',
+    '.......VVUUUUUUUUUUU',
+    '......VUUUUUUUUUUUUU',
+    '.....VUUUUUUUUUUUUUU',
+    '.....UUUUUUUUUUUUUUU',
+    '.....UUUuUUUUUUUUUUU',
+    '.....UUUuUUUUUUUUUUU',
+    '.....UUUuUUUUUUUUUUU',
+    '....UUUUuUUUUUUUUUUU',
+    ...FILL('....UUUUuUUUUUUUUUUU', 18),
+  ],
+  -3,
+);
+
 const LAPEL_MIC = spr(['mn', 'mm'], -8, 5);
 const POCKET_SQUARE = spr(['XX', 'XxX', 'uuuuu'], 7, 6);
 const NECKLACE = spr(['Y....Y', '.Y..Y.', '..YY..', '..yy..'], -3, 1);
@@ -915,6 +1174,9 @@ const BODIES = {
   turtleneck: { sprite: TURTLENECK, extras: [] },
   hoodie: { sprite: HOODIE, extras: [[null, DRAWSTRINGS], ['headphones', HEADPHONES], ['pin', HOODIE_PIN]] },
   flight: { sprite: FLIGHT, extras: [['patch', MISSION_PATCH], ['pin', STAR_PIN]] },
+  bomber: { sprite: BOMBER, extras: [] },
+  track: { sprite: TRACK, extras: [] },
+  rollneck: { sprite: ROLLNECK, extras: [] },
 };
 
 // ---------------------------------------------------------------------------
@@ -926,6 +1188,12 @@ const BODIES = {
 
 const HAND_REST = spr(
   ['.DDD............', 'DUUUDDD.........', 'UUUUUUUDDwSSs...', 'uUUUUUUUUESSSSs.', '.uuuuuuuuwsSsSs.'],
+  -17,
+  -3,
+);
+// a track top's resting forearm: the stripe (t) runs along its outer edge to the cuff
+const HAND_REST_STRIPE = spr(
+  ['.DDD............', 'DtttDDD.........', 'UUUUttttDwSSs...', 'uUUUUUUUUESSSSs.', '.uuuuuuuuwsSsSs.'],
   -17,
   -3,
 );
@@ -1620,7 +1888,7 @@ export function drawAnchor(ctx, x, y, L, state) {
   }
 
   // beard, mouth, mustache
-  if (L.beard) draw(ctx, BEARD, fx, hy, pal);
+  if (L.beard) draw(ctx, L.beardStyle === 'full' ? BEARD_FULL : BEARD, fx, hy, pal);
   draw(ctx, mouthSprite(BROWS[mouthMood] ? mouthMood : 'neutral', mouth, L.mustache), fx, hy + F.mouthY, pal);
   if (L.mustache) {
     const mm = mouthMood === 'happy' ? 'happy' : mouthMood === 'sad' || mouthMood === 'serious' ? 'sad' : 'neutral';
@@ -1636,6 +1904,13 @@ export function drawAnchor(ctx, x, y, L, state) {
     if (L.earringStyle === 'stud') {
       ctx.fillRect(hx + ex, hy + ey, 1, 1);
       ctx.fillRect(hx - 1 - ex, hy + ey, 1, 1);
+    } else if (L.earringStyle === 'hoop') {
+      // a small hoop: gold at the lobe, its shaded lower half below
+      ctx.fillRect(hx + ex, hy + ey, 1, 1);
+      ctx.fillRect(hx - 1 - ex, hy + ey, 1, 1);
+      ctx.fillStyle = P.orange;
+      ctx.fillRect(hx + ex, hy + ey + 1, 1, 1);
+      ctx.fillRect(hx - 1 - ex, hy + ey + 1, 1, 1);
     } else {
       ctx.fillRect(hx + ex, hy + ey, 1, 2);
       ctx.fillRect(hx - 1 - ex, hy + ey, 1, 2);
@@ -1665,7 +1940,7 @@ export function drawHands(ctx, x, deskY, L, gesture = 0) {
   if (pose.prop === 'stack') draw(ctx, prop === 'tablet' ? STACK_TABLET : STACK, x, deskY + pose.propDy, pal);
   else if (pose.prop !== 'hidden') draw(ctx, PROPS[prop], x, deskY, pal);
   if (prop === 'pen' && pose.prop !== 'stack') draw(ctx, PEN, x, deskY + pose.penDy, pal);
-  const rest = robot ? ROBOT_REST : HAND_REST;
+  const rest = robot ? ROBOT_REST : L.stripe ? HAND_REST_STRIPE : HAND_REST;
   for (const s of [-1, 1]) {
     const arm = pose.arms[s];
     if (arm) drawArm(ctx, x, deskY, s, arm, pal, robot);
