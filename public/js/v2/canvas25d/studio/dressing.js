@@ -892,21 +892,22 @@ LIVE_DRAW['seven-days'] = LIVE_DRAW['world-now'];
 // own pieces on the set plane: the hero screen hung from the canopy on two hangers (the centre stays clear for the
 // stand's scoreboard over it), the platform's back edge, the canopy's fascia with its orange cove and the studio lights
 // on its underside.
-// the studio lights under the canopy (wall X, either side of the screen, over the presenters: the graphics' top row
-// keeps the corners), a fresnel each seen from behind: housing, yoke, its barn doors catching the light
-const LAMPS = [-104, -80, 80, 104];
+// the studio lights under the canopy: a fresnel clamped on each of the screen's two drop pipes, inward of the pipe,
+// seen from behind (aimed across at the presenters): housing, yoke, its barn doors catching
+// the light. Over the screen's corners they keep clear of the graphics' top row and of the programme tag beside the bug.
 //   k black, i ink, s slate, t steel, f fog
 const FRESNEL = ['..k..', '.kik.', 'kitsk', 'kitsk', 'kissk', '.kkk.', 'f...f'];
+const HANGERS = [SET.screen.x0 + 8, SET.screen.x1 - 8]; // the screen's drop pipes (wall X)
 function studioLamps(fr, cam, soft) {
   const k = kAt(cam, SET.wallZ);
   const s = Math.max(1, Math.round(k * 1.4));
   const yTop = Math.round(syOf(cam, k, GROUND.canopyY)) + 1;
-  for (const X of LAMPS) {
-    const cx = sxOf(cam, k, X);
-    const x0 = Math.round(cx - 2.5 * s);
-    // the drop pipe from the canopy, then the lamp
+  for (const X of HANGERS) {
+    const hx = Math.round(sxOf(cam, k, X));
+    // inward of its pipe, a short clamp arm between them
+    const x0 = X < 0 ? hx + 3 * s : hx - 3 * s - 5 * s + 1;
     const y0 = yTop + 2 * s;
-    fr.span(Math.round(cx - s / 2), yTop, Math.round(cx - s / 2) + s, y0, C.black);
+    fr.span(X < 0 ? hx + 1 : x0 + 5 * s, y0 + s, X < 0 ? x0 : hx, y0 + 2 * s, C.black);
     for (let j = 0; j < FRESNEL.length; j++) for (let i = 0; i < 5; i++) {
       const ch = FRESNEL[j][i];
       if (ch === '.') continue;
@@ -937,7 +938,7 @@ function fullTime(fr, cam, style, soft) {
   // the hero screen: a slim black mount, hung from the canopy on two hangers clear of the scoreboard
   rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
   if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
-  for (const X of [S.x0 + 8, S.x1 - 8]) rectW(fr, cam, X - 0.7, GROUND.canopyY, X + 0.7, S.y0 - m, C.black);
+  for (const X of HANGERS) rectW(fr, cam, X - 0.7, GROUND.canopyY, X + 0.7, S.y0 - m, C.black);
   // the canopy over the platform: its fascia from column to column, the orange cove under it glowing down (flat rows),
   // the studio lights on its underside
   rectW(fr, cam, -2000, -400, 2000, GROUND.canopyY, C.black);

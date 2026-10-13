@@ -63,7 +63,7 @@ export const GROUND = {
   stripe: 240, // mowing stripe width
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
-  far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, halo: 50, mast: 6.4, far: true },
+  far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, gapx: true, halo: 50, mast: 6.4, far: true },
   // (the near pair close enough that their feet are behind the desk in the wide: never a mast standing on the pitch)
   near: { X: 476, Z: 2800, Y: -122, cols: 5, pitch: 5.6, gapless: false, halo: 34, mast: 8.4 },
 };
@@ -252,11 +252,12 @@ export const TOWER_LIST = TOWERS;
 export function towerHead(cam, t) {
   const k = kOf(cam, t.Z);
   const s = Math.max(1, Math.round(k * t.pitch * (t.gapless ? 1 : 0.5)));
-  const lw = s, gap = t.gapless ? 0 : s;
-  const w = t.cols * lw + (t.cols - 1) * gap + 2 * s, h = 4 * lw + 3 * gap + 2 * s;
+  // (gapx: the far heads' lamp columns apart, the banks' rows touching: a lamp grid at one pixel a lamp)
+  const lw = s, gap = t.gapless ? 0 : s, gx = t.gapx ? s : gap;
+  const w = t.cols * lw + (t.cols - 1) * gx + 2 * s, h = 4 * lw + 3 * gap + 2 * s;
   const cx = 192 + (t.X - cam.x) * k, cy = cam.hy + (t.Y - cam.y) * k;
   const x0 = symX0(cx, w), y0 = Math.round(cy - h / 2);
-  return { x0, y0, w, h, s, lw, gap, cx: x0 + w / 2, cy: y0 + h / 2, R: t.halo * k, k };
+  return { x0, y0, w, h, s, lw, gap, gx, cx: x0 + w / 2, cy: y0 + h / 2, R: t.halo * k, k };
 }
 
 function towerMast(cam, t, hd, P, soft) {
@@ -282,7 +283,7 @@ function towerMast(cam, t, hd, P, soft) {
 }
 
 function towerHeadDraw(t, hd, P, banks, soft) {
-  const { x0, y0, w, h, s, lw, gap } = hd;
+  const { x0, y0, w, h, s, lw, gap, gx } = hd;
   // the housing (its top catching the light), then the lamps: bank j (from the top) lit when j < banks
   fill(x0, y0, x0 + w, y0 + h, P.towerDark);
   if (!soft) fill(x0, y0, x0 + w, y0 + s, P.head);
@@ -290,7 +291,7 @@ function towerHeadDraw(t, hd, P, banks, soft) {
     // (the far heads a step dimmer: distance)
     const c = j < banks ? (soft || t.far ? mute(P.lamp) : P.lamp) : P.lampOff;
     for (let i = 0; i < t.cols; i++) {
-      const lx = x0 + s + i * (lw + gap), ly = y0 + s + j * (lw + gap);
+      const lx = x0 + s + i * (lw + gx), ly = y0 + s + j * (lw + gap);
       fill(lx, ly, lx + lw, ly + lw, c);
     }
   }
@@ -473,8 +474,8 @@ const digitX = (d) => d * 4 + (d >= 2 ? 2 : 0);
 // the pennant's three frames (8x4 at s 1: o its colour, r its shadow edge), slow: 0.9 s each
 const PENNANT = [
   ['oooooooo', 'ooooor..', 'ooor....', 'or......'],
-  ['ooooooo.', 'oooooor.', 'oooor...', 'or......'],
-  ['ooooooo.', 'oooooo..', 'oooor...', 'oor.....'],
+  ['ooooooo.', 'oooooooo', 'ooooor..', 'oor.....'],
+  ['oooooo..', 'ooooooor', 'oooooor.', 'ooor....'],
 ];
 export const PENNANT_FRAMES = PENNANT;
 /** The pennant's frame at time t (0, 1, 2; 0.9 s each). */
