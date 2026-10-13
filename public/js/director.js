@@ -10,7 +10,7 @@ import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard } from './pace.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard, plainFact } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 import { recreationOf } from './graphics/recreation.js';
@@ -1132,7 +1132,7 @@ export class Director {
     if (number) beats.push('fact'); // the number of the day shows its card early (the v2 plans)
     if (seg.location) beats.push('map');
     if (hasImg) beats.push('full');
-    if ((seg.fact || storyBoard(seg, s.program?.id)) && !number) beats.push('fact');
+    if ((plainFact(seg, s.program?.id) || storyBoard(seg, s.program?.id)) && !number) beats.push('fact');
     if (seg.shot === 'full' && hasImg && beats[1] !== 'full') {
       beats.splice(beats.indexOf('full'), 1);
       beats.splice(1, 0, 'full');

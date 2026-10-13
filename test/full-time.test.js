@@ -66,6 +66,9 @@ describe('FULL TIME: the stories made ready', () => {
     assert.equal(why('Viking’s two head coaches on Champions League adventure: ‘For us, it’s the best team in the world’', '“When we recruit players, we say something bold.” The morning’s training session has finished.'), 'interview feature');
     assert.equal(why('The star is Luis Enrique - inside the plans to keep PSG on top', 'As Luis Enrique bids to guide PSG to a third successive Champions League triumph, Guillem Balague looks at how the coach keeps his side at the top.'), 'analysis, list or listing');
     assert.equal(why('Arsenal sweat over Saka fitness', 'Arsenal are monitoring Saka after he limped off.'), null, 'monitoring an injury is not a rumour');
+    assert.equal(why('Christian Pulisic is no longer a focal point for the US or Milan – and that’s OK', 'The winger is 28, and younger teammates are rising into the high-pressure spots he has usually occupied.'), 'column or opinion', 'a headline that ends on its writer\'s verdict');
+    assert.equal(why('Why Arteta keeps faith in a back three', 'Arsenal have used three centre-backs in four games.'), 'column or opinion');
+    assert.equal(why('Coventry beat Newcastle - and stay top', 'Coventry beat Newcastle 4-1.'), null, 'a dash and "and" is not a verdict');
   });
 
   test("sport's own senses are not grave news; a death stays grave", () => {
@@ -125,6 +128,13 @@ describe('FULL TIME: the running order', () => {
     assert.ok(top.filter((s) => s.sport === 'football').length <= 4, 'football at most half');
     assert.ok(new Set(top.map((s) => s.sport)).size >= 3, 'three sports');
     assert.equal(balance(list, { count: 8, ledLately: (id) => id === 'cov' })[0].id !== 'cov', true, 'never the lead of the last three hours');
+  });
+
+  test('any other sport a quarter of the edition at most: three rugby stories of twelve, not four in a row', () => {
+    const rugby = ['Lewis left out of World Cup opener', 'Smith insists England have winner mentality', 'Saracens sack player after fracas', 'Four Super League clubs back NRL deal', 'Wales name squad for Tonga Test'].map((title, i) => prep({ id: `r${i}`, title, sport: 'rugby' }));
+    const others = ['Norris accepts blame for collision', 'Renshaw stars in Durban', 'Suljovic faces darts probe', 'Fury and Joshua title fight confirmed', 'Vela wins Pixelburg Open', 'Bloom backs Hearts', 'Coventry thump Newcastle', 'Quist breaks 400m record'].map((title, i) => prep({ id: `o${i}`, title, sport: ['f1', 'cricket', 'darts', 'boxing', 'tennis', 'football', 'football', 'athletics'][i] }));
+    const out = balance([...rugby, ...others], { count: 12 });
+    assert.equal(out.slice(0, out.edition).filter((s) => s.sport === 'rugby').length, 3);
   });
 });
 

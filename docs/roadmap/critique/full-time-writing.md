@@ -112,6 +112,17 @@ Scores after the fixes (all twenty re-run clean, every edition re-read):
 
 **Round score: 9.0. Not passed.**
 
+## Step 4's changes to the writing (13 Oct, `full-time-director.md`)
+
+- **Length measured**: the editions played through the director ran 308–326 s against 360–480; the edition is now
+  thirteen stories (AROUND THE GROUNDS 4–7) and the real editions run 364–413 s.
+- **News sense**: any sport other than football is at most a quarter of the edition (three rugby stories of thirteen,
+  not four in a row); that was this round's 9.4.
+- **A new fault the longer edition brought in, fixed**: an opinion column whose headline ends on its writer's verdict
+  ("… – and that's OK") aired as news with its mangled "The magnificence: …"; such headlines never air now, and
+  "magnificence", "majesty" and "mastery" are verdict nouns.
+- All fifteen gate editions re-run clean on the automatic checks; the thirteen-story editions re-read.
+
 ## What is still needed to pass
 
 - **Real data from other days**: snapshots on a Saturday evening and a Sunday (matchday) and two more weekdays, the twenty

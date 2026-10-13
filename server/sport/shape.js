@@ -577,6 +577,10 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
 
   episode.segments = [intro, hello, ...order.flat(), outro].filter(Boolean);
   episode.segments = keepPromises(episode.segments);
+  // no maps: a world map under a result says nothing a sport bulletin needs (full-time.md §6: its pictures and its
+  // boards); a story without a picture stands on its board or its presenter, a headline frame on its field
+  for (const seg of episode.segments) delete seg.location;
+  for (const r of episode.rundown || []) delete r.location;
   // where each result and each date is read: the board's row flips in, the calendar's leaf drops, when the voice
   // reaches the sentence that says it (director.js playBoardSegment; char offsets into the final text)
   const sentenceStart = (text, at) => {

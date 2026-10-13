@@ -278,8 +278,10 @@ const PROGRAMMES = {
     holds: { signoff: 1.2, endcard: 3.0 },
     // the boards (full-time.md §5): a story's strongest, never the same type twice in a row: the scoreline, THE MOMENT
     // ON THE BOARD, WHO'S WHO, IN PROPORTION, WHAT HAPPENS NEXT, WHAT WE KNOW; IN THEIR WORDS on a sourced quote. No
-    // BY THE NUMBERS (THE NUMBER is its own segment), no timeline or FROM → TO (the bible's boards are these)
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 8], cutsPerMinMax: 9, scoresMax: 40, quoteCard: true, score: true, chalk: true, fixtures: true, proportion: true, next: true, who: true, known: true },
+    // BY THE NUMBERS (THE NUMBER is its own segment), no timeline or FROM → TO (the bible's boards are these), and no
+    // plain KEY FACT card (factCard false: a story without one of its boards stands on its picture; THE NUMBER keeps
+    // its card)
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 8], cutsPerMinMax: 9, scoresMax: 40, factCard: false, quoteCard: true, score: true, chalk: true, fixtures: true, proportion: true, next: true, who: true, known: true },
     moves: { max: 2, minGap: 60 },
     gestures: { perMin: 5.5, minGap: 5, beatsPerMin: 8, rest: 0.58, grave: 2, floor: 2.5 },
     listener: { reactionGap: 7, nodsPerMin: [1.2, 6] },
@@ -446,6 +448,15 @@ export function timelineBoard(seg, programId) {
   return steps.length >= 2 ? steps : null;
 }
 
+/**
+ * The plain fact card's words (KEY FACT, or BY THE NUMBERS with one figure): seg.fact, unless the programme shows only
+ * its boards (pace shots.factCard false: FULL TIME, full-time.md §5), where only THE NUMBER keeps its card.
+ */
+export function plainFact(seg, programId) {
+  if (!seg?.fact) return null;
+  return paceFor(programId).shots.factCard === false && seg.feature !== 'number' ? null : seg.fact;
+}
+
 const str = (x) => typeof x === 'string' && x.trim() !== '';
 const CHALK_SPORTS = new Set(['football', 'american-football', 'rugby']);
 
@@ -556,7 +567,7 @@ export function factText(seg, programId, last = null) {
   if (board) return board.map((n) => [n.qualifier, n.value, n.label].filter(Boolean).join(' ')).join(' ');
   const b = pickBoard(seg, programId, last);
   if (b) return boardText(b);
-  return seg?.fact || seg?.numbers?.[0]?.value || '';
+  return plainFact(seg, programId) || seg?.numbers?.[0]?.value || '';
 }
 
 /**

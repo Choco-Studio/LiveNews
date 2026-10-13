@@ -171,6 +171,9 @@ export function balance(stories, { count = 10, ledLately = () => false, now = Da
   const fits = (s) => {
     const football = out.filter((x) => x.sport === 'football').length;
     if (s.sport === 'football' && football + 1 > Math.ceil(count / 2)) return false;
+    // any other sport a quarter of the edition at most (three of twelve or thirteen): four rugby league stories in a row on a
+    // World Cup squad day were one story told four times (gate run 3, 13 Oct)
+    if (s.sport && s.sport !== 'football' && out.filter((x) => x.sport === s.sport).length + 1 > Math.max(2, Math.floor(count / 4))) return false;
     return clubsOf(s).every((c) => (clubs.get(c) || 0) < 2);
   };
   const take = (s) => {

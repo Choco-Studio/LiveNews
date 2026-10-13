@@ -92,7 +92,7 @@ const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|mave
 // a verdict on a team or a player by name ("A wasteful Newcastle lost at Coventry despite having 19 shots", Sky Sports 13
 // Oct), read after the verdicts on acts are gone ("A stunning Sven Botman strike" keeps its act); case-sensitive
 const EVAL_NAME = new RegExp(`\\b(?:[Aa]n?|[Tt]he)\\s+(?:${EVAL})\\s+\\p{Lu}`, 'u');
-const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare)\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
+const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare|magnificence|majesty|mastery)\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
 
 /**
  * A sentence without the outlets' praise or blame of a sporting act ("A brilliant goal from Bruno Guimaraes helps

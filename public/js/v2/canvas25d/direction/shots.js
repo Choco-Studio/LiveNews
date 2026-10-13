@@ -52,7 +52,7 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
-import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax } from '../../../pace.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax, plainFact } from '../../../pace.js';
 
 // PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
 // the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
@@ -741,7 +741,7 @@ function worldNow(ctx, tl) {
     single: storySingle(ctx),
     map: !!seg.location,
     picture: ctx.hasImage,
-    fact: seg.fact || seg.numbers?.[0]?.value || storyBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
+    fact: plainFact(seg, ctx.programId) || numbersBoard(seg, ctx.programId) || (paceFor(ctx.programId).shots.factCard !== false && seg.numbers?.[0]?.value) || storyBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
     board: !!(numbersBoard(seg, ctx.programId) || storyBoard(seg, ctx.programId)),
     linked: !!seg.link,
     pictureFirst: seg.shot === 'full' && ctx.hasImage,

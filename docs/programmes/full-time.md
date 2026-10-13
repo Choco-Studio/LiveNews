@@ -79,7 +79,9 @@ sources do not say, and nothing a viewer sees is a guess.
   in the last three hours with nothing new since: then the next.
 - Across the edition (results aside): **football at most half the stories**, **one club in at most two stories** (a club
   is a team within one sport: a scoreline's team, or a name in two headlines of the same sport; England's cricket and
-  football sides are two clubs), **at least three sports** when the desk has them, and **at least one
+  football sides are two clubs), **any other sport at most a quarter of the stories** (three of twelve: four rugby league
+  stories in a row on a World Cup squad day were one story told four times), **at least three sports** when the desk has
+  them, and **at least one
   women's sport story** when the desk has one from the last 24 hours with a picture and two sentences of its own (never a
   one-line brief to fill the rule).
 - An edition airs at least 40 % stories its previous edition did not.
@@ -209,7 +211,7 @@ are different programmes. A shape fixes the order; a segment without material is
 | **Lead** | Kai | 3–5 sentences, with its board: the scoreline card for a match (landing on the bed's crowd swell); otherwise WHO'S WHO, WHAT WE KNOW, IN PROPORTION or WHAT HAPPENS NEXT | 40 s |
 | **THE BREAKDOWN** | Kai asks, Rosa answers | Rosa's answer is context of one kind, 1–3 of the story's own sentences Kai has not read: **the record or the wait** ("first … since", "record", "unbeaten", "in 25 years"), **the table** ("top", "bottom", "relegation zone", "points clear"), **what's next** (a dated step ahead), or **what they said** (an attributed quote). Kai's question fits that kind ("How long has that been coming?", "Where does that leave them?", "What's next for them?", "What are they saying?"). No context of a kind, no BREAKDOWN: the story is simply told. After the lead, and after one more main story on long days | 30 s each |
 | **SCORE CENTRE** | Kai | 3–6 readable results (§3.5) from the last 24 h (on a Monday before 14:00, since Saturday 06:00), shown as **the stadium's scoreboard** filling the frame: the LED board on its gantry over the stand, a floodlight either side, one row flipping in on a tick as each is read. Grouped by sport ("In the Premier League…" only when the source names it, else "In football…", then "Elsewhere…"). Each line is built from the scoreline (§3.5), names and score marked in the voice plan, a short beat before the score. Title: LAST NIGHT'S RESULTS when every result's story says "last night" or was filed 17:00–02:00 the evening before an airing before 14:00; TODAY'S RESULTS when all were filed today; THE WEEKEND'S RESULTS on a Monday before 14:00 with Saturday and Sunday stories; otherwise THE LATEST RESULTS. A row from another day carries the day (SUN) | 35 s |
-| **AROUND THE GROUNDS** | Kai and Rosa in turn | 3–4 more stories, each 2–3 sentences, each led by its sport's tag and transition; a scoreline card when the story has one | 25 s each |
+| **AROUND THE GROUNDS** | Kai and Rosa in turn | 4–7 more stories (the edition is twelve stories: step 4 measured the bible's first budgets, ten stories, at 5.1–5.4 minutes against its own 6–8), each 2–3 sentences, each led by its sport's tag and transition; a scoreline card when the story has one | 25 s each |
 | **THE NUMBER** | Rosa | One figure a story states, with a unit or a label ("25 YEARS", "£10.6M", "39 GAMES UNBEATEN"): the channel's number of the day. Never a score, a record ("1-4"), an age, a shirt number or a date | 15 s |
 | **MOMENT OF THE DAY** | Rosa, then a chat | The lighter story: a record, a catch, a milestone, an auction. Never grave. When the source gives the distance of a goal or a kick ("from 30 yards", "from the spot", "a 45-yard field goal"), **THE MOMENT ON THE BOARD**: a chalk tactics board, top-down, the pitch's lines in chalk, and only what the source states: a dotted chalk line from that distance to the goal, its length written beside it ("30 YARDS"). No players, no direction, no keeper: a diagram of a fact, not a replay. A distance is stated in a few stories a day, so the board is an occasional treat; otherwise the moment stands on its picture | 30 s |
 | **COMING UP** / THE WEEKEND AHEAD | Kai | Two or three dated events ahead on a calendar board (a leaf each). The fixture reader (`server/sport/fixtures.js`) takes "A will face/host/meet/play/fight B on <day>", "who host B on Tuesday", "when they meet on December 11", "the Test starts on…", "in November" (a month leaf), and the WHAT HAPPENS NEXT reader's forms. The event is "WALES v ALBANIA" or "FURY v JOSHUA" when both sides are named in the sentence; the event's own name only when the sentence uses it as a name ("THE ASHES", "THE CHAMPIONS LEAGUE FINAL"), never one the channel composes; nothing when a side is a description ("Norway's champions"). Future dates only | 20 s |
@@ -230,8 +232,11 @@ are different programmes. A shape fixes the order; a segment without material is
   and the presenters themselves, never at a real person.
   A light story about a person (a record jersey sale, a milestone) gets a reaction that celebrates the fact ("Fourteen
   million dollars. For a shirt.") and never the person's character.
-- **Boards rotate**: a story's board is the strongest it has (scoreline, then WHO'S WHO / IN PROPORTION / WHAT HAPPENS NEXT
-  / WHAT WE KNOW), and the director never shows the same board type twice in a row.
+- **Boards rotate**: a story's board is the strongest it has (scoreline, THE MOMENT ON THE BOARD, then WHO'S WHO /
+  IN PROPORTION / WHAT HAPPENS NEXT / WHAT WE KNOW), and the director never shows the same board type twice in a row when
+  the story has another (a story whose only board repeats the last one's type still shows it: a result is worth a
+  repeat, a story without its board is not). No plain KEY FACT card: a story without one of these boards stands on its
+  picture; THE NUMBER keeps its card. No maps: a world map under a result says nothing a sport bulletin needs.
 - **IN THEIR WORDS at the press conference.** A manager's, coach's, captain's or official's quote (38 % of sport items carry
   one) is re-staged by the channel's existing system in the **press-conference room**: the press room re-dressed with a
   backdrop of plain orange-and-slate panels, no sponsor or club logo, the bank of microphones in blank foam covers (no
@@ -316,7 +321,10 @@ are different programmes. A shape fixes the order; a segment without material is
    *Gate: twenty editions written from three days of cached feeds, each read in full; no fault left.*
 3. **Graphics**: scoreline card, stadium scoreboard, COMING UP, THE MOMENT ON THE BOARD, sport icons, the accent. *Gate:
    the lab page at 1x and 4x, a hostile critique above 9.7.*
-4. **Director and pace**: the shapes' shots, SCORE CENTRE as a full-screen sequence, board rotation.
+4. **Director and pace**: the shapes' shots, SCORE CENTRE as a full-screen sequence, board rotation. *Built: FULL TIME's
+   pace profile (`public/js/pace.js`), the board registry and rotation (`pickBoard`), the board segments
+   (`director.js` `playBoardSegment`: SCORE CENTRE fills the frame, COMING UP holds the calendar, a row or a leaf as
+   its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.*
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
 7. **On air**: record a matchday edition and a quiet-day edition with sound; critique the whole programme above 9.7

@@ -1,6 +1,6 @@
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickBoard, storyBoards, storyBoard, factText, scoreBoard, chalkBoard, shareBoard, nextBoard, whoBoard, paceFor, shotMax } from '../public/js/pace.js';
+import { pickBoard, storyBoards, storyBoard, factText, scoreBoard, chalkBoard, shareBoard, nextBoard, whoBoard, paceFor, shotMax, plainFact } from '../public/js/pace.js';
 import { Director } from '../public/js/director.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
 
@@ -46,6 +46,17 @@ describe('FULL TIME: the boards in pace', () => {
     }
     assert.equal(whoBoard({ who: WHO }, 'news-60'), null, 'NEWS IN 60 has no boards of the kind');
     assert.equal(paceFor('full-time').shots.numbers, undefined, 'FULL TIME: THE NUMBER is its own segment, no BY THE NUMBERS');
+  });
+
+  test('no plain KEY FACT card in FULL TIME: a story without one of its boards stands on its picture; THE NUMBER keeps its card', () => {
+    assert.equal(plainFact({ fact: '6-4 6-3' }, 'full-time'), null);
+    assert.equal(plainFact({ fact: '6,000', feature: 'number' }, 'full-time'), '6,000');
+    assert.equal(plainFact({ fact: '1.2 MILLION' }, 'world-now'), '1.2 MILLION', 'the other programmes keep theirs');
+    const d = new Director({ audio: { mode: 'mute', setVoices() {}, stop() {}, playTune: () => ({ stop() {} }), sfx() {}, speak: () => Promise.resolve() }, channel: { name: 'GLOBIT 24', slogan: '', presenters: {} } });
+    d.scene.program = { id: 'full-time', theme: 'sport' };
+    d.scene.cast = { A: 'kai', B: 'rosa' };
+    assert.ok(!d.storyBeats({ type: 'story', anchor: 'A', storyId: 's', text: 'Ana Vela won. She beat Lia Moreau.', fact: '6-4 6-3' }, true).includes('fact'));
+    assert.ok(d.storyBeats({ type: 'story', anchor: 'A', storyId: 's', text: 'Coventry won. They beat Newcastle.', fact: '4-1', score: SCORE }, true).includes('fact'));
   });
 
   test('a board\'s hold reads its own words; SCORE CENTRE may hold its whole segment', () => {
