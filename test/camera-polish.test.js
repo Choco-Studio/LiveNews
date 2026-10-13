@@ -433,13 +433,15 @@ test('planner: a long MONEY MINUTE intro plans WIDE → MCU-R → WIDE, the gree
     const plan = planSegment(fixture(name), 0, { gapAfter: (j) => gapAfter(fixture(name), j).gap });
     for (const e of shots.slice(1)) assert.ok(plan.ctx.sentences.some((x) => Math.abs(x.start - e.char) <= 2), `${name}: in a sentence's pause (money-minute.md §5.8)`);
   }
-  // the live intro of 13 Oct (three long headlines, 26 s): no two sentence pauses fit; the cut takes a colon's pause
+  // the live intro of 13 Oct (three long headlines, 26 s): no two sentence pauses fit; one cut takes a phrase's pause,
+  // the first two shots inside the guard's margin (max − 1 s: it would cut them again)
   const intro = "Americans Hall and Woodford win Nobel Prize in economics for stabilisation models. Also coming up: Swamped with 'daily avalanches' of soiled items and poor-quality fast fashion, secondhand stores are in crisis. Later: Lobbying, lawyers and a media blitz: the fight to kill the Church of England's £100m slavery compensation fund. This is MONEY MINUTE. I'm Penny Sterling.";
   const ep = { id: 'mmLive', program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, cast: { A: 'penny' }, rundown: [], segments: [{ type: 'intro', anchor: 'A', text: intro, cues: [] }, { type: 'story', anchor: 'A', storyId: 's1', headline: 'x', source: 'X', hasImage: true, cues: [], text: 'Two Americans won the Nobel Prize in economics on Monday for their work on stabilisation. The prize committee praised models that central banks still use.' }, { type: 'outro', anchor: 'A', text: "That's MONEY MINUTE.", cues: [] }] };
   const shots = check(ep, 'live intro');
   const mid = shots.slice(1).find((e) => !/[.!?]\s*$/.test(ep.segments[0].text.slice(0, e.char)));
   assert.ok(mid, `one cut in a phrase's pause: ${shots.map((e) => e.char).join(' ')}`);
-  assert.match(ep.segments[0].text.slice(mid.char - 3, mid.char), /[:;]\s*$/, 'a colon\'s pause before a comma\'s');
+  assert.match(ep.segments[0].text.slice(mid.char - 3, mid.char), /[,:;]\s*$/, 'after a comma, colon or semicolon');
+  assert.ok(shots[1].at <= 12 - 1 && shots[2].at - shots[1].at <= 12 - 1, `inside the guard's margin: ${shots.map((e) => e.at).join(' ')}`);
 });
 
 test('planner: a MONEY MINUTE story never opens on the WIDE the previous story stayed on (however long it was)', () => {

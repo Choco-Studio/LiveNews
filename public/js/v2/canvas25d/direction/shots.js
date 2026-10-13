@@ -1230,6 +1230,7 @@ function moneyMinute(ctx, tl) {
  * the pause before a sentence (money-minute.md §5.8), the shots as even as they come; a phrase's own pause (after a
  * colon, semicolon or comma) only when no two sentence pauses keep all three inside the maximum. Null: no plan fits.
  */
+const HOLD_LEAD = 1.0; // s: runtime/direction.js HOLD_MARGIN
 function moneyIntro(ctx, tl, max) {
   const me = ctx.speaker;
   const greet = ctx.sentences.findIndex((x, i) => i > 0 && GREETING_RE.test(String(x.text || '').trim().toLowerCase()));
@@ -1241,9 +1242,12 @@ function moneyIntro(ctx, tl, max) {
   });
   const fits = (a, b) => a.t >= MIN_SHOT - 1e-6 && b.t - a.t >= MIN_SHOT - 1e-6 && tl.end - b.t >= MIN_SHOT - 1e-6 && b.t <= last + 1e-6;
   let best = null;
+  // (the first two shots keep the runtime guard's 1 s margin: it would cut either one again past max − 1 s, while
+  // the last WIDE runs into the lead story's MCU-R, a cut the guard never makes; live, 13 Oct, a planned 11.8 s
+  // MCU-R was cut back to the WIDE early by the guard, and that WIDE held 15.1 s)
   const consider = (a, b, phrases) => {
     if (!a || !b || !fits(a, b)) return;
-    const worst = Math.max(a.t, b.t - a.t, tl.end - b.t);
+    const worst = Math.max(a.t + HOLD_LEAD, b.t - a.t + HOLD_LEAD, tl.end - b.t);
     const score = (worst > max ? 100 : 0) + worst + phrases;
     if (!best || score < best.score) best = { a, b, worst, score };
   };
