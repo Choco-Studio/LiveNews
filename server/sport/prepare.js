@@ -3,14 +3,14 @@
 // already played nor "a brilliant goal"; each story with its sport, its strap tag, its scorelines and fixtures. Then
 // the running order's balance: not a Premier League show.
 import { isGrave, sentencesIn } from '../facts.js';
-import { isFragment } from '../writer.js';
+import { isFragment, splitClauses } from '../writer.js';
 import { isWomensSport, sportOf, sportTag } from './desk.js';
 import { headlineContradicts, scorelinesIn } from './scores.js';
 import { fixturesIn } from './fixtures.js';
 import { retime, withoutJudgement } from './words.js';
 
 // an outlet's own furniture in an article ("The Sky Sports app is better than ever - tap to find out why")
-const PROMO = /\b(?:app is better than ever|tap to find out|download the|sign up|subscribe|follow us|click here|watch (?:live|it|the highlights) on|available on (?:sky|bbc|now|the)|listen to|read more|get the latest|newsletter|sky sports app|bbc sport app|live on sky sports|on demand|iplayer|get in touch|email us|let us know|reading on|sky sports scores|scores app|not got sky|got sky|on your phone|stream (?:it|live|every))\b/i;
+const PROMO = /\b(?:app is better than ever|tap to find out|download the|sign up|subscribe|follow us|click here|watch (?:live|it|the highlights) on|available on (?:sky|bbc|now|the)|listen to|read more|get the latest|newsletter|sky sports app|bbc sport app|live on sky sports|on demand|iplayer|get in touch|email us|let us know|reading on|sky sports scores|scores app|not got sky|got sky|on your phone|stream (?:it|live|every)|get sky sports|contract-free|notifications you want|choose the sky sports|sky sports notifications|download the app)\b/i;
 // a clause that lost its main clause ("As Luis Enrique bids to guide PSG to a third successive Champions League triumph.")
 const SUBORDINATE = /^(?:As|While|Although|Though|Because|If|When|Since|After|Before|Whereas|Unless|Once|Until)\b(?![^,]*,\s*\p{L})/u;
 // a count that points back ("He was named the Finals' Most Valuable Player in all six", BBC Sport 13 Oct, after a
@@ -38,7 +38,8 @@ const READER_QUESTION = (t) => /\?\s*$/.test(t) && !/["”’]\s*$/.test(t.trim(
 const CROSSHEAD = /^(.{8,80}?[\p{Ll}\d])\s+((?:On|In|At|After|Before|During|But|However|Meanwhile|Speaking|Asked|When|While|The|He|She|They|It)\s+\S.*)$/u;
 const unglue = (t) => {
   const m = CROSSHEAD.exec(t);
-  return m && !/[,;:]/.test(m[1]) && !/\b(?:is|are|was|were|has|have|had|said|says|will)\b/.test(m[1]) ? m[2] : t;
+  // (a crosshead may have its colon, "Carra: Newcastle 'beaten up' again It is the first time since December 2012…")
+  return m && !/[,;]/.test(m[1]) && !/\b(?:is|are|was|were|has|have|had|said|says|will)\b/.test(m[1]) ? m[2] : t;
 };
 const clean = (sentences, opts) => {
   const out = [];
@@ -52,7 +53,11 @@ const clean = (sentences, opts) => {
     if (said) said = said.replace(BARE_NOUN_START, (m, noun) => `The ${noun.toLowerCase()}`);
     // (after a sentence that went, an "also" has nothing to add to: "Brad O'Neill also returns…")
     if (said && lost) said = said.replace(/^([^,;:.]{0,80}?)\s+also\b/i, '$1');
-    if (said && said.trim()) out.push(said);
+    // (a long sentence that joins two clauses is told as two: "…an unbeaten five-game start across all competitions, but
+    // recent results have seen his side fall to 11th…", Sky Sports 13 Oct; each half can then be told or put to Rosa)
+    const two = said && said.split(/\s+/).length > 28 ? splitClauses(said, 28, 6) : null;
+    if (two) out.push(...two);
+    else if (said && said.trim()) out.push(said);
     // (a sentence that went takes its count and its antecedent with it: the next one cannot point back to it)
     prev = said && said.trim() ? said : '';
     lost = !(said && said.trim());
@@ -84,8 +89,23 @@ export function prepareStory(story, { now = Date.now(), tz = 'Europe/London' } =
     return known !== m[1] && !/^(?:Mr|Mrs|Ms|Dr|Sir|Lord|Lady|The|And|But|Head|Coach|Manager|Captain|Boss|Chairman|Striker|Defender|Midfielder|Goalkeeper|Winger|Forward|Prop|Hooker|Scrum|Fly|Full|Centre|Opener|Bowler|Batter|Driver|Rider|Team|Former|Ex|New|Old|Young|Saint|St|Real|Inter|Sporting|Athletic|Atletico|United|City|Town|County|Rovers|Wanderers|Albion|North|South|East|West|Great|Little|Grand|Premier|Super|League|World|Golden|Gold|Coast|Titans|Hull|Leeds|Leigh|London|Manchester|Newcastle)$/.test(m[1]) && !/^(?:Mr|Mrs|Ms|Dr|Sir|Lord|Lady|The|And|But|Head|Coach|Manager|Captain|Boss|Chairman|Former|New|Saint|St)$/.test(known);
   });
   for (const t of [...summary]) variant(t);
-  const bodyKept = body.filter((t) => !variant(t));
+  // a sentence about another sport is the article's tangent ("F1 is pressing ahead with plans to run the races in Qatar
+  // and Abu Dhabi", in a BBC report of a football match delayed by a missile alert, 13 Oct): out of its article it is
+  // a non sequitur
+  const own = sportOf(story);
+  const tangent = (t) => {
+    const other = sportOf({ title: t, summary: '', link: '' });
+    return !!own && !!other && other !== own;
+  };
+  const bodyKept = body.filter((t) => !variant(t) && !tangent(t));
   body.splice(0, body.length, ...bodyKept);
+  // a one-line standfirst is filled out from the article's next sentences (three at most): THE NUMBER, the figures and
+  // THE BREAKDOWN read a story's summary first, and a sport standfirst rarely carries its figure
+  const key = (t) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, ' ').trim();
+  for (const t of body) {
+    if (summary.length >= 3) break;
+    if (!summary.some((x) => key(x) === key(t))) summary.push(t);
+  }
   const sport = sportOf(story);
   const all = [title, ...summary, ...body];
   const context = all.join(' ');

@@ -12,6 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { ALSO_LEAN, LIGHT, contentWords, extractFigures, fixNameTypos, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
+import { ROSA_MEMORIES, ROSA_NEEDLES } from '../sport/shape.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { nextFrom, shareFrom, whoFrom } from '../boards.js';
@@ -444,29 +445,17 @@ const CATCH = [
 // FULL TIME, THE BREAKDOWN (docs/programmes/full-time.md §4): Kai asks the question a story's context answers and Rosa
 // answers with that sentence of the story: the record or the wait, the table, what comes next, what they said. Never
 // an opinion: the sentences have already lost the outlets' verdicts (server/sport/prepare.js).
+// (a run that went wrong is no "moment": "A second loss in three games comes after an unbeaten five-game start" is asked
+// about as form, never "How big a moment is that?")
+const FORM_DOWN = /\b(?:loss|losses|defeat|defeats|lost|beaten|winless|losing|conceded|sacked|relegat\w*|bottom|slump\w*)\b/i;
 const BREAKDOWN = [
-  { test: /\b(?:first\s+(?:[\w-]+\s+){0,5}since|for the first time (?:in|since)|in \d+ years|\d+-year wait|(?:end(?:s|ed)?|snap(?:s|ped)?) (?:a|an|their|his|her|its) (?:[\w-]+\s+){0,3}(?:wait|run|drought|streak)|records?|unbeaten|consecutive|in a row|straight (?:wins|defeats|victories)|losing streak|winless run|back-to-back)\b/i, q: (rosa) => [`[lean_in] ${rosa}, how long has that been coming?`, `[look_partner] Put that in context for us, ${rosa}.`, '[lean_in] How big a moment is that?'] },
+  { test: /\b(?:first\s+(?:[\w-]+\s+){0,5}since|for the first time (?:in|since)|in \d+ years|\d+-year wait|(?:end(?:s|ed)?|snap(?:s|ped)?) (?:a|an|their|his|her|its) (?:[\w-]+\s+){0,3}(?:wait|run|drought|streak)|records?|unbeaten|consecutive|in a row|straight (?:wins|defeats|victories)|losing streak|winless run|back-to-back|youngest|oldest)\b/i, q: (rosa, t) => (FORM_DOWN.test(t || '') ? [`[look_partner] Put that in context for us, ${rosa}.`, `[lean_in] How has their form been, ${rosa}?`, `[look_partner] ${rosa}, how had they been going before this?`] : [`[lean_in] ${rosa}, how long has that been coming?`, `[look_partner] Put that in context for us, ${rosa}.`, '[lean_in] How big a moment is that?']) },
   { test: /\b(?:top of the (?:table|league)|bottom of the (?:table|league)|relegation zone|drop zone|points? (?:clear|behind|adrift|ahead|off)|\d+(?:st|nd|rd|th) place|league leaders|title race|play-off (?:places?|spots?)|top four|top half|bottom three|standings|out of the (?:relegation|drop) zone)\b/i, q: (rosa) => [`[look_partner] Where does that leave them, ${rosa}?`, '[lean_in] And what does that do to the table?', `[look_partner] And the table, ${rosa}?`] },
   { test: /\b(?:will (?:face|host|play|meet|travel|visit|take on)|(?:face|host|play|meet|visit) \p{Lu}[\p{L}'’-]+ (?:on|next|in)|second leg|next (?:up|week|game|match|month)|before (?:the|their) (?:next|return))\b/iu, q: (rosa) => [`[look_partner] What's next for them, ${rosa}?`, '[lean_in] And what comes next?', `[look_partner] Where do they go from here, ${rosa}?`] },
   { test: /["“][^"”]{12,}["”]/, q: (rosa) => [`[look_partner] What are they saying, ${rosa}?`, '[lean_in] And the reaction?', `[look_partner] What did they make of it, ${rosa}?`] },
 ];
-// FULL TIME, after the moment of the day: one of Rosa's (fictional) memories of her playing days and Kai's reply. No
-// real club, match, stadium or player; each once in the station's recent lines.
-const ROSA_MEMORIES = [
-  // (no figures in them: a chat may say no number its stories do not, so "eleven minutes" would never air)
-  ['[shrug] I once missed a penalty in a cup final. Nobody here mentions it.', '[nod] We mention it every week, Rosa.'],
-  ['[chin] I scored from the halfway line once. In training. It still counts.', '[shake_head] It does not count.'],
-  ['[nod] My first coach said I ran like a filing cabinet. A fast filing cabinet.', '[nod] High praise.'],
-  ['[shrug] I played a whole match in odd boots once. We won. I wore them all season.', '[nod] That is science.'],
-  ['[nod] I still have the shirt from my debut. It no longer fits. Neither do the shorts.', '[nod] Too much detail, Rosa.'],
-  ['[shrug] We trained in the rain every winter. I think I am still drying out.', '[nod] It shows.'],
-  ['[chin] My mum came to every game. She mostly watched the other team\'s goalkeeper.', '[nod] Tactical.'],
-  ['[nod] I once did a lap of honour after a draw. Nobody joined me.', '[nod] A brave lap.'],
-  ['[shrug] I took a corner once that went out for a throw-in. It is on the internet somewhere.', '[nod] I will find it.'],
-  ['[chin] I captained my country once. Briefly. The captain was tying his laces.', '[nod] A proud moment.'],
-  ['[nod] I scored an own goal on my debut, then scored at the right end. Balance.', '[nod] Very balanced.'],
-  ['[shrug] I was the fastest in my team at the start of every season. By October, not so much.', '[nod] Every October, Rosa.'],
-];
+// FULL TIME, after the moment of the day: one of Rosa's (fictional) memories of her playing days and Kai's reply
+// (server/sport/shape.js, where the edition without a moment has them before its sign-off).
 
 // COSMOS DESK, UNIT-8 ASKS: the robot asks Dr Reyes the literal question a story leaves (how far, how long ago, how
 // big, how they know, what comes next, what it means) and she answers with the story's own sentence. Each type
@@ -678,7 +667,10 @@ function lowerFirstWord(text, info) {
 // A person by surname (or first name) alone, never heard in the story: "Scully said the organisation may have to
 // accept..." after "A National Trust manager says..." (BBC 5 Oct). Said whole the first time, as the article gives
 // it ("Justin Scully said..."); a name the article never gives whole (a company: "Microsoft said") stays as it is.
-const NOT_A_NAME = new Set('It He She They We You There This That These Those Which What Who When While After Before If As At In On For With From By The A An And But So Then Yet Its Their His Her Our Each All Both Some Many Most One Officials Police Mr Mrs Ms Dr Prof Professor Sir Dame Lord Lady Chief President Minister Senator Judge Society Chairman Manager'.split(' '));
+const NOT_A_NAME = new Set('It He She They We You There This That These Those Which What Who When While After Before If As At In On For With From By The A An And But So Then Yet Its Their His Her Our Each All Both Some Many Most One Officials Police Mr Mrs Ms Dr Prof Professor Sir Dame Lord Lady Chief President Minister Senator Judge Society Chairman Manager Once Since Until Although Though Because Despite During Following Against Between Without Under Over Meanwhile Elsewhere However Also Still Even Only Just Now Today Yesterday Tomorrow Monday Tuesday Wednesday Thursday Friday Saturday Sunday Where How Why Not No Yes Here'.split(' '));
+// (and never a possessive: "Uzbekistan's Neftchi" gave "Uzbekistan champions Uzbekistan's Neftchi", nor a sentence's
+// first word: "Once Al-Nassr…" gave "Ronaldo scores as Once Al-Nassr win", BBC Sport 13 Oct)
+const givenName = (w) => !!w && !NOT_A_NAME.has(w) && !/['’]s$/.test(w) && !lookupPlace(w);
 const BARE_NAME = /(?:^|[,;:]\s+|\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+)(\p{Lu}[\p{Ll}’'-]+)(?=\s+(?:said|says|told|added|explained|warned|believes|thinks|argued|noted|wrote|hopes|was|is|has|had)\b)/u;
 function nameWhole(t, told, info) {
   const m = String(t).match(BARE_NAME);
@@ -724,12 +716,12 @@ function introduceNames(t, told, info) {
   if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && !info.s.title.includes(lead)) {
     const source = source0;
     const first = source.match(new RegExp(`(?<![\\p{L}])(\\p{Lu}\\p{Ll}[\\p{Ll}’'-]*)\\s+${lead}(?![\\p{L}])`, 'u'))?.[1];
-    if (first && !NOT_A_NAME.has(first) && !lookupPlace(first) && !COMMON_START.test(first)) out = `${first} ${out}`;
+    if (givenName(first) && !COMMON_START.test(first)) out = `${first} ${out}`;
   }
   for (const name of strangers(out, told, info)) {
     const source = `${info.s.summary || ''} ${info.s.body || ''}`;
     const first = source.match(new RegExp(`(?<![\\p{L}])(\\p{Lu}\\p{Ll}[\\p{Ll}’'-]*)\\s+${name}(?![\\p{L}])`, 'u'))?.[1];
-    if (!first || NOT_A_NAME.has(first) || lookupPlace(first)) return null;
+    if (!givenName(first)) return null;
     out = out.replace(new RegExp(`(?<![\\p{L}])${name}(?![\\p{L}])`, 'u'), `${first} ${name}`);
   }
   return out;
@@ -1701,7 +1693,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // (an answer is one spoken sentence of the programme's length: the validator trims stories, not chats)
       // (FULL TIME: Rosa's answer is the story's context, never its news: not the first sentence, nor one with the
       // story's own scoreline, which the presenter reads)
-      const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2 && (pid !== 'full-time' || (t !== info.sentences[0] && !PRONOUN_START.test(t) && !/^\s*(?:he|she|they|it|we|i)\s+(?:added|said|says|told)\b/i.test(t) && !/["”’]\s*,?\s*(?:he|she|they|it)\s+(?:said|says|added|told)\b/i.test(t) && !(info.s.scorelines || []).some((sl) => t.includes(`${sl.sa}-${sl.sb}`))));
+      // (nor an answer that starts on a connective, "But recent results…", nor a quotation with nobody saying it)
+      const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2 && (pid !== 'full-time' || (t !== info.sentences[0] && !PRONOUN_START.test(t) && !CONNECTIVE_START.test(t.trim()) && (c !== BREAKDOWN[3] || /\b(?:said|says|added|told|admitted|insisted|explained|according to)\b/i.test(t)) && !/^\s*(?:he|she|they|it|we|i)\s+(?:added|said|says|told)\b/i.test(t) && !/["”’]\s*,?\s*(?:he|she|they|it)\s+(?:said|says|added|told)\b/i.test(t) && !(info.s.scorelines || []).some((sl) => t.includes(`${sl.sa}-${sl.sb}`))));
       // (never before a grave story: no chat follows a story there, and the kept-back sentence would be lost)
       const quietAfter = !!order[k + 1]?.grave;
       const catchList = pid === 'tech-bytes' ? CATCH : pid === 'full-time' ? BREAKDOWN : null;
@@ -1783,7 +1776,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         if (!opener.includes(raw)) figureLine = pickSentence((t) => t.includes(raw));
         // (the figure's own sentence first when it stands alone: "Tom Cruise's latest film Digger is expected to lose around
         // $245m" before "The film dropped by around 60%…", BBC 12 Oct, aired the other way round)
-        if (figureLine && !PRONOUN_START.test(figureLine) && !leansOnPrevious(figureLine) && !CONNECTIVE_START.test(figureLine)) [opener, figureLine] = [figureLine, opener];
+        // (nor one that names its person by a role the story has not yet tied to a name: "The Brighton chairman completed a
+        // near £10m investment…" before "Tony Bloom has reiterated…", Sky Sports 13 Oct)
+        const byRole = /^The\s+(?:\p{Lu}[\p{L}'’-]*\s+)+(?:chairman|chairwoman|owner|manager|boss|coach|captain|striker|midfielder|defender|goalkeeper|winger|forward|player|president|chief|driver|rider|club|side|team|champion|champions)\b/u;
+        if (figureLine && !PRONOUN_START.test(figureLine) && !leansOnPrevious(figureLine) && !CONNECTIVE_START.test(figureLine) && !byRole.test(figureLine)) [opener, figureLine] = [figureLine, opener];
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
       const body = [];
@@ -1984,10 +1980,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           } else if (pid === 'full-time' && (slot === 'lead' || slot === 'story') && info.catchAnswer) {
             // THE BREAKDOWN: Kai asks, Rosa answers with the story's own sentence
             const rosa = idOf('B') === 'rosa' ? 'B' : idOf('A') === 'rosa' ? 'A' : 'B';
-            planned.push({ anchor: other(rosa), text: pickLine(info.catchAnswer.q(nameOf(rosa)), `${key}~bd`, info) }, { anchor: rosa, text: `[nod] ${info.catchAnswer.line}` });
+            planned.push({ anchor: other(rosa), text: pickLine(info.catchAnswer.q(nameOf(rosa), info.catchAnswer.line), `${key}~bd`, info) }, { anchor: rosa, text: `[nod] ${info.catchAnswer.line}` });
           } else if (pid === 'full-time' && slot === 'lighter') {
             const rosa = idOf('B') === 'rosa' ? 'B' : idOf('A') === 'rosa' ? 'A' : 'B';
-            const keyed = ROSA_MEMORIES.map((p) => ({ text: `${p[0]} ${p[1]}`, pair: p }));
+            const keyed = [...ROSA_MEMORIES, ...ROSA_NEEDLES].map((p) => ({ text: `${p[0]} ${p[1]}`, pair: p }));
             const both = pickLine(keyed, `${key}~rosa`, info);
             const pair = keyed.find((x) => x.text === both)?.pair || ROSA_MEMORIES[0];
             planned.push({ anchor: rosa, text: pair[0] }, { anchor: other(rosa), text: pair[1] });

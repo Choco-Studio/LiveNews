@@ -24,15 +24,15 @@ function clockIn(ms, tz) {
 
 export const BANKS = {
   greeting: {
-    morning: ['Good morning, and welcome to {title}. I\'m {A}.', 'Good morning. This is {title}, the day in sport. I\'m {A}.', 'A very good morning to you. I\'m {A}, and this is {title}.'],
-    afternoon: ['Good afternoon, and welcome to {title}. I\'m {A}.', 'Good afternoon. This is {title}, the day in sport. I\'m {A}.', 'Hello, and welcome to {title} this afternoon. I\'m {A}.'],
-    evening: ['Good evening, and welcome to {title}. I\'m {A}.', 'Good evening. This is {title}, the day in sport. I\'m {A}.', 'Hello and good evening. I\'m {A}, and this is {title}.', 'A very good evening. This is {title}, and I\'m {A}.'],
+    morning: ['Good morning, and welcome to {title}. I\'m {A}.', 'Good morning. This is {title}, the day in sport. I\'m {A}.', 'A very good morning to you. I\'m {A}, and this is {title}.', 'Morning, and welcome to {title}. I\'m {A}.', 'Good morning. I\'m {A}, and here is the day in sport on {title}.', 'Hello, and good morning. This is {title}, and I\'m {A}.'],
+    afternoon: ['Good afternoon, and welcome to {title}. I\'m {A}.', 'Good afternoon. This is {title}, the day in sport. I\'m {A}.', 'Hello, and welcome to {title} this afternoon. I\'m {A}.', 'Good afternoon. I\'m {A}, and this is {title}.', 'Afternoon, everyone, and welcome to {title}. I\'m {A}.', 'Hello. This is {title}, and I\'m {A}. Good afternoon.'],
+    evening: ['Good evening, and welcome to {title}. I\'m {A}.', 'Good evening. This is {title}, the day in sport. I\'m {A}.', 'Hello and good evening. I\'m {A}, and this is {title}.', 'A very good evening. This is {title}, and I\'m {A}.', 'Evening, everyone, and welcome to {title}. I\'m {A}.', 'Good evening. I\'m {A}, with the day in sport on {title}.'],
   },
-  hello: ['[nod] Hello. Plenty to get through.', '[nod] Hello, everyone.', '[nod] Good to be here. Let\'s get going.', '[nod] Hello. A busy one today.', '[nod] Hi. Let\'s get to it.', '[nod] Hello again.'],
+  hello: ['[nod] Hello. Plenty to get through.', '[nod] Hello, everyone.', '[nod] Good to be here. Let\'s get going.', '[nod] Hello. Let\'s get started.', '[nod] Hi. Let\'s get to it.', '[nod] Hello again.', '[nod] Hello. Lots to talk about.', '[nod] Good to see you all.', '[nod] Hello. Shall we?', '[nod] Hi, everyone. Here we go.', '[nod] Hello. Settle in.', '[nod] Hello. On we go.'],
   results: {
-    MATCHDAY: ['[point_screen] Now, the results.', '[point_screen] Let\'s run through the results.', '[point_screen] To the scores.', '[point_screen] Here are the results.'],
-    MIDWEEK: ['[point_screen] A look at the latest results.', '[point_screen] The latest scores.', '[point_screen] Some results now.', '[point_screen] Now, the scores.'],
-    PREVIEW: ['[point_screen] Before we look ahead, the latest results.', '[point_screen] First, the latest scores.'],
+    MATCHDAY: ['[point_screen] Now, the results.', '[point_screen] Let\'s run through the results.', '[point_screen] To the scores.', '[point_screen] Here are the results.', '[point_screen] The results now.', '[point_screen] Let\'s go through the scores.', '[point_screen] Time for the results.', '[point_screen] The scores, then.'],
+    MIDWEEK: ['[point_screen] A look at the latest results.', '[point_screen] The latest scores.', '[point_screen] Some results now.', '[point_screen] Now, the scores.', '[point_screen] Here are the latest results.', '[point_screen] The results so far.', '[point_screen] To the latest scores.', '[point_screen] A few results now.'],
+    PREVIEW: ['[point_screen] Before we look ahead, the latest results.', '[point_screen] First, the latest scores.', '[point_screen] The latest results first.', '[point_screen] Before the weekend, the scores so far.', '[point_screen] A look back at the latest results first.', '[point_screen] First, some results.'],
   },
   elsewhere: ['Elsewhere, ', 'Meanwhile, ', 'And elsewhere, '],
   transition: {
@@ -50,21 +50,59 @@ export const BANKS = {
     athletics: ['Athletics now.', 'To the track.', 'In athletics.', 'Some athletics.', 'Athletics next.', 'On the track now.'],
     other: ['Now, something different.', 'Elsewhere in sport.', 'Away from the big leagues.', 'Another story now.', 'Something else now.', 'Elsewhere now.'],
   },
+  // Kai asks for one of Rosa's memories when the edition has no moment of the day
+  memoryAsk: ['[look_partner] Before we go, {B}, one from your playing days?', '[look_partner] {B}, anything from the old days before we go?', '[lean_in] Any memories for us today, {B}?', '[look_partner] One from your career before we finish, {B}?', '[look_partner] {B}, a story from your playing days to end on?', '[lean_in] Anything from the archive, {B}?', '[look_partner] Before we finish, {B}, how was your week as a player?', '[look_partner] {B}, one for the road?'],
   // a presenter hands the next sport to the other ("Rosa has the rugby.")
-  handover: ['{N} has {S}.', 'Over to {N} for {S}.', '{N} now, with {S}.', 'Here\'s {N} with {S}.'],
+  handover: ['{N} has {S}.', 'Over to {N} for {S}.', '{N} now, with {S}.', 'Here\'s {N} with {S}.', '{N} is here with {S}.', 'For {S}, here\'s {N}.', '{N} takes us to {S}.', 'And {N} has {S}.'],
   // a second story about the same match or the same people, straight after the first
-  follow: ['Staying with that story.', 'More on that now.', 'There is more on that one.', 'Staying with that one.', 'And there is more on that.', 'More from that one.'],
+  follow: ['Staying with that story.', 'More on that now.', 'There is more on that one.', 'Staying with that one.', 'And there is more on that.', 'More from that one.', 'Still with that one.', 'There is more to that story.', 'Staying there for a moment.'],
   moment: ['Our moment of the day.', 'Now, the moment of the day.', 'Time for the moment of the day.', 'The moment of the day.', 'Here is our moment of the day.', 'And now, the moment of the day.', 'Our moment of the day now.', 'Today\'s moment.'],
   comingUp: {
     'COMING UP': ['[point_screen] Coming up in sport.', '[point_screen] A look at what is coming up.', '[point_screen] What is still to come.', '[point_screen] Some dates for the diary.', '[point_screen] Coming up.', '[point_screen] What to look out for.'],
     'THE WEEKEND AHEAD': ['[point_screen] The weekend ahead.', '[point_screen] A look at the weekend ahead.', '[point_screen] What the weekend holds.', '[point_screen] Coming up this weekend.'],
   },
   signoff: {
-    morning: ['That\'s {title}. [nod] From {B} and from me, enjoy your day. Stay with us on {channel}.', 'That\'s {title} for this morning. [nod] Thanks for watching. Stay with us on {channel}.', 'And that\'s {title}. [nod] From {B} and me, have a good day.'],
-    afternoon: ['That\'s {title}. [nod] From {B} and from me, thanks for watching. Stay with us on {channel}.', 'That\'s {title} this afternoon. [nod] Thanks for your company.', 'And that\'s {title}. [nod] More sport later on {channel}.'],
-    evening: ['That\'s {title}. [nod] From {B} and from me, good night, and stay with us on {channel}.', 'That\'s {title} for this evening. [nod] Thanks for watching.', 'And that\'s {title}. [nod] From {B} and me, thanks for your company tonight.', 'That\'s all from {title}. [nod] More sport around the clock on {channel}.'],
+    morning: ['That\'s {title}. [nod] From {B} and from me, enjoy your day. Stay with us on {channel}.', 'That\'s {title} for this morning. [nod] Thanks for watching. Stay with us on {channel}.', 'And that\'s {title}. [nod] From {B} and me, have a good day.', 'That\'s all from {title} this morning. [nod] More sport later on {channel}.', 'And that\'s the morning\'s sport. [nod] From {B} and me, see you later on {channel}.', 'That\'s {title}. [nod] Thanks for starting your day with us.'],
+    afternoon: ['That\'s {title}. [nod] From {B} and from me, thanks for watching. Stay with us on {channel}.', 'That\'s {title} this afternoon. [nod] Thanks for your company.', 'And that\'s {title}. [nod] More sport later on {channel}.', 'That\'s all from {title} this afternoon. [nod] From {B} and me, see you later.', 'And that\'s the afternoon\'s sport. [nod] Stay with us on {channel}.', 'That\'s {title}. [nod] Thanks for watching, from {B} and from me.'],
+    evening: ['That\'s {title}. [nod] From {B} and from me, good night, and stay with us on {channel}.', 'That\'s {title} for this evening. [nod] Thanks for watching.', 'And that\'s {title}. [nod] From {B} and me, thanks for your company tonight.', 'That\'s all from {title}. [nod] More sport around the clock on {channel}.', 'And that\'s the evening\'s sport. [nod] From {B} and me, good night.', 'That\'s {title} tonight. [nod] Stay with us on {channel}.'],
   },
 };
+
+// Rosa's (fictional) memories of her playing days and Kai's reply, after the moment of the day, or before the sign-off
+// of an edition that has none (Kai asks for one). No real club, match, stadium or player; each once in the station's
+// recent lines.
+export const ROSA_MEMORIES = [
+  // (no figures in them: a chat may say no number its stories do not, so "eleven minutes" would never air)
+  ['[shrug] I once missed a penalty in a cup final. Nobody here mentions it.', '[nod] We mention it every week, Rosa.'],
+  ['[chin] I scored from the halfway line once. In training. It still counts.', '[shake_head] It does not count.'],
+  ['[nod] My first coach said I ran like a filing cabinet. A fast filing cabinet.', '[nod] High praise.'],
+  ['[shrug] I played a whole match in odd boots once. We won. I wore them all season.', '[nod] That is science.'],
+  ['[nod] I still have the shirt from my debut. It no longer fits. Neither do the shorts.', '[nod] Too much detail, Rosa.'],
+  ['[shrug] We trained in the rain every winter. I think I am still drying out.', '[nod] It shows.'],
+  ['[chin] My mum came to every game. She mostly watched the other team\'s goalkeeper.', '[nod] Tactical.'],
+  ['[nod] I once did a lap of honour after a draw. Nobody joined me.', '[nod] A brave lap.'],
+  ['[shrug] I took a corner once that went out for a throw-in. It is on the internet somewhere.', '[nod] I will find it.'],
+  ['[chin] I captained my country once. Briefly. The captain was tying his laces.', '[nod] A proud moment.'],
+  ['[nod] I scored an own goal on my debut, then scored at the right end. Balance.', '[nod] Very balanced.'],
+  ['[shrug] I was the fastest in my team at the start of every season. By October, not so much.', '[nod] Every October, Rosa.'],
+];
+
+// Rosa needling Kai about his own (fictional) sporting past, and his reply (the bible's chemistry: never a real club,
+// match or player, never a person who exists); in the same slots as her memories
+export const ROSA_NEEDLES = [
+  ['[look_partner] Kai played in goal once. The ball still has not forgiven him.', '[nod] It was a very fast ball.'],
+  ['[shrug] Kai says he was a sprinter at school. His school has no record of it.', '[shake_head] My school has a short memory.'],
+  ['[look_partner] Kai still has his medal for taking part. He polishes it.', '[nod] Every Sunday.'],
+  ['[shrug] Kai ran a marathon once. Well, the first mile of one.', '[nod] It was a very good mile.'],
+  ['[look_partner] Kai tried rowing once. The boat went round in a circle.', '[nod] A perfect circle, Rosa.'],
+  ['[shrug] Kai was picked last for football at school. Every week.', '[nod] Consistency is a skill.'],
+  ['[look_partner] Kai says he can still do keepy-uppies. I counted. It is three.', '[nod] Three good ones.'],
+  ['[shrug] Kai tried to dunk once. The hoop is still waiting.', '[nod] One day.'],
+  ['[look_partner] Kai calls cycling to work training. It is downhill.', '[nod] Both ways, somehow.'],
+  ['[shrug] Kai played golf once. He found every bunker on the course.', '[nod] I was thorough.'],
+  ['[look_partner] Kai bought running shoes in January. They are still in the box.', '[nod] They are resting.'],
+  ['[shrug] Kai says he once had a trial at a big club. It was the stadium tour.', '[nod] I signed the visitors\' book.'],
+];
 
 /** A line from a bank, the one aired longest ago (never one in `recent`, the station's last six hours), else by seed. */
 function pick(list, seed, recent) {
@@ -83,6 +121,9 @@ function pick(list, seed, recent) {
 const LEANS_START_RE = /^(?:On|In|At|By|From|After|Before|Since|Until|Last|This|Next|Earlier|Later)\s+[\p{L}\d ]{1,24}?\s(?:they|he|she|it|his|her|their)\s/u;
 const LEANS_START = { test: (t) => pointsBack(t) || LEANS_START_RE.test(String(t || '').trim()) };
 
+// a story that is no place for a joke after it: a misconduct charge, a court, a ban, a death, an injury that ends a career
+const SERIOUS = /\b(?:sexist|racist|racism|abuse|abused|assault|court|charged|charge|banned|ban|suspended|probe|investigation|inquiry|died|dies|death|funeral|tribute|retire[sd]? (?:through|due to) injury|arrest\w*|convicted|jailed|misconduct|disciplinary|sacked)\b/i;
+const bare = (t) => String(t || '').replace(/\[[^\]]*\]\s*/g, '').trim();
 // a sport as a hand-over names it
 const SPORT_NAME = { football: 'the football', f1: 'the Formula One', rugby: 'the rugby', cricket: 'the cricket', tennis: 'the tennis', 'american-football': 'the NFL', basketball: 'the basketball', baseball: 'the baseball', boxing: 'the boxing', cycling: 'the cycling', golf: 'the golf', athletics: 'the athletics' };
 const ALSO_FIRST_CLAUSE = /^[^,;:.]{0,80}?\s+also\b/i;
@@ -397,9 +438,21 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     };
   }
   let comingUp = null;
-  // (never the dates the story just before it has read out: COMING UP is no echo of the last ten seconds)
-  const lastBefore = (shape === 'PREVIEW' ? [] : segs.filter((x) => x.type === 'story' && x.storyId && x.feature !== 'lighter')).at(-1);
-  const justSaid = (f) => lastBefore && f.storyId === lastBefore.storyId && words(lastBefore.text).includes(words(f.sentence || '').split(' ').slice(0, 5).join(' '));
+  // (never the dates the last stories before it have just read out, chats included: COMING UP is no echo of the last
+  // minute; a date said earlier in the edition may come back as the calendar's recap)
+  // (the order on air ends: the last stories, THE NUMBER, the moment of the day, then COMING UP)
+  const tailBlocks = [];
+  for (const x of segs) {
+    if (x.type === 'intro' || x.type === 'outro') continue;
+    if (x.type === 'story' || !tailBlocks.length) tailBlocks.push([x]);
+    else tailBlocks[tailBlocks.length - 1].push(x);
+  }
+  const lastFeature = (b) => (b[0]?.feature === 'number' ? 1 : b[0]?.feature === 'lighter' ? 2 : 0);
+  const aired = shape === 'PREVIEW' ? [] : tailBlocks.map((b, i) => ({ b, i })).sort((x, y) => lastFeature(x.b) - lastFeature(y.b) || x.i - y.i).flatMap((x) => x.b);
+  const lastStories = aired.filter((x) => x.type === 'story' && x.storyId).slice(-3);
+  const from = lastStories.length ? aired.indexOf(lastStories[0]) : aired.length;
+  const recentText = words(aired.slice(from).map((x) => x.text).join(' '));
+  const justSaid = (f) => !!f.sentence && recentText.includes(words(f.sentence).split(' ').slice(0, 5).join(' '));
   const ahead = fixtures.filter((f) => !justSaid(f)).slice(0, 3);
   if (ahead.length >= 2) {
     const weekend = shape === 'PREVIEW' && ahead.every((f) => f.date && [5, 6, 0].includes(new Date(`${f.date}T12:00:00Z`).getUTCDay()));
@@ -454,6 +507,29 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   if (number && shape === 'MIDWEEK') order.push(number);
   else if (number) order.push(number);
   if (moment) order.push(moment);
+  // no moment of the day: Rosa's memory still airs before the sign-off, asked for by Kai (the ritual a viewer waits for),
+  // never after a grave or a serious story (a misconduct charge, a court case, a death)
+  const memoryAired = segs.some((x) => x.type === 'chat' && [...ROSA_MEMORIES, ...ROSA_NEEDLES].some((p) => bare(x.text) === bare(p[0])));
+  const endSeg = order.flat().filter((x) => x.type === 'story').at(-1);
+  const endStory = endSeg && byId.get(endSeg.storyId);
+  const serious = (st) => !st || isGrave(`${st.title}. ${st.summary || ''}`) || SERIOUS.test(`${st.title}. ${st.summary || ''}`);
+  if (!moment && !memoryAired && presenters.B && endSeg && !endSeg.heavy && !serious(endStory)) {
+    // (one of her memories, which Kai asks for, or one of her needles at Kai, which she starts herself)
+    const pairs = [...ROSA_MEMORIES, ...ROSA_NEEDLES];
+    const keyed = pairs.map((p) => `${p[0]} ${p[1]}`);
+    const both = pick(keyed, `${seed}~mem`, recent);
+    const at = Math.max(0, keyed.indexOf(both));
+    const pair = pairs[at];
+    const ask = at < ROSA_MEMORIES.length ? [{ type: 'chat', anchor: 'A', emotion: 'neutral', cues: [], text: fill(pick(BANKS.memoryAsk, `${seed}~ma`, recent), { B }) }] : [];
+    const chats = [
+      ...ask,
+      { type: 'chat', anchor: 'B', emotion: 'neutral', cues: [], text: pair[0] },
+      { type: 'chat', anchor: 'A', emotion: 'neutral', cues: [], text: pair[1] },
+    ];
+    // (their gestures read out of the words, as the writer's are)
+    for (const c of chats) edit(c, (t) => t);
+    order.push(chats);
+  }
   if (shape !== 'PREVIEW' && comingUp) order.push([comingUp]);
 
   // ---- greeting and hello, sign-off

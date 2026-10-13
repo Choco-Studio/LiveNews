@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { balance, leansOnCount, prepareStory, sameEvent, together } from '../server/sport/prepare.js';
-import { shapeEpisode } from '../server/sport/shape.js';
+import { BANKS, ROSA_MEMORIES, ROSA_NEEDLES, shapeEpisode } from '../server/sport/shape.js';
 import { headlineContradicts, scorelinesIn } from '../server/sport/scores.js';
 import { notSport, sportApart } from '../server/sport/desk.js';
 import { withoutJudgement } from '../server/sport/words.js';
@@ -166,14 +166,15 @@ describe('FULL TIME: the shape', () => {
     const oka = stories[1];
     assert.ok(oka.follows);
     assert.doesNotMatch(oka.text, /Thanks, Rosa/, 'the writer\'s pick-up was for its own order');
-    assert.match(oka.text, /^(?:Staying with that story|More on that now|There is more on that one|Staying with that one|And there is more on that|More from that one)\./);
+    assert.ok(BANKS.follow.some((l) => oka.text.startsWith(l)), oka.text);
     assert.doesNotMatch(stories[0].text, /Rosa\?/, 'the writer\'s toss goes');
     // Kai the lead, then in turn: Rosa the story that follows it on, Kai the rugby, Rosa the cricket
     assert.deepEqual(stories.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
     // the rugby is Kai's after Rosa's football: she hands it over by name, and Kai needs no "Rugby now"
-    assert.match(oka.text, /(?:Kai has the rugby|Over to Kai for the rugby|Kai now, with the rugby|Here's Kai with the rugby)\./);
+    const handed = (n, sport) => new RegExp(`(?:${BANKS.handover.map((l) => l.replace('{N}', n).replace('{S}', sport).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
+    assert.match(oka.text, handed('Kai', 'the rugby'));
     assert.doesNotMatch(stories[2].text, /^(?:Rugby now|To the rugby|In rugby|Some rugby|On to the rugby|Rugby next)\./);
-    assert.match(stories[2].text, /(?:Rosa has the cricket|Over to Rosa for the cricket|Rosa now, with the cricket|Here's Rosa with the cricket)\.$/);
+    assert.match(stories[2].text, handed('Rosa', 'the cricket'));
     // three different stories in the headlines, never the match and its reaction both
     assert.doesNotMatch(ep.segments[0].text, /Okafor/);
     assert.match(ep.segments[0].text, /Menon century/);
@@ -206,6 +207,49 @@ describe('FULL TIME: the shape', () => {
     assert.equal(num.anchor, 'B');
     assert.equal(num.score, undefined);
     assert.ok(!(ep.segments.find((s) => s.feature === 'scores')?.scores || []).some((r) => r.a === 'Northgate County'));
+  });
+});
+
+describe('FULL TIME: the light touches', () => {
+  const presenters = { A: { name: 'Kai Sprite' }, B: { name: 'Rosa Rally' } };
+  const cand = (id, title, summary) => ({ id, title, sport: 'football', summary, scorelines: [], fixtures: [], source: 'Pixelburg Sport', published: NOW - 3600_000, sportTag: 'FOOTBALL' });
+  const edition = (last) => ({
+    segments: [
+      { type: 'intro', anchor: 'A', text: 'Harbour Cup draw made. Good morning, and welcome to FULL TIME.', cues: [] },
+      { type: 'story', anchor: 'A', storyId: 'a', headline: 'Harbour Cup draw made', text: 'Glimmerford will meet Lanternhill in the quarter-finals of the Harbour Cup.', cues: [] },
+      { type: 'story', anchor: 'B', storyId: 'b', headline: last.title, text: last.summary, cues: [] },
+      { type: 'outro', anchor: 'A', text: 'That is FULL TIME.', cues: [] },
+    ],
+  });
+  const lines = (ep) => ep.segments.filter((x) => x.type === 'chat').map((x) => x.text);
+  const all = [...ROSA_MEMORIES, ...ROSA_NEEDLES];
+
+  test('an edition without a moment still has one of Rosa\'s memories or needles before the sign-off, its gestures read', () => {
+    const last = cand('b', 'Quaywick Albion open new training ground', 'Quaywick Albion have opened a new training ground.');
+    const ep = edition(last);
+    shapeEpisode(ep, { candidates: [cand('a', 'Harbour Cup draw made', 'Glimmerford will meet Lanternhill in the quarter-finals.'), last], program: { title: 'FULL TIME' }, presenters, now: NOW, tz: 'Europe/London', seed: 'm' });
+    const chat = lines(ep);
+    assert.ok(all.some((p) => chat.includes(p[0].replace(/\[[^\]]*\]\s*/g, ''))), chat.join(' | '));
+    assert.ok(chat.every((t) => !/\[/.test(t)), 'no stage direction left in the words');
+    assert.equal(ep.segments.at(-1).type, 'outro');
+    assert.equal(ep.segments.at(-2).type, 'chat');
+  });
+
+  test('never after a serious story: a misconduct charge, a court, a ban, a death', () => {
+    for (const [title, summary] of [['Darts player faces probe over sexist comments', 'He has been referred to the regulator.'], ['Former striker dies aged 70', 'Tributes have been paid.'], ['Captain banned for six matches', 'The ban was confirmed on Monday.']]) {
+      const last = cand('b', title, summary);
+      const ep = edition(last);
+      shapeEpisode(ep, { candidates: [cand('a', 'Harbour Cup draw made', 'Glimmerford will meet Lanternhill.'), last], program: { title: 'FULL TIME' }, presenters, now: NOW, tz: 'Europe/London', seed: 'g' });
+      assert.ok(!lines(ep).some((t) => all.some((p) => t === p[0].replace(/\[[^\]]*\]\s*/g, ''))), title);
+    }
+  });
+
+  test('the banks are deep enough for a day of editions (none repeats within six hours)', () => {
+    assert.ok(BANKS.hello.length >= 12 && ROSA_MEMORIES.length >= 12 && ROSA_NEEDLES.length >= 12);
+    for (const part of ['morning', 'afternoon', 'evening']) assert.ok(BANKS.greeting[part].length >= 6 && BANKS.signoff[part].length >= 6, part);
+    for (const shape of ['MATCHDAY', 'MIDWEEK']) assert.ok(BANKS.results[shape].length >= 8, shape);
+    // no real club, player or number in Rosa's stories
+    for (const [a, b] of all) assert.doesNotMatch(`${a} ${b}`, /\d|United|City|Rovers|Arsenal|Chelsea|Liverpool|Madrid|Barcelona/);
   });
 });
 

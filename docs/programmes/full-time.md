@@ -24,9 +24,12 @@ sources do not say, and nothing a viewer sees is a guess.
 - **Nobody on FULL TIME judges a real person** (§3.4): no "brilliant", "poor", "should have", "the referee got it wrong".
   What Rosa adds is context the source states and the words of the people involved, attributed ("Lampard says they are
   keeping their feet on the ground").
-- **Rosa's own past is fictional and touches no real event**: no real club, match, stadium or player. A bank of at least
-  12 such memories ("I once missed a penalty in a cup final. Nobody here mentions it."), each at most once a day station-
-  wide, at most one an edition, only in a chat after a light story.
+- **Rosa's own past is fictional and touches no real event**: no real club, match, stadium or player. A bank of 12 such
+  memories ("I once missed a penalty in a cup final. Nobody here mentions it.") and 12 of her needles at Kai's own
+  (fictional) sporting past ("Kai played in goal once. The ball still has not forgiven him." / "It was a very fast
+  ball."), none again within six hours station-wide, one an edition: in the chat after the moment of the day, or, on an
+  edition without a moment, before the sign-off (Kai asks for a memory: "One from your career before we finish, Rosa?";
+  a needle she starts herself), never after a grave or a serious story (a misconduct charge, a court, a ban, a death).
 - **Seated at the desk**: the channel's seated poses and gestures, no new walk or standing cycle.
 - **Looks** (v2 cast; each unlike every face on air, checked against the list below):
   - **Kai**: a clean-shaven head and a full, neatly squared black beard; warm olive skin; a navy **bomber jacket** with an
@@ -114,11 +117,28 @@ FULL TIME text, from either writer:
   display, performance, win, victory, defeat, comeback, run, show). "A brilliant goal from Bruno Guimaraes helps Arsenal…"
   airs as "A goal from Bruno Guimaraes helps Arsenal…".
 - **A sentence that judges a person outright is dropped** ("Caicedo was outstanding", "the referee got it wrong", "he
-  deserved…").
+  deserved…"), and so is one that judges a team by name ("A wasteful Newcastle lost…"), compares ("was even better"),
+  names a verdict ("their profligacy", "a nightmare start", "a fine evening for Lampard's side") or puts it after the verb
+  ("he played poorly"). **An adverb of praise or blame before an act goes** ("Mfuni superbly added a fourth" airs as
+  "Mfuni added a fourth").
 - **Inside a quotation, attributed, the words stay** (they are that person's, and the listener hears whose).
 - Words about a result, not a person, stay: "a 4-1 win", "an emphatic victory", "a thumping 4-1 home win" (the result is
   a fact; the outlet's emphasis on it judges no one).
 - The validator applies the same check to the AI writer's copy, Rosa's answers included.
+
+### 3.4b How the writing is built (step 2)
+
+FULL TIME has no writer of its own: the channel's two writers (the AI writer and the fallback writer) write it between two
+stages of its own, in `server/producer.js`:
+
+- **`sport-desk`, before the writer** (`server/sport/prepare.js`): every story made ready (§3.3, §3.4; promotions, reader
+  questions, crossheads run into a sentence, a sentence that leaned on one that went, a count that points back, a person
+  with two first names in one story, a tangent about another sport all go; a long two-clause sentence is told as two; a
+  one-line standfirst is filled out from the article); a story whose headline and copy name different results is not told;
+  then the balance (§3.2), whose first stories are the edition and the rest the pool for SCORE CENTRE and COMING UP.
+- **`sport`, after the validator** (`server/sport/shape.js`): the shape for the day and the hour (§4), whichever writer
+  wrote: the same event's stories told together, sports in groups, who reads what, hand-overs, transitions, signposts,
+  SCORE CENTRE, COMING UP, the greeting, Rosa's hello, the memory, the sign-off, the straps and the intro's headlines.
 
 ### 3.5 Scorelines: only what can be read with certainty
 
@@ -206,7 +226,8 @@ are different programmes. A shape fixes the order; a segment without material is
   least 6 each for football, F1, tennis, cricket, rugby, US sports, combat sports, cycling and "the rest": "To the track…",
   "On the court…"), moment intros (8), coming-up intros (6), sign-offs (10).
 - **No catchphrases.** Nothing Rosa or Kai says is a signature line.
-- **Chats** (at most four an edition) aim at numbers, waits, weather and the presenters themselves, never at a real person.
+- **Chats** (at most four exchanges an edition: Rosa's hello, two BREAKDOWNs, the memory) aim at numbers, waits, weather
+  and the presenters themselves, never at a real person.
   A light story about a person (a record jersey sale, a milestone) gets a reaction that celebrates the fact ("Fourteen
   million dollars. For a shirt.") and never the person's character.
 - **Boards rotate**: a story's board is the strongest it has (scoreline, then WHO'S WHO / IN PROPORTION / WHAT HAPPENS NEXT
@@ -271,6 +292,9 @@ are different programmes. A shape fixes the order; a segment without material is
 - One slot in the rotation (`config/channel.json` `rotation`), after WORLD WEATHER: COSMOS → WORLD WEATHER → FULL TIME →
   WORLD NOW, so it never sits beside TECH BYTES or MONEY MINUTE, the other magazine shows.
 - `minGapHours: 1.5` (the station's rule for SEVEN DAYS): about ten editions a day.
+- **Until step 7 passes, FULL TIME is a draft**: it lives under `"drafts"` in `config/channel.json`, validated like every
+  programme and written by the tests and the gate (`tools/sport/gate.mjs`), never in the rotation and never seen by the
+  station or the browser (`loadChannel(file, { drafts: true })` merges it for those who ask).
 - It airs only with at least five fresh sport stories and at least 40 % of them new since its last edition; otherwise
   the station plays the next programme (overnight in UK time this skips most slots, as it should).
 - Never at :00 or :30 (NEWS IN 60 is pinned).
