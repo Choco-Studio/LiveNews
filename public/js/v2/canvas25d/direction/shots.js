@@ -52,7 +52,7 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
-import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax, plainFact } from '../../../pace.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax, plainFact, scoreBoard } from '../../../pace.js';
 
 // PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
 // the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
@@ -82,6 +82,9 @@ export const SHOT_STYLES = {
   'news-60': { ...fromPace('news-60'), singleSoft: undefined, fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
   // SEVEN DAYS: WORLD NOW's grammar at its own, calmer pace (sevenDays below)
   'seven-days': { ...fromPace('seven-days'), moves: true },
+  // FULL TIME: WORLD NOW's grammar on its own pace profile (pace.js 'full-time': studio shots to 12 s, a single split past
+  // 10, pictures 4-8 s). Without it the planner played WORLD NOW's windows and a 12.4 s story aired on one 13 s single
+  'full-time': { ...fromPace('full-time'), moves: true },
 };
 
 const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');
@@ -162,7 +165,7 @@ function ev(ctx, at, char, shot, framing, focus, beat, extra = null) {
 
 /** Sentence boundaries (cut candidates), the segment's end and the dry-line guard. */
 /** The director's hold after the sign-off before the end card (bibles), when ctx.gapAfter is unknown. */
-const SIGNOFF_HOLD = { 'world-now': 1.5, 'news-60': 1.0, cosmos: 0.6, 'tech-bytes': 0.3, 'money-minute': 0.3 };
+const SIGNOFF_HOLD = { 'world-now': 1.5, 'news-60': 1.0, cosmos: 0.6, 'tech-bytes': 0.3, 'money-minute': 0.3, 'full-time': PACE['full-time'].holds.signoff };
 
 function timeline(ctx) {
   const hold = ctx.type === 'outro' ? SIGNOFF_HOLD[styleOf(ctx.programId)] : DEFAULT_GAP;
@@ -751,6 +754,7 @@ function worldNow(ctx, tl) {
     mapOnSecond: true,
     finally: isFinally(ctx),
   });
+  shortResultCard(ctx, tl, out);
   noMapEnd(ctx, tl, out);
   capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
   splitLongSingles(ctx, tl, out, S.singleSoft);
@@ -763,6 +767,21 @@ function worldNow(ctx, tl) {
     if (m) out[0].move = m;
   }
   return out;
+}
+
+/**
+ * FULL TIME (full-time.md §5: a story's board is the strongest it has, the scoreline first): a short result story still
+ * shows its result. After its first sentence the card wants its full hold, which a two-sentence result may not have
+ * (the step-7 recording: a nine-second basketball result aired with no card, so neither did its picture); then the card
+ * takes the last sentence start that leaves it the programme's factMin on screen with the pause after the story, the
+ * card staying up through that pause. Only on a story planned as its opening single alone. Mutates `out`.
+ */
+function shortResultCard(ctx, tl, out) {
+  if (out.length !== 1 || out[0].shot !== 'close' || !scoreBoard(ctx.seg, ctx.programId)) return;
+  const gap = Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : DEFAULT_GAP;
+  const room = (paceFor(ctx.programId).shots.factMin ?? MIN_SHOT) - gap;
+  const b = [...tl.bounds].reverse().find((x) => !x.blocked && x.t >= MIN_SHOT - 1e-6 && tl.end - x.t >= room - 1e-6);
+  if (b) out.push(ev(ctx, b.t, b.char, 'fact', null, ctx.speaker, 'fact'));
 }
 
 /**

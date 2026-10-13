@@ -85,6 +85,7 @@ const SC = [
   ['SCORELINE · the longest names, two rows', { score: { a: 'Wolverhampton Wanderers Women', b: 'Brighton & Hove Albion Women', sa: 2, sb: 1, winner: 'Wolverhampton Wanderers Women', draw: false, sport: 'football' }, source: 'Pixelburg Sport' }],
   ['SCORELINE · the longest names, home and away, an away win', { score: { a: 'Brighton & Hove Albion', b: 'Wolverhampton Wanderers', sa: 3, sb: 0, winner: 'Brighton & Hove Albion', home: 'Wolverhampton Wanderers', draw: false, sport: 'football' }, source: 'Sky Sports' }],
   ['SCORELINE · women\'s rugby, a stage', { score: { a: 'Saltmarsh Sirens', b: 'Kestrel Vale Women', sa: 31, sb: 12, winner: 'Saltmarsh Sirens', draw: false, sport: 'rugby', stage: 'SEMI-FINAL' }, source: 'Pixelburg Sport' }],
+  ['SCORELINE · three figures and a long winner: one size, the long name on two lines (13 Oct)', { score: { a: 'Portland Trail Blazers', b: 'London Lions', sa: 119, sb: 66, winner: 'Portland Trail Blazers', draw: false, sport: 'basketball' }, source: 'Sky Sports' }],
 ];
 for (const [name, o] of SC) add(name, (ctx) => drawScoreline(ctx, dt, o, P.orange));
 const ROWS = [
