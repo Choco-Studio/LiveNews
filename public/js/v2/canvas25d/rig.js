@@ -17,7 +17,8 @@
 //   6. speech                          speech.js (visemes → mouth, emphasis → brows +
 //                                      small nods); behaviour.js listening nods
 // Then partner space is mirrored to screen space for whoever sits on the
-// right (solve), and both arms are solved with 3D two-bone IK (elbow pole hints).
+// right (solve), both wrist targets are placed (the glasses reach, the fingertip contact of a steeple),
+// and both arms are solved with 3D two-bone IK (elbow pole hints).
 //
 // Gesture events: perf.gestures = [{ name, t0, speed?, n?, variant?, amp? }] sorted by t0.
 //   variant  a named variant of the gesture (gestures/index.js defOf)
@@ -231,7 +232,7 @@ function applyGestureRange(c, list, upto, t, mode) {
       const tt = ch.finger ? Math.max(0, lt - FINGER_LAG) : lt;
       if (ch.override) {
         // the arm the interrupter takes over fades; the other one keeps this gesture's weight
-        let wa = !by ? w : (ch.far ? takeF : ch.ch === 'hold' || ch.ch === 'tilt' ? takeN || takeF : takeN) ? wArm : w;
+        let wa = !by ? w : (ch.far ? takeF : ch.both ? takeN || takeF : takeN) ? wArm : w;
         // the glasses reach moves the solved wrist (not the wrist channel the interrupter starts from):
         // let it go slowly, or the hand would drop from the face in a few frames
         if (by && ch.ch === 'reach' && takeN) wa = w * (1 - smooth((t - cut) / 0.7));
@@ -250,6 +251,9 @@ function applyGestureRange(c, list, upto, t, mode) {
         } else {
           let v = evalTrack(ch.keys, tt);
           if (from) v += (from[ch.ch] - ch.start) * decay;
+          // an interrupting gesture's fingertip contact waits for its hands to be back on their own path (the
+          // contact pulling two hands together from wherever the other gesture left them would yank them)
+          if (from && ch.ch === 'touch') v *= 1 - decay;
           c[ch.ch] += (v - c[ch.ch]) * wa;
         }
       } else {
@@ -362,7 +366,7 @@ function newSkeleton() {
   };
 }
 
-const TW = [0, 0, 0];
+const TWN = [0, 0, 0], TWF = [0, 0, 0]; // wrist targets of the near and far arm
 const PW = [0, 0, 0];
 const ANCHOR = [0, 0];
 // a head frame in BODY space (head-local units → body units) for glasses.js glassesAnchor
@@ -418,9 +422,10 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   const A = L.arm;
   const armScale = (A.upper + A.fore) / 37;
   const reach = clamp(c.reach, 0, 1);
+  const touch = clamp(c.touch || 0, 0, 1);
+  // the wrist targets of both arms first (the fingertip contact moves both), then the IK of each
   for (let pass = 0; pass < 2; pass++) {
     const sideKey = pass === 0 ? near : far;
-    const suffix = pass === 0 ? '' : 'F';
     const arm = sk.arms[sideKey];
     const sx = sideKey === 'R' ? 1 : -1;
     const lift = c.breathe * 0.45 + (sideKey === near ? c.shN : c.shF);
@@ -428,6 +433,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.shoulder[1] = T.shoulderJoint[1] - lift;
     arm.shoulder[2] = 0;
     const w = pass === 0 ? c.wrist : c.wristF;
+    const TW = pass === 0 ? TWN : TWF;
     TW[0] = arm.shoulder[0] + w[0] * m * armScale;
     TW[1] = arm.shoulder[1] + w[1] * armScale + lift * 0.6;
     TW[2] = w[2] * armScale;
@@ -449,14 +455,55 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.hand.palm[1] = pv[1];
     arm.hand.palm[2] = pv[2];
     arm.hand.palmW = clamp(pass === 0 ? c.palmW : c.palmWF, 0, 1);
-    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0);
+    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0, TW);
+  }
+  if (touch > 0.001) touchHands(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, touch, c.tipSettle || 0, c.tipGap || 0);
+  for (let pass = 0; pass < 2; pass++) {
+    const arm = sk.arms[pass === 0 ? near : far];
     const pole = pass === 0 ? c.pole : c.poleF;
     PW[0] = pole[0] * m;
     PW[1] = pole[1];
     PW[2] = pole[2];
-    ik(arm.shoulder, TW, A.upper, A.fore, PW, arm.elbow, arm.wrist);
+    ik(arm.shoulder, pass === 0 ? TWN : TWF, A.upper, A.fore, PW, arm.elbow, arm.wrist);
   }
   return sk;
+}
+
+/**
+ * Fingertips meeting (steeple, hands joined): `touch` (0..1) closes the two hands' fingertips onto each other.
+ * The contact point of each hand is between its index and middle fingertips, from the same hand skeleton
+ * hands.js draws (handGeometry at a zero wrist, this frame's direction and shape); the two points are brought
+ * level and side by side across the screen, the pads just touching, each wrist taking half the correction.
+ * Across the screen the constraint is one-sided while it blends in: a gap closes with `touch`, an overlap is
+ * pushed out at once (from a touch of 1/8), so the fingers never pass through each other on the way in or out. `tipGap`
+ * (body units) opens the fingertips by that much (a steeple's tap), `tipSettle` (body units, down) is the contact
+ * beat: the joined hands settle about a pixel as the fingertips land, then hold still.
+ */
+const TG = [newHandGeometry(), newHandGeometry()];
+const TARM = { wrist: [0, 0, 0], handDir: null, hand: null };
+// the fingertips' centres sit this many tip radii apart: the outlines just meet
+const TOUCH_GAP = 1.6;
+function touchHands(L, armN, armF, sideN, w, settle, part) {
+  TARM.handDir = armN.handDir;
+  TARM.hand = armN.hand;
+  const a = handGeometry(L, TARM, sideN, TG[0]).J;
+  TARM.handDir = armF.handDir;
+  TARM.hand = armF.hand;
+  const b = handGeometry(L, TARM, -sideN, TG[1]).J;
+  // the far hand lies on the other screen side of the near one: its signed separation across the screen
+  const across = -sideN;
+  const gap = TOUCH_GAP * TG[0].R[3] + Math.max(0, part);
+  const sep = (TWF[0] + (b[9] + b[21]) * 0.5 - (TWN[0] + (a[9] + a[21]) * 0.5)) * across;
+  const ex = (sep - gap) * across;
+  const ey = TWF[1] + (b[10] + b[22]) * 0.5 - (TWN[1] + (a[10] + a[22]) * 0.5);
+  const ez = TWF[2] + (b[11] + b[23]) * 0.5 - (TWN[2] + (a[11] + a[23]) * 0.5);
+  const k = w * 0.5, kx = (sep < gap ? Math.min(1, w * 8) : w) * 0.5, p = settle * w;
+  TWN[0] += ex * kx;
+  TWN[1] += ey * k + p;
+  TWN[2] += ez * k;
+  TWF[0] -= ex * kx;
+  TWF[1] -= ey * k - p;
+  TWF[2] -= ez * k;
 }
 
 /**
@@ -470,7 +517,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
 const RG = newHandGeometry();
 const RARM = { wrist: [0, 0, 0], handDir: null, hand: null };
 const REACH_Z = 7.5; // body units: the fingertip's depth, in front of the face plane
-function reachGlasses(L, sk, arm, reach, sideKey, nudgeY = 0) {
+function reachGlasses(L, sk, arm, reach, sideKey, nudgeY, TW) {
   const h = sk.head;
   BODY_HEAD.L = L;
   BODY_HEAD.cx = L.headAt[0] + h.x;

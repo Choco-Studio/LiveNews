@@ -31,7 +31,8 @@
 // sleeve, so the hand comes OUT of the sleeve instead of being stuck on it.
 // Finish passes keep clean clusters: no lone detail, line or highlight pixel,
 // separations only between fingers at least 2 px wide (a closed hand below the
-// close-up scale reads as one mass), knuckles as a ridge on a closed hand.
+// close-up scale reads as one mass), knuckles as their valleys (the separations running on into the back of
+// the hand) and, on a bent finger at the largest scale, a 2 px lit cap.
 //
 // Draw order and groups inside drawArm (z is the arm's base depth from
 // character.js; each arm owns z .. z+3):
@@ -1583,19 +1584,7 @@ function details(g, B, s, lod, robot, back) {
   // it: a 1 px lit dot is a lone speck), broken between the fingers; a pixel the silhouette refuses leaves its
   // mate alone, and cleanClusters() takes that one out
   if (back) {
-    for (let fi = 0; fi < 4; fi++) {
-      const q = fi * 4;
-      // the top of the knuckle: the joint pushed to the back of the hand
-      const r = R[q];
-      const x3 = J[q * 3] - g.n[0] * r, y3 = J[q * 3 + 1] - g.n[1] * r, z3 = J[q * 3 + 2] - g.n[2] * r;
-      const X = Math.floor(px(B, x3, y3, z3)) - bx0, Y = Math.floor(py(B, x3, y3, z3)) - by0;
-      if (curl[fi + 1] >= 0.55 ? FW[fi] >= 2.2 : lod >= 3 && FW[fi] >= 2.6) {
-        ridgePx(X, Y, 0);
-        ridgePx(X + 1, Y, 0);
-        ridgePx(X, Y + 1, 2);
-        ridgePx(X + 1, Y + 1, 2);
-      }
-    }
+    if (!robot) knuckles(g, B, s, lod);
   } else if (!robot) {
     // wrist crease across the heel of the palm, then the thenar crease at the largest scales
     creaseLine(g, B, -0.15, 0.07, 0.14, 0.06);
@@ -1616,6 +1605,75 @@ function details(g, B, s, lod, robot, back) {
   }
 }
 
+/**
+ * Knuckles on the back of the hand (close-ups; critic: a lit and a shaded row across them read as a glove seam).
+ * Each metacarpal head is its own small bump under the key light (upper left): a lit cap on its upper-left
+ * shoulder, a crescent of shade on its lower-right one; a bent finger raises its knuckle (a bigger, crisper
+ * bump), a flat hand keeps only soft caps. Between two heads the valley that the fingers' separations run
+ * into continues a little toward the wrist as a short shade line. Painted only where the back of the hand or
+ * that finger's root is the visible surface, never on the silhouette (it keeps the outline), never over a line.
+ */
+const KX = new Float64Array(4), KY = new Float64Array(4), KR = new Float64Array(4), KZ = new Float64Array(4);
+function knuckles(g, B, s, lod) {
+  const J = g.J, R = g.R, n = g.n, f = g.f, curl = g.curl;
+  // the fingers' direction on screen, and across it (along the row of knuckles)
+  const fx = px(B, f[0], f[1], f[2]) - px(B, 0, 0, 0), fy = py(B, f[0], f[1], f[2]) - py(B, 0, 0, 0);
+  const fl = Math.sqrt(fx * fx + fy * fy) || 1;
+  const ux = fx / fl, uy = fy / fl;
+  for (let fi = 0; fi < 4; fi++) {
+    KR[fi] = 0;
+    if (FW[fi] < 2.2) continue;
+    const q = fi * 4, r = R[q];
+    // the top of the head: on the back of the hand, a little toward the wrist from the joint's centre
+    const x3 = J[q * 3] - n[0] * r * 0.8 - f[0] * r * 0.3, y3 = J[q * 3 + 1] - n[1] * r * 0.8 - f[1] * r * 0.3, z3 = J[q * 3 + 2] - n[2] * r * 0.8 - f[2] * r * 0.3;
+    KX[fi] = px(B, x3, y3, z3) - bx0;
+    KY[fi] = py(B, x3, y3, z3) - by0;
+    KR[fi] = r * s;
+    KZ[fi] = z3 + r * 1.5; // anything in front of this is another part (the thumb, the other hand)
+  }
+  // the valleys between neighbouring heads: the separation of the two fingers runs on into the back of the
+  // hand as a short shade line toward the wrist (the main read of the knuckles at every close scale)
+  for (let fi = 0; fi < 3; fi++) {
+    if (!KR[fi] || !KR[fi + 1]) continue;
+    const mx = (KX[fi] + KX[fi + 1]) * 0.5, my = (KY[fi] + KY[fi + 1]) * 0.5, rk = (KR[fi] + KR[fi + 1]) * 0.5;
+    const len = rk * (lod >= 3 ? 0.9 : 0.6);
+    let lx = -1, ly = -1;
+    for (let q = 0; q <= 6; q++) {
+      const u = rk * 0.35 - (len * q) / 6;
+      const i = Math.floor(mx + ux * u), j = Math.floor(my + uy * u);
+      if (i === lx && j === ly) continue;
+      lx = i;
+      ly = j;
+      knucklePx(i, j, 2, Math.max(KZ[fi], KZ[fi + 1]), -1);
+    }
+  }
+  // a raised knuckle (a bent finger, at the largest scale) catches the key on its upper-left shoulder: a 2 px
+  // lit cap along the row of knuckles, never on a flat hand (inside the form a highlight reads as a scratch)
+  if (lod < 3) return;
+  for (let fi = 0; fi < 4; fi++) {
+    if (!KR[fi] || curl[fi + 1] < 0.35) continue;
+    const rk = KR[fi];
+    const cx = KX[fi] + L2X * rk * 0.5, cy = KY[fi] + L2Y * rk * 0.5;
+    // the second pixel: along the row, on the lit side
+    const ax = -uy, ay = ux, sg = ax * L2X + ay * L2Y >= 0 ? 1 : -1;
+    const i0 = Math.floor(cx), j0 = Math.floor(cy);
+    const i1 = Math.floor(cx + ax * sg), j1 = Math.floor(cy + ay * sg);
+    if (knucklePx(i0, j0, 0, KZ[fi], fi + 2) && (i1 !== i0 || j1 !== j0)) knucklePx(i1, j1, 0, KZ[fi], fi + 2);
+  }
+}
+
+/** A knuckle detail pixel: on the back plate (or finger fi's root), inside the hand, visible, not over a line. */
+function knucklePx(i, j, tone, maxZ, own) {
+  if (i < 1 || j < 1 || i >= bw - 1 || j >= bh - 1) return false;
+  const k = j * LW + i;
+  const o = OWN[k];
+  if (o !== 0 && !(o === own && SEG[k] === 0)) return false;
+  if (TN[k] === 4 || (TN[k] >= 8 && TN[k] !== 8 + tone) || ZB[k] > maxZ) return false;
+  if (OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) return false;
+  TN[k] = 8 + tone;
+  return true;
+}
+
 /** Paint a detail tone at local (X, Y) if a hand pixel is there and is the visible surface. */
 function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   if (X < 0 || Y < 0 || X >= bw || Y >= bh) return;
@@ -1623,16 +1681,6 @@ function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   if (OWN[k] < 0 || TN[k] === 4) return;
   if (onlyOwn >= 0 && OWN[k] !== onlyOwn) return;
   if (ZB[k] < minDepth) return;
-  TN[k] = 8 + tone;
-}
-
-/** A knuckle pixel: inside the hand only (never on its silhouette, which keeps the outline), not over a line. */
-function ridgePx(X, Y, tone) {
-  if (X < 1 || Y < 1 || X >= bw - 1 || Y >= bh - 1) return;
-  const k = Y * LW + X;
-  // inside the hand only (never on its silhouette, which keeps the outline) and not over a line
-  if (OWN[k] < 0 || TN[k] === 4 || OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) return;
-  if (tone === 2 && TN[k] === 8) return; // the lit row wins where the ridge doubles back
   TN[k] = 8 + tone;
 }
 

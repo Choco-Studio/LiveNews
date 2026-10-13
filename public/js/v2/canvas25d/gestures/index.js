@@ -32,7 +32,9 @@
 //                    palm keeps this direction, for sweeps across the front), pole (elbow hint),
 //                    F suffix = far arm;
 //                    hold / tilt (the papers prop: 0 on the desk .. 1 held / upright);
-//                    reach (0..1: the near hand's index goes to the glasses, glasses.js glassesAnchor)
+//                    reach (0..1: the near hand's index goes to the glasses, glasses.js glassesAnchor);
+//                    touch (0..1: the fingertips of the two hands meet, rig.js touchHands), tipGap (their
+//                    opening), tipSettle (the contact beat: the joined hands settle as they land)
 //   additive (body/head/face): yaw, pitch, roll, hx, hy, lean, bx, by, shN, shF (shoulder lift),
 //                    brow, browIn, smile, squint, lid, lookX, lookY
 //
@@ -56,11 +58,13 @@ export const REST = {
   wristF: [5.6, 19.3, 13.5],
   dir: [-0.8, 0.12, 0.58],
   dirF: [0.8, 0.12, 0.58],
-  // relaxed hands on the desk: fingers loosely bent, not fists
-  curl: [0.3, 0.42, 0.46, 0.5, 0.56],
-  curlF: [0.3, 0.42, 0.46, 0.5, 0.56],
+  // relaxed hands on the desk: fingers loosely bent, not fists, the index the most open and the little finger
+  // the most tucked (one even curl read as a paddle); the two hands are not twins (the far one a little more
+  // open in the middle, its fingers a touch further apart)
+  curl: [0.18, 0.3, 0.44, 0.56, 0.68],
+  curlF: [0.22, 0.36, 0.47, 0.54, 0.62],
   spread: 0.15,
-  spreadF: 0.15,
+  spreadF: 0.2,
   facing: -1,
   facingF: -1,
   sup: 0,
@@ -85,6 +89,12 @@ export const REST = {
   // body units added to the glasses aim while the index is at the hinge (negative = up): the push that adjusts
   // the frame (critic r3: a rigid touch read as touching the temple)
   reachY: 0,
+  // fingertips meeting (rig.js touchHands): 0..1 brings the two hands' fingertips onto each other; tipGap (body
+  // units) opens them that far apart (a tap); tipSettle (body units, down) is the contact beat, the joined hands
+  // settling as the fingertips land (`press` is the lips' channel)
+  touch: 0,
+  tipGap: 0,
+  tipSettle: 0,
   yaw: 0, pitch: 0, roll: 0, hx: 0, hy: 0, lean: 0, bx: 0, by: 0, shN: 0, shF: 0,
   brow: 0, browIn: 0, smile: 0, squint: 0, lid: 0, lookX: 0, lookY: 0,
 };
@@ -100,8 +110,10 @@ REST.proF = pronationSide(REST.dirF, -1);
 }
 
 /** Channels that OVERRIDE (a gesture blends them toward its own value); every other channel adds. */
-export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY'];
+export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY', 'touch', 'tipGap', 'tipSettle'];
 const OVERRIDE = new Set(ARM_CHANNELS);
+/** Override channels that belong to both hands at once (the papers prop, the fingertip contact). */
+const BOTH_ARMS = new Set(['hold', 'tilt', 'touch', 'tipGap', 'tipSettle']);
 /** Hand-shape channels: evaluated 40 ms late (fingers follow the hand). */
 export const FINGER_CHANNELS = new Set(['curl', 'curlF', 'spread', 'spreadF']);
 /** Channels the lag pose needs (hair / earring follow-through): body and head position. */
@@ -247,8 +259,10 @@ export function prepareDef(g) {
   if (g._ch) return g;
   for (const [ch, keys] of Object.entries(g.tracks)) {
     for (const k of keys) {
-      if (k[1] === 'R') k[1] = REST[ch];
-      else if ((ch === 'wrist' || ch === 'wristF') && Array.isArray(k[1])) k[1] = deskPress(k[1]);
+      if (k[1] === 'R') {
+        k[1] = REST[ch];
+        k.rest = true; // (mirrorDef: the other hand's rest)
+      } else if ((ch === 'wrist' || ch === 'wristF') && Array.isArray(k[1])) k[1] = deskPress(k[1]);
     }
   }
   // the palm's turning side, constant for the whole gesture (gestures/orient.js): baked after 'R' resolution
@@ -284,11 +298,12 @@ export function prepareDef(g) {
     rest: REST[ch],
     arr: Array.isArray(REST[ch]),
     far: ch.endsWith('F'), // a far-arm channel (wristF, dirF, curlF...)
+    both: BOTH_ARMS.has(ch), // a channel of both hands (the papers, the fingertip contact)
     start: Array.isArray(keys[0][1]) ? keys[0][1].slice() : keys[0][1],
   }));
   g.arm = g._ch.some((c) => c.override);
   // which arm each definition drives (the rig's arm idle layer yields only on those)
-  g.armN = g._ch.some((c) => c.override && !c.ch.endsWith('F') && c.ch !== 'hold' && c.ch !== 'tilt');
+  g.armN = g._ch.some((c) => c.override && !c.ch.endsWith('F') && !BOTH_ARMS.has(c.ch));
   g.armF = g._ch.some((c) => c.override && c.ch.endsWith('F'));
   g.stroke ??= Math.min(0.3, g.dur * 0.15);
   g.apex ??= Math.min(g.dur * 0.4, g.stroke + 0.35);
@@ -363,8 +378,12 @@ export function mirrorDef(d) {
   const tracks = {};
   for (const [ch, keys] of Object.entries(d.tracks)) {
     if (ch === 'reach' || ch === 'reachY') continue; // the glasses reach is the near hand's own
-    tracks[SWAP[ch] || ch] = keys.map((k) => {
-      let v = k[1] === 'R' ? REST[ch] : k[1];
+    const to = SWAP[ch] || ch;
+    tracks[to] = keys.map((k) => {
+      // a rest key stays a rest key: the far hand's own rest (the hands are not twins at rest), never the
+      // near hand's mirrored (prepareDef marks the 'R' keys it resolves)
+      if (k[1] === 'R' || (k.rest && to !== ch)) return k.length > 2 ? [k[0], 'R', k[2]] : [k[0], 'R'];
+      let v = k[1];
       if (NEG_X.has(ch)) v = [-v[0], v[1], v[2]];
       else if (NEG.has(ch)) v = -v;
       else if (Array.isArray(v)) v = v.slice();
