@@ -76,6 +76,7 @@ class Bed {
     this.entry = arr.entry || entry;
     this.nodes = [];
     this.sources = [];
+    this.ticks = []; // the bed's own ticks to come: { t, g (their gain), note } (rowTick may silence one)
     this.lastFadeIn = -Infinity;
     const g = (v) => {
       const n = ctx.createGain();
@@ -296,14 +297,22 @@ class Bed {
       if (voiceFree && (e.layer === 'lead' || e.layer === 'arp') && this.engine.voiceNear(t)) continue;
       const dest = this.layer[e.layer];
       const dur = (e.dur || 0.25) * this.spb;
-      this.engine.noteLog(t, e.layer, e.inst);
+      const note = this.engine.noteLog(t, e.layer, e.inst);
       switch (e.inst) {
         case 'kick': rig.kick(t, e.vel, dest, e.p); break;
         case 'snare': rig.snare(t, e.vel, dest, e.p); break;
         case 'hat': rig.hat(t, e.vel, dest, e.open); break;
         case 'shaker': rig.shaker(t, e.vel, dest); break;
         case 'rim': rig.rim(t, e.vel, dest); break;
-        case 'tick': rig.tick(t, e.vel, dest, e.tok); break;
+        case 'tick': {
+          // (each tick through a gain of its own, so a SCORE CENTRE row's tick can take its place: LofiEngine.rowTick)
+          const g = this.engine.ctx.createGain();
+          g.connect(dest);
+          rig.tick(t, e.vel, g, e.tok);
+          this.ticks.push({ t, g, note });
+          if (this.ticks.length > 48) this.ticks.shift();
+          break;
+        }
         case 'clock': rig.clock(t, e.vel, dest, e.tok); break;
         default:
           if (typeof rig[e.inst] === 'function') rig[e.inst](t, e.midi, dur, e.vel, dest, e.p || {});
@@ -394,7 +403,31 @@ export class LofiEngine {
   }
 
   noteLog(t, layer, inst) {
-    if (this.notes && this.notes.length < 20000) this.notes.push({ t, layer, inst });
+    if (!this.notes || this.notes.length >= 20000) return null;
+    const note = { t, layer, inst };
+    this.notes.push(note);
+    return note;
+  }
+
+  /**
+   * FULL TIME's SCORE CENTRE (full-time.md §6): a row's tick (the director's audio.sfx('scoreTick')) asked for at `at`.
+   * The bed's own ticks leave room for it, none within `gap` of it: a bed tick still to come is silenced; one that has
+   * just sounded moves the row's tick to `gap` after it. Returns the time the row's tick sounds.
+   */
+  rowTick(at, gap = 0.15) {
+    const now = this.ctx.currentTime;
+    for (const bed of this.beds) {
+      for (const k of bed.ticks) if (!k.off && k.t <= now + 0.005 && k.t <= at && at - k.t < gap) at = k.t + gap;
+    }
+    for (const bed of this.beds) {
+      for (const k of bed.ticks) {
+        if (k.off || k.t <= now + 0.005 || Math.abs(k.t - at) >= gap) continue;
+        k.off = true;
+        k.g.gain.setValueAtTime(0, Math.max(now, k.t - 0.01));
+        if (k.note) k.note.cancelled = true;
+      }
+    }
+    return at;
   }
 
   registerSting(g) {

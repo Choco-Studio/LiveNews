@@ -681,8 +681,14 @@ export class Director {
       : { fixtures, title: seg.kicker || 'COMING UP', source: seg.source, leafTimes: times };
     const shot = scores ? 'scores' : 'fact';
     // full-time.md §6: SCORE CENTRE's tick as each row flips onto the board, a sound effect (audio.sfx, not the beds' music:
-    // it stays after grave news); a row due before the board is on air flips in, with its tick, on the board's cut
-    const tick = () => scores && this.audio.sfx('scoreTick', { programId: s.program?.id, startAt: performance.now() + 30 });
+    // it stays after grave news); a row due before the board is on air flips in, with its tick, on the board's cut. The
+    // bed's own tick leaves room for it (music.rowTick: when it sounds, up to 0.12 s later); returns that extra delay
+    const tick = () => {
+      if (!scores) return 0;
+      const lead = this.music.rowTick?.(0.03) ?? 0.03;
+      this.audio.sfx('scoreTick', { programId: s.program?.id, startAt: performance.now() + lead * 1000 });
+      return Math.max(0, lead - 0.03);
+    };
     // the board cuts in once the shot on air has held its minimum (as every cut); the voice never waits for it: the
     // intro line starts over the shot on air, as a story's first words do (an item read before the cut is on the board
     // from its first frame)
@@ -708,8 +714,8 @@ export class Director {
         marks: later.map((m) => m.c),
         onMark: (k) => {
           if (!later[k]) return;
-          times[later[k].i] = at();
-          if (since !== null) tick();
+          // (the row flips in with its tick)
+          times[later[k].i] = at() + (since !== null ? tick() : 0);
         },
       });
     } else {

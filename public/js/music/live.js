@@ -93,6 +93,18 @@ export class LiveMusic {
   }
 
   /**
+   * SCORE CENTRE's row tick (full-time.md §6): in how many seconds it should sound, `lead` or a little later, so the bed's
+   * own tick leaves room for it (LofiEngine.rowTick). Without a bed: `lead`.
+   */
+  rowTick(lead = 0.03) {
+    const e = this.engine;
+    const ctx = this.audio?.context;
+    if (!e || !ctx || typeof e.rowTick !== 'function') return lead;
+    const at = this.guard(() => e.rowTick(ctx.currentTime + lead));
+    return typeof at === 'number' ? Math.max(lead, at - ctx.currentTime) : lead;
+  }
+
+  /**
    * May the programme's sign-off cue play now (audio.sfx('outro'), after the sign-off's last word)? FULL TIME's is the
    * theme's tail, never in the segment after grave news (full-time.md §6); every other programme's always plays.
    */

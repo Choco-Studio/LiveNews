@@ -286,13 +286,15 @@ export const STINGS = {
   },
 
   /**
-   * FULL TIME's scoreline sting, candidate A (full-time.md §6): a crowd swell, the roar of a ground at a goal. Twenty-two
+   * FULL TIME's scoreline sting, candidate A (full-time.md §6): a crowd swell, the roar of a ground at a goal. Thirty
    * voices, each its own pitch (men and women, 100-340 Hz, never in tune with one another) and its own open vowel (mostly
-   * "aah", some "uh" and "oh": F1 560-750 Hz, F2 1-1.2 kHz), drifting at random and lifting with the excitement, each
-   * panned and coming and going at random (never in a common pulse: no laughter, which the owner rejected); a few shouts
-   * stand out of the roar at random moments; the crowd's breath (pink noise through the vowels) and the ground's low
-   * rumble under it. It swells for 0.6 s, holds a breath and falls away over two seconds. Ducked under the voice it lands
-   * on (the card is cut to inside a sentence).
+   * "aah", some "uh" and "oh": F1 560-750 Hz, F2 1-1.2 kHz) through formants of its own size (a woman's a little higher
+   * than a man's, every throat a little different), drifting at random and lifting with the excitement, each panned and
+   * coming and going at random (never in a common pulse: no laughter, which the owner rejected); a few shouts stand out
+   * of the roar at random moments, and four callers break out of it at the peak, one after another at uneven moments,
+   * each sliding from "eh" to "ah" with a rising pitch; the crowd's breath (pink noise through the vowels) and the
+   * ground's low rumble under it, all in the ground's own space (a dark 1.5 s tail). It swells for 0.6 s, holds a breath
+   * and falls away over two seconds. Ducked under the voice it lands on (the card is cut to inside a sentence).
    */
   scoreCrowd(eng, t) {
     const ctx = eng.ctx;
@@ -302,7 +304,7 @@ export const STINGS = {
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const nodes = [];
     const srcs = [];
-    const stopAt = t + 4.4;
+    const stopAt = t + 4.6;
     // (an open "aah" for most voices, the rest "uh" and "oh": a crowd's roar is mostly open vowels)
     const VOWELS = [[750, 1220, 2600], [750, 1220, 2600], [720, 1150, 2550], [640, 1080, 2500], [560, 980, 2450]];
     // the swell
@@ -319,36 +321,61 @@ export const STINGS = {
     shelf.gain.value = -10;
     env.connect(shelf).connect(out);
     nodes.push(env, shelf);
+    // the ground's space: a dark stereo tail (1.5 s to -60 dB, 20 ms before it starts), under the dry roar
+    const sr = ctx.sampleRate;
+    const n = Math.round(1.8 * sr);
+    const ir = ctx.createBuffer(2, n, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      let lp = 0;
+      for (let i = Math.round(0.02 * sr); i < n; i++) {
+        lp += 0.35 * ((rnd() * 2 - 1) - lp); // (a one-pole low-pass: a dark tail, no fizz)
+        d[i] = lp * Math.exp((-6.9 * i) / (1.5 * sr));
+      }
+    }
+    const room = ctx.createConvolver();
+    room.buffer = ir;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.3;
+    env.connect(room).connect(wet).connect(shelf);
+    nodes.push(room, wet);
     // a slow random wobble (a noise buffer read very slowly and low-passed): pitch drift and voices coming and going
     const wobble = (rate, hz, depth, dest) => {
-      const n = ctx.createBufferSource();
-      n.buffer = rig.white;
-      n.loop = true;
-      n.playbackRate.value = rate;
+      const nz = ctx.createBufferSource();
+      nz.buffer = rig.white;
+      nz.loop = true;
+      nz.playbackRate.value = rate;
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
       lp.frequency.value = hz;
       lp.Q.value = 0.5;
       const g = ctx.createGain();
       g.gain.value = depth;
-      n.connect(lp).connect(g).connect(dest);
-      n.__offset = rnd() * 1.8;
-      srcs.push(n);
+      nz.connect(lp).connect(g).connect(dest);
+      nz.__offset = rnd() * 1.8;
+      srcs.push(nz);
       nodes.push(lp, g);
     };
-    const vowel = (input, dest, [f1, f2, f3], q, k = 1) => {
-      for (const [f, gain, qq] of [[f1, 1, q], [f2, 0.7, q * 1.15], [f3, 0.22, q * 1.5]]) {
+    // a vowel's three formants; `glide`: [time, the vowel it slides to, seconds] (a caller's "eh" opening to "ah")
+    const vowel = (input, dest, [f1, f2, f3], q, k = 1, glide = null) => {
+      [[f1, 1, q], [f2, 0.7, q * 1.15], [f3, 0.22, q * 1.5]].forEach(([f, gain, qq], j) => {
         const bp = ctx.createBiquadFilter();
         bp.type = 'bandpass';
         bp.frequency.value = f * k;
+        if (glide) {
+          bp.frequency.setValueAtTime(f * k, glide[0]);
+          bp.frequency.linearRampToValueAtTime(glide[1][j] * k, glide[0] + glide[2]);
+        }
         bp.Q.value = qq;
         const g = ctx.createGain();
         g.gain.value = gain;
         input.connect(bp).connect(g).connect(dest);
         nodes.push(bp, g);
-      }
+      });
     };
-    for (let i = 0; i < 22; i++) {
+    const VOICES = 30;
+    const level = 0.034 * Math.sqrt(22 / VOICES); // (the roar as loud as ever, from more throats)
+    for (let i = 0; i < VOICES; i++) {
       const f0 = 100 * 2 ** (rnd() * 1.77);
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
@@ -360,14 +387,14 @@ export const STINGS = {
       const on = t + rnd() * 0.35;
       amp.gain.setValueAtTime(0, t);
       amp.gain.setValueAtTime(0, on);
-      amp.gain.linearRampToValueAtTime(0.034, on + 0.22 + rnd() * 0.2);
+      amp.gain.linearRampToValueAtTime(level, on + 0.22 + rnd() * 0.2);
       // a shout now and then: one voice's level jumps for a moment and its pitch glides up (at random, never in step)
       if (rnd() < 0.3) {
         const at = t + 0.3 + rnd() * 1.1;
         const len = 0.14 + rnd() * 0.18;
-        amp.gain.setValueAtTime(0.034, at);
-        amp.gain.linearRampToValueAtTime(0.075, at + 0.04);
-        amp.gain.linearRampToValueAtTime(0.034, at + len);
+        amp.gain.setValueAtTime(level, at);
+        amp.gain.linearRampToValueAtTime(level * 2.2, at + 0.04);
+        amp.gain.linearRampToValueAtTime(level, at + len);
         o.frequency.setValueAtTime(f0 * 1.08, at);
         o.frequency.linearRampToValueAtTime(f0 * 1.2, at + len);
         o.frequency.linearRampToValueAtTime(f0 * 1.05, at + len + 0.2);
@@ -380,10 +407,41 @@ export const STINGS = {
       pan.pan.value = (rnd() * 2 - 1) * 0.85;
       const pre = ctx.createGain();
       o.connect(pre);
-      vowel(pre, amp, VOWELS[Math.floor(rnd() * VOWELS.length)], 9, 0.96 + 0.08 * rnd());
+      // (the formants' size follows the voice: higher for the higher voices, every throat a little different)
+      const k = 0.93 + 0.14 * (Math.log2(f0 / 100) / 1.77) + (rnd() - 0.5) * 0.05;
+      vowel(pre, amp, VOWELS[Math.floor(rnd() * VOWELS.length)], 9, k);
       amp.connect(lvl).connect(pan).connect(env);
       srcs.push(o);
       nodes.push(amp, lvl, pan, pre);
+    }
+    // the callers: four voices breaking out of the roar at its peak, one after another at uneven moments, each a rising
+    // "eh-AAH" (the vowel opening, the pitch climbing, then falling back into the crowd)
+    let at = t + 0.46;
+    for (let i = 0; i < 4; i++) {
+      at += 0.06 + rnd() * 0.13;
+      const f0 = 150 * 2 ** (rnd() * 0.9);
+      const len = 0.38 + rnd() * 0.24;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, at);
+      o.frequency.linearRampToValueAtTime(f0 * (1.16 + 0.06 * rnd()), at + 0.12);
+      o.frequency.linearRampToValueAtTime(f0 * 1.04, at + len);
+      wobble(0.002 + 0.001 * rnd(), 12, f0 * 0.025, o.frequency);
+      const amp = ctx.createGain();
+      amp.gain.setValueAtTime(0, t);
+      amp.gain.setValueAtTime(0, at);
+      amp.gain.linearRampToValueAtTime(0.05, at + 0.05);
+      amp.gain.setValueAtTime(0.05, at + len * 0.6);
+      amp.gain.linearRampToValueAtTime(0, at + len);
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = (i % 2 ? 1 : -1) * (0.3 + 0.4 * rnd());
+      const pre = ctx.createGain();
+      o.connect(pre);
+      const k = 0.95 + 0.1 * rnd();
+      vowel(pre, amp, [530, 1840, 2480], 8, k, [at, [760, 1220, 2600], 0.16]);
+      amp.connect(pan).connect(env);
+      srcs.push(o);
+      nodes.push(amp, pan, pre);
     }
     // the crowd's breath: pink noise through two of the vowels, and the ground's low rumble
     for (const [v, off, g] of [[VOWELS[0], 0.7, 0.17], [VOWELS[3], 1.9, 0.1]]) {
