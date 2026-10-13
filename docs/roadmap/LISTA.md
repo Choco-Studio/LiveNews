@@ -114,7 +114,10 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
       - "¿cuántos?", solo cuando hay cifras.
     - Nunca pregunta por muertes, sucesos, guerras ni política. Los días de noticias graves no se emite.
     - **Falta de ti, más adelante:** la cara, la voz y el nombre del presentador nuevo, y el nombre del programa.
-    - Pasos: 1 la mesa de preguntas · 2 el guion · 3 los gráficos · 4 la dirección · 5 el plató, la cabecera y la música · 6 la cara del presentador · 7 dos ediciones grabadas.
+    - 🟡 Paso 1, la mesa de preguntas: hecha. Elige solo noticias ya emitidas y monta cada edición entera. La nota final llega el 16 oct, tras revisar a mano tres días reales de preguntas.
+    - 🟡 Paso 2, el guion: hecho (9,7, hace falta más de 9,7). Lo que falta (la ronda "¿hoy o no hoy?" con titulares reales y partidas de Max y Ada) también depende de esos tres días. Las partidas están igualadas: el favorito claro pierde un 28 % de las veces y hay remontadas.
+    - Ya conectado al canal como programa de tipo concurso; aún no está en la parrilla.
+    - En marcha: 3 los gráficos · 5 el plató, la cabecera y la música · 6 la cara del presentador. Después: 4 la dirección · 7 dos ediciones grabadas.
 
 ## E. Plató, gráficos y cámara
 24. Plató:
