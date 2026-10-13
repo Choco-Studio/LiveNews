@@ -66,11 +66,12 @@ export const GROUND = {
   // at y 31; clear of the screen's mount, the clock's box and the presenter's head under it)
   board: { Z: 6000, X: 417, Y0: -240 },
   pennant: { X: 492, top: -228 }, // its pole beside the board, on the roof (the cloth is live; wide: x 274-282, y 24-27)
-  // the mowing stripes (world X, mirrored about the halfway line): a centre stripe 400 wide, then stripes 650 wide.
-  // Their edges (X ±200, ±850, ±1500...) keep clear of every head: in the wide an edge between |X| 278 and 618 would
-  // pass behind a presenter's chin, in the two-shot one between 218 and 820 (the ots and the singles see the pitch only
-  // below the shoulders)
-  stripe: { centre: 400, width: 650 },
+  // the mowing stripes (world X, mirrored about the halfway line): a centre stripe 420 wide, then stripes 600 wide.
+  // Their edges (X ±210, ±810, ±1410...) keep 8 px or more clear of every head (Kai's and Rosa's) in every framing.
+  // Even stripes cannot: in the two-shot an edge between |X| about 220 and 800 passes behind a presenter's head, in
+  // the wide one between 280 and 620, so the centre stripe has to be narrower than the rest (the ots and the singles
+  // see the pitch only below the shoulders)
+  stripe: { centre: 420, width: 600 },
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
   far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, gapx: true, halo: 50, mast: 6.4, far: true },
@@ -112,20 +113,19 @@ export function groundKey() {
 // --------------------------------------------------------------------------- the palettes by phase
 // names → u32 (nested arrays kept). pitch: [centre stripe, the stripes beside it], each [a, b]: one colour when a and b
 // are the same, else a 50 % mix of the two (a checker of adjacent steps, calm: no Bayer pattern within a stripe).
-// halo: posterised rings [inner, middle, outer] lifting darker pixels, or 'up': each pixel lifted a step up its own
-// ramp (two inside), the glare taking the sky's colour (the golden hour: a red sky)
+// halo: the glow's [inner, middle] steps, lifting darker pixels (halo())
 const toC = (v) => (Array.isArray(v) ? v.map(toC) : typeof v === 'string' && C[v] !== undefined ? C[v] : v);
 const pal = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, toC(v)]));
-// the pitch's values (L*: green 72, the green/darkGreen mix 58 as the eye mixes it, darkGreen 35, the darkGreen/black
-// mix 26, the darkest green the palette can make: a mix with ink or slate turns teal-grey, with brown or maroon olive):
-// the stripes beside the centre, behind the presenters' heads in the wide and the two-shot, are darkGreen in every
-// phase (one solid colour behind a head); the centre stripe, between the presenters, carries the light: in the sun the
-// green/darkGreen mix (the brightest pitch, under every face, 59-73, in every framing), under the floodlights and in
-// the half light of dawn the darkGreen/black mix
-const PITCH_NIGHT = [['darkGreen', 'black'], ['darkGreen', 'darkGreen']];
-const PITCH_DAY = [['green', 'darkGreen'], ['darkGreen', 'darkGreen']];
-const PITCH_DAWN = PITCH_NIGHT;
-const NIGHT = { sky: ['ink', 'ink', 'ink', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: PITCH_NIGHT, line: 'steel', softLine: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate', 'ink'], band: 'orange', pole: 'steel', boardFrame: 'slate' };
+// the pitch's values, in ENDESGA 32's four greens (L*: green 72, midGreen 51, darkGreen 35, deepGreen 23; palette.js
+// P_SET), each stripe one solid colour: the stripes beside the centre, behind the presenters' heads in the wide and
+// the two-shot, are the darker value; the centre stripe, between the presenters, the lit one. In the sun midGreen over
+// darkGreen (the brightest pitch, under every face in every framing); under the floodlights darkGreen over deepGreen;
+// at dawn, unlit, deepGreen with a stripe of the darkGreen/deepGreen mix (12 L* apart: calm), the darkest and the
+// faintest stripes
+const PITCH_DAY = [['midGreen', 'midGreen'], ['darkGreen', 'darkGreen']];
+const PITCH_NIGHT = [['darkGreen', 'darkGreen'], ['deepGreen', 'deepGreen']];
+const PITCH_DAWN = [['darkGreen', 'deepGreen'], ['deepGreen', 'deepGreen']];
+const NIGHT = { sky: ['ink', 'ink', 'ink', 'navy'], town: 'black', roof: 'ink', roofEdge: 'slate', under: 'black', seatBg: 'black', seat: 'ink', exit: 'tan', exitEdge: 'brown', balcony: 'ink', balconyEdge: 'slate', crowdBg: 'ink', step: 'black', heads: ['slate', 'steel'], softSky: 'ink', softTier: 'ink', softHead: 'slate', body: 'black', scarves: ['maroon', 'brown', 'purple', 'navy'], wall: 'black', board: 'black', boardEdge: 'ink', pitch: PITCH_NIGHT, line: 'steel', softLine: 'steel', tower: 'slate', towerDark: 'ink', head: 'steel', lamp: 'white', lampOff: 'slate', halo: ['steel', 'slate'], band: 'orange', pole: 'steel', boardFrame: 'slate' };
 const PALS = [
   // night: a black sky, the floodlit pitch, the stand dark with its lower tier in the spill
   pal(NIGHT),
@@ -135,18 +135,15 @@ const PALS = [
   pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: PITCH_DAY, line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog', boardFrame: 'slate' }),
   // the golden hour: the sky reddening behind the stand, its roof catching the last light, the banks coming on, each
   // lit head's glare a bloom of the red sky
-  pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', halo: ['tan', 'tanShade', null], boardFrame: 'ink' }),
+  pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', halo: ['tan', 'tanShade'], boardFrame: 'ink' }),
   // the blue hour: the last light a purple band over the roof, every bank on
-  pal({ ...NIGHT, sky: ['ink', 'navy', 'navy', 'purple'], softSky: 'navy', halo: ['fog', 'steel', 'slate'], boardFrame: 'ink' }),
+  pal({ ...NIGHT, sky: ['ink', 'navy', 'navy', 'purple'], softSky: 'navy', halo: ['fog', 'steel'], boardFrame: 'ink' }),
 ];
 export const PHASE_PALS = PALS;
 
 // out of focus: each light a step dimmer, the bright lines gone
 const MUTE = new Map([['white', 'silver'], ['silver', 'fog'], ['fog', 'steel'], ['steel', 'slate'], ['orange', 'brown'], ['rust', 'brown'], ['tan', 'tanShade'], ['cream', 'tan']].map(([a, b]) => [C[a] >>> 0, C[b]]));
 const mute = (c) => MUTE.get(c >>> 0) ?? c;
-// a step up a colour's own ramp (a glare in a coloured sky keeps its hue), never past L* 65 (under every face)
-const UP = new Map([['black', 'ink'], ['ink', 'slate'], ['slate', 'steel'], ['steel', 'fog'], ['navy', 'steel'], ['purple', 'magenta'], ['magenta', 'pink'], ['maroon', 'darkRed'], ['darkRed', 'red'], ['red', 'pink'], ['brown', 'rust'], ['rust', 'orange']].map(([a, b]) => [C[a] >>> 0, C[b]]));
-const up = (c) => UP.get(c >>> 0) ?? c;
 
 // --------------------------------------------------------------------------- helpers
 const hash = (a, b, c = 0) => {
@@ -316,7 +313,9 @@ export function towerHead(cam, t) {
   const w = t.cols * lw + (t.cols - 1) * gx + 2 * s, h = 4 * lw + 3 * gap + 2 * s;
   const cx = 192 + (t.X - cam.x) * k, cy = cam.hy + (t.Y - cam.y) * k;
   const x0 = symX0(cx, w), y0 = Math.round(cy - h / 2);
-  return { x0, y0, w, h, s, lw, gap, gx, cx: x0 + w / 2, cy: y0 + h / 2, R: t.halo * k, k };
+  // (fx, fy: the head's exact centre, which the halo rings follow: a ring tied to the rounded head would step back
+  // and forth against its smoothly growing radius under a push)
+  return { x0, y0, w, h, s, lw, gap, gx, cx: x0 + w / 2, cy: y0 + h / 2, fx: cx, fy: cy, R: t.halo * k, k };
 }
 
 function towerMast(cam, t, hd, P, soft) {
@@ -357,30 +356,28 @@ function towerHeadDraw(t, hd, P, banks, soft) {
 }
 
 /**
- * A static halo round a lit head: posterised rings that only lift darker pixels (no Bayer fringe, never moving). In a
- * coloured sky ('up', the golden hour) the glare lifts each pixel up its own ramp, two steps near the head and one
- * further out, so the bloom is the red sky brightened, as strong as the blue hour's halo over navy.
+ * A static halo round a lit head, the light falling off as the channel's other glows do (light.js: a halo step, then
+ * a fringe): an inner step and a middle step of light, each a palette colour lifting only darker pixels, then a
+ * fringe where every other pixel takes the middle step (a 50 % ring: the glow's edge melts into the sky instead of
+ * ending as a disc). P.halo: [inner, middle], per phase the steps that stand over its sky (steel and slate over the
+ * night's ink, fog and steel over the blue hour's navy, tan and tanShade over the golden hour's red). Never moving:
+ * the checker is the screen's, the rings whole pixels round the head.
  */
+export const HALO_IN = 0.6, HALO_MID = 0.82, HALO_OUT = 1.06; // (fractions of a head's halo radius)
 function halo(hd, P, banks, soft) {
   if (!P.halo || banks <= 0) return;
   const R = hd.R * (0.55 + 0.45 * (banks / 4)) * (soft ? 1.2 : 1);
-  const cx = hd.cx, cy = hd.cy;
-  const bloom = P.halo === 'up';
-  const [c0, c1, c2] = bloom ? [0, 0, 0] : P.halo;
-  for (let y = Math.floor(cy - R - 1); y <= Math.ceil(cy + R + 1); y++) {
-    for (let x = Math.floor(cx - R - 1); x <= Math.ceil(cx + R + 1); x++) {
+  const cx = hd.fx, cy = hd.fy;
+  const [c0, c1] = P.halo;
+  const Rmax = R * HALO_OUT;
+  for (let y = Math.floor(cy - Rmax - 1); y <= Math.ceil(cy + Rmax + 1); y++) {
+    for (let x = Math.floor(cx - Rmax - 1); x <= Math.ceil(cx + Rmax + 1); x++) {
       if (x >= hd.x0 && x < hd.x0 + hd.w && y >= hd.y0 && y < hd.y0 + hd.h) continue; // the head itself
       if (x < BOX.x0 || x >= BOX.x1 || y < BOX.y0 || y >= BOX.y1) continue;
       const d = Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.15) / R;
-      if (d >= 1) continue;
-      if (bloom) {
-        if (d >= 0.8) continue;
-        const o = y * W + x, c = PX[o];
-        PX[o] = d < 0.45 ? up(up(c)) : up(c);
-      } else {
-        const c = d < 0.5 ? c0 : d < 0.74 ? c1 : c2;
-        if (c) lift(x, y, c);
-      }
+      if (d >= HALO_OUT) continue;
+      if (d < HALO_IN) lift(x, y, c0);
+      else if (d < HALO_MID || ((x + y) & 1) === 0) lift(x, y, c1);
     }
   }
 }

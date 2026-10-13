@@ -958,7 +958,9 @@ function fullTime(fr, cam, style, soft) {
 }
 
 // The platform's front edge, in front of the desk: the deck runs on a metre and a half in front of the desk (ink, under
-// the desk's foot), to the edge's orange LED strip with its light on the riser's top row, then the riser's black
+// the desk's foot), to the edge's orange LED strip (its diodes every other pixel) with its light falling down the
+// riser's top (rust, then brown: a light's falloff, which a graphics rule never has), the strip broken at each panel
+// joint, then the riser's black
 // panels, their seams under the desk's module joints, running down out of the frame (its foot, the grass and the
 // touchline in front of it are below the frame: the wide sees the pitch's surface only from 11 m out, behind the desk).
 // The edge runs straight across (the desk curves back from it). Its light sits in the wide's free rows between the
@@ -995,9 +997,13 @@ function platformFront(fr, cam, style, soft) {
     if (yE >= H) continue;
     // the deck in front of the desk (the desk, drawn after, covers it down to its foot)
     for (let y = Math.max(0, yE - 40); y < Math.min(H, yE); y++) fr.px[y * W + x] = deck;
-    if (yE >= 0) fr.px[yE * W + x] = soft ? ramp.halo : ramp.core;
+    // the strip, then its light falling down the riser's top: a step dimmer, then a step dimmer again (light, not a
+    // ruled line)
+    // (the strip's diodes: every other pixel a warm step down, a row of lights at 1x, not a drawn line)
+    if (yE >= 0) fr.px[yE * W + x] = soft ? ramp.halo : (x & 1) ? ramp.halo : ramp.core;
     if (yE + 1 >= 0 && yE + 1 < H) fr.px[(yE + 1) * W + x] = soft ? ramp.outer : ramp.halo;
-    for (let y = Math.max(0, yE + 2); y < H; y++) fr.px[y * W + x] = riser;
+    if (yE + 2 >= 0 && yE + 2 < H) fr.px[(yE + 2) * W + x] = soft ? riser : ramp.outer;
+    for (let y = Math.max(0, yE + 3); y < H; y++) fr.px[y * W + x] = riser;
   }
   // the riser's panel seams at the desk's joints (a mirrored pair of whole columns); the LED strip runs panel by panel,
   // broken at each joint (a fixture on the riser, not a line drawn across the picture)
@@ -1007,7 +1013,7 @@ function platformFront(fr, cam, style, soft) {
     for (const x of X ? [xl, xr] : [191, 192]) {
       if (x < 0 || x >= W || !Number.isFinite(PLAT_Y[x])) continue;
       const yE = Math.round(PLAT_Y[x]);
-      for (let y = Math.max(0, yE); y < H; y++) fr.px[y * W + x] = y < yE + 2 ? riser : seam;
+      for (let y = Math.max(0, yE); y < H; y++) fr.px[y * W + x] = y < yE + 3 ? riser : seam;
     }
   }
 }
