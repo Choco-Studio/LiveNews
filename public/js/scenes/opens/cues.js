@@ -91,6 +91,21 @@ export const CUES = Object.freeze({
     settle: 15.25, // ...and the stopwatch at 90:00 alone at centre stage on the open's field: the emblem
     hit: 19,
   }),
+  // PAY ATTENTION (pay-attention.md §6): "a dark stage; the buzzer lamps of both desks light in turn on the beat; the
+  // question board flips to PAY ATTENTION; the plate." The quiz studio in the dark, the two desks' shape lamps unlit; they
+  // light in turn, one a beat (the circle, the square, the circle, the square: the buzzers playing the channel's
+  // signature), each bringing its desk up; both at once and the room's white light on the downbeat; the board turns over
+  // to PAY ATTENTION; a cut closer on the board; a cut to the two lamps alone on the open's field: the emblem
+  'pay-attention': Object.freeze({
+    bpm: 112,
+    lamps: Object.freeze([2, 3, 4, 5]), // a lamp lights on each beat, in turn: A (circle), B (square), A, B
+    both: 6, // both lamps lit, the room's white light comes up, the band comes in
+    flip: 6.5, // the question board turns over...
+    flipLen: 1, // ...in a beat
+    close: 8, // a cut closer: PAY ATTENTION on the board
+    emblem: 10, // a cut: the two lamps lit, alone on the open's field (the emblem), from which the plate wipes out
+    hit: 14,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

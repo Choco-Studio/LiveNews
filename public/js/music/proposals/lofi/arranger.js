@@ -114,6 +114,15 @@ const DRUMS = {
     ghosts: [[1.75, 0.14, 0.3], [3.25, 0.14, 0.25]],
     hats: { step: 0.5, vel: [0.7, 0.55, 0.62, 0.55, 0.7, 0.55, 0.62, 0.6], open: 0.2 },
   },
+  // PAY ATTENTION (pay-attention.md §6, "light, bright, plucked"): a soft kick on 1 and 3 with a push into 3 now and
+  // then, no snare (the snap on 2 and 4 is the perc layer's), hats on the off-beats only
+  light: {
+    brush: false,
+    kick: [[0, 0.62], [2, 0.5], [1.75, 0.28, 0.3]],
+    snare: [],
+    ghosts: [],
+    hats: { step: 0.5, vel: [0, 0.5, 0, 0.42, 0, 0.5, 0, 0.45], open: 0 },
+  },
   bounce: {
     brush: false,
     kick: [[0, 1], [0.75, 0.5, 0.4], [2, 0.8], [2.5, 0.6, 0.5]],
@@ -410,6 +419,9 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
         // nothing
       } else if (percStyle === 'tick') {
         for (let i = 0; i < 8; i++) out.push({ inst: 'tick', layer: 'perc', at: i * 0.5, vel: (i % 2 ? 0.55 : 0.8) * human(), tok: i % 2 === 1 });
+      } else if (percStyle === 'snap') {
+        // PAY ATTENTION's snap on 2 and 4 (the rig's rim, its woodblock knock kept low)
+        for (const at of [1, 3]) out.push({ inst: 'rim', layer: 'perc', at, vel: 0.55 * human() });
       } else if (percStyle === 'rim') {
         for (const at of [0.75, 2.75]) if (r.chance(0.8)) out.push({ inst: 'rim', layer: 'perc', at, vel: 0.6 * human() });
         if (r.chance(0.3)) out.push({ inst: 'rim', layer: 'perc', at: 3.5, vel: 0.4 });

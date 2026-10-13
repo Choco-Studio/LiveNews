@@ -361,6 +361,24 @@ Measured on the development archive, with a model of the planner that counts sto
 4. **Director and pace**: the shots, the countdowns timed to the reading rule, the lock-in and buzz beats, the half-note
    ticks.
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
+   *Built; the three critiques passed at 9.8 in round 3 (`docs/roadmap/critique/pay-attention-set.md`,
+   `pay-attention-open.md`, `pay-attention-sound.md`):*
+   - *The set: `public/js/v2/canvas25d/studio/quiz.js` (style `'pay-attention'`, theme `quiz`; `THEMES.quiz` in
+     `public/js/set.js`), lab `public/lab/pay-attention-set.html`. Seats (`QUIZ_SEATS`, neck at the network's depth
+     Z 1000): the host at X 0 (the solo seat), A at X −118 facing right, B at X 118 facing left. Framings
+     (`quizCamera`): `wide` (the solo wide pulled back 5 % and lowered 11 px, clear of the top row), `host`, `player-a`,
+     `player-b`. The director's hook: `setQuizState({ question, lamps: { A, B }, scores: { A, B } }, t)` from
+     `studio/set.js`; the moving heads ease to a stop over 0.8 s when `question` turns on and pick up again when it
+     turns off. Player B's single is not cut to while the programme's tag shows (its frame stands under the tag).*
+   - *The open: `public/js/scenes/opens/payattentiontitles.js` and `payattention.js` (the emblem: the two lamps), cue
+     sheet `'pay-attention'` (8.3 s, the hit at 7.5 s).*
+   - *The sound: the theme `payAttentionTitles` and the sign-off tail (`audio/themes.js`); the bed `'pay-attention'`
+     (moments welcome, question, scores, chat, double, result, signoff); the cue sheet's `QUIZ` moments: `question`
+     (`{ double: true }` for DOUBLE OR NOTHING), `right`, `wrong`, `double` (the drumroll, 4.3 s, the bed stopped);
+     the stings by name in `QUIZ_STINGS`; the countdown `LiveMusic.countdown(halves)`: ticks on the bed's half notes
+     (1.0714 s), the first on the next half note (up to one half note's wait), returning `{ start, ticks, end, half }`
+     in seconds from now, so the countdown bar runs from `start` and the reveal lands on `end`. Lab
+     `public/lab/pay-attention-sound.html`.*
 6. **Cast**: the host's face and voice (A/B for the owner); the contestants' seats. *Gate: the character rubric above 9.7.*
 7. **On air**: two recorded editions with sound (an afternoon and an evening); the whole programme critiqued above 9.7
    (`docs/roadmap/critique/pay-attention.md`).

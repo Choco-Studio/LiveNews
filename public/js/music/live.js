@@ -105,6 +105,25 @@ export class LiveMusic {
   }
 
   /**
+   * PAY ATTENTION's countdown (pay-attention.md §6): `halves` ticks on the bed's half notes, the first `lead` s from now or
+   * on the next half note after it (LofiEngine.countdown). Returns { start, ticks, end, half } in seconds from now, so the
+   * director runs the countdown bar from `start` to `end` and reveals on `end`; without the engine (beds off), a grid of
+   * the quiz's half notes from `lead` (the ticks are then not heard: the beds and their ticks are one switch).
+   */
+  countdown(halves = 4, lead = 0.05) {
+    const n = Math.max(1, Math.round(halves));
+    const half = 2 * (60 / 112);
+    const plain = { start: lead, ticks: Array.from({ length: n }, (_, i) => lead + i * half), end: lead + n * half, half };
+    const e = this.engine;
+    const ctx = this.audio?.context;
+    if (!e || !ctx || typeof e.countdown !== 'function') return plain;
+    const now = ctx.currentTime;
+    const r = this.guard(() => e.countdown(now + lead, n));
+    if (!r || typeof r.start !== 'number') return plain;
+    return { start: r.start - now, ticks: r.ticks.map((t) => t - now), end: r.end - now, half: r.half };
+  }
+
+  /**
    * May the programme's sign-off cue play now (audio.sfx('outro'), after the sign-off's last word)? FULL TIME's is the
    * theme's tail, never in the segment after grave news (full-time.md §6); every other programme's always plays.
    */

@@ -23,8 +23,11 @@
 import { C } from '../pixbuf.js';
 
 // (FULL TIME is still a draft in config/channel.json: its set is built and warmed with the others, so it is ready
-// the day it airs)
+// the day it airs. PAY ATTENTION's set is built (styleFor('pay-attention')) and joins this list the day config lists it
+// as a draft: the network's set tests hold STYLE_IDS to config's programmes and drafts)
 export const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days', 'full-time'];
+/** Sets built ahead of their config entry (warmed by their labs and tests, not by the channel's warm-up). */
+export const BUILT_STYLE_IDS = ['pay-attention'];
 
 // Seat pools: one soft pool from above behind each head (ART_DIRECTION
 // "head zones ... one soft light pool from above"). Back-wall world units:
@@ -223,6 +226,47 @@ const DEFS = {
     wallField: ['ink', 'ink'],
     tintNames: [],
     tintMax: 0,
+    values: { face: [55, 73], headZone: [18, 45], wall: 45 },
+  },
+  // PAY ATTENTION (pay-attention.md §6, built before its draft entry in config/channel.json): the quiz studio, a low
+  // stage in a dark room (quiz.js). A black wall with one soft pool from above behind each contestant (they sit at X
+  // ±118, in front of the wall's sides); the host at the centre seat in front of the question board, the network's
+  // screen in a purple frame with its fog rim (the dressing); the podium and two desks instead of the network's curved
+  // desk (`desk: 'quiz'`); two moving heads on the wall's outer edges. White and gold light only: the bezel black with
+  // ink lips, no coloured practicals, no LED line on the podium (its top's front edge catches the key in silver).
+  // `solo`: the host sits at the solo seat, so the wall lays its idle and pictures out round the host's head.
+  'pay-attention': {
+    theme: 'quiz',
+    accentName: 'purple',
+    deskLineName: 'silver',
+    wallIdle: 'quiz',
+    solo: true,
+    desk: 'quiz',
+    base: 0.1,
+    // the ceiling: the wall's light eases out well under the ceiling line (Y -148 here) and is black above Y -121: the
+    // pools' tops stay 4 px under the graphics' top row in the wide (the clock's plate never cuts them)
+    top: { y0: -121, y1: -101, to: 0 },
+    ceilingY: -148, // the one ceiling line at y 6 in the quiz's wide (lowered and pulled back: see quiz.js quizCamera)
+    sides: { x0: 236, x1: 300 },
+    // one pool from above behind each contestant (in the wide their heads stand in front of wall X ±150..±195): a flat
+    // ink plateau with a slate heart above the hair and a narrow Bayer edge, falling back to ink below the heads
+    // (an ink wash from above, as dark as COSMOS's, wide enough to stand behind the contestant's head both in the wide,
+    // where the head is in front of wall X -171, and in their single, X -139: the parallax moves it; its Bayer edge
+    // falls beside the head in both)
+    pools: [
+      { X: -160, Y: -76, rx: 60, ry: 82, edge: 0.55, amount: 1.12 },
+      { X: 160, Y: -76, rx: 60, ry: 82, edge: 0.55, amount: 1.12 },
+    ],
+    poolMax: 2.0,
+    glow: 0.08,
+    seams: false,
+    flats: false,
+    practical: 'off',
+    bezel: { base: 'black', top: 'ink', left: 'ink', soft: 'black' },
+    wallField: ['black', 'black'],
+    tintNames: ['purple'],
+    tintMax: 0.06,
+    wallPicL: 50, // a story picture on the board: the dark room keeps it as quiet as COSMOS's (it stands behind heads)
     values: { face: [55, 73], headZone: [18, 45], wall: 45 },
   },
 };

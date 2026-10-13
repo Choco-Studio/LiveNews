@@ -44,8 +44,11 @@ import { warmExpertStudio, EXPERT_STUDIOS } from './experts.js';
 import { drawPressRoom } from './press.js';
 import { twoWayField } from './remote.js';
 import { warmSky } from '../../../scenes/weather/sky.js';
+import { rasterQuizDesks, setQuizState, quizState } from './quiz.js';
 
 export { SET, setStyle, styleFor, drawWallContent, warmWallContent, prepareImage, setLive, setSkyClock, setSkyHour };
+// PAY ATTENTION's quiz studio (quiz.js): the director's hook for the question flag, the lamps and the scores
+export { setQuizState, quizState };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -433,7 +436,8 @@ function warmDraw(style, pass) {
   drawWallDetails(fr, cam, style, !!pass);
   drawFlats(fr, cam, style, !!pass);
   drawFloor(fr, cam, style);
-  rasterDesk(fr, cam, WARM_CLIP, style.deskLine, style);
+  if (style.desk === 'quiz') rasterQuizDesks(fr, cam, WARM_CLIP, style, quizPlate);
+  else rasterDesk(fr, cam, WARM_CLIP, style.deskLine, style);
 }
 
 // The episode's own rooms, built ahead of their first shot: an expert's studio (studio/experts.js, 4-35 ms to build)
@@ -787,7 +791,7 @@ function drawWallDetails(fr, cam, style, soft = false) {
     return;
   }
   // y 0-10: dark ceiling with one static grid line (ART_DIRECTION bands)
-  layerHLine(fr, cam, Zw, -2000, 2000, -128, style.id === 'cosmos' || style.id === 'news-60' ? C.ink : C.slate);
+  layerHLine(fr, cam, Zw, -2000, 2000, style.ceilingY ?? -128, style.id === 'cosmos' || style.id === 'news-60' || style.id === 'pay-attention' ? C.ink : C.slate);
   if (style.seams) {
     // matte panel seams, only on the outer panels (never within 6 px of a head in any framing)
     for (const X of [-322, -230, 230, 322]) layerVLine(fr, cam, Zw, X, -128, SET.floorY, C.black);
@@ -968,6 +972,15 @@ function blitLogo(fr, cx, cy, scale) {
   }
 }
 
+/** The network's red plate in a box (PAY ATTENTION's podium, quiz.js): the block, its shade, the logo at a whole scale. */
+function quizPlate(fr, kc, x0, y0, x1, y1) {
+  fr.span(x0, y0, x1, y1, C.red);
+  fr.span(x0, y1 - Math.max(1, Math.round(kc)), x1, y1, C.darkRed);
+  fr.span(x0, y0, x0 + 1, y1, C.darkRed);
+  const ls = Math.max(1, Math.min(3, Math.floor(kc * 0.62)));
+  blitLogo(fr, (x0 + x1) / 2, (y0 + y1) / 2 - 0.5 * kc, ls);
+}
+
 // ---------------------------------------------------------------------------
 // Desk: curved in plan, tessellated in perspective, logo plate and one LED line
 
@@ -1038,8 +1051,14 @@ export function drawDesk(fr, cam, clipRows, accent) {
     }
   }
   const d0 = PROF.on ? now() : 0;
-  rasterDesk(fr, cam, clipRows, led, style);
-  for (let x = 0; x < W; x++) LED_ROWS[x] = PTOP[x] < 0 || PFACET[x] === 2 ? -1 : PLED[x];
+  if (DRESSING.on && style.desk === 'quiz') {
+    // PAY ATTENTION: the podium and the two contestant desks instead of the curved desk (quiz.js); no LED line to sweep
+    rasterQuizDesks(fr, cam, clipRows, style, quizPlate);
+    LED_ROWS.fill(-1);
+  } else {
+    rasterDesk(fr, cam, clipRows, led, style);
+    for (let x = 0; x < W; x++) LED_ROWS[x] = PTOP[x] < 0 || PFACET[x] === 2 ? -1 : PLED[x];
+  }
   if (PROF.on) lap(PROF, 'desk', d0);
   // is every desk column under the wall's bottom bezel? (then wall patches may go into the composite)
   const r = wallRect(cam, RECT2);

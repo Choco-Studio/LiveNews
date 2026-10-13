@@ -2,7 +2,7 @@
 // ONE signature, shared with the opens and idents of the audio stream
 // (public/js/audio/themes.js MOTIF): low 5 - 1 - 2 - high 5 ("da-da-da-DAH"),
 // no third, so it fits every mode; a fifth "colour" note gives each programme
-// its mood (home 3, tech b7, cosmos #4, money 6, news-60 octave, weather 7, week 4, breaking b3,
+// its mood (home 3, tech b7, cosmos #4, money 6, news-60 octave, weather 7, week 4, quiz 9, breaking b3,
 // up-next 2 "left hanging"). The beds sing it in scale steps so it follows each
 // programme's mode. Everything here is pure (no WebAudio).
 
@@ -16,7 +16,7 @@ export const SIGNATURE = Object.freeze([
 export const SIGNATURE_SEMITONES = Object.freeze([-5, 0, 2, 7]);
 
 /** Colour notes in scale steps (in each palette's own mode they give 3, b7, #4, 6, 8, 7, 4, b3, 2). */
-export const COLOUR = Object.freeze({ home: 2, tech: 6, cosmos: 3, money: 5, sixty: 7, weather: 6, week: 3, breaking: 2, next: 1 });
+export const COLOUR = Object.freeze({ home: 2, tech: 6, cosmos: 3, money: 5, sixty: 7, weather: 6, week: 3, quiz: 8, breaking: 2, next: 1 });
 
 export const SCALES = Object.freeze({
   major: [0, 2, 4, 5, 7, 9, 11],

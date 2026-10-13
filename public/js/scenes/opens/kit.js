@@ -262,7 +262,7 @@ function riseText(ctx, p, x, y, h, rise, text, style, text2 = null, style2 = nul
 /**
  * Plate, title, accent bar, tagline and credits. style = { accent, plate,
  * ink: 'light' | 'dark', bar, barH (default 2), barX0 (the bar may start left of
- * the plate, e.g. from under the emblem) }.
+ * the plate, e.g. from under the emblem), plateRim (a colour down the plate's sides) }.
  */
 export function drawLockup(ctx, dt, info, style) {
   const L = lockupLayout(info, style);
@@ -273,6 +273,13 @@ export function drawLockup(ctx, dt, info, style) {
     ctx.fillRect(L.plateX, L.plateY, vis, L.plateH);
     ctx.fillStyle = style.plateHi || P.slate;
     ctx.fillRect(L.plateX, L.plateY, vis, 1);
+    // a rim down the plate's two sides (opt-in: PAY ATTENTION's purple plate never meets the dark without its fog rim);
+    // the right one follows the wipe
+    if (style.plateRim) {
+      ctx.fillStyle = style.plateRim;
+      ctx.fillRect(L.plateX, L.plateY, 1, L.plateH);
+      ctx.fillRect(L.plateX + vis - 1, L.plateY, 1, L.plateH);
+    }
   }
   // accent bar under the plate grows left to right
   const x0 = style.barX0 ?? L.plateX;

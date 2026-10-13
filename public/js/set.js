@@ -268,6 +268,10 @@ const THEMES = {
   // FULL TIME (full-time.md §6; the v2 renderer draws its pitchside platform): on the old renderer the network studio in
   // the programme's orange, the floodlights' warm white on the set, the home globe on the wall
   sport: { id: 'sport', ring: [P.rust, P.orange], led: [P.rust, P.orange, P.yellow], text: P.orange, tint: P.cream, glow: P.orange, idle: 'globe', screen: [P.ink, P.black, P.black] },
+  // PAY ATTENTION (pay-attention.md §6; the v2 renderer draws its quiz studio, studio/quiz.js): on the old renderer the
+  // network studio lit white and gold only (gold the lit lamps' colour, white the room's light), never TECH BYTES's purple
+  // and magenta rings and LEDs nor COSMOS's purple glow; the purple stays a fill (the v2 desks' fronts, the board's frame)
+  quiz: { id: 'quiz', ring: [P.steel, P.silver], led: [P.tanShade, P.yellow, P.cream], text: P.white, tint: P.cream, glow: P.silver, idle: 'globe', screen: [P.ink, P.black, P.black], dark: true },
 };
 const themeOf = (scene) => THEMES[scene?.program?.theme] || THEMES.world;
 

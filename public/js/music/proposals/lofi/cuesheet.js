@@ -199,7 +199,41 @@ const SPORT = (m, o, c) => {
   }
 };
 
-const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER, 'seven-days': WEEK, 'full-time': SPORT };
+// PAY ATTENTION (pay-attention.md §6): its own song in the open's key (A-flat, 112 BPM: light, bright, plucked). The
+// director's moments: the welcome on the bright groove; each question on the lighter, drier one (its countdown ticks on
+// the bed's half notes: LofiEngine.countdown, asked through music/live.js); a right answer's sting (two bright notes) and
+// a wrong one's (a soft low note, never a buzzer's sneer), over the bed; the scores and the banter between; DOUBLE OR
+// NOTHING's drumroll (the bed steps out on the beat for it), then its question on a held pedal; the result and the
+// week's table bright; the sign-off on the groove, out on the bar line where the theme's tail takes over. The quiz never
+// airs on a grave day (§3.3); should a grave segment ever come, the network's rule holds: nothing on it nor after it.
+// Never a laugh, never applause (the owner's rule): there are no such sounds in the quiz's kit.
+export const QUIZ_MOMENTS = Object.freeze(['welcome', 'question', 'right', 'wrong', 'scores', 'double', 'result', 'chat', 'outro']);
+const QUIZ = (m, o, c) => {
+  const song = 'pay-attention';
+  if (c.afterGrave && (SEGMENT_MOMENTS.has(m) || QUIZ_MOMENTS.includes(m))) return silence();
+  switch (m) {
+    case 'openTail':
+    case 'headlines':
+    case 'greeting':
+    case 'welcome': return bed(song, 'welcome');
+    // (DOUBLE OR NOTHING's question: { double: true }, on its held pedal)
+    case 'question': return bed(song, o.double ? 'double' : 'question');
+    case 'scores': return bed(song, 'scores');
+    case 'chat': return bed(song, 'chat');
+    case 'double': return sting('quizDrumroll', { stopBed: true });
+    case 'result': return bed(song, 'result');
+    // (not segments: the bed carries on under them)
+    case 'right': return isGrave(o) || c.graveNear ? KEEP : sting('quizRight', { stopBed: false });
+    case 'wrong': return isGrave(o) || c.graveNear ? KEEP : sting('quizWrong', { stopBed: false });
+    case 'story': return silence(0.8);
+    case 'outro': return bed(song, 'signoff');
+    case 'signoffEnd': return silence(1.2, { atBar: true });
+    case 'endcard': return silence(0.6);
+    default: return silence();
+  }
+};
+
+const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER, 'seven-days': WEEK, 'full-time': SPORT, 'pay-attention': QUIZ };
 
 /**
  * May the programme's sign-off cue (audio.sfx('outro')) play? FULL TIME's is the theme's tail: never under grave news nor
@@ -249,7 +283,7 @@ export function resolveCue(moment, opts = {}, ctx = {}) {
 }
 
 function gravePadSong(pid) {
-  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather', 'seven-days': 'seven-days', 'full-time': 'full-time' }[pid] || 'cosmos';
+  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather', 'seven-days': 'seven-days', 'full-time': 'full-time', 'pay-attention': 'pay-attention' }[pid] || 'cosmos';
 }
 
 export const SONGS = Object.keys(PALETTES);
@@ -295,6 +329,12 @@ export const CUE_SHEET = [
   ['FULL TIME', 'SCORE CENTRE', 'its ticking bed: eighth ticks over the bass\'s eighths and a guitar chop on 2 and 4, no kit; a dry tick (audio.sfx) as each row flips in, which stays after grave news'],
   ['FULL TIME', 'chats, THE NUMBER, the moment of the day, COMING UP', 'the same song, lighter: hats, bass and guitar for the chats, a kick for the number, the kit back for the moment and COMING UP'],
   ['FULL TIME', 'sign-off', 'the groove, out on the bar line after the last word; then the theme\'s tail (the signature, #5 -> 6) on the brass, never after grave news'],
+  ['PAY ATTENTION', 'welcome, the week\'s table', '112 BPM in A-flat: a pizzicato pluck breaking each chord in eighths, short plucked chords, a bouncing plucked bass, a soft kick, a snap on 2 and 4, off-beat hats, a low pad'],
+  ['PAY ATTENTION', 'each question', 'the same song lighter and dry (the pluck, the bass, the pad; no kit); the countdown ticks on the bed\'s half notes (1.07 s), a countdown a whole number of half notes (LofiEngine.countdown)'],
+  ['PAY ATTENTION', 'a reveal', 'right: two bright notes (5 -> 8 on a pluck and a bell, quizRight); wrong: one soft low note (a felt triangle on the IV, quizWrong), never a buzzer\'s sneer; both over the bed, ducked under the voice'],
+  ['PAY ATTENTION', 'DOUBLE OR NOTHING', 'the bed steps out on the beat for a two-bar drumroll (a snare roll and a timpani roll on the 5th, rising), landing on Ab add9; then its question on a held pedal'],
+  ['PAY ATTENTION', 'sign-off', 'the groove, out on the bar line after the last word; then the theme\'s tail (the signature, the 9th answered by the 10th) on the plucked lead and its bell'],
+  ['PAY ATTENTION', 'never', 'laughter or applause (the owner\'s rule): no such sound exists in the quiz\'s kit'],
   ['ALL (owner switch soft)', 'light / neutral stories', 'WORLD NOW 76 BPM pad + triangle + slow Rhodes (D); TECH pad + half-time triangle on Am9/D9; COSMOS pad + sub on every shot; MONEY the 800 Hz drone; all below 1.3 kHz, >= 24 LU under the voice'],
   ['ALL', 'grave story', 'silence (opt-in: a near-inaudible low pad), and no bed in the segment after it'],
   ['CHANNEL', 'lead-in WORLD NOW / NEWS IN 60', 'countdown 10.5 s: a quiet bell tick every second, triangle eighths at 120 BPM, a pad minor -> major at 0:00 (sombre: pad only)'],

@@ -11,6 +11,7 @@
 //   NEWS IN 60           -> 8   (G: the octave, "the minute starts")
 //   SEVEN DAYS           -> 4   (B-flat: the plagal colour, the Sunday "amen"; 4 -> 3 on the hit)
 //   FULL TIME            -> #5  (E-flat: the augmented lift of a stadium anthem; #5 -> 6 on the hit)
+//   PAY ATTENTION        -> 9   (A-flat: a question left open over the pedal, answered by the 10th on the hit)
 //   BREAKING             -> b3  (the programme's key, minor, low and firm)
 //   UP NEXT promo        -> 2   (three notes, left hanging on 2 over IV add9)
 // Harmony leans on sevenths, ninths and plagal moves (no V-I fanfares, no
@@ -26,7 +27,7 @@ import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
-export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, week: 5, sport: 8, breaking: 3, next: 2 });
+export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, week: 5, sport: 8, quiz: 14, breaking: 3, next: 2 });
 
 const D4 = 62; // channel home key: D major
 
@@ -800,6 +801,110 @@ function fullTimeTitles(tempo, H, C) {
   };
 }
 
+// PAY ATTENTION (pay-attention.md §6): the week's news as a game, A-flat major at 112 BPM, light, bright and plucked. Its
+// colour is the 9th (B-flat an octave over the tonic): a question left open over the A-flat pedal, answered by the 10th
+// (C, the 3rd) on the hit. The cue sheet (opens/cues.js):
+//   dark      0-2    the studio in the dark: a pad from nothing on the open fifth, the A-flat sub, two soft ticks (the
+//                    quiz's clock)
+//   lamps     2-6    the lamps light in turn, one a beat: each a bright ping, left (the circle, seat A) and right (the
+//                    square, seat B) by turns; together the four pings are the channel's signature an octave up (low 5,
+//                    1, 2, high 5): the buzzers say the network's name
+//   lights    6      both lamps and the room's light on the downbeat: the band comes in (a plucked arpeggio in eighths,
+//                    a bouncing plucked bass, a soft kick, a snap on 2 and 4, off-beat hats), Ab
+//   flip      6.5    a run of mallet notes up the scale in a beat as the board turns over
+//   close     8-10   the board's two words: Fm7 over the pedal, the groove
+//   signature 10-14  the cut to the emblem on the signature's downbeat: the signature on a bright plucked lead doubled by
+//                    a bell an octave up, over Db/Ab (plagal), the colour (the 9th) over Ab sus2 (no third), rising to
+//                    the 10th on Ab6/9 on the hit
+// No crash, no whoosh, no laughter and no applause (the owner's rule): the studio is in the pictures, the music is the band.
+const QUIZ = {
+  // the lead: a plucked voice with a little sustain (its long notes ring), bright, no vibrato
+  lead: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.42, s: 0.42, r: 0.14, cutoff: 4400, fenv: [2.6, 0.08], vib: false },
+  // the lamps' pings and the lead's double: a bell, bright and short
+  ping: { wave: 'pulse12', preset: 'bell', a: 0.002, d: 0.55, s: 0, r: 0.18, legato: 1, cutoff: 6000, fenv: [2.2, 0.08] },
+  // the band's arpeggio: a pizzicato pluck, dry
+  pluck: { wave: 'pulse25', preset: 'pluck', a: 0.002, d: 0.12, s: 0, r: 0.05, cutoff: 3000, fenv: [2.4, 0.05], vib: false },
+  // the flip's run: a mallet
+  mallet: { wave: 'tri', preset: 'mallet', a: 0.002, d: 0.3, s: 0, r: 0.1, legato: 1, cutoff: 4600, fenv: [1.6, 0.05] },
+};
+
+function payAttentionTitles(tempo, H, C) {
+  const k = 68; // A-flat 4
+  const Qc = SEQ_CUES['pay-attention'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4; // the signature on the cut to the emblem
+  const total = C + 2;
+  const [l1, l2, l3, l4] = Qc.lamps.map(at);
+  const band = at(Qc.both);
+  const flip = at(Qc.flip);
+  const flipLen = at(Qc.flipLen);
+  const close = at(Qc.close);
+  const Ab2 = k - 24;
+  // the harmony over the A-flat pedal
+  const ch = {
+    fifth: [k - 12, k - 5], // Ab3 Eb4: the dark
+    add9: [k - 12, k - 5, k + 2], // Ab3 Eb4 Bb4: the lamps
+    ab: [k, k + 4, k + 7], // Ab4 C5 Eb5: the lights
+    fm7: [k, k + 4, k + 9], // Ab4 C5 F5: Fm7 over the pedal (the close)
+    db: [k + 5, k + 9, k + 12], // Db5 F5 Ab5: Db over Ab, plagal, under the signature
+    sus2: [k, k + 7, k + 14], // Ab4 Eb5 Bb5... no third under the colour (the lead's Bb is the 9th)
+    hit: [k + 4, k + 7, k + 9, k + 14], // C5 Eb5 F5 Bb5: Ab6/9 (the lead lands on C6, the 10th)
+  };
+  // the band's arpeggio: eighths up and down each chord from the downbeat to the hit
+  const arpOf = (b) => (b < close ? [k, k + 4, k + 7, k + 12] : b < m0 ? [k, k + 4, k + 9, k + 12] : b < m0 + 2.5 ? [k + 5, k + 9, k + 12, k + 17] : [k, k + 7, k + 12, k + 14]);
+  const arp = range(band, H, 0.5).filter((b) => b < flip - 1e-6 || b >= flip + flipLen - 1e-6).map((b, i) => {
+    const n = arpOf(b);
+    return [b, n[[0, 1, 2, 3, 2, 1][i % 6]], 0.45, i % 2 ? 0.42 : 0.55];
+  });
+  // the bass: plucked, bouncing on the pedal (root, octave, fifth), from the downbeat
+  // (under the colour it holds A-flat: the 9th heard over the tonic pedal, as every open's colour)
+  const bass = [...range(band, m0 + 2.5, 0.5).map((b, i) => [b, [Ab2, Ab2, Ab2 + 12, Ab2 + 7][i % 4], 0.3, i % 2 ? 0.5 : 0.7]), [m0 + 2.5, Ab2, 1.5, 0.66]];
+  // the flip: a mallet run up the scale over its beat (eight notes)
+  // (the key's own notes from its 5th: Eb F G Ab Bb C Db Eb)
+  const run = [0, 2, 4, 5, 7, 9, 10, 12].map((s, i) => [flip + (i * flipLen) / 8, k + 7 + s, flipLen / 8, 0.36 + 0.04 * i]);
+  // the light kit from the downbeat: a soft kick on 1 and 3, a snap on 2 and 4, off-beat hats
+  const kicks = range(band, H, 2).map((b) => [b, 'K', 0.5]);
+  const snaps = range(band + 1, H, 2).map((b) => [b, 'X', 0.4]);
+  const hats = range(band + 0.5, H, 1).map((b) => [b, 'H', 0.28]);
+  return {
+    bpm: tempo,
+    // (+0.5 dB: the dark second at its head reads the integrated level low; measured level with the other opens)
+    loudness: 0.5,
+    room: 0.22,
+    echo: { amount: 0.55, beats: 0.75, feedback: 0.24 },
+    fadeOut: 0.8,
+    tracks: [
+      // the signature first (the lead's first five notes, as in every open): the colour, the 9th, rises to the 10th on the hit
+      { kind: 'lead', inst: QUIZ.lead, notes: part([...motif(k, COLOURS.quiz, m0), [H, k + 16, C - H - 0.25, 0.85]], total), gain: 1 },
+      { kind: 'lead', inst: QUIZ.ping, notes: part([...motif(k + 12, COLOURS.quiz, m0, { vel: 0.6 }), [H, k + 28, C - H - 0.25, 0.55]], total), gain: 0.7, pan: 0.18, echo: 0.3 },
+      // the lamps: the signature an octave up, a ping a beat, left (A, the circle) and right (B, the square) by turns
+      { kind: 'lead', inst: QUIZ.ping, notes: part([[l1, k + 7, 0.9, 0.8], [l3, k + 14, 0.9, 0.84]], total), gain: 0.95, pan: -0.42, echo: 0.25 },
+      { kind: 'lead', inst: QUIZ.ping, notes: part([[l2, k + 12, 0.9, 0.82], [l4, k + 19, 0.9, 0.88]], total), gain: 0.95, pan: 0.42, echo: 0.25 },
+      { kind: 'harmony', inst: QUIZ.pluck, notes: part(arp, total), gain: 1, pan: -0.2 },
+      { kind: 'harmony', inst: QUIZ.mallet, notes: part(run, total), gain: 0.9, pan: 0.2, echo: 0.2 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, ch.fifth, l1, 0.32], // from nothing in the dark
+        [l1, ch.add9, band - l1, 0.42], // the lamps
+        [band, ch.ab, close - band, 0.5],
+        [close, ch.fm7, m0 - close, 0.5],
+        [m0, ch.db, 2.5, 0.52],
+        [m0 + 2.5, ch.sus2, 1.5, 0.54],
+        [H, ch.hit, total - H, 0.62],
+      ], total), gain: 0.85, pan: 0.15 },
+      { kind: 'harmony', inst: 'bell', notes: part([[H, [k + 16, k + 21, k + 26], total - H, 0.4]], total), gain: 0.8, echo: 0.45, pan: -0.25 },
+      { kind: 'bass', inst: 'tri', notes: part([...bass, [H, Ab2, total - H, 0.8]], total), gain: 0.55 },
+      // the A-flat under everything: a sub in the dark and under the signature
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 36, band, 0.45], [m0, k - 36, H - m0, 0.55], [H, k - 36, total - H, 0.7]], total), gain: 0.4 },
+      stab(QUIZ.pluck, [k - 12, k - 5, k + 4], C, total, 0.65, 0.95),
+      { drums: drums([...kicks, [H, 'K', 0.72]], total), gain: 0.85 },
+      { drums: drums([[0, 'X', 0.26], [at(1), 'X', 0.22], ...snaps], total), gain: 0.9 },
+      { drums: drums(hats, total), gain: 0.75 },
+      { drums: drums([[band, 'F', 0.5], [H, 'F', 0.62], [C, 'F', 0.5]], total) },
+    ],
+  };
+}
+
 // Each open: preferred tempo, then a builder that receives H (the beat of the
 // final chord, landing exactly on the title lock-up) and C (the beat of the
 // cut to the studio, possibly fractional) and returns the tune. The motif
@@ -1114,6 +1219,47 @@ OPENS['full-time'] = {
   },
 };
 
+// PAY ATTENTION (pay-attention.md §6): 112 BPM, A-flat major, its colour the 9th (a question left open), answered by
+// the 10th on the hit. Its title sequence (opens/payattentiontitles.js) on its own grid; the 4 s package's version: the
+// signature on the plucked lead and its bell over the plucked arpeggio and the bouncing bass on the A-flat pedal, Db over
+// Ab then Ab sus2 under the colour, Ab6/9 on the hit.
+OPENS['pay-attention'] = {
+  bpm: 112,
+  key: 68,
+  long: { bpm: SEQ_CUES['pay-attention'].bpm, maxDuration: 11 },
+  build(H, C) {
+    if (H >= SEQ_CUES['pay-attention'].hit) return payAttentionTitles(this.tempo, H, C);
+    const k = 68; // A-flat 4
+    const m0 = H - 4;
+    const total = C + 2;
+    const g0 = Math.max(0, m0 - 1);
+    const arp = range(g0, H, 0.5).map((b, i) => [b, (b < m0 + 2.5 ? [k + 5, k + 9, k + 12, k + 9] : [k, k + 7, k + 12, k + 7])[i % 4], 0.45, i % 2 ? 0.42 : 0.55]);
+    const bass = [...range(g0, m0 + 2.5, 0.5).map((b, i) => [b, [k - 24, k - 24, k - 12, k - 17][i % 4], 0.3, i % 2 ? 0.5 : 0.68]), [m0 + 2.5, k - 24, 1.5, 0.64]];
+    return {
+      bpm: this.tempo,
+      room: 0.22,
+      echo: { amount: 0.55, beats: 0.75, feedback: 0.24 },
+      fadeOut: 0.8,
+      tracks: [
+        { kind: 'lead', inst: QUIZ.lead, notes: part([...motif(k, COLOURS.quiz, m0), [H, k + 16, C - H - 0.25, 0.85]], total), gain: 1 }, // 9 -> 10 on the hit
+        { kind: 'lead', inst: QUIZ.ping, notes: part([...motif(k + 12, COLOURS.quiz, m0, { vel: 0.6 }), [H, k + 28, C - H - 0.25, 0.55]], total), gain: 0.7, pan: 0.18, echo: 0.3 },
+        { kind: 'harmony', inst: QUIZ.pluck, notes: part(arp, total), gain: 1, pan: -0.2 },
+        { kind: 'harmony', inst: 'pad', notes: part([
+          [0, [k + 5, k + 9, k + 12], m0 + 2.5, 0.5], // Db over Ab
+          [m0 + 2.5, [k, k + 7, k + 14], 1.5, 0.54], // Ab sus2 under the colour
+          [H, [k + 4, k + 7, k + 9, k + 14], total - H, 0.62], // Ab6/9
+        ], total), gain: 0.85, pan: 0.15 },
+        { kind: 'bass', inst: 'tri', notes: part([...bass, [H, k - 24, total - H, 0.8]], total), gain: 0.55 },
+        { kind: 'bass', inst: 'sine', notes: part([[m0, k - 36, H - m0, 0.55], [H, k - 36, total - H, 0.7]], total), gain: 0.4 },
+        stab(QUIZ.pluck, [k - 12, k - 5, k + 4], C, total, 0.65, 0.95),
+        { drums: drums([[g0, 'K', 0.5], [m0, 'K', 0.5], [m0 + 2, 'K', 0.5], [H, 'K', 0.72]], total), gain: 0.85 },
+        { drums: drums(range(m0 + 1, H, 2).map((b) => [b, 'X', 0.4]), total), gain: 0.9 },
+        { drums: drums([[H, 'F', 0.62], [C, 'F', 0.5]], total) },
+      ],
+    };
+  },
+};
+
 // Unknown programmes: the channel signature in C major, sober, all major:
 // Cadd9 -> Dm9/C -> Fmaj7/C over the C pedal, a C6/9 hit (no minor start,
 // unlike WORLD NOW's arc).
@@ -1147,7 +1293,7 @@ const GENERIC = {
   },
 };
 
-const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather', 'seven-days': 'week', 'full-time': 'sport' };
+const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather', 'seven-days': 'week', 'full-time': 'sport', 'pay-attention': 'quiz' };
 
 /**
  * Theme tune for a programme's open. The final chord lands on the title
@@ -1189,6 +1335,7 @@ const VOICE = {
   'world-weather': { key: 60, lead: LEAD.breeze, pad: 'pad' },
   'seven-days': { key: 70, lead: LEAD.flugel, pad: 'pad' },
   'full-time': { key: 63, lead: SPORT.horn, pad: 'pad' },
+  'pay-attention': { key: 68, lead: QUIZ.lead, pad: 'pad' },
   channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
 };
 const keyOf = (programId) => (VOICE[programId] ? programId : 'channel');
@@ -1312,6 +1459,34 @@ function buildOutro(programId) {
         { drums: drums([[1, 'S', 0.5], [3, 'S', 0.5]], total), gain: 1.25 },
         { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.3 : 0.42]), total), gain: 0.85 },
         { drums: drums([[H, 'F', 0.66]], total) },
+      ],
+      meta,
+    };
+  }
+  if (id === 'pay-attention') {
+    // pay-attention.md §6: the sign-off is the theme's tail: the signature on the plucked lead and its bell over the
+    // plucked arpeggio and the bouncing bass on the A-flat pedal, the colour (the 9th) answered by the 10th on Ab6/9,
+    // ringing over the end card. The quiz never airs on a grave day (§3.3), so there is no grave rule to keep here.
+    const total = 6.5;
+    const H = 4;
+    const arp = range(0, H, 0.5).map((b, i) => [b, (b < 2.5 ? [k + 5, k + 9, k + 12, k + 9] : [k, k + 7, k + 12, k + 7])[i % 4], 0.45, i % 2 ? 0.4 : 0.52]);
+    const bass = [...range(0, 2.5, 0.5).map((b, i) => [b, [k - 24, k - 24, k - 12, k - 17][i % 4], 0.3, i % 2 ? 0.48 : 0.64]), [2.5, k - 24, 1.5, 0.62]];
+    return {
+      bpm: 112,
+      room: 0.22,
+      echo: { amount: 0.55, beats: 0.75, feedback: 0.24 },
+      loudness: -1.5,
+      fadeOut: 0.9,
+      tracks: [
+        { kind: 'lead', inst: QUIZ.lead, notes: part([...motif(k, COLOURS.quiz, 0), [H, k + 16, total - H - 0.5, 0.85]], total), gain: 1 },
+        { kind: 'lead', inst: QUIZ.ping, notes: part([...motif(k + 12, COLOURS.quiz, 0, { vel: 0.58 }), [H, k + 28, total - H - 0.5, 0.52]], total), gain: 0.68, pan: 0.18, echo: 0.3 },
+        { kind: 'harmony', inst: QUIZ.pluck, notes: part(arp, total), gain: 1, pan: -0.2 },
+        { kind: 'harmony', inst: 'pad', notes: part([[0, [k + 5, k + 9, k + 12], 2.5, 0.5], [2.5, [k, k + 7, k + 14], 1.5, 0.54], [H, [k + 4, k + 7, k + 9, k + 14], total - H, 0.6]], total), gain: 0.85, pan: 0.15 },
+        { kind: 'harmony', inst: 'bell', notes: part([[H, [k + 16, k + 21, k + 26], total - H, 0.38]], total), gain: 0.8, echo: 0.45, pan: -0.25 },
+        { kind: 'bass', inst: 'tri', notes: part([...bass, [H, k - 24, total - H, 0.78]], total), gain: 0.55 },
+        { drums: drums([[0, 'K', 0.5], [2, 'K', 0.5], [H, 'K', 0.66]], total), gain: 0.85 },
+        { drums: drums([[1, 'X', 0.38], [3, 'X', 0.38]], total), gain: 0.9 },
+        { drums: drums([[H, 'F', 0.6]], total) },
       ],
       meta,
     };

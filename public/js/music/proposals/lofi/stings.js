@@ -14,6 +14,9 @@
 //   NEWS IN 60  sixtyBell(): one Gadd9 bell chord on the sign-off's last word.
 //   FULL TIME   scoreSting(): the lead's scoreline card (the A/B's pick of scoreCrowd, a crowd swell, and
 //               scoreBrass, a brass stab and a timpani hit), ducked under the voice it lands on.
+//   PAY ATTENTION  quizRight() (two bright notes), quizWrong() (a soft low note, never a buzzer's sneer), quizDrumroll()
+//               (DOUBLE OR NOTHING: two bars of snare and timpani roll, rising, landing on the key), quizTick() (the
+//               countdown's tick, on the bed's half notes: LofiEngine.countdown). Named for the director: QUIZ_STINGS.
 //   CHANNEL     countdown() (10.5 s), identFilm() (3 bars + hold), shortIdent(),
 //               sombreIdent(), upNext(), replay() (the signature backwards on the
 //               REPLAY plate: "we have heard this before").
@@ -30,6 +33,12 @@ const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
  * docs/roadmap/critique/full-time-sound.md; both candidates stay here (scoreCrowd, scoreBrass) for the owner to hear.
  */
 export const SCORE_STING = 'scoreCrowd';
+/**
+ * PAY ATTENTION's stings for the director (pay-attention.md §6), by what they mark. Cue them by moment through
+ * music/live.js (cue('right'), cue('wrong'), cue('double')); the countdown's ticks come with LiveMusic.countdown().
+ */
+export const QUIZ_STINGS = Object.freeze({ right: 'quizRight', wrong: 'quizWrong', drumroll: 'quizDrumroll', tick: 'quizTick' });
+const QUIZ_SPB = 60 / 112; // the quiz's beat (its bed, its open)
 const bassOf = (pc, octave = 2) => 12 * (octave + 1) + mod(pc, 12);
 
 // `avoid`: the notes a melody plays over the chord; the chord is voiced round them (on its guide
@@ -497,6 +506,76 @@ export const STINGS = {
     eng.rig.kick(t, 0.75, dest, { punch: true });
     eng.rig.bass(t, 39, 0.5, 0.6, dest, { wave: 'triangle', lp: 420, release: 0.4 });
     return t + 2.4;
+  },
+
+  /**
+   * PAY ATTENTION's right answer (pay-attention.md §6: "a right sting of two bright notes"): the 5th then the octave of
+   * A-flat high up (Eb6, Ab6), each a pluck doubled by a bell, the second ringing; a short room. It lands on the reveal,
+   * often with the host's line: ducked under the voice like a bed. 1.2 s.
+   */
+  quizRight(eng, t) {
+    const out = eng.duckedSting ? eng.duckedSting(1.0, 0.48) : bus(eng, 1.0);
+    const dest = eng.ctx.createGain();
+    dest.connect(out);
+    const d = eng.ctx.createDelay(1);
+    d.delayTime.value = QUIZ_SPB * 0.375;
+    const wet = eng.ctx.createGain();
+    wet.gain.value = 0.16;
+    dest.connect(d).connect(wet).connect(out);
+    const gap = QUIZ_SPB * 0.25; // a sixteenth apart
+    eng.rig.pluck(t, 87, 0.12, 0.85, dest, { wave: 'pulse25', decay: 0.08, bright: 3400, pan: -0.1 });
+    eng.rig.bell(t, 87, 0.3, 0.55, dest, { decay: 0.22, pan: -0.1 });
+    eng.rig.pluck(t + gap, 92, 0.4, 0.9, dest, { wave: 'pulse25', decay: 0.2, bright: 3600, pan: 0.1 });
+    eng.rig.bell(t + gap, 92, 0.9, 0.68, dest, { decay: 0.55, pan: 0.1 });
+    return t + 1.2;
+  },
+
+  /**
+   * PAY ATTENTION's wrong answer (pay-attention.md §6: "a soft low note, never a buzzer's sneer"): one note, D-flat (the
+   * key's 4th: not home, not a clash), soft and round: a felt electric piano on D-flat 4, its gentle harmonics the part a
+   * phone's speaker plays (a bare low note lost 18 dB there), over the round D-flat 3 body of a triangle and its sine;
+   * no saw, no square, no bend, no dissonance; well under the right sting. Ducked under the voice. 0.9 s.
+   */
+  quizWrong(eng, t) {
+    const out = eng.duckedSting ? eng.duckedSting(0.42, 0.22) : bus(eng, 0.42);
+    eng.rig.ep(t, 61, 0.42, 1, out, { index: 0.85, tine: 0, attack: 0.012, decay: 0.7, release: 0.18 }); // Db4, felt
+    eng.rig.bass(t, 49, 0.42, 0.45, out, { wave: 'triangle', lp: 520, release: 0.12 }); // Db3
+    return t + 0.9;
+  },
+
+  /**
+   * PAY ATTENTION's DOUBLE OR NOTHING (pay-attention.md §6: "a drumroll"): two bars at the quiz's tempo, a snare roll in
+   * thirty-seconds and a timpani roll in sixteenths on E-flat (the 5th: the question still open), both rising from soft;
+   * on the next downbeat the landing: a timpani on A-flat, a felt kick, Ab add9 on a bell and a pluck (no crash). The bed
+   * steps out on the beat before it (the cue sheet). 6.3 s with its ring.
+   */
+  quizDrumroll(eng, t) {
+    const dest = bus(eng, 0.37);
+    const spb = QUIZ_SPB, bars = 2, end = t + bars * 4 * spb;
+    const n = bars * 4 * 8;
+    for (let i = 0; i < n; i++) {
+      const u = i / (n - 1);
+      eng.rig.snare(t + (i * spb) / 8, 0.1 + 0.55 * u * u, dest, { brush: false });
+      if (i % 2 === 0) eng.rig.timpani(t + (i * spb) / 8, 39, 0.12 + 0.4 * u * u, dest); // Eb2
+    }
+    eng.rig.timpani(end, 44, 0.8, dest); // Ab2
+    eng.rig.kick(end, 0.7, dest);
+    [80, 82, 84, 87].forEach((m, i) => eng.rig.bell(end + i * 0.006, m, 1.4, 0.55, dest, { decay: 0.7, pan: (i - 1.5) * 0.2 })); // Ab5 Bb5 C6 Eb6
+    [68, 75, 80].forEach((m, i) => eng.rig.pluck(end + i * 0.004, m, 0.4, 0.7, dest, { wave: 'pulse25', decay: 0.18, bright: 2800, pan: (i - 1) * 0.2 }));
+    eng.rig.bass(end, 44, 0.8, 0.7, dest, { wave: 'triangle', lp: 520, release: 0.3 });
+    return end + 2;
+  },
+
+  /**
+   * PAY ATTENTION's countdown tick (pay-attention.md §6: "countdown ticks on the bed's half notes"): a dry high pluck on
+   * the key's 5th (Eb6) with a click under it, the last one on the octave (Ab6: time). Placed on the bed's grid by
+   * LofiEngine.countdown; ducked under the voice like a bed. 0.15 s.
+   */
+  quizTick(eng, t, { last = false } = {}) {
+    const out = eng.duckedSting ? eng.duckedSting(2.0, 1.1) : bus(eng, 2.0);
+    eng.rig.pluck(t, last ? 92 : 87, 0.05, 0.75, out, { wave: 'pulse25', decay: 0.028, bright: 4200 });
+    eng.rig.tick(t, 0.55, out, true);
+    return t + 0.15;
   },
 
   /** FULL TIME's scoreline sting on air: the A/B's pick (docs/roadmap/critique/full-time-sound.md). */

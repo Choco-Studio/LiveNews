@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz Set Lab</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 300px; }
+  #note { padding: 8px; max-width: 1140px; color: #8b9bb4; }
+</style>
+</head>
+<body>
+<!-- PAY ATTENTION's quiz studio (docs/programmes/pay-attention.md §6; public/js/v2/canvas25d/studio/quiz.js).
+     window.__lab: render(t), set({ framing, wall, image, presenters, cast, question, lamps, scores, at, cache, move }),
+     measure(t), profile(n), ready. Serve the repo root (e.g. `timeout 1500 python3 -m http.server 8505 --bind 127.0.0.1`)
+     and open /public/lab/pay-attention-set.html. URL: ?framing=wide|host|player-a|player-b, ?zoom=1|3|4, ?still=1,
+     ?question=1 (the moving heads hold still), ?lamps=A|B|AB (lit), ?scores=7,12, ?wall=picture, ?t=<seconds>,
+     ?cast=host,A,B (presenter ids; the host is a stand-in until step 6), ?onair=1 (the network's top row over the set:
+     the bug, LIVE, the programme's tag in purple as for 8 s after the open, the clock). -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="framing"></select>
+  <select id="wall"></select>
+  <select id="zoom" title="display scale"><option value="3">3x</option><option value="1">1x</option><option value="4">4x</option></select>
+  <label><input type="checkbox" id="presenters" checked> people</label>
+  <label><input type="checkbox" id="question"> question (heads still)</label>
+  <label><input type="checkbox" id="lampA"> lamp A</label>
+  <label><input type="checkbox" id="lampB"> lamp B</label>
+  <button id="score">score +1</button>
+  <button id="play">pause</button>
+  <button id="prof">profile</button>
+  <input id="t" type="range" min="0" max="40" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<div id="note">The host is a stand-in (Sam) until step 6 gives the host a face; contestants: Penny on seat A (the circle), Nova on seat B (the square).
+The moving heads sweep between questions and hold still while "question" is ticked (the director's hook: setQuizState in studio/set.js).</div>
+<script type="module">
+  import * as lab from '../js/v2/canvas25d/labs/pay-attention-set.js';
+  import { pixelate } from '../js/pixelate.js';
+  import { drawTopRow } from '../js/graphics/bug.js';
+  import { P } from '../js/palette.js';
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d');
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+
+  const load = (src) => new Promise((ok, no) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = no;
+    img.src = src;
+  });
+  const ready = (async () => {
+    try {
+      const img = await load('../../config/fixtures/img/port.png');
+      lab.setImage('port', { small: pixelate(img, 104, 62, { colors: 16 }), full: pixelate(img, 416, 234, { colors: 24 }) });
+    } catch { /* no fixture picture: picture mode falls back to the board at rest */ }
+  })();
+
+  // the network's top row as on air (the tag as in its 8 s after the open), over the set: what the set must keep clear of
+  const onAir = params.get('onair') === '1';
+  const TOP = { onAt: -60, replay: false, program: { title: 'PAY ATTENTION', color: P.purple }, programIn: -30, programOut: null, clock: '18:42' };
+  const present = (t) => {
+    lab.frame.present(ctx);
+    if (onAir) drawTopRow(ctx, t, TOP);
+  };
+  window.__lab = {
+    render(t = 0) {
+      lab.render(t);
+      present(t);
+    },
+    set: lab.set,
+    measure: lab.measure,
+    profile: lab.profile,
+    reset: lab.reset,
+    state: lab.LAB,
+    ready,
+    FRAMINGS: lab.FRAMINGS,
+  };
+
+  for (const n of lab.FRAMINGS) $('framing').add(new Option(n, n));
+  for (const n of lab.WALLS) $('wall').add(new Option(n, n));
+  if (params.has('cast')) {
+    const [host, A, B] = params.get('cast').split(',');
+    lab.set({ cast: { ...(host && { host }), ...(A && { A }), ...(B && { B }) } });
+  }
+  for (const k of ['framing', 'wall']) {
+    if (params.has(k)) lab.set({ [k]: params.get(k) });
+    $(k).value = lab.LAB[k];
+    $(k).onchange = () => lab.set({ [k]: $(k).value });
+  }
+  const scores = { A: 0, B: 0 };
+  if (params.has('scores')) {
+    const [a, b] = params.get('scores').split(',').map(Number);
+    scores.A = a;
+    scores.B = b;
+  }
+  const lamps = { A: /A/.test(params.get('lamps') || ''), B: /B/.test(params.get('lamps') || '') };
+  $('lampA').checked = lamps.A;
+  $('lampB').checked = lamps.B;
+  $('question').checked = params.get('question') === '1';
+  lab.set({ scores, lamps, question: $('question').checked, at: 0 });
+  const tNow = () => Number($('t').value);
+  $('question').onchange = () => lab.set({ question: $('question').checked, at: tNow() });
+  $('lampA').onchange = () => lab.set({ lamps: { A: $('lampA').checked } });
+  $('lampB').onchange = () => lab.set({ lamps: { B: $('lampB').checked } });
+  $('score').onclick = () => {
+    scores.A = (scores.A + 1) % 100;
+    scores.B = (scores.B + 2) % 100;
+    lab.set({ scores });
+  };
+  const zoom = () => {
+    const z = Number($('zoom').value);
+    canvas.style.width = `${384 * z}px`;
+    canvas.style.height = `${216 * z}px`;
+  };
+  if (params.has('zoom')) $('zoom').value = params.get('zoom');
+  zoom();
+  $('zoom').onchange = zoom;
+  $('presenters').onchange = () => lab.set({ presenters: $('presenters').checked });
+  $('prof').onclick = () => {
+    const p = lab.profile(120);
+    $('info').textContent = `bg uncached ${p.bgUncached.toFixed(3)} ms, cached ${p.bgCached.toFixed(3)} ms, desk ${p.desk.toFixed(3)} ms`;
+  };
+  const still = params.has('still');
+  if (params.has('t')) $('t').value = params.get('t');
+  let playing = !still;
+  let t0 = performance.now() - tNow() * 1000;
+  $('play').onclick = () => {
+    playing = !playing;
+    $('play').textContent = playing ? 'pause' : 'play';
+    t0 = performance.now() - tNow() * 1000;
+  };
+  $('t').oninput = () => {
+    playing = false;
+    $('play').textContent = 'play';
+    window.__lab.render(tNow());
+  };
+  function loop() {
+    if (playing) {
+      const t = (performance.now() - t0) / 1000;
+      $('t').value = t % 40;
+      window.__lab.render(t);
+    }
+    requestAnimationFrame(loop);
+  }
+  ready.then(() => window.__lab.render(tNow()));
+  if (!still) loop();
+</script>
+</body>
+</html>
