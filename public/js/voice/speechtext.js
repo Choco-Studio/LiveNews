@@ -917,7 +917,9 @@ function otherNumbers(st, L) {
     const a = +mt[1];
     const b = +mt[2];
     if (a === 0 && b === 0) return L.gb ? 'nil-nil' : 'zero-zero';
-    return a === b ? `${say(a)} all` : `${say(a)} ${say(b)}`;
+    if (a === b) return `${say(a)} all`;
+    // (a score past a hundred keeps its "to": "one hundred and nineteen to sixty-six", never heard as one number)
+    return a > 99 || b > 99 ? `${say(a)} to ${say(b)}` : `${say(a)} ${say(b)}`;
   });
   // Fractions: "½", "2 1/2", "3/4", "24/7".
   const VULGAR = { '½': [1, 2], '⅓': [1, 3], '⅔': [2, 3], '¼': [1, 4], '¾': [3, 4], '⅕': [1, 5], '⅛': [1, 8], '⅜': [3, 8], '⅝': [5, 8], '⅞': [7, 8] };
@@ -1154,13 +1156,90 @@ function tidy(st, srcText, { terminal = true } = {}) {
   return st;
 }
 
+// FULL TIME's sports (docs/programmes/full-time.md §3.5: written in figures, spoken in words), as its shape names them
+const FOOTBALL_CODES = new Set(['football', 'rugby']);
+const US_SPORTS = new Set(['american-football', 'basketball', 'baseball', 'ice-hockey']);
+// words after a figure pair that make it a result or a series score, never a cricket total or a team's record
+const RESULT_AFTER = /^\s+(?:[\p{L}-]+\s+){0,2}?(?:win|wins|victory|defeat|loss|draw|series|lead|thrashing|scoreline|result|aggregate|deficit|triumph|success|half-time)\b/iu;
+// an American team's record: "Allen was 0-7 in overtime", "the Texans are 1-4", "a 3-2 start", "improved to 5-1"
+const RECORD_BEFORE = /\b(?:was|were|is|are|went|go|goes|now|improved to|improve to|improves to|fell to|fall to|falls to|dropped to|drop to|moved to|move to|moves to|sit at|sits at|stand at|stands at)\s+$/i;
+const RECORD_AFTER = /^\s+(?:in\s+(?:OT|overtime)|record|start|on the season|this season|on the road|at home|in (?:their|his|her) last)\b/i;
+// a cricket series or match result, never a total: "England won the series 2-1", "lead the series 1-0"
+const CRICKET_RESULT_BEFORE = /\b(?:won|win|wins|winning|lost|lose|loses|losing|beat|beats|drew|draw|draws|clinched|sealed|lead|leads|led|leading|trail|trails|trailed|trailing)\b(?:\s+[\p{L}'’-]+){0,3}\s*$/iu;
+
+/**
+ * A sport story's figure pairs as a results reader says them, for the segment's own sport only (`sport`: FULL TIME's
+ * shape sets it on a story; no other programme passes one, so their reading is unchanged): cricket's "102-4" is "one
+ * hundred and two for four" (a series "2-1" stays a score); tennis's sets "6-4 6-3" are "six-four, six-three" ("6-0":
+ * "six-love"); in football and rugby every score has its "nil" ("a 3-0 Ashes series defeat": "three nil"), as the
+ * result lines say it; an American team's record is "oh and seven" ("Allen was 0-7 in overtime"), and a score of two
+ * figures there needs no "to" ("going into the breaks 34-21": "thirty-four twenty-one").
+ */
+function sportNumbers(st, L, sport) {
+  if (!sport || L.es) return st;
+  const n = (x) => cardinalEn(x, L.gb);
+  const pair = /(?<![\w.,/$€£¥-])(\d{1,3})\s?[-–]\s?(\d{1,3})\b(?![-–]?\d|\s?%|\s?(?:per\s?cent|percent))/g;
+  // a result or a series score: "three nil", "one all", "nil-nil" ("zero" in the American sports, as spokenScore); a
+  // score past a hundred keeps its "to" ("one hundred and nineteen to sixty-six": never heard as one number)
+  const score = (a, b, zero) => {
+    const say = (x) => (x === 0 ? zero : n(x));
+    if (a === 0 && b === 0) return zero === 'nil' ? 'nil-nil' : 'zero-zero';
+    if (a === b) return `${say(a)} all`;
+    return a > 99 || b > 99 ? `${say(a)} to ${say(b)}` : `${say(a)} ${say(b)}`;
+  };
+  if (sport === 'cricket') {
+    return sub(st, pair, (mt, s) => {
+      const runs = +mt[1];
+      const wickets = +mt[2];
+      const result = RESULT_AFTER.test(s.slice(mt.index + mt[0].length)) || CRICKET_RESULT_BEFORE.test(s.slice(Math.max(0, mt.index - 40), mt.index));
+      if (result) return runs <= 10 && wickets <= 10 ? score(runs, wickets, 'nil') : null;
+      if (wickets > 10) return null;
+      return [[n(runs), 0], [' for ', mt[1].length], [n(wickets), mt[0].length - mt[2].length]];
+    });
+  }
+  if (sport === 'tennis') {
+    const set = /(?<![\w.,/$€£¥-])\(?([0-7])\s?[-–]\s?([0-7])\)?(?![-–]?\d|\s?%)/g;
+    return sub(st, set, (mt, s) => {
+      const say = (x) => (+x === 0 ? 'love' : n(+x));
+      const another = /^\s+\(?[0-7]\s?[-–]\s?[0-7]/.test(s.slice(mt.index + mt[0].length));
+      return `${say(mt[1])}-${say(mt[2])}${another ? ',' : ''}`;
+    });
+  }
+  if (FOOTBALL_CODES.has(sport)) {
+    // a formation: "a 4-3-3" is "four-three-three"
+    st = sub(st, /(?<![\w.,/-])([1-6])-([1-6])-([1-6])(?:-([1-6]))?\b(?![-–]?\d)/g, (mt) => mt.slice(1).filter(Boolean).map((x) => n(+x)).join('-'));
+    return sub(st, pair, (mt) => {
+      const a = +mt[1];
+      const b = +mt[2];
+      if ((sport === 'football' && (a > 15 || b > 15)) || a > 99 || b > 99) return null;
+      return score(a, b, 'nil');
+    });
+  }
+  if (US_SPORTS.has(sport)) {
+    return sub(st, pair, (mt, s) => {
+      const a = +mt[1];
+      const b = +mt[2];
+      const before = s.slice(Math.max(0, mt.index - 24), mt.index);
+      const after = s.slice(mt.index + mt[0].length, mt.index + mt[0].length + 30);
+      if (a <= 30 && b <= 30 && (RECORD_BEFORE.test(before) || RECORD_AFTER.test(after))) {
+        const say = (x) => (x === 0 ? 'oh' : n(x));
+        return [[say(a), 0], [' and ', mt[1].length], [say(b), mt[0].length - mt[2].length]];
+      }
+      if ((a >= 10 && b >= 10) || RESULT_AFTER.test(after)) return score(a, b, 'zero');
+      return null;
+    });
+  }
+  return st;
+}
+
 /**
  * Rewrite news copy for the ear. Returns `{ spoken, map }` where `map[i]` is
  * the offset in `text` of spoken character i (`map.length === spoken.length + 1`,
  * monotonic). Options: `lang` ('en-GB', 'en-US', 'es'...), `lexicon` (extra
- * word -> respelling), `terminal` (end with a full stop, default true).
+ * word -> respelling), `terminal` (end with a full stop, default true), `sport`
+ * (a FULL TIME story's sport: its figure pairs read as its results reader would).
  */
-export function normalizeForSpeech(text, { lang = 'en-US', lexicon = null, terminal = true } = {}) {
+export function normalizeForSpeech(text, { lang = 'en-US', lexicon = null, terminal = true, sport = null } = {}) {
   const L = langInfo(lang);
   let st = mapped(String(text ?? ''));
   st = cleanup(st);
@@ -1170,6 +1249,7 @@ export function normalizeForSpeech(text, { lang = 'en-US', lexicon = null, termi
   st = datesAndTimes(st, L);
   st = money(st, L);
   st = percentAndUnits(st, L);
+  st = sportNumbers(st, L, sport);
   st = otherNumbers(st, L);
   st = plainNumbers(st, L);
   st = symbols(st, L);

@@ -88,6 +88,9 @@ export function planPhrases(text, { speech, persona, personaId, lang, seg, minRe
     segmentType: seg ? segmentType(seg) : 'story',
     grave: seg?.emotion === 'serious' || seg?.emotion === 'sad',
     cues: Array.isArray(seg?.cues) ? seg.cues.filter((c) => c && c.emotion && !c.slot) : undefined,
+    // a FULL TIME story's sport (server/sport/shape.js): its scores, totals, sets and records read as its results
+    // reader says them (speechtext sportNumbers); no other programme's segment carries one
+    ...(typeof seg?.sport === 'string' && seg.sport ? { sport: seg.sport } : {}),
   });
   // The planner's speedFactor includes the persona's own pace, which casting
   // already calibrated into the Kokoro speed: keep only what it adds on top.
