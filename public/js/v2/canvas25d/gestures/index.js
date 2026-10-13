@@ -89,6 +89,8 @@ export const REST = {
   // body units added to the glasses aim while the index is at the hinge (negative = up): the push that adjusts
   // the frame (critic r3: a rigid touch read as touching the temple)
   reachY: 0,
+  // where the reach goes: 0 the hinge on the hand's own side (a pinch at the frame), 1 the bridge (one finger)
+  reachAt: 0,
   // fingertips meeting (rig.js touchHands): 0..1 brings the two hands' fingertips onto each other; tipGap (body
   // units) opens them that far apart (a tap); tipSettle (body units, down) is the contact beat, the joined hands
   // settling as the fingertips land (`press` is the lips' channel)
@@ -110,7 +112,7 @@ REST.proF = pronationSide(REST.dirF, -1);
 }
 
 /** Channels that OVERRIDE (a gesture blends them toward its own value); every other channel adds. */
-export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY', 'touch', 'tipGap', 'tipSettle'];
+export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY', 'reachAt', 'touch', 'tipGap', 'tipSettle'];
 const OVERRIDE = new Set(ARM_CHANNELS);
 /** Override channels that belong to both hands at once (the papers prop, the fingertip contact). */
 const BOTH_ARMS = new Set(['hold', 'tilt', 'touch', 'tipGap', 'tipSettle']);
@@ -377,7 +379,7 @@ const NEG = new Set(['yaw', 'roll', 'hx', 'bx', 'lookX', 'pro', 'proF']);
 export function mirrorDef(d) {
   const tracks = {};
   for (const [ch, keys] of Object.entries(d.tracks)) {
-    if (ch === 'reach' || ch === 'reachY') continue; // the glasses reach is the near hand's own
+    if (ch === 'reach' || ch === 'reachY' || ch === 'reachAt') continue; // the glasses reach is the near hand's own
     const to = SWAP[ch] || ch;
     tracks[to] = keys.map((k) => {
       // a rest key stays a rest key: the far hand's own rest (the hands are not twins at rest), never the

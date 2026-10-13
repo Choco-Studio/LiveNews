@@ -322,12 +322,43 @@ export const ARMS = {
       spread: [[0, 'R'], [0.7, 0.06], [1.16, 0.06], [1.64, 'R']],
       pole: [[0, 'R'], [0.5, [0.7, 1, 0.1]], [1.16, [0.7, 1, 0.1]], [1.9, 'R']],
       reach: [[0, 0, 's'], [0.48, 0, 's'], [0.8, 1, 's'], [1.1, 1, 's'], [1.4, 0, 's'], [1.9, 0, 's']],
-      // at the hinge the fingertip nudges the frame up about 1 px and lets it settle (the adjustment itself)
-      reachY: [[0, 0], [0.84, 0, 's'], [0.92, -0.32, 's'], [1.0, -0.26], [1.1, 0, 's'], [1.9, 0]],
+      // at the hinge the fingertip nudges the frame up about 1 px and holds it there until the hand leaves: the
+      // glasses ride up with the push and settle back only as the fingers let go (expression.js glassesLift)
+      reachY: [[0, 0], [0.84, 0, 's'], [0.92, -0.32, 's'], [1.0, -0.26], [1.08, -0.22, 's'], [1.14, -0.22, 's'], [1.4, 0, 's'], [1.9, 0]],
       shN: [[0, 0], [0.2, 0.15], [0.7, -0.4], [1.12, -0.36], [1.6, 0.04], [1.9, 0]],
       pitch: [[0, 0], [0.7, 0.02], [0.9, -0.012], [1.1, 0.008], [1.9, 0]],
       roll: [[0, 0], [0.72, 0.018], [1.12, 0.015], [1.9, 0]],
       brow: [[0, 0], [0.7, 0.12], [0.94, 0.2], [1.6, 0]],
+    },
+  },
+};
+
+// The glasses pushed up with one finger (owner, LISTA 13 "deslizar gafas"): the near hand rises with the index
+// up and the other fingers loosely curled, the back of the hand to the lens; the index fingertip lands on the
+// bridge (rig.js reachGlasses, `reachAt` 1), pushes the frame up about a pixel and holds it while the hand is
+// there, then the hand goes back down. Shorter than the pinch at the hinge (1.6 s); the planner puts the touch
+// in the pause between two sentences, so the hand passes the mouth only while nothing is said.
+const PUSH_UP = [0.5, 0.0, 0.62, 0.72, 0.8];
+ARMS.glasses.variants = {
+  push: {
+    dur: 1.6,
+    stroke: 0.26,
+    apex: 0.62,
+    hold: 0.9,
+    tracks: {
+      wrist: [[0, 'R'], [0.18, [-6.2, 19.4, 12.8]], [0.4, [-9.6, 5.0, 10.6]], [0.6, [-12.6, -8.0, 8.6]], [0.7, [-12.6, -9.0, 8.6], 's'], [0.9, [-12.6, -9.0, 8.6], 's'], [1.14, [-9.0, 4.0, 10.8]], [1.38, [-6.0, 15.0, 12.6]], [1.6, 'R', 's']],
+      dir: [[0, 'R'], [0.24, [-0.6, -0.2, 0.75]], [0.5, [-0.3, -0.93, 0.2]], [0.92, [-0.3, -0.93, 0.2], 's'], [1.2, [-0.5, -0.4, 0.75]], [1.44, [-0.75, 0.15, 0.62]], [1.6, 'R']],
+      curl: [[0, 'R'], [0.36, [0.4, 0.2, 0.55, 0.65, 0.72]], [0.6, PUSH_UP, 's'], [0.94, PUSH_UP, 's'], [1.36, 'R']],
+      facing: [[0, 'R'], [0.5, -0.9, 's'], [0.94, -0.9, 's'], [1.36, 'R']],
+      spread: [[0, 'R'], [0.6, 0.1], [0.94, 0.1], [1.36, 'R']],
+      pole: [[0, 'R'], [0.5, [0.6, 1, 0.2]], [0.94, [0.6, 1, 0.2]], [1.6, 'R']],
+      reach: [[0, 0, 's'], [0.36, 0, 's'], [0.62, 1, 's'], [0.88, 1, 's'], [1.14, 0, 's'], [1.6, 0, 's']],
+      // (the bridge for the whole reach; back to the hinge only while the hand is away, so the track ends at rest)
+      reachAt: [[0, 0], [0.3, 1, 's'], [1.3, 1, 's'], [1.6, 0]],
+      reachY: [[0, 0], [0.64, 0, 's'], [0.72, -0.34, 's'], [0.8, -0.28], [0.86, -0.24, 's'], [0.9, -0.24, 's'], [1.12, 0, 's'], [1.6, 0]],
+      shN: [[0, 0], [0.2, 0.12], [0.62, -0.3], [0.9, -0.26], [1.4, 0.03], [1.6, 0]],
+      pitch: [[0, 0], [0.62, 0.015], [0.74, -0.01], [0.9, 0.005], [1.6, 0]],
+      brow: [[0, 0], [0.6, 0.08], [0.76, 0.14], [1.3, 0]],
     },
   },
 };

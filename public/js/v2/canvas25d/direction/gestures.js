@@ -58,9 +58,12 @@
 // and a statement's name not within the presenter's last vocabWindow (3) gestures, across turns; the wall point
 // at most twice per presenter per episode, the second time with the open hand.
 // Meaning (critics r2): gestures that carry a meaning need it in the text: shake_head only near a
-// negation, contrast or doubt, shrug only on uncertainty or a question, glasses only on the question
-// (tech-bytes.md "before her question"); chin while speaking is a brief touch (the long thinking pose
-// only on a question or into the pause after the last word).
+// negation, contrast or doubt, shrug only on uncertainty or a question; chin while speaking is a brief touch
+// (the long thinking pose only on a question or into the pause after the last word).
+// Glasses (owner, LISTA 13 "deslizar gafas"): a presenter who wears them pushes them up now and then, in a
+// pause between two sentences (preferably the one before her question, tech-bytes.md "before her question"),
+// the hand at the frame only while nothing stressed is said, at most once every GLASSES_GAP s of the programme
+// (the programme memory), by the frame (a pinch at the hinge) or with one finger on the bridge.
 //
 // Visibility (owner 20:40 / critics): a gesture is only worth performing where the viewer sees the
 // hands. At planning time every arm gesture's apex hand is projected through the framing of the
@@ -277,6 +280,10 @@ const MIN_BEAT_PX = 2; // a beat that moves less than this on screen is not wort
 // per presenter per episode: the wall point at most twice (the second time the open hand), a third wall
 // reference is left to the eyeline (critic r3: Lola pointed at the wall at 41, 105 and 151 s)
 const FAMILY_CAP = { point_screen: 2 };
+// the glasses push: at most once in this many s of the programme per presenter ("rare: once every few minutes"),
+// and outside the pause before a question only after this many s without one
+const GLASSES_GAP = 180;
+const GLASSES_IDLE = 240;
 // meaning in the text: a head shake near a negation, contrast or doubt; a shrug on uncertainty or a question
 const NEGATION = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/gi;
 const UNCERTAIN = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/gi;
@@ -866,7 +873,7 @@ const SAME_ACTION = { steeple: ['tap'], raise_hand: ['lift', 'box'], point_scree
 const CHEST = [['steeple', 'tap'], ['raise_hand', 'lift'], ['raise_hand', 'box'], ['point_screen', 'open'], ['count', null], ['chin', 'touch']];
 const NUMBERISH = /\d|\b(one|two|three|four|five|first|second|third)\b|,/i;
 const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0, names: Object.freeze([]) });
-const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}), counts: Object.freeze({}) });
+const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}), counts: Object.freeze({}), glasses: Object.freeze({}) });
 
 // ---------------------------------------------------------------------------
 
@@ -906,7 +913,7 @@ function memoryBefore(ctx) {
   if (!c || !c.valid) return MEM0;
   const t = turnOf(c);
   if (!t || !t.mem) return MEM0;
-  return { t0: t.mem.t0 + c.duration + (c.gapAfter ?? 0.7), recent: t.mem.recent, raised: t.mem.raised, counts: t.mem.counts };
+  return { t0: t.mem.t0 + c.duration + (c.gapAfter ?? 0.7), recent: t.mem.recent, raised: t.mem.raised, counts: t.mem.counts, glasses: t.mem.glasses || MEM0.glasses };
 }
 
 /** The memory at the end of a planned segment: what came before plus its own marked arm gestures. */
@@ -915,21 +922,23 @@ function memoryAfter(P) {
   const end = m.t0 + P.ctx.duration;
   // the last MEMORY_SPAN s, and always the latest one (never the same family twice in a row on air)
   const recent = m.recent.filter((r, i) => end - r.abs <= MEMORY_SPAN || i === m.recent.length - 1);
-  let raised = m.raised, counts = m.counts;
+  let raised = m.raised, counts = m.counts, glasses = m.glasses || MEM0.glasses;
   for (const e of P.events.slice().sort((a, b) => a.at - b.at)) {
+    // when each presenter last touched their glasses (on the programme clock)
+    if (e.name === 'glasses') glasses = { ...glasses, [e.slot]: m.t0 + e.at };
     if (!e.aired) continue;
     const fam = familyOf(e);
     recent.push({ fam, abs: m.t0 + e.at, slot: e.slot });
     if (fam === 'raise_hand') raised = { ...raised, [e.slot]: (raised[e.slot] || 0) + 1 };
     if (FAMILY_CAP[fam]) counts = { ...counts, [`${e.slot}|${fam}`]: (counts[`${e.slot}|${fam}`] || 0) + 1 };
   }
-  return { t0: m.t0, recent, raised, counts };
+  return { t0: m.t0, recent, raised, counts, glasses };
 }
 
 /** A segment with no plan of its own (no words, invalid) passes the memory on unchanged. */
 function carryMemory(c) {
   const m = memoryBefore(c);
-  return { t0: m.t0, recent: m.recent, raised: m.raised, counts: m.counts };
+  return { t0: m.t0, recent: m.recent, raised: m.raised, counts: m.counts, glasses: m.glasses };
 }
 
 function previousTurns(ctx) {
@@ -1047,14 +1056,15 @@ function planInternal(ctx) {
     const name = P.admit(cue.action);
     if (!name || (name === 'papers' && B.signoffPapers)) continue;
     if (name === 'nod' && greeted) continue; // one greeting nod, not two
+    if (name === 'glasses') continue; // the glasses keep their own moment and rarity (placeGlasses)
     if (name === 'point_screen' && !pictureFollows(ctx, ctx.timeAt(cue.char) + 0.6)) continue;
     if (name === 'lean_in' && B.leanInPerEpisode && P.ep.leanIn !== ctx.index) continue;
     P.placeVisible(name, cue.char, {});
   }
 
-  // ---- TECH BYTES / COSMOS: a presenter who wears glasses may touch them as her question starts
+  // ---- TECH BYTES / COSMOS: a presenter who wears glasses pushes them up now and then, between two sentences
   // (the bible's own moment, like the greeting: outside the pace budget, inside the variety memory)
-  if (ctx.question && R.speaker.includes('glasses') && P.admit('glasses') && P.r() < 0.7) P.placeNear('glasses', ctx.question.char, { early: true, free: true, statement: true });
+  placeGlasses(P);
 
   // ---- sign-off: a nod on the last stressed word, then the papers in the hold
   if (ctx.type === 'outro') {
@@ -1484,12 +1494,87 @@ function handsVisible(ctx, ev, d) {
   return xa >= 8 && xb <= 376;
 }
 
+/** Seconds of a glasses definition (as played) while the fingertip is at the frame: reach ≥ 0.5 (memoised). */
+const CONTACT = new WeakMap();
+function glassesContact(d) {
+  let c = CONTACT.get(d);
+  if (c) return c;
+  const ch = d._ch.find((x) => x.ch === 'reach');
+  let t0 = d.apex, t1 = d.hold;
+  if (ch) {
+    t0 = Infinity;
+    t1 = -Infinity;
+    for (let t = 0; t <= d.dur + 1e-9; t += 0.01) {
+      if (evalTrack(ch.keys, t) < 0.5) continue;
+      t0 = Math.min(t0, t);
+      t1 = Math.max(t1, t);
+    }
+  }
+  CONTACT.set(d, (c = [t0, t1]));
+  return c;
+}
+
+/** The engine's pause after a sentence (audio.js gapAfter; direction/context.js uses the same table). */
+function pauseAfter(text) {
+  const end = /([.!?…:;])["'’”»)\]]*\s*$/.exec(text || '')?.[1] ?? '';
+  return end === '?' ? 0.48 : end === '…' ? 0.56 : end === '.' || end === '!' ? 0.43 : end === ':' || end === ';' ? 0.3 : 0.16;
+}
+
+/** No stressed word is said while the hand is at the glasses (the touch between sentences, never on an accent). */
+function glassesClear(ctx, ev) {
+  const d = defOf(ev);
+  const rate = rateOf(ev);
+  const [c0, c1] = glassesContact(d);
+  const a = ev.at + c0 / rate - 0.05, b = ev.at + c1 / rate;
+  for (const w of ctx.words) if (w.stressed && w.t >= a && w.t <= b) return false;
+  return true;
+}
+
+/**
+ * The glasses push (owner, LISTA 13): in the pause before sentence k, the fingertip arriving at the frame just
+ * after the last word of sentence k − 1 and gone before the first stressed word of sentence k. Tried at the
+ * pause before the question first (Ada's moment, tech-bytes.md), then, only after GLASSES_IDLE s without one,
+ * at the other pauses; never twice within GLASSES_GAP s for one presenter (the programme memory), never in a
+ * greeting or a sign-off segment. The hand works by the frame (a pinch at the hinge) or, seeded, with one
+ * finger on the bridge (`push`).
+ */
+function placeGlasses(P) {
+  const { ctx, R } = P;
+  if (ctx.type === 'intro' || ctx.type === 'outro' || !R.speaker.includes('glasses') || !P.admit('glasses')) return;
+  const S = ctx.sentences, W = ctx.words;
+  if (S.length < 2) return;
+  const last = (P.mem.glasses || MEM0.glasses)[ctx.speaker];
+  const q = ctx.question ? sentenceOf(ctx, ctx.question.char) : -1;
+  const order = [];
+  if (q > 0 && P.r() < 0.7) order.push(q);
+  const idle = last == null ? Infinity : P.mem.t0 - last;
+  if (idle >= GLASSES_IDLE && P.r() < 0.35) for (let k = 1; k < S.length; k++) if (k !== q) order.push(k);
+  if (!order.length) return;
+  const variant = P.r() < 0.5 ? 'push' : null;
+  for (const k of order) {
+    // the last word of sentence k − 1, and when it ends (the start of sentence k minus the engine's pause)
+    let wi = -1;
+    for (let i = 0; i < W.length && W[i].char < S[k].start; i++) wi = i;
+    if (wi < 0) continue;
+    const end = Math.max(W[wi].t + 0.12, S[k].t0 - pauseAfter(S[k - 1].text));
+    const d = defOf({ name: 'glasses', variant });
+    const [c0] = glassesContact(d);
+    const at = end + 0.03 - c0;
+    if (at < 0 || (last != null && P.mem.t0 + at - last < GLASSES_GAP)) continue;
+    const ev = P.tryAt('glasses', wi, { atOverride: at, free: true, statement: true, variant });
+    if (ev) {
+      P.commit(ev, { free: true, statement: true });
+      return;
+    }
+  }
+}
+
 /** Do the words carry this gesture's meaning (head shake: negation / contrast / doubt; shrug: uncertainty; glasses: the question)? */
 function semanticOk(ctx, ev) {
   const name = ev.name;
   if (name !== 'shake_head' && name !== 'shrug' && name !== 'glasses') return true;
   const si = sentenceOf(ctx, ev.word);
-  if (name === 'glasses') return !!ctx.question && si === sentenceOf(ctx, ctx.question.char);
+  if (name === 'glasses') return glassesClear(ctx, ev);
   const sent = ctx.sentences[si];
   const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
   const re = name === 'shake_head' ? NEGATION : UNCERTAIN;

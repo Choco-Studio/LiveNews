@@ -455,7 +455,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.hand.palm[1] = pv[1];
     arm.hand.palm[2] = pv[2];
     arm.hand.palmW = clamp(pass === 0 ? c.palmW : c.palmWF, 0, 1);
-    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0, TW);
+    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0, TW, clamp(c.reachAt || 0, 0, 1));
   }
   if (touch > 0.001) touchHands(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, touch, c.tipSettle || 0, c.tipGap || 0);
   for (let pass = 0; pass < 2; pass++) {
@@ -517,7 +517,8 @@ function touchHands(L, armN, armF, sideN, w, settle, part) {
 const RG = newHandGeometry();
 const RARM = { wrist: [0, 0, 0], handDir: null, hand: null };
 const REACH_Z = 7.5; // body units: the fingertip's depth, in front of the face plane
-function reachGlasses(L, sk, arm, reach, sideKey, nudgeY, TW) {
+const BRIDGE = [0, 0];
+function reachGlasses(L, sk, arm, reach, sideKey, nudgeY, TW, at) {
   const h = sk.head;
   BODY_HEAD.L = L;
   BODY_HEAD.cx = L.headAt[0] + h.x;
@@ -528,6 +529,12 @@ function reachGlasses(L, sk, arm, reach, sideKey, nudgeY, TW) {
   BODY_HEAD.yaw = h.yaw;
   BODY_HEAD.pitch = h.pitch;
   glassesAnchor(BODY_HEAD, sideKey === 'R' ? 'templeR' : 'templeL', ANCHOR);
+  // `reachAt` 1: the bridge instead (one finger pushing the glasses up the nose)
+  if (at > 0) {
+    glassesAnchor(BODY_HEAD, 'bridge', BRIDGE);
+    ANCHOR[0] += (BRIDGE[0] - ANCHOR[0]) * at;
+    ANCHOR[1] += (BRIDGE[1] - ANCHOR[1]) * at;
+  }
   RARM.handDir = arm.handDir;
   RARM.hand = arm.hand;
   handGeometry(L, RARM, sideKey === 'R' ? 1 : -1, RG);

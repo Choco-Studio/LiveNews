@@ -435,6 +435,8 @@ test('timing: anchored to a stressed word (stroke 0.2-0.3 s before, apex ±0.1 s
             assert.ok(e.at >= ctx.duration - 0.15 - 1e-9, 'papers after the last word');
             continue;
           }
+          // the glasses push goes in a pause between two sentences, never on a word (its own test below)
+          if (e.name === 'glasses') continue;
           const w = ctx.words.find((x) => x.char === e.word);
           assert.ok(w, 'anchored to a word');
           const lead = pid === 'cosmos' ? [0.3, 0.3] : [0.2, 0.3];
@@ -1060,7 +1062,7 @@ test('the episode\'s own gesture policy replaces the client mirror when the cont
   assert.deepEqual([...seen.nod], ['nod'], `nod-only policy: ${[...seen.nod]}`);
 });
 
-test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question, glasses the question', () => {
+test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question; the glasses a pause', () => {
   const NEG = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/i;
   const UNC = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/i;
   let seen = 0;
@@ -1075,10 +1077,7 @@ test('meaning (critics r2): head shakes need a negation, contrast or doubt, shru
         const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
         if (e.name === 'shake_head') assert.ok(NEG.test(text), `${pid}: shake_head on "${text}"`);
         if (e.name === 'shrug') assert.ok(UNC.test(text), `${pid}: shrug on "${text}"`);
-        if (e.name === 'glasses') {
-          assert.ok(ctx.question, `${pid}: glasses without a question`);
-          assert.equal(ctx.sentences.findIndex((x) => ctx.question.char < x.end), si, `${pid}: glasses outside the question`);
-        }
+        if (e.name === 'glasses') assert.ok(glassesInPause(ctx, e), `${pid}: glasses at ${e.at.toFixed(2)} not in a pause`);
       }
     }
   }
@@ -1166,6 +1165,68 @@ test('glasses: the index fingertip sits on the hinge of the glasses (glassesAnch
         assert.ok(c.blink < 0.05, `seed ${seed} t0 ${t0.toFixed(1)}: blink ${c.blink.toFixed(2)} at the hinge`);
       }
     }
+  }
+});
+
+/** The fingertip-at-the-frame window of a glasses event (reach ≥ 0.5), as played: [from, to] s. */
+function glassesWindow(e) {
+  const d = defOf(e), rate = rateOf(e);
+  let a = Infinity, b = -Infinity;
+  const s = actor('ada', { side: 1, seed: 3, gestures: [{ ...e, t0: 0.3 }], armIdle: false });
+  for (let t = 0; t <= d.dur / rate; t += 0.01) {
+    poseAt(s, 0.3 + t);
+    if (s._c.reach >= 0.5) {
+      a = Math.min(a, t);
+      b = Math.max(b, t);
+    }
+  }
+  return [e.at + a, e.at + b];
+}
+/** The touch falls in a pause: no stressed word under it, a sentence boundary right at it. */
+function glassesInPause(ctx, e) {
+  const [a, b] = glassesWindow(e);
+  if (ctx.words.some((w) => w.stressed && w.t >= a - 0.05 && w.t <= b)) return false;
+  return ctx.sentences.some((s, k) => k > 0 && s.t0 >= a - 0.1 && s.t0 <= b + 0.6);
+}
+
+test('glasses (owner, LISTA 13): pushed up between two sentences, never under a stressed word, at most once per 180 s per presenter, only by wearers', () => {
+  // both ways of doing it end at rest and reach the frame: by the hinge (a pinch) and with one finger on the bridge
+  const push = defOf({ name: 'glasses', variant: 'push' });
+  assert.ok(push && push.variant === 'push' && push._ch.some((c) => c.ch === 'reachAt'), 'the one-finger push exists');
+  let seen = 0, pushes = 0;
+  for (const ep of episodes('tech-bytes', 14)) {
+    const res = planEpisode(ep);
+    let t = 0;
+    const last = {};
+    res.forEach((r) => {
+      for (const e of gesturesOf(r).filter((x) => x.name === 'glasses')) {
+        seen++;
+        if (e.variant === 'push') pushes++;
+        assert.ok(LOOKS[r.ctx.speakerId]?.glasses, `${r.ctx.speakerId} wears no glasses`);
+        assert.ok(glassesInPause(r.ctx, e), `glasses at ${e.at.toFixed(2)} of "${r.ctx.seg.text.slice(0, 40)}" not in a pause`);
+        assert.ok(r.ctx.type !== 'intro' && r.ctx.type !== 'outro', 'no glasses in the greeting or the sign-off');
+        const abs = t + e.at;
+        if (last[e.slot] != null) assert.ok(abs - last[e.slot] >= 170, `glasses again after ${(abs - last[e.slot]).toFixed(0)} s`);
+        last[e.slot] = abs;
+      }
+      t += r.ctx.duration + 0.7;
+    });
+  }
+  assert.ok(seen > 0, 'the glasses still air');
+  assert.ok(pushes > 0 && pushes < seen, `both ways air (${pushes} pushes of ${seen})`);
+  // the frame rides up with the fingertip's push and comes down as the fingers let go, never before the finger is there
+  for (const variant of [null, 'push']) {
+    const a = actor('ada', { side: 1, seed: 11, gestures: [{ name: 'glasses', t0: 0.3, ...(variant ? { variant } : {}) }] });
+    let lifted = 0, early = 0;
+    for (let t = 0.3; t < 2.4; t += 1 / 60) {
+      const sk = poseAt(a, t);
+      if (sk.face.glassesLift >= 0.5) {
+        lifted++;
+        if (a._c.reach < 0.85 || a._c.reachY > -0.07) early++;
+      }
+    }
+    assert.ok(lifted >= 8, `${variant || 'frame'}: the frame rides up (${lifted} frames)`);
+    assert.equal(early, 0, `${variant || 'frame'}: the frame never moves without the finger on it`);
   }
 });
 
