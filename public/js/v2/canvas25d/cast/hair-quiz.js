@@ -175,7 +175,8 @@ export function drawPuffs(buf, L, m, head, s, sk) {
     if (x > 0 && Math.abs(x) > hw - 0.6 && y > cyc - 1) t = Math.max(t, 2);
     if (tr === 0) return t;
     // the centre part: a fine line of scalp from the hairline toward the gap between the puffs
-    const part = Math.abs(fx) < (tr === 2 ? 0.5 * px1 + 0.08 : 0.3) && y < hl - 0.2 && y > PF.y + r * 0.4;
+    // (it stops short of the puffs: run up into the gap it read as a stalk between them)
+    const part = Math.abs(fx) < (tr === 2 ? 0.5 * px1 + 0.08 : 0.3) && y < hl - 0.2 && y > hl - 3.2;
     if (part) return (m.scalp << 4) | 1;
     // combed back toward the nearer puff: strands along the line from the hairline to that puff's base
     const side = fx < 0 ? 0 : 1;
@@ -313,6 +314,8 @@ export function drawPompadour(buf, L, m, head, s, sk) {
     return tt;
   });
   const g = head.gb + GROUPS.hair;
+  // sheen strokes that end in a single pixel read as steel dust at mediums (the craft rule: no orphans)
+  if (tr >= 1) pruneSpecks(buf, x0, y0, x1, y1, g, mt, [md]);
   selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, mt, m.hairEdge);
   if (s >= 1.35) hairLight(buf, head, g, rimMat(P.silver), PD.cx - 0.6, RV + 1, rollTop - 1.2, cyc + 1, Math.max(2, Math.round(s * 1.2)));
   void px1;

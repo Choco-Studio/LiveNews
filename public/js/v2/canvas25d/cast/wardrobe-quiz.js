@@ -60,7 +60,8 @@ function bowTieSuit(o) {
       for (let dy = 0; dy <= 1; dy++) {
         const px = cx + dx, py = cyp + dy;
         const i = py * buf.w + px;
-        if (!buf.mat[i] || (buf.grp[i] !== gb + G.shirt && buf.grp[i] !== gb + G.collar)) continue;
+        const gi = buf.grp[i] - gb;
+        if (!buf.mat[i] || (gi !== G.shirt && gi !== G.collar && gi !== G.neck && gi !== G.jacket)) continue; // the bow lies over all of them
         buf.paint(px, py, dx === 0 ? knot : dx < 0 && dy === 0 ? lit : base, 0);
       }
     }

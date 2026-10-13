@@ -353,5 +353,30 @@ Measured on the development archive, with a model of the planner that counts sto
    ticks.
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
 6. **Cast**: the host's face and voice (A/B for the owner); the contestants' seats. *Gate: the character rubric above 9.7.*
+   *Built: the host is the presenter `qm` (`config/channel.json`, named Quinn Query until the owner chooses), with three
+   candidates for each of name, face and voice; critique in `docs/roadmap/critique/pay-attention-cast.md` (passed at
+   9.75 in round 3). Seen in `public/lab/pay-attention-cast.html` (the three faces at 1x and 4x, seated and talking,
+   beside the eight contestants; the three voice samples under the sheets).*
+   - *Faces, both renderers (v2: `cast/pay-attention.js`, `cast/hair-quiz.js`, `cast/wardrobe-quiz.js`; the old renderer:
+     `anchors.js`, `scenes/portraits.js`):*
+     - *A: two high afro puffs from a centre part, warm medium-brown skin, a crimson blazer over a black top, a gold stud
+       (on Lola's body);*
+     - *B: a glossy black pompadour with one silver streak, clean-shaven, olive skin, a cream dinner jacket with black
+       satin lapels, a purple bow tie and pocket square (on Paco's body);*
+     - *C: an azure hijab framing the face and draped over the shoulders, light tan skin, a charcoal jacket over a white
+       blouse, a gold pin (on Penny's body).*
+   - *Voices (`server/voice/casting.json` `qm`, its `candidates`): A, bright and quick, American (female); B, a light,
+     lively baritone, American (male); C, clear and even, British (female). None shares a voice component with any
+     presenter or expert.*
+   - *For the director (step 4): cast id `qm`, seated at the centre podium (`SET.seatX.solo` until step 5's set gives
+     it a seat), its gestures in `HOST_GESTURES` (`cast/pay-attention.js`: no laughing), `point_partner` sided for
+     each player.*
+   - ***The owner decides:***
+     - *the name: Quinn Query (A), Theo Tally (B) or Layla Level (C);*
+     - *the face: one letter in `public/js/pay-attention-looks.js` (`HOST_LOOK`, both renderers);*
+     - *the voice, by ear: copy `qm.candidates[letter]` into `qm` in `server/voice/casting.json`, and its gender, lang,
+       pitch and rate into `presenters.qm.voice` in `config/channel.json` with the name. Look B takes voice B; looks A
+       and C take voice A or C.*
+   - *Open: the faces are seen on a placeholder stage until step 5's set exists; no person has heard the voices yet.*
 7. **On air**: two recorded editions with sound (an afternoon and an evening); the whole programme critiqued above 9.7
    (`docs/roadmap/critique/pay-attention.md`).

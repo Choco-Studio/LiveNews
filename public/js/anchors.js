@@ -270,8 +270,8 @@ const HOST_OLD_LOOKS = {
   // B: a glossy black pompadour with a silver streak, olive skin, a cream dinner jacket with black satin lapels, a purple
   // bow tie and square
   B: { ...HOST_BASE, name: 'THEO TALLY', style: 'pompadour', skin: P.tan, skinShade: P.tanShade, hair: P.ink, hairHi: P.steel, hairShade: P.black, temples: P.fog, templesHi: P.silver, body: 'dinner', suit: P.cream, suitShade: P.fog, suitHi: P.cream, suitDeep: P.steel, tie: P.purple, tieShade: P.maroon, pocket: P.magenta, pocketShade: P.purple, cuff: P.white },
-  // C: an azure hijab framing the face and draped over the shoulders, a black jacket over a white blouse, a gold pin
-  C: { ...HOST_BASE, name: 'LAYLA LEVEL', style: 'hijab', skin: P.skin, skinShade: P.tan, hair: P.blue, hairHi: P.cyan, hairShade: P.navy, lipstick: P.brown, body: 'hijab', suit: P.ink, suitShade: P.black, suitHi: P.slate, suitDeep: P.black, pin: P.yellow, pinShade: P.orange, cuff: P.white },
+  // C: an azure hijab framing the face and draped over the shoulders, a charcoal jacket over a white blouse, a gold pin
+  C: { ...HOST_BASE, name: 'LAYLA LEVEL', style: 'hijab', skin: P.skin, skinShade: P.tan, hair: P.blue, hairHi: P.cyan, hairShade: P.navy, lipstick: P.brown, body: 'hijab', suit: P.slate, suitShade: P.ink, suitHi: P.steel, suitDeep: P.black, pin: P.yellow, pinShade: P.orange, cuff: P.white },
 };
 /** The PAY ATTENTION host's candidates in this renderer (labs): { A, B, C }. */
 export const HOST_OLD = HOST_OLD_LOOKS;

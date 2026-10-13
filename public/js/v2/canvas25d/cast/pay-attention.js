@@ -135,7 +135,7 @@ const SCARF = [P.cyan, P.blue, P.navy, P.ink];
 
 /**
  * HOST C, "the hijab": an azure hijab framing the face, its drape round the neck and over the shoulders, light tan
- * skin, a black tailored jacket over a white blouse, a small gold pin at the temple and a gold bar on the lapel. At
+ * skin, a charcoal tailored jacket over a white blouse, a small gold pin at the temple and a gold bar on the lapel. At
  * 1x: a bright blue oval round the face over a dark jacket with a white V. The calmest of the three: an even head, a
  * level gaze, a warm, ready smile.
  */
@@ -157,7 +157,8 @@ const HOST_C = deriveLook(penny, {
   under: 'tailored',
   neckline: 'v',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },
-  jacket: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+  // charcoal: black read as a floating head on the quiz's dark stage; the charcoal keeps the shoulders
+  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel },
   pin: { at: [5.8, 11.6], ramp: [P.yellow, P.orange, P.rust] },
   buttons: 1,
@@ -181,7 +182,7 @@ export const HOST_CANDIDATES = { A: HOST_A, B: HOST_B, C: HOST_C };
 export const CANDIDATE_NOTES = {
   A: 'the puffs: hair parted in the centre and drawn back into two high afro puffs, warm medium-brown skin, a gold stud, a crimson blazer over a black scoop top',
   B: 'the bow tie: a glossy black pompadour swept up from a side part with one silver streak, clean-shaven, olive skin, a cream dinner jacket with black satin lapels, white shirt, purple bow tie and pocket square',
-  C: 'the hijab: an azure hijab framing the face and draped over the shoulders, light tan skin, a black tailored jacket over a white blouse, a gold pin',
+  C: 'the hijab: an azure hijab framing the face and draped over the shoulders, light tan skin, a charcoal tailored jacket over a white blouse, a gold pin',
 };
 
 /**

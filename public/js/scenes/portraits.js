@@ -474,7 +474,7 @@ Object.assign(CAST, {
     cloth: [P.white, P.cream, P.cream, P.fog, P.steel, P.slate], cuff: P.white,
     persona: { bob: 0.9, shift: 0.7, sway: 0.5, look: 0.8 },
   },
-  // C: an azure hijab framing the face and draped over the shoulders, a black jacket over a white blouse, a gold pin
+  // C: an azure hijab framing the face and draped over the shoulders, a charcoal jacket over a white blouse, a gold pin
   'qm-c': {
     ...HOST_FACE_W,
     ears: false,
@@ -484,7 +484,7 @@ Object.assign(CAST, {
     brow: [P.maroon, P.black], iris: [P.tanShade, P.brown],
     lips: lips(P.tanShade, P.brown, P.skinShade, P.skin),
     hair: 'qmHijab', outfit: 'qmHijab',
-    cloth: DARK_CLOTH, cuff: P.white,
+    cloth: [P.fog, P.steel, P.slate, P.ink, P.black, P.black], cuff: P.white,
     persona: { bob: 0.5, shift: 0.5, sway: 0.4, look: 0.6 },
   },
 });
@@ -1738,7 +1738,7 @@ const OUTFITS = {
     for (const [x, y, tn] of [[31, 36, 0], [32, 35, 0], [33, 36, 1], [35, 35, 0], [36, 34, 0], [37, 35, 1], [32, 36, 0], [36, 35, 1]]) body.set(sx(x), C + y, BOW, tn);
   },
 
-  // Host C: a black tailored jacket over a white blouse (Penny's cut), under the hijab's drape round the neck and
+  // Host C: a charcoal tailored jacket over a white blouse (Penny's cut), under the hijab's drape round the neck and
   // over the shoulders (behind the head, so the chin falls on the cloth).
   qmHijab(K) {
     OUTFITS.penny(K);
