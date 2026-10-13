@@ -315,8 +315,10 @@ function creditBuild(c, maxW, maxLines, verb) {
     const lines = t.filter(Boolean);
     if (lines.every((l) => mw(l) <= maxW)) return lines.slice(0, maxLines);
   }
-  // (a source no shortening fits: its words wrapped, the airing last)
-  const words = [...src(false).split(' '), '·', ...when(short, false).split(' ')];
+  // (a source no shortening fits: its words wrapped over the lines but the last, the airing on the last; dots only
+  // when even that cannot hold it)
+  const airing = [short, c.time].filter(Boolean).join(' ') || when(short, false);
+  const words = src(false).split(' ');
   const out = [];
   let line = '';
   for (const wd of words) {
@@ -327,7 +329,14 @@ function creditBuild(c, maxW, maxLines, verb) {
     } else line = t;
   }
   if (line) out.push(line);
-  return out.slice(0, Math.max(maxLines, out.length));
+  const room = Math.max(1, maxLines - 1);
+  if (out.length > room) {
+    out.length = room;
+    let last = out[room - 1];
+    while (last.length > 1 && mw(`${last}...`) > maxW) last = last.slice(0, -1).trimEnd();
+    out[room - 1] = `${last}...`;
+  }
+  return maxLines > 1 ? [...out, airing] : [out[0]];
 }
 
 function drawCredit(ctx, lines, x, y, dt, at, align = 'left', w = 0) {
@@ -607,7 +616,7 @@ export function drawQuestionBoard(ctx, dt, o = {}) {
       const here = locks.filter((l) => l.answer === opt.letter).sort((a, b) => (a.seat < b.seat ? -1 : 1));
       here.forEach((l, k) => {
         const my = here.length === 1 ? y + 12 : y + 7 + k * 10;
-        wipeMark(ctx, l.seat, nameOf(o.players, l.seat), GUTTER_X, my, ease(dt, l.at ?? 0, 0.15));
+        wipeMark(ctx, l.seat, nameOf(o.players, l.seat), GUTTER_X, my, ease(dt, l.at ?? 0, 0.15), revealed && opt.letter !== q.answer ? 'off' : 'lit');
       });
     });
     // the foot: the countdown bar, then at the reveal the credit (source and airing)
@@ -646,9 +655,13 @@ export function drawLettersBoard(ctx, dt, o = {}) {
   const revealAt = o.revealAt ?? Infinity;
   const revealed = dt >= revealAt;
   const times = o.stageTimes || [];
+  // (the board's game clock stops at the winning buzz: no stage, no tick, while the player says the headline; a stall
+  // does not stop it, the other player may still buzz)
+  const win = o.winner ? (o.buzzes || []).find((b) => b.seat === o.winner && !b.stall) : null;
+  const gt = win && Number.isFinite(win.at) ? Math.min(dt, win.at) : dt;
   let stage = 0;
   times.forEach((t, i) => {
-    if (dt >= t) stage = i + 1;
+    if (gt >= t) stage = i + 1;
   });
   const shown = lettersShown(q.reveal, stage);
   const prev = lettersShown(q.reveal, stage - 1);
@@ -715,7 +728,7 @@ export function drawLettersBoard(ctx, dt, o = {}) {
     }
     // the foot: the countdown, then the credit
     const footY = SAFE.bottom - 9;
-    if (!revealed) drawFoot(ctx, dt, CX, footY + 1, 128 + STAKE_W, o.countdown || null, stakeOf('letters', stage, doubleName(o)));
+    if (!revealed) drawFoot(ctx, gt, CX, footY + 1, 128 + STAKE_W, o.countdown || null, stakeOf('letters', stage, doubleName(o)));
     else drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), CW, 1), CX, footY, dt, revealAt + 0.3);
   } finally {
     ctx.restore();
@@ -969,7 +982,7 @@ export function drawWhereBoard(ctx, dt, o = {}) {
             if (pw2 < 1) return;
             ctx.fillStyle = P.black;
             ctx.fillRect(mx - 1, my - 1, pw2, 9);
-            wipeMark(ctx, l.seat, l.name, mx, my, mp2);
+            wipeMark(ctx, l.seat, l.name, mx, my, mp2, state === 'wrong' ? 'off' : 'lit');
           });
         });
       } finally {
@@ -1297,10 +1310,14 @@ const wins = (n) => {
  * The week's table: o = { standings: [{ id, name, played, wins }] (most wins first), players (tonight's two: their
  * shapes beside their names), title }. At most eight rows; tonight's players always among them.
  */
-export function drawTableBoard(ctx, dt, o = {}) {
-  let rows = (o.standings || []).map((r, i) => ({ ...r, rank: i + 1 }));
-  if (!rows.length) return;
-  const tonight = new Map((o.players || []).map((p) => [p.id || p.name, p]));
+/**
+ * The table's rows: the standings (most wins first, as table.js orders them) with their ranks, equal records sharing
+ * one (never an order the results do not make), at most eight rows and tonight's two players always among them.
+ */
+export function tableRows(standings, players = []) {
+  const all = standings || [];
+  let rows = all.map((r) => ({ ...r, rank: all.findIndex((x) => x.wins === r.wins && x.played === r.played) + 1 }));
+  const tonight = new Set((players || []).map((p) => p.id || p.name));
   const MAX = 8;
   if (rows.length > MAX) {
     const keep = rows.slice(0, MAX);
@@ -1311,6 +1328,13 @@ export function drawTableBoard(ctx, dt, o = {}) {
     }
     rows = keep.sort((a, b) => a.rank - b.rank);
   }
+  return rows;
+}
+
+export function drawTableBoard(ctx, dt, o = {}) {
+  const rows = tableRows(o.standings, o.players);
+  if (!rows.length) return;
+  const tonight = new Map((o.players || []).map((p) => [p.id || p.name, p]));
   const pitch = 10;
   const h = 18 + rows.length * pitch + 4; // eight rows: 102 px, inside the safe area
   const y = place(h);
@@ -1359,13 +1383,15 @@ const RULES = {
   where: 'THE RIGHT PIN: 2 POINTS',
   today: 'ONE POINT A HEADLINE',
   howmany: 'THE CLOSEST GUESS: 2 POINTS',
+  howmanyExact: 'THE CLOSEST GUESS 2 · EXACTLY RIGHT 3',
 };
-/** A round's card: o = { type, k (1..3), sudden (the tie-break) }. "ROUND TWO", the title at 2x, its scoring. */
+/** A round's card: o = { type, k (1..3), sudden (the tie-break), exact (HOW MANY?) }. "ROUND TWO", the title at 2x, its scoring. */
 export function drawRoundCard(ctx, dt, o = {}) {
   const title = o.sudden ? 'SUDDEN DEATH' : ROUND_TITLES[o.type] || up(o.title || '');
   if (!title) return;
   const kicker = o.sudden ? 'TIE-BREAK' : o.k ? `ROUND ${ORDINALS[o.k - 1] || o.k}` : '';
-  const rule = o.sudden ? 'FIRST TO NAME THE HEADLINE WINS' : RULES[o.type] || '';
+  // (HOW MANY?: "exactly right 3" only when one of the round's figures aired without "about", "up to"... : o.exact)
+  const rule = o.sudden ? 'FIRST TO NAME THE HEADLINE WINS' : (o.type === 'howmany' && o.exact ? RULES.howmanyExact : RULES[o.type]) || '';
   const h = 52;
   const y = place(h);
   ctx.save();

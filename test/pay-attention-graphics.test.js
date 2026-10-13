@@ -243,6 +243,12 @@ describe('PAY ATTENTION graphics', () => {
     const won = board(G.drawLettersBoard, 15, { question: LET, players: [LOLA, SAM], stageTimes: [3, 6, 9], buzzes: [{ seat: 'A', at: 10 }], winner: 'A', revealAt: 13, now: NOW });
     assert.equal(won.fills.filter((f) => f.c === P.yellow && f.w === 11 && f.h === 15).length, lay.cells.filter((c) => c.tile).length, 'every tile gold');
     assert.equal(G.fitsLetters('Supercalifragilisticexpialidocious telecommunications conglomerate merges today again'), false);
+    // the winning buzz stops the board's game clock: no more letters while the headline is said
+    const stopped = (t) => {
+      const ctx = board(G.drawLettersBoard, t, { question: LET, players: [LOLA, SAM], stageTimes: [3, 6, 9], countdown: { at: 3, dur: 9 * HN }, buzzes: [{ seat: 'A', at: 4 }], winner: 'A', revealAt: 13, now: NOW });
+      return [ctx.images.filter((im) => isText(im) && im.w <= 12 && im.y + 3 >= lay.top && im.y + 3 < lay.top + lay.rows * 18).length, ctx.fills.filter((f) => f.c === P.white && f.h === 3).length];
+    };
+    assert.deepEqual(stopped(12), stopped(4.5), 'the same letters and lit cells at 12 s as just after the buzz');
   });
 
   test('a mask is a solid block in the text (never a glyph), and the reveal lights the words it hid', () => {
@@ -309,6 +315,29 @@ describe('PAY ATTENTION graphics', () => {
     assert.equal(G.stakeOf('picture', 2, 'Penny'), '6 FOR PENNY', 'never a stake lower than the one played for');
     assert.equal(G.stakeOf('letters', 3, 'UNIT-8'), '2 FOR UNIT-8');
     assert.equal(G.stakeOf('where', 2), '');
+  });
+
+  test('after the reveal gold means right only: a lamp beside a wrong tile goes out', () => {
+    const o = picO({ locks: [{ seat: 'A', answer: 'A', at: 16 }, { seat: 'B', answer: 'C', at: 17 }] });
+    const gutter = (t) => board(G.drawQuestionBoard, t, o).fills.filter((f) => f.x >= G.TILE.x + G.TILE.w);
+    assert.ok(gutter(20).every((f) => f.c === P.yellow), 'both lit while they wait');
+    const after = gutter(25);
+    assert.ok(after.filter((f) => f.y < 31 + 31).every((f) => f.c === P.slate), 'by A (wrong): out');
+    assert.ok(after.filter((f) => f.y >= 99).every((f) => f.c === P.yellow), 'by C (right): lit');
+  });
+
+  test('the credit never runs past its lines, the table never ranks equal records apart', () => {
+    const long = G.creditOf({ programme: 'world-weather', at: NOW - 3 * 86_400_000, source: 'National Oceanic and Atmospheric Administration Climate Prediction Center' }, { now: NOW });
+    const lines = G.creditLines(long, 132, 2);
+    assert.equal(lines.length, 2);
+    assert.ok(lines.every((l) => l.length && l.length <= 40), lines.join(' / '));
+    assert.equal(lines[1], 'SAT 21:20', 'the airing kept whole on its line (London)');
+    assert.equal(G.creditLines(long, 350, 1).length, 1);
+    const rows = G.tableRows([{ id: 'penny', wins: 3, played: 4 }, { id: 'paco', wins: 1, played: 3 }, { id: 'ada', wins: 0, played: 1 }, { id: 'max', wins: 0, played: 1 }]);
+    assert.deepEqual(rows.map((r) => r.rank), [1, 2, 3, 3], 'Ada and Max share third');
+    const ten = G.tableRows(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'sam'].map((id, i) => ({ id, wins: 9 - i, played: 9 })), [{ id: 'sam', seat: 'B' }]);
+    assert.equal(ten.length, 8);
+    assert.ok(ten.some((r) => r.id === 'sam'), "tonight's player kept");
   });
 
   test('the countdown goes out a cell on each half note of the bed', () => {

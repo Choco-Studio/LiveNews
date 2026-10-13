@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>PAY ATTENTION · the question board, PICTURE THIS, LETTER BY LETTER, WHERE IN THE WORLD?, HOW MANY?, TODAY OR NOT TODAY?, the scores, DOUBLE OR NOTHING, the table</h1>
-<p>Real questions from the writer's editions of 13 Oct (the archive's headlines, as the desk chose them), the hardest cases on purpose (72-character headlines on three-line tiles, masked words, a three-line country tag, six-digit and currency figures, a tie, two players on one answer), and generated test pictures (the archive's own pictures stay on the outlets' servers). Each board runs on its own clock. URL: ?scale=1|2|4, ?overlay=1 (the channel's top row and a two-line caption, as on air), ?moment=name or ?t=seconds, ?only=id.</p>
+<p>Real questions from the writer's editions of 13 Oct (the archive's headlines, as the desk chose them), the hardest cases on purpose (72-character headlines on three-line tiles, masked words, "UNITED ARAB EMIRATES" on a pin's tag, three neighbouring pins, six-digit and currency figures, a tie, two players on one answer, DOUBLE OR NOTHING's doubled stake), and generated test pictures (the archive's own pictures stay on the outlets' servers). Each board runs on its own clock. URL: ?scale=1|2|4, ?overlay=1 (the channel's top row and a two-line caption, as on air), ?moment=name or ?t=seconds, ?only=id.</p>
 <div class="bar" id="bar"></div>
 <div class="grid" id="grid"></div>
 <pre id="fits"></pre>
@@ -191,7 +191,7 @@ const BOARDS = [
   ['wherenear', 'WHERE IN THE WORLD? · the hardest: three neighbouring pins (Egypt, Jordan, Greece) and both players on one', whereBoard(WHERE_NEAR, [LOLA, SAM], [['A', 'A', 8.1], ['B', 'A', 9.0]], Q.kickerOf({ type: 'where', k: 2, n: 3 }))],
   ['howmany', 'HOW MANY? · real (13 Oct): a price, Sam closer', hmBoard(HM_HOMEPOD, [LOLA, SAM], [['A', '$200', 7, 0], ['B', '$120', 8.5, 2]], Q.kickerOf({ type: 'howmany', k: 1, n: 3 }))],
   ['howmany2', 'HOW MANY? · real (13 Oct): billions, a six-block mask', hmBoard(HM_BUMBLE, [PENNY, UNIT8], [['A', '$1.2 billion', 7, 2], ['B', '$900 million', 8.5, 0]], Q.kickerOf({ type: 'howmany', k: 3, n: 3 }))],
-  ['howmany3', 'HOW MANY? · a six-digit figure with its qualifier kept (UP TO), exactly right', hmBoard(HM_SIX, [LOLA, SAM], [['A', '200,000', 7, 0], ['B', '250,000', 8.5, 3]], Q.kickerOf({ type: 'howmany', k: 2, n: 3 }))],
+  ['howmany3', 'HOW MANY? · a six-digit figure with its qualifier kept (UP TO): the right number is the closest guess, 2 points (no exact bonus on a qualified figure)', hmBoard(HM_SIX, [LOLA, SAM], [['A', '200,000', 7, 0], ['B', '250,000', 8.5, 2]], Q.kickerOf({ type: 'howmany', k: 2, n: 3 }))],
   ['howmanyowl', 'HOW MANY? · real (13 Oct): exactly right on 15 chicks', hmBoard(HM_OWLS, [LOLA, SAM], [['A', '12', 7, 0], ['B', '15', 8.5, 3]], Q.kickerOf({ type: 'howmany', k: 2, n: 3 }))],
   ['today', 'TODAY OR NOT TODAY? · headline 4 of 6: the two differ', todayBoard(TODAY_ITEMS[0], 3, [LOLA, SAM], [['A', 'EARLIER', 4.2], ['B', 'TODAY', 4.8]], { A: [true, true, false], B: [true, false, true] })],
   ['today2', 'TODAY OR NOT TODAY? · headline 2 of 6: both say TODAY', todayBoard(TODAY_ITEMS[1], 1, [PENNY, UNIT8], [['A', 'TODAY', 4.0], ['B', 'TODAY', 4.6]], { A: [false], B: [true] })],
@@ -204,7 +204,7 @@ const BOARDS = [
   ['donone', 'DOUBLE OR NOTHING · one desk on offer', still((ctx, t) => Q.drawDoubleCard(ctx, t, { players: [PENNY, UNIT8], player: 'A', leader: 'B', offered: ['business'], pick: 'business', pickAt: 0.6 }))],
   ['table', "THE WEEK'S TABLE · half wins after a drawn game, tonight's players' shapes", still((ctx, t) => Q.drawTableBoard(ctx, t, { players: [LOLA, SAM], standings: [{ id: 'penny', name: 'PENNY', played: 4, wins: 3 }, { id: 'lola', name: 'LOLA', played: 3, wins: 2.5 }, { id: 'nova', name: 'NOVA', played: 3, wins: 1.5 }, { id: 'unit8', name: 'UNIT-8', played: 2, wins: 1 }, { id: 'paco', name: 'PACO', played: 3, wins: 1 }, { id: 'sam', name: 'SAM', played: 3, wins: 0.5 }, { id: 'max', name: 'MAX', played: 1, wins: 0 }, { id: 'ada', name: 'ADA', played: 1, wins: 0 }] }), 3)],
   ['round', 'ROUND TWO · PICTURE THIS', still((ctx, t) => Q.drawRoundCard(ctx, t, { type: 'picture', k: 2 }))],
-  ['roundhm', 'ROUND THREE · HOW MANY?', still((ctx, t) => Q.drawRoundCard(ctx, t, { type: 'howmany', k: 3 }))],
+  ['roundhm', 'ROUND THREE · HOW MANY? (a round with an unqualified figure: the exact bonus stated)', still((ctx, t) => Q.drawRoundCard(ctx, t, { type: 'howmany', k: 3, exact: true }))],
   ['roundsd', 'TIE-BREAK · SUDDEN DEATH', still((ctx, t) => Q.drawRoundCard(ctx, t, { sudden: true }))],
 ].filter(([id]) => !only || only.split(',').includes(id));
 
