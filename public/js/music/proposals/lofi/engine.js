@@ -298,7 +298,7 @@ class Bed {
       const dur = (e.dur || 0.25) * this.spb;
       this.engine.noteLog(t, e.layer, e.inst);
       switch (e.inst) {
-        case 'kick': rig.kick(t, e.vel, dest); break;
+        case 'kick': rig.kick(t, e.vel, dest, e.p); break;
         case 'snare': rig.snare(t, e.vel, dest, e.p); break;
         case 'hat': rig.hat(t, e.vel, dest, e.open); break;
         case 'shaker': rig.shaker(t, e.vel, dest); break;
@@ -362,6 +362,23 @@ export class LofiEngine {
     hv.gain.value = 0.18;
     this.headBus.connect(hv).connect(this.rig.reverbIn);
     this.headlineVoice = null;
+    this.duckedStings = new Set(); // stings that sit under a voice (FULL TIME's scoreline sting): they duck with the beds
+  }
+
+  /**
+   * A sting bus that ducks under the voice like a bed (level in the clear, `under` while anyone speaks): for a sting the
+   * bible lands on a picture inside a sentence (FULL TIME's scoreline card). Returns the gain node.
+   */
+  duckedSting(level, under) {
+    const g = this.ctx.createGain();
+    g.gain.value = this.speaking ? under : level;
+    g.__level = level;
+    g.__under = under;
+    g.connect(this.stingBus);
+    this.registerSting(g);
+    this.duckedStings.add(g);
+    if (this.duckedStings.size > 8) this.duckedStings.delete(this.duckedStings.values().next().value);
+    return g;
   }
 
   /** Layer level of an arrangement (a `solo` set mutes the other layers: lab diagnostics). */
@@ -428,8 +445,11 @@ export class LofiEngine {
     }
     if (moment === 'leadin' || moment === 'open') this.graveSeg = null;
     const afterGrave = this.graveSeg != null && (this.segment === this.graveSeg + 1);
+    // (a cue that is no segment of its own, such as FULL TIME's scoreline sting, may arrive just before its segment's
+    // cue: "near" covers the grave segment and the one after it either way)
+    const graveNear = this.graveSeg != null && this.segment - this.graveSeg <= 1;
     const action = resolveCue(moment, opts, {
-      afterGrave, current: this.bed && this.bed.endAt === Infinity ? this.bed.id : null,
+      afterGrave, graveNear, current: this.bed && this.bed.endAt === Infinity ? this.bed.id : null,
       gravePad: this.gravePad, sharedStings: this.sharedStings, bedUnderStories: this.bedUnderStories,
     });
     this.pump(at + LOOKAHEAD);
@@ -605,6 +625,10 @@ export class LofiEngine {
     if (on === this.speaking) return;
     this.speaking = on;
     for (const bed of this.beds) bed.duckTo(on, at);
+    for (const g of this.duckedStings) {
+      if (on) targetTo(g.gain, g.__under, at, MIX.duckAttack);
+      else targetTo(g.gain, g.__level, at + MIX.duckHold, MIX.duckRelease);
+    }
     const hd = dbToGain(MIX.headline.level + (on ? MIX.headline.duckDb : 0));
     if (on) targetTo(this.headBus.gain, hd, at, MIX.duckAttack);
     else targetTo(this.headBus.gain, hd, at + MIX.duckHold, MIX.duckRelease);

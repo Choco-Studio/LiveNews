@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · FULL TIME sound</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; max-width: 980px; }
+      button { font: inherit; margin: 2px 4px 2px 0; }
+      h2 { font-size: 13px; color: #f77622; margin: 18px 0 4px; }
+      #log { white-space: pre-wrap; color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size:14px">FULL TIME: the theme, the bed, the sting, the ticks (full-time.md §6)</h1>
+    <p>
+      Every sound of the programme rendered offline with the channel's own engines: the theme and the network cues through the audio
+      stream's mixer (audio/synth.js renderTune, as the director plays them), the beds and the stings through the bed engine
+      (music/proposals/lofi, as music/live.js runs it), the house test voices at -16 LUFS. Click to hear; tools/render-audio.mjs
+      calls <code>window.__audio.render(opts)</code>.
+    </p>
+    <h2>Theme</h2>
+    <div id="theme"></div>
+    <h2>The scoreline sting: the A/B (crowd swell / brass stab and timpani) and the references</h2>
+    <div id="sting"></div>
+    <h2>Beds</h2>
+    <div id="bed"></div>
+    <h2>SCORE CENTRE ticks</h2>
+    <div id="ticks"></div>
+    <div id="log"></div>
+    <script type="module">
+      import { renderTune } from '../js/audio/synth.js';
+      import { themeFor, cueFor } from '../js/audio/themes.js';
+      import { durationOf } from '../js/scenes/opens/cues.js';
+      import { WN_DURATION } from '../js/scenes/opens/worldcues.js';
+      import { CUES as SEQ_CUES } from '../js/scenes/opens/cues.js';
+      import { LofiEngine, LOOKAHEAD } from '../js/music/proposals/lofi/engine.js';
+      import { STINGS } from '../js/music/proposals/lofi/stings.js';
+
+      const SR = 48000;
+      const VOICE_BASE = '../js/music/proposals/broadcast/lab/voice/';
+      const openLength = (id) => (id === 'world-now' ? WN_DURATION : SEQ_CUES[id] ? durationOf(id) : 4);
+
+      // ------------------------------------------------------------------ helpers
+
+      const clips = new Map();
+      async function clip(ctx, name) {
+        if (!clips.has(name)) clips.set(name, fetch(`${VOICE_BASE}${name}.ogg`).then((r) => r.arrayBuffer()));
+        const data = await clips.get(name);
+        return ctx.decodeAudioData(data.slice(0));
+      }
+
+      /** Speech regions [[a, b]] from voice placements [[t, name]] with their decoded lengths (gaps under 0.6 s merged). */
+      async function regionsOf(voice) {
+        const tmp = new OfflineAudioContext(1, 1, SR);
+        const out = [];
+        for (const [t, name] of voice) {
+          const b = await clip(tmp, name);
+          out.push([t, t + b.duration]);
+        }
+        out.sort((a, b) => a[0] - b[0]);
+        const merged = [];
+        for (const r of out) {
+          const last = merged[merged.length - 1];
+          if (last && r[0] - last[1] < 0.6) last[1] = Math.max(last[1], r[1]);
+          else merged.push([...r]);
+        }
+        return merged;
+      }
+
+      async function placeVoice(ctx, voice, dest = ctx.destination) {
+        for (const [t, name] of voice) {
+          const src = ctx.createBufferSource();
+          src.buffer = await clip(ctx, name);
+          src.connect(dest);
+          src.start(t);
+        }
+      }
+
+      const pack = (buf) => ({ sampleRate: buf.sampleRate, channels: [buf.getChannelData(0), buf.getChannelData(1)] });
+
+      /** A buffer mixed into ctx at t. */
+      function mixIn(ctx, buf, t = 0, gain = 1) {
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.value = gain;
+        src.connect(g).connect(ctx.destination);
+        src.start(t);
+      }
+
+      // --------------------------------------------------------------- renderers
+
+      /** A programme's open theme as the director plays it: from the cut at volume 0.6, stopped (faded) on the cut. */
+      async function renderTheme({ id = 'full-time', seconds } = {}) {
+        const d = openLength(id);
+        const r = await renderTune(themeFor(id, { duration: d }), { seconds: seconds ?? d + 1.4, volume: 0.6, startAt: 0, stopAt: d, sampleRate: SR });
+        return pack(r.buffer);
+      }
+
+      /** A network cue (outro, scoreTick, promo, breaking...) for a programme, at sfx volume (0.5). */
+      async function renderCue({ name = 'outro', programId = 'full-time', seconds = 5 } = {}) {
+        const r = await renderTune(cueFor(name, programId), { seconds, volume: 0.5, startAt: 0.05, sampleRate: SR });
+        return pack(r.buffer);
+      }
+
+      /**
+       * The bed engine as music/live.js runs it (sharedStings, the soft story bed) on a timeline of cues [[t, moment, opts]]
+       * with the house voices [[t, clip]] ducking it; stem 'music' leaves the voices out but keeps the ducking.
+       */
+      async function renderBed({ cues = [[0, 'headlines', { segment: 1 }]], voice = [], seconds = 20, stem = 'mix', programId = 'full-time', seed = 'lab' } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const engine = new LofiEngine(ctx, ctx.destination, { sharedStings: true, bedUnderStories: 'soft', seed, noteLog: true });
+        const regions = await regionsOf(voice);
+        engine.speechPlan = regions;
+        const events = [];
+        for (const [t, moment, o] of cues) events.push({ t, cue: moment, opts: { programId, ...(o || {}) } });
+        for (const [a, b] of regions) {
+          events.push({ t: Math.max(0, a - 0.12), speak: true });
+          events.push({ t: b, speak: false });
+        }
+        events.sort((x, y) => x.t - y.t || (x.cue ? -1 : 1));
+        for (const e of events) {
+          engine.pump(e.t + LOOKAHEAD);
+          if (e.cue) engine.cue(e.cue, e.opts, e.t);
+          else engine.setSpeaking(e.speak, e.t);
+        }
+        engine.pump(seconds + 2);
+        if (stem !== 'music') await placeVoice(ctx, voice);
+        const out = await ctx.startRendering();
+        window.__lastLog = engine.log;
+        return pack(out);
+      }
+
+      /** One sting of the bed engine alone (the A/B candidates). */
+      async function renderSting({ name = 'scoreCrowd', seconds = 4.5, at = 0.3 } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const engine = new LofiEngine(ctx, ctx.destination, { sharedStings: true, seed: 'lab' });
+        STINGS[name](engine, at, { programme: 'full-time' });
+        return pack(await ctx.startRendering());
+      }
+
+      /**
+       * References for the A/B: pink noise ("rain" as a flat hiss) and rain proper (pink noise with drops: short
+       * high clicks at random), each with the crowd candidate's envelope so only the spectrum and texture differ.
+       */
+      async function renderReference({ kind = 'pink', seconds = 4.5, at = 0.3 } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const engine = new LofiEngine(ctx, ctx.destination, { seed: 'lab' });
+        const rig = engine.rig;
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, at);
+        env.gain.linearRampToValueAtTime(0.4, at + 0.7);
+        env.gain.setTargetAtTime(0, at + 1.1, 0.6);
+        env.connect(ctx.destination);
+        const n = ctx.createBufferSource();
+        n.buffer = rig.pink;
+        n.loop = true;
+        n.connect(env);
+        n.start(at);
+        if (kind === 'rain') {
+          // drops: a few hundred band-passed clicks a second, at random (deterministic)
+          let s = 7;
+          const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+          for (let t = at; t < seconds - 0.2; t += 0.003 + rnd() * 0.01) {
+            const d = ctx.createBufferSource();
+            d.buffer = rig.white;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.frequency.value = 2500 + rnd() * 5000;
+            bp.Q.value = 3;
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(4 * rnd(), t + 0.001);
+            g.gain.setTargetAtTime(0, t + 0.001, 0.004);
+            d.connect(bp).connect(g).connect(env);
+            d.start(t, rnd());
+            d.stop(t + 0.04);
+          }
+        }
+        return pack(await ctx.startRendering());
+      }
+
+      /**
+       * SCORE CENTRE's row ticks under a voice: the tick cue (audio stream, as audio.sfx plays it, ducked under the voice
+       * with its own depth) at each row's first word, over the house voice; stem 'ticks' leaves the voice out.
+       */
+      async function renderTicks({ voice = [[0.3, 'n6-story'], [8.2, 'tb-chat']], at = [0.3, 3.1, 8.2, 11.2], seconds = 15, stem = 'mix', bed = false } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const regions = await regionsOf(voice);
+        for (const t of at) {
+          const duck = regions.map(([a, b]) => [a - t, b - t]).filter(([, b]) => b > 0);
+          const r = await renderTune(cueFor('scoreTick', 'full-time'), { seconds: 1, volume: 0.5, startAt: 0, duck, sampleRate: SR });
+          mixIn(ctx, r.buffer, t);
+        }
+        if (bed) {
+          const b = await renderBed({ cues: [[0, 'story', { feature: 'scores', segment: 3 }]], voice, seconds, stem: 'music' });
+          const buf = ctx.createBuffer(2, b.channels[0].length, SR);
+          buf.copyToChannel(b.channels[0], 0);
+          buf.copyToChannel(b.channels[1], 1);
+          mixIn(ctx, buf, 0);
+        }
+        if (stem !== 'ticks') await placeVoice(ctx, voice);
+        return pack(await ctx.startRendering());
+      }
+
+      const RENDER = { theme: renderTheme, cue: renderCue, bed: renderBed, sting: renderSting, reference: renderReference, ticks: renderTicks };
+      window.__audio = {
+        render: async (opts = {}) => (RENDER[opts.what || 'theme'] || renderTheme)(opts),
+        log: () => window.__lastLog,
+      };
+
+      // --------------------------------------------------------------------- UI
+
+      let ac = null;
+      let playing = null;
+      async function play(opts) {
+        ac ??= new AudioContext();
+        playing?.stop();
+        const r = await window.__audio.render(opts);
+        const buf = ac.createBuffer(2, r.channels[0].length, r.sampleRate);
+        buf.copyToChannel(Float32Array.from(r.channels[0]), 0);
+        buf.copyToChannel(Float32Array.from(r.channels[1]), 1);
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        src.connect(ac.destination);
+        src.start();
+        playing = src;
+      }
+      const add = (where, label, opts) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.onclick = () => play(opts);
+        document.getElementById(where).append(b);
+      };
+      add('theme', 'the open (10.3 s)', { what: 'theme' });
+      add('theme', 'the sign-off: the theme\'s tail', { what: 'cue', name: 'outro' });
+      add('theme', 'NEWS IN 60 open (reference)', { what: 'theme', id: 'news-60' });
+      add('sting', 'A: crowd swell', { what: 'sting', name: 'scoreCrowd' });
+      add('sting', 'B: brass stab + timpani', { what: 'sting', name: 'scoreBrass' });
+      add('sting', 'the sting on air (the A/B\'s pick)', { what: 'sting', name: 'scoreSting' });
+      add('sting', 'reference: pink noise', { what: 'reference', kind: 'pink' });
+      add('sting', 'reference: rain', { what: 'reference', kind: 'rain' });
+      const P = (o) => ({ ...o });
+      add('bed', 'headlines', { what: 'bed', seconds: 24, cues: [[0, 'headlines', P({ segment: 1 })]] });
+      add('bed', 'soft story bed under a voice', { what: 'bed', seconds: 16, cues: [[0, 'story', P({ segment: 3 })]], voice: [[0.5, 'tb-story']] });
+      add('bed', 'SCORE CENTRE ticking bed', { what: 'bed', seconds: 20, cues: [[0, 'story', P({ feature: 'scores', segment: 3 })]] });
+      add('bed', 'chat', { what: 'bed', seconds: 16, cues: [[0, 'chat', P({ segment: 4 })]], voice: [[0.4, 'tb-chat']] });
+      add('bed', 'moment of the day', { what: 'bed', seconds: 16, cues: [[0, 'finally', P({ segment: 6 })]] });
+      add('bed', 'sign-off', { what: 'bed', seconds: 12, cues: [[0, 'outro', P({ segment: 9 })], [6, 'signoffEnd', P()]] });
+      add('ticks', 'ticks under the voice', { what: 'ticks' });
+      add('ticks', 'ticks on the ticking bed', { what: 'ticks', bed: true });
+      add('ticks', 'ticks alone', { what: 'ticks', stem: 'ticks' });
+    </script>
+  </body>
+</html>

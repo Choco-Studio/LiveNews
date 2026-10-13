@@ -542,7 +542,8 @@ export class Rig {
     this.play([o, o2], [g2, lp, amp], t, t + 0.3);
   }
 
-  kick(t, vel, dest) {
+  kick(t, vel, dest, p = null) {
+    if (p && p.punch) return this.punchKick(t, vel, dest);
     const o = this.osc('sine', 118, t, false);
     o.frequency.setValueAtTime(118, t);
     o.frequency.exponentialRampToValueAtTime(54, t + 0.09);
@@ -563,8 +564,104 @@ export class Rig {
     this.play([o, n], [amp, lp, ng], t, t + 0.7);
   }
 
-  /** Soft snare (tight kits) or brush swish (brush kits). */
+  /**
+   * FULL TIME's kick (the bed's "punchy drums", full-time.md §6): a longer, rounder body falling from 150 to 48 Hz, a
+   * short click for the beater (band-limited, under 4 kHz) and the felt knock: it reads on small speakers and still
+   * sits under a voice once the bed ducks.
+   */
+  punchKick(t, vel, dest) {
+    const o = this.osc('sine', 150, t, false);
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.075);
+    const amp = this.gain(0);
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(0.3 * vel, t + 0.003);
+    amp.gain.setTargetAtTime(0, t + 0.003, 0.11);
+    o.connect(amp).connect(dest);
+    const n = this.noise(t);
+    n.__offset = (t * 7.3) % 1.5;
+    const bp = this.filter('bandpass', 2400, 0.9);
+    const lp = this.filter('lowpass', 3800, 0.6);
+    const ng = this.gain(0);
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(0.07 * vel, t + 0.001);
+    ng.gain.setTargetAtTime(0, t + 0.001, 0.005);
+    n.connect(bp).connect(lp).connect(ng).connect(dest);
+    const n2 = this.noise(t);
+    n2.__offset = (t * 5.1) % 1.5;
+    const lp2 = this.filter('lowpass', 900, 0.7);
+    const ng2 = this.gain(0);
+    ng2.gain.setValueAtTime(0, t);
+    ng2.gain.linearRampToValueAtTime(0.05 * vel, t + 0.002);
+    ng2.gain.setTargetAtTime(0, t + 0.002, 0.014);
+    n2.connect(lp2).connect(ng2).connect(dest);
+    this.play([o, n, n2], [amp, bp, lp, ng, lp2, ng2], t, t + 0.8);
+  }
+
+  /** FULL TIME's snare: a crack on top of the tight snare's body and noise (the backbeat of a sport bed). */
+  punchSnare(t, vel, dest) {
+    const n = this.noise(t);
+    n.__offset = (t * 3.1) % 1.5;
+    const bp = this.filter('bandpass', 1900, 0.75);
+    const lp = this.filter('lowpass', 6000, 0.5);
+    const amp = this.gain(0);
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(0.24 * vel, t + 0.0015);
+    amp.gain.setTargetAtTime(0, t + 0.0015, 0.07);
+    n.connect(bp).connect(lp).connect(amp).connect(dest);
+    const c = this.noise(t);
+    c.__offset = (t * 6.7) % 1.5;
+    const hp = this.filter('highpass', 3200, 0.6);
+    const cg = this.gain(0);
+    cg.gain.setValueAtTime(0, t);
+    cg.gain.linearRampToValueAtTime(0.09 * vel, t + 0.001);
+    cg.gain.setTargetAtTime(0, t + 0.001, 0.012);
+    c.connect(hp).connect(cg).connect(dest);
+    const body = this.osc('triangle', 205, t, false);
+    body.frequency.exponentialRampToValueAtTime(160, t + 0.07);
+    const bg = this.gain(0);
+    bg.gain.setValueAtTime(0, t);
+    bg.gain.linearRampToValueAtTime(0.14 * vel, t + 0.002);
+    bg.gain.setTargetAtTime(0, t + 0.002, 0.05);
+    body.connect(bg).connect(dest);
+    this.play([n, c, body], [bp, lp, amp, hp, cg, bg], t, t + 0.7);
+  }
+
+  /**
+   * A palm-muted electric guitar (FULL TIME's "muted guitar"): a bright pulse plucked, its low-pass snapping shut in a
+   * few tens of milliseconds (the palm's damping), a pick's tick on the attack and a slight fall onto the pitch.
+   */
+  mute(t, midi, dur, vel, dest, p = {}) {
+    const f = hz(midi);
+    const o = this.osc('pulse25', f, t);
+    o.detune.setValueAtTime(9, t);
+    o.detune.setTargetAtTime(0, t, 0.012);
+    const lp = this.filter('lowpass', p.bright ?? 2400, 1.6);
+    lp.frequency.setValueAtTime(p.bright ?? 2400, t);
+    lp.frequency.setTargetAtTime(Math.max(260, f * 1.4), t + 0.002, 0.022);
+    const amp = this.gain(0);
+    const peak = 0.07 * vel;
+    const decay = p.decay ?? 0.05;
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(peak, t + 0.002);
+    amp.gain.setTargetAtTime(0, t + 0.002, decay);
+    const pick = this.noise(t);
+    pick.__offset = (t * 9.1 + midi * 0.013) % 1.5;
+    const bp = this.filter('bandpass', 2900, 1.4);
+    const pg = this.gain(0);
+    pg.gain.setValueAtTime(0, t);
+    pg.gain.linearRampToValueAtTime(0.018 * vel, t + 0.001);
+    pg.gain.setTargetAtTime(0, t + 0.001, 0.004);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = p.pan ?? 0;
+    o.connect(lp).connect(amp).connect(pan).connect(dest);
+    pick.connect(bp).connect(pg).connect(pan);
+    this.play([o, pick], [lp, amp, bp, pg, pan], t, t + Math.min(dur + 0.3, decay * 8) + 0.02);
+  }
+
+  /** Soft snare (tight kits) or brush swish (brush kits); FULL TIME's crack (p.punch). */
   snare(t, vel, dest, p = {}) {
+    if (p.punch) return this.punchSnare(t, vel, dest);
     const brush = p.brush;
     const n = this.noise(t);
     n.__offset = (t * 3.1) % 1.5;

@@ -12,6 +12,8 @@
 //               moneySignoff(): a fragment after the last word; moneyButton():
 //               the end card's first downbeat.
 //   NEWS IN 60  sixtyBell(): one Gadd9 bell chord on the sign-off's last word.
+//   FULL TIME   scoreSting(): the lead's scoreline card (the A/B's pick of scoreCrowd, a crowd swell, and
+//               scoreBrass, a brass stab and a timpani hit), ducked under the voice it lands on.
 //   CHANNEL     countdown() (10.5 s), identFilm() (3 bars + hold), shortIdent(),
 //               sombreIdent(), upNext(), replay() (the signature backwards on the
 //               REPLAY plate: "we have heard this before").
@@ -22,6 +24,12 @@ import { SCALES, COLOUR, parseChord, voiceChord, guideTones, hasClash, degreeToM
 import { targetTo } from './automation.js';
 
 const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+/**
+ * FULL TIME's scoreline sting: the bible's A/B (full-time.md §6: "a crowd swell, if the A/B test says it sounds like a
+ * crowd and not like rain; otherwise a brass stab and a timpani hit"). The evidence and the pick are in
+ * docs/roadmap/critique/full-time-sound.md; both candidates stay here (scoreCrowd, scoreBrass) for the owner to hear.
+ */
+export const SCORE_STING = 'scoreCrowd';
 const bassOf = (pc, octave = 2) => 12 * (octave + 1) + mod(pc, 12);
 
 // `avoid`: the notes a melody plays over the chord; the chord is voiced round them (on its guide
@@ -275,6 +283,167 @@ export const STINGS = {
     const notes = motifVariant('retrograde', 0, COLOUR.next);
     notes.forEach((n, i) => eng.rig.ep(t + n.at * spb * 0.8, degreeToMidi(prog.tonic, SCALES[prog.scale], n.d), n.len * spb * 0.75, 0.6 - i * 0.04, lead, { index: 0.7, attack: 0.012, release: 0.35, bend: i === notes.length - 1 ? -22 : 0 }));
     return t + 4;
+  },
+
+  /**
+   * FULL TIME's scoreline sting, candidate A (full-time.md §6): a crowd swell, the roar of a ground at a goal. Twenty-two
+   * voices, each its own pitch (men and women, 100-340 Hz, never in tune with one another) and its own open vowel (mostly
+   * "aah", some "uh" and "oh": F1 560-750 Hz, F2 1-1.2 kHz), drifting at random and lifting with the excitement, each
+   * panned and coming and going at random (never in a common pulse: no laughter, which the owner rejected); a few shouts
+   * stand out of the roar at random moments; the crowd's breath (pink noise through the vowels) and the ground's low
+   * rumble under it. It swells for 0.6 s, holds a breath and falls away over two seconds. Ducked under the voice it lands
+   * on (the card is cut to inside a sentence).
+   */
+  scoreCrowd(eng, t) {
+    const ctx = eng.ctx;
+    const rig = eng.rig;
+    const out = eng.duckedSting ? eng.duckedSting(3.3, 1.2) : bus(eng, 3.3);
+    let seed = 2417;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const nodes = [];
+    const srcs = [];
+    const stopAt = t + 4.4;
+    // (an open "aah" for most voices, the rest "uh" and "oh": a crowd's roar is mostly open vowels)
+    const VOWELS = [[750, 1220, 2600], [750, 1220, 2600], [720, 1150, 2550], [640, 1080, 2500], [560, 980, 2450]];
+    // the swell
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.3, t + 0.2);
+    env.gain.linearRampToValueAtTime(1, t + 0.6);
+    env.gain.setValueAtTime(1, t + 0.82);
+    env.gain.setTargetAtTime(0, t + 0.82, 0.55);
+    // no hiss: the top of a crowd is its consonants, gently rolled off above 4 kHz
+    const shelf = ctx.createBiquadFilter();
+    shelf.type = 'highshelf';
+    shelf.frequency.value = 4000;
+    shelf.gain.value = -10;
+    env.connect(shelf).connect(out);
+    nodes.push(env, shelf);
+    // a slow random wobble (a noise buffer read very slowly and low-passed): pitch drift and voices coming and going
+    const wobble = (rate, hz, depth, dest) => {
+      const n = ctx.createBufferSource();
+      n.buffer = rig.white;
+      n.loop = true;
+      n.playbackRate.value = rate;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = hz;
+      lp.Q.value = 0.5;
+      const g = ctx.createGain();
+      g.gain.value = depth;
+      n.connect(lp).connect(g).connect(dest);
+      n.__offset = rnd() * 1.8;
+      srcs.push(n);
+      nodes.push(lp, g);
+    };
+    const vowel = (input, dest, [f1, f2, f3], q, k = 1) => {
+      for (const [f, gain, qq] of [[f1, 1, q], [f2, 0.7, q * 1.15], [f3, 0.22, q * 1.5]]) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = f * k;
+        bp.Q.value = qq;
+        const g = ctx.createGain();
+        g.gain.value = gain;
+        input.connect(bp).connect(g).connect(dest);
+        nodes.push(bp, g);
+      }
+    };
+    for (let i = 0; i < 22; i++) {
+      const f0 = 100 * 2 ** (rnd() * 1.77);
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.linearRampToValueAtTime(f0 * (1.06 + 0.08 * rnd()), t + 0.65); // the excitement lifts the voices
+      o.frequency.linearRampToValueAtTime(f0 * (1 + 0.04 * rnd()), t + 2.8);
+      wobble(0.0016 + 0.0009 * rnd(), 10, f0 * 0.04, o.frequency);
+      const amp = ctx.createGain();
+      const on = t + rnd() * 0.35;
+      amp.gain.setValueAtTime(0, t);
+      amp.gain.setValueAtTime(0, on);
+      amp.gain.linearRampToValueAtTime(0.034, on + 0.22 + rnd() * 0.2);
+      // a shout now and then: one voice's level jumps for a moment and its pitch glides up (at random, never in step)
+      if (rnd() < 0.3) {
+        const at = t + 0.3 + rnd() * 1.1;
+        const len = 0.14 + rnd() * 0.18;
+        amp.gain.setValueAtTime(0.034, at);
+        amp.gain.linearRampToValueAtTime(0.075, at + 0.04);
+        amp.gain.linearRampToValueAtTime(0.034, at + len);
+        o.frequency.setValueAtTime(f0 * 1.08, at);
+        o.frequency.linearRampToValueAtTime(f0 * 1.2, at + len);
+        o.frequency.linearRampToValueAtTime(f0 * 1.05, at + len + 0.2);
+      }
+      // each voice comes and goes at random (a slow wobble on its level)
+      const lvl = ctx.createGain();
+      lvl.gain.value = 0.65;
+      wobble(0.0011 + 0.0008 * rnd(), 3.5, 0.6, lvl.gain);
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = (rnd() * 2 - 1) * 0.85;
+      const pre = ctx.createGain();
+      o.connect(pre);
+      vowel(pre, amp, VOWELS[Math.floor(rnd() * VOWELS.length)], 9, 0.96 + 0.08 * rnd());
+      amp.connect(lvl).connect(pan).connect(env);
+      srcs.push(o);
+      nodes.push(amp, lvl, pan, pre);
+    }
+    // the crowd's breath: pink noise through two of the vowels, and the ground's low rumble
+    for (const [v, off, g] of [[VOWELS[0], 0.7, 0.17], [VOWELS[3], 1.9, 0.1]]) {
+      const air = ctx.createBufferSource();
+      air.buffer = rig.pink;
+      air.loop = true;
+      air.__offset = off;
+      const airIn = ctx.createGain();
+      airIn.gain.value = g;
+      air.connect(airIn);
+      vowel(airIn, env, v, 3);
+      srcs.push(air);
+      nodes.push(airIn);
+    }
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = rig.pink;
+    rumble.loop = true;
+    rumble.__offset = 2.3;
+    const rlp = ctx.createBiquadFilter();
+    rlp.type = 'lowpass';
+    rlp.frequency.value = 260;
+    const rg = ctx.createGain();
+    rg.gain.value = 0.07;
+    rumble.connect(rlp).connect(rg).connect(env);
+    srcs.push(rumble);
+    nodes.push(rlp, rg);
+    rig.play(srcs, nodes, t, stopAt);
+    return stopAt;
+  },
+
+  /**
+   * FULL TIME's scoreline sting, candidate B (full-time.md §6): a brass stab and a timpani hit. The section in E-flat
+   * (Eb G Bb over C and F: Eb6/9, the theme's hit chord) on the rig's brass, a hard bite and a quick fall-off, doubled an
+   * octave up by a brighter pair; a timpani on E-flat and a felt kick under it. Ducked under the voice it lands on.
+   */
+  scoreBrass(eng, t) {
+    const out = eng.duckedSting ? eng.duckedSting(0.5, 0.19) : bus(eng, 0.5);
+    const dest = eng.ctx.createGain();
+    dest.connect(out);
+    // a short room after it (the stab rings into the hall, then it is gone)
+    const d = eng.ctx.createDelay(1);
+    d.delayTime.value = 0.155;
+    const fb = eng.ctx.createGain();
+    fb.gain.value = 0.22;
+    const wet = eng.ctx.createGain();
+    wet.gain.value = 0.18;
+    dest.connect(d).connect(wet).connect(out);
+    d.connect(fb).connect(d);
+    const stab = [63, 67, 70, 72, 77]; // Eb4 G4 Bb4 C5 F5
+    stab.forEach((m, i) => eng.rig.brass(t + i * 0.004, m, 0.3, 0.92, dest, { bright: 2300, attack: 0.012, release: 0.24, pan: (i - 2) * 0.15 }));
+    [75, 79].forEach((m, i) => eng.rig.brass(t + 0.006, m, 0.26, 0.62, dest, { bright: 3200, attack: 0.01, release: 0.2, pan: i ? 0.3 : -0.3 })); // Eb5 G5
+    eng.rig.timpani(t, 39, 0.85, dest); // Eb2
+    eng.rig.kick(t, 0.75, dest, { punch: true });
+    eng.rig.bass(t, 39, 0.5, 0.6, dest, { wave: 'triangle', lp: 420, release: 0.4 });
+    return t + 2.4;
+  },
+
+  /** FULL TIME's scoreline sting on air: the A/B's pick (docs/roadmap/critique/full-time-sound.md). */
+  scoreSting(eng, t, o) {
+    return STINGS[SCORE_STING](eng, t, o);
   },
 
   /** UP NEXT (only without sharedStings: audio.js has its own promo cue): IV -> V9sus, the signature hanging on the 2nd. */

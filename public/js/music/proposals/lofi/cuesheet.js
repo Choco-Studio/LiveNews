@@ -11,7 +11,8 @@
 //           bumper, holding, leadin, upNext, replay, standby, silence, ad, cut
 //   opts:   { programId, emotion, breaking, grave, segment, line, lines, kind,
 //             expected, tape, next, sombre, replay, hour, seconds }
-//   ctx:    { afterGrave, current (song id playing or null), gravePad,
+//   ctx:    { afterGrave, graveNear (the grave segment or the one after it, for a cue that is no segment of its own),
+//             current (song id playing or null), gravePad,
 //             sharedStings, bedUnderStories: 'off' (bibles) | 'soft' | 'drone' }
 // bedUnderStories 'soft' (owner switch) gives light / neutral stories a very soft bed
 // (pad + triangle, < 1.3 kHz, >= 24 LU under the voice); grave stories and the segment
@@ -167,7 +168,46 @@ const WEEK = (m, o, c) => {
   }
 };
 
-const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER, 'seven-days': WEEK };
+// FULL TIME (full-time.md §6): its own song in the open's key (E-flat, 116 BPM: punchy drums, the bass, a muted guitar)
+// under the headlines and the greeting; a light story on the owner's soft switch only; SCORE CENTRE on its ticking bed (the
+// rows' ticks are sound effects, audio.sfx('scoreTick'), so they stay after grave news when the bed does not); the chats,
+// THE NUMBER, the moment of the day and COMING UP on a lighter groove; the sign-off on the groove, out on the bar line where
+// the theme's tail takes over (audio.sfx('outro'), never after grave news: signoffAllowed). The lead's scoreline card: the
+// scoreline sting (scoreSting), never on grave news nor after it.
+const SPORT = (m, o, c) => {
+  const song = 'full-time';
+  if (c.afterGrave && SEGMENT_MOMENTS.has(m)) return silence();
+  switch (m) {
+    case 'openTail':
+    case 'headlines': return bed(song, 'headlines');
+    case 'greeting': return bed(song, 'greeting');
+    case 'story':
+      if (o.breaking) return sting('breaking', { stopBed: true, hard: true });
+      if (o.feature === 'scores') return bed(song, 'scores');
+      if (o.feature === 'fixtures') return bed(song, 'ahead');
+      return softStory(o, c) ? bed(song, 'story') : silence(0.8);
+    case 'number': return bed(song, 'number');
+    case 'finally': return bed(song, 'moment');
+    case 'chat': return c.current === song ? bed(song, 'chat') : silence();
+    case 'outro': return bed(song, 'signoff');
+    case 'signoffEnd': return silence(1.2, { atBar: true });
+    case 'endcard': return silence(0.6);
+    // (not a segment: the bed carries on whatever the sting does)
+    case 'scoreSting': return c.graveNear || c.afterGrave || isGrave(o) ? KEEP : sting('scoreSting', { stopBed: false });
+    case 'breaking': return sting('breaking', { stopBed: true, hard: true });
+    default: return silence();
+  }
+};
+
+const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER, 'seven-days': WEEK, 'full-time': SPORT };
+
+/**
+ * May the programme's sign-off cue (audio.sfx('outro')) play? FULL TIME's is the theme's tail: never under grave news nor
+ * in the segment after it (the cue sheet's rule, full-time.md §6). Every other programme's sign-off plays as before.
+ */
+export function signoffAllowed(programId, { afterGrave = false } = {}) {
+  return !(programId === 'full-time' && afterGrave);
+}
 
 // ------------------------------------------------------------------ channel
 
@@ -209,7 +249,7 @@ export function resolveCue(moment, opts = {}, ctx = {}) {
 }
 
 function gravePadSong(pid) {
-  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather', 'seven-days': 'seven-days' }[pid] || 'cosmos';
+  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather', 'seven-days': 'seven-days', 'full-time': 'full-time' }[pid] || 'cosmos';
 }
 
 export const SONGS = Object.keys(PALETTES);
@@ -249,6 +289,12 @@ export const CUE_SHEET = [
   ['SEVEN DAYS', 'the week in sixty seconds', 'the same song a little brighter, brushes in half time, a sparse pluck'],
   ['SEVEN DAYS', 'and finally + chat', 'Rhodes and a sparse soft triangle'],
   ['SEVEN DAYS', 'sign-off', 'keys, pad and bass, then out on the end card'],
+  ['FULL TIME', 'headlines, greeting', '116 BPM in E-flat: a punchy kit, the bass driving in eighths, a palm-muted guitar chopping the off-beats, a low pad'],
+  ['FULL TIME', 'lead and stories', 'silence (owner switch soft: a pad and a long bass below 1.3 kHz)'],
+  ['FULL TIME', 'the lead\'s scoreline card', 'the scoreline sting (the A/B\'s pick: a crowd swell; the other candidate a brass stab and a timpani hit), ducked under the voice; never on or after grave news'],
+  ['FULL TIME', 'SCORE CENTRE', 'its ticking bed: eighth ticks over the bass\'s eighths and a guitar chop on 2 and 4, no kit; a dry tick (audio.sfx) as each row flips in, which stays after grave news'],
+  ['FULL TIME', 'chats, THE NUMBER, the moment of the day, COMING UP', 'the same song, lighter: hats, bass and guitar for the chats, a kick for the number, the kit back for the moment and COMING UP'],
+  ['FULL TIME', 'sign-off', 'the groove, out on the bar line after the last word; then the theme\'s tail (the signature, #5 -> 6) on the brass, never after grave news'],
   ['ALL (owner switch soft)', 'light / neutral stories', 'WORLD NOW 76 BPM pad + triangle + slow Rhodes (D); TECH pad + half-time triangle on Am9/D9; COSMOS pad + sub on every shot; MONEY the 800 Hz drone; all below 1.3 kHz, >= 24 LU under the voice'],
   ['ALL', 'grave story', 'silence (opt-in: a near-inaudible low pad), and no bed in the segment after it'],
   ['CHANNEL', 'lead-in WORLD NOW / NEWS IN 60', 'countdown 10.5 s: a quiet bell tick every second, triangle eighths at 120 BPM, a pad minor -> major at 0:00 (sombre: pad only)'],
