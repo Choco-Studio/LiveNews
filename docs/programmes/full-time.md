@@ -266,8 +266,10 @@ are different programmes. A shape fixes the order; a segment without material is
   pitch, under a cantilevered canopy whose underside carries the studio lights. Behind the presenters the stand rises in
   dark tiers with a few lit exits and an empty-seat pattern; four floodlight towers with soft static halos; the striped
   pitch in front of the stand; the advertising boards round the pitch carry no brand, only the channel's orange band and
-  FULL TIME. The desk is curved black with an orange edge light. A screen at the platform's side shows pictures and the
-  idle FULL TIME emblem. It reads as nothing else on the channel: WORLD NOW and SEVEN DAYS are glass rooms over a city,
+  FULL TIME. The desk is curved black with an orange edge light. The platform's screen is the network's main screen
+  above the desk: it shows the story's picture, or the idle FULL TIME emblem (the integrator's decision, step 5: a
+  screen at the platform's side would break every framing and the channel's camera grammar, which are built on the
+  centred main screen). It reads as nothing else on the channel: WORLD NOW and SEVEN DAYS are glass rooms over a city,
   the others are rooms.
   - **The ground follows the hour**, with the channel's sky phases (as WORLD NOW's city): by day the floodlights are off,
     the stand in sun and shadow, the pitch bright; at dusk the floodlights come on bank by bank as the sky reddens; at
@@ -282,19 +284,32 @@ are different programmes. A shape fixes the order; a segment without material is
   - **Built (step 5, the set)**: `public/js/v2/canvas25d/studio/pitch.js` (the ground on its own depth planes: the
     channel's sky by the hour with the town through the open corners; four floodlight towers, a pair in the far corners
     and a pair in front of the stand, whose four banks come on one at a time from 17:00, one every 24 minutes, all lit
-    at night and in the blue hour, none by day or at dawn; static posterised halos; the far stand: a dark upper tier of
-    empty seats with two lit exits, a still two-tone crowd in the lower tier on a seeded seat table; the scoreboard on a
-    gantry over the roof, in the slot above the screen, and the pennant beside it, both drawn live; the boards: two
-    FULL TIME bands in the wide, whole or not at all and never behind a person; the striped pitch in perspective, the
-    halfway line), `studio/dressing.js` (the canopy's fascia and orange cove, two studio fresnels on the screen's drop
-    pipes, the slim columns with their orange inlays, the curved black desk with one orange edge light and no sweep),
-    `studio/styles.js` (`'full-time'`, an open set), `studio/wall.js` (the screen: the story's picture or the FULL TIME
-    emblem, a stopwatch at full time beside the name; THE NUMBER's own figure on its segment; never a map, a plate or
-    a story's age). The screen at "the platform's side" is the network's centred hero screen, hung from the canopy at the
-    platform's pitch edge (every framing and the wall's layout are built on it). Out of focus (the singles) the sky is
-    one tone, the roofline a soft step, the crowd one dim tone. Labs: `public/lab/v2-set.html` and `v2-camera.html`
-    with `?programme=full-time&hour=<0-24>&zoom=1|3|4`; tests `test/full-time-set.test.js`; critique
-    `docs/roadmap/critique/full-time-set.md` (round 6: 9.6, below the gate; what keeps it there is listed).
+    at night and in the blue hour, none by day or at dawn; static posterised halos, at the golden hour a warm glare
+    lifting the red sky as the blue hour's halo lifts its navy; the far stand: a dark upper tier of empty seats with two
+    lit exits, a still two-tone crowd in the lower tier on a seeded seat table; the stand's scoreboard on its roof,
+    right of the screen, in its own frame on two legs with its shadow on the roof's lit edge, and the pennant on a pole
+    beside it, both drawn live; the boards: two FULL TIME bands in the wide, whole or not at all and never behind a
+    person; the striped pitch in perspective, the halfway line), `studio/dressing.js` (the canopy's fascia and orange
+    cove, two studio fresnels on the screen's drop pipes, the slim columns with their orange inlays, the curved black
+    desk with one orange edge light and no sweep; in the wide, the platform's front: the deck running on in front of
+    the desk, its edge's orange LED strip panel by panel, the riser's black panels under it), `studio/styles.js`
+    (`'full-time'`, an open set), `studio/wall.js` (the screen: the story's picture or the FULL TIME emblem, a
+    stopwatch at full time beside the name; THE NUMBER's own figure on its segment; never a map, a plate or a story's
+    age). The pitch's stripes are two values, each one colour or a 50 % mix of two (no Bayer pattern): the stripes
+    beside the centre, behind the presenters' heads, darkGreen in every phase; the centre stripe carries the light, the
+    green/darkGreen mix in the sun (the brightest pitch, L* 58 as the eye mixes it, under every face in every framing),
+    the darkGreen/black mix under the floodlights and at dawn (the darkest green the palette can make). The stripes are
+    laid so that no edge passes within 6 px of a head in any framing (a centre stripe 4 m wide, then 6.5 m). In the
+    over-the-shoulder the sky's bands are kept off the presenter's head (the head stands in the second band). Out of
+    focus (the singles) the sky is one tone, the roofline a soft step, the crowd one dim tone, the stripes keep their
+    two values and the halfway line is a dim soft line. In the wide the platform's light sits in the free rows between
+    the captions and the lower third (to y 196) and the ticker (from y 202); the deck under the captions is ink, the
+    riser under the ticker black. What the wide cannot show: the platform's foot, its steps, and the grass and touchline
+    in front of it. The network's wide sees the pitch's surface only from 11 m out (its bottom row), which is behind
+    the desk front (9-9.6 m) and the presenters (10 m); a riser at any edge in front of the desk runs below the frame.
+    Labs: `public/lab/v2-set.html` and `v2-camera.html` with `?programme=full-time&hour=<0-24>&zoom=1|3|4` (the set lab
+    also frames `mcu-b` and `ots-b`, the singles on presenter B); tests `test/full-time-set.test.js`; critique
+    `docs/roadmap/critique/full-time-set.md`.
 - **The open (≈10 s, 120 BPM).** A dark ground; the floodlights bang on bank by bank on the beat (a low thunk each); the
   camera sweeps down to the centre circle; the scoreboard flips to FULL TIME on the referee's final whistle — three
   blasts, the last long (the common "two short and one long" is the same call) — played by the brass; the emblem is a
@@ -356,7 +371,7 @@ are different programmes. A shape fixes the order; a segment without material is
    (`director.js` `playBoardSegment`: SCORE CENTRE fills the frame, COMING UP holds the calendar, a row or a leaf as
    its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.* The set is built (§6; its critique
-   stands at 9.6, `docs/roadmap/critique/full-time-set.md`).
+   stands at 9.7 after the integrator's round, still at the gate, not above it: `docs/roadmap/critique/full-time-set.md`).
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
    *Looks built (§2): three candidates each, A on air in both renderers; critique in
    `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*

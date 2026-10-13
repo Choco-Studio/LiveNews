@@ -7,11 +7,12 @@ are another stream's and are not judged here.
 **Built**: `public/js/v2/canvas25d/studio/pitch.js` (the ground: sky by the hour, the town through the open corners, four
 floodlight towers, the far stand with its still crowd, the scoreboard and its pennant, the boards, the striped pitch),
 `studio/dressing.js` (the canopy with its orange cove and studio lights, the screen hung on two hangers, the slim
-columns, the curved black desk with one orange edge light), `studio/styles.js` (`'full-time'`, an open set),
-`studio/set.js` (no back-wall light under an open set; the floodlight banks in the cache key), `studio/wall.js` (the side
-screen: the story's picture or the FULL TIME emblem; THE NUMBER's own figure on its segment), `runtime/stage.js`
-(warmed with the others), `public/js/set.js` (the old renderer's `sport` theme), the labs (`v2-set.html`,
-`v2-camera.html`: `?programme=full-time&hour=…&zoom=1|3|4`), `test/full-time-set.test.js` (18 tests) and
+columns, the curved black desk with one orange edge light; round 7: the platform's front in the wide), `studio/styles.js`
+(`'full-time'`, an open set), `studio/set.js` (no back-wall light under an open set; the floodlight banks in the cache
+key; round 7: a programme's own floor in front of the desk), `studio/wall.js` (the screen: the story's picture or the
+FULL TIME emblem; THE NUMBER's own figure on its segment), `runtime/stage.js` (warmed with the others),
+`public/js/set.js` (the old renderer's `sport` theme), the labs (`v2-set.html`, `v2-camera.html`:
+`?programme=full-time&hour=…&zoom=1|3|4`; round 7: `mcu-b` and `ots-b`), `test/full-time-set.test.js` (24 tests) and
 `test/v2-set.test.js` (reads the drafts, so the drafted set meets every network set rule).
 
 **The panel** (QUALITY_LOOP.md's method): a lead pixel artist, a senior broadcast director and production designer, a
@@ -232,9 +233,117 @@ panel's view: a network decision to let a set place its hero screen (a side scre
 slimmer desk in FULL TIME's wide so the platform's edge shows, and a second, darker green in the palette (a lit and a
 mown stripe without dither, a bright day pitch below the faces).
 
+## Round 7 — the integrator's decisions and fixes; the panel again, from scratch
+
+The integrator (after round 6): fault 1 is decided, not excused: in FULL TIME the platform's screen is the network's
+main screen above the desk, its idle frame the FULL TIME emblem (a side screen would break every framing and the
+channel's camera grammar); the bible says so (§6). Every other fault stays open, with directions: the platform must
+read in the wide, the scoreboard must be an object of the ground, the day's pitch brighter than the night's from the
+palette's greens (P.green with P.darkGreen), the golden hour's lit banks as visible as the blue hour's, no golden band
+behind a chin in the ots, the singles' lower right given something true to the ground, the mown stripes two calm
+values with no edge behind a head in any framing. The panel looked again from scratch, as hard as before.
+
+What changed:
+
+- **The platform in the wide** (fault 2): the deck now runs on a metre and a half in front of the desk (ink: the desk's
+  black foot stands on it, visibly), to the platform's edge: an orange LED strip on the edge, panel by panel (broken at
+  the riser's three joints), its light on the riser's top row, then the riser's black panels with their seams, down out
+  of the frame. The edge's light sits in the wide's only free rows, y 198-199: under the captions and the lower third
+  (they end at y 196 and 194) and over the ticker (y 202); the deck under the captions is a quiet ink, the riser under
+  the ticker black (ART_DIRECTION's one light line in the graphics zone, here the platform's: DESK_FRONTS `base`, `baseAt:
+  'platform'`; the desk's own foot light is off). In every other framing the edge is below the frame. Asked for and
+  not built, because the network's wide cannot see them: the platform's steps or a handrail at its ends, and the grass
+  and a touchline low in the frame's corners. Measured: the wide's bottom row meets the pitch's surface 11.0 m out
+  (Z 1101), behind the desk front (9.0-9.6 m) and the presenters (10 m), so no grass in front of the platform can be in
+  frame; the riser under any edge in front of the desk runs below the frame (its foot at y 252 or lower); the
+  platform's ends lie beyond the frame's sides (the desk alone spans x -56 to 440). Painting them would be a false
+  detail.
+- **The scoreboard** (fault 3): now on the stand's roof, right of the screen (wide: x 251-272, y 22-28, 4 px clear of
+  the screen's mount and under the clock's box), in a frame on two legs down to the roof, its shadow breaking the roof's
+  lit edge (thrown right by day and at the golden hour), the pennant on its pole beside it; the old slot over the
+  screen is empty sky. The frame and legs take the colour that stands off each phase's sky (slate at night and by day,
+  ink at dawn, the golden and the blue hour). Clear of every person (in the ots on presenter B it would stand by her
+  hair, so it is not drawn there). Symmetry: 0 asymmetric blocks outside the board's own.
+- **The pitch** (faults 4 and 7): two values a stripe, each one colour or a 50 % checker, never a Bayer pattern. The
+  stripes beside the centre, which are behind the presenters' heads in the wide and the two-shot, are darkGreen in
+  every phase; the centre stripe carries the light: the green/darkGreen checker in the sun (L* 58 as the eye mixes it),
+  the darkGreen/black checker under the floodlights and at dawn (L* 26; the palette's darkest green that stays green:
+  with ink or slate it turns teal-grey, with brown or maroon olive). The pitch's light (L* of the mean luminance), day /
+  night: wide 45 / 32, two-shot 45 / 29, singles 52-53 / 30, every face over it (Lola 58-59, Paco 68). The stripes are a
+  4 m centre stripe and 6.5 m stripes: no edge comes within 6 px of a head in any framing (nearest: 10.8 px, the
+  two-shot at Rosa's shoulder); an edge between |X| 218 and 820 would pass behind a head in the two-shot, one between
+  278 and 618 in the wide.
+- **The golden hour** (fault 5): the lit heads' glare is a warm ring (tanShade, tan nearest the head) lifting the red
+  sky by 11 L*, as the blue hour's steel ring lifts its navy (the blue hour's own halo, invisible before, now shows the
+  same way); measured against the same sky with the banks off. In the ots the head stands in the sky's second band
+  (purple at the golden hour, steel by day, navy at dawn and in the blue hour): the first edge moves above the crown
+  with its ramp, the others below the neck; no band edge crosses behind a head in any phase (tested).
+- **The singles** (fault 6): the stripes keep their two values out of focus (a stripe is a broad shape: the blur only
+  takes the lines) and the halfway line is a dim soft line, so the lower right is the pitch: a stripe's edge running
+  to the vanishing point, the halfway line, the boards' glows, all true to the ground.
+
+Still open (the panel, round 7):
+
+1. **The day's lit stripe is a green/darkGreen checker, 37 L* apart** (the integrator's specification; the only green
+   mix under the faces): at 1x a sunlit stripe, at 3-5x a coarse mesh; in the two-shot a bright wedge between the
+   presenters pointing at the screen, in the day singles a checkered field beside the presenter (under her face's
+   value, L* 52 against 58) (pixel artist, director).
+2. **The night's mown stripe** (darkGreen/black) reads dark teal at 1x, a textured shadowed stripe at 3x; dawn's pitch
+   has the floodlit night's values (an unlit dawn darker than the night would need a darker green the palette lacks)
+   (director).
+3. **The halos are posterised discs** (the night's language since round 1, now in every lit phase): at 4x and closer
+   they read as round plates behind the lamp heads (pixel artist).
+4. **The platform's drop is out of frame**, as measured above: the wide reads a stage with a lit edge, not the height
+   over the grass; on air the strip sits 3 px over the ticker band and, despite its joints, can be taken for a
+   graphics rule at a glance (director, first-time viewer).
+5. **The stripes' widths are uneven** (4 m and 6.5 m, set by the heads): the two-shot sees essentially one wedge
+   (pixel artist).
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Composition and depth | 9.8 | 4, 1 (the wedge's pull) |
+| Light and the hour | 9.7 | 2, 3 |
+| Pixel craft and palette | 9.7 | 1, 3, 5 |
+| Presenters' integration | 9.8 | 1 (the day singles' field) |
+| Motion discipline | 9.9 | — (the minute and the pennant only, on the scoreboard; 0 flip-backs under a push) |
+| Distinctness | 9.9 | — |
+| Performance | 9.9 | — (0.29-0.54 ms uncached, a sixth of WORLD NOW's city) |
+
+**Round score: 9.7. Not passed** (the gate is above 9.7). Every fault the integrator listed is fixed or, for the
+grass and steps the wide cannot see, measured and left out rather than faked. What holds light and pixel craft at 9.7
+is the palette: two greens, 37 L* apart, so a brighter day stripe can only be their checker and a darker night stripe
+only a mix with black; the halos' posterised discs are the night's language carried to the other phases. What would
+pass, in the panel's view: a third green in the palette (a mid green near L* 50 gives a lit stripe in one solid colour
+and a calm day pitch; a darker one, near L* 25, a night stripe without a checker), and, for the drop, a wide whose
+bottom rows reach the grass (a network camera decision, as the screen was).
+
 ---
 
+## Evidence (round 7)
+
+Renders (Chromium, the set lab; regenerate with `public/lab/v2-set.html?programme=full-time&framing=<f>&hour=<h>&zoom=4`;
+`framing=mcu-b` or `ots-b` for presenter B): the contact sheets of every phase and framing, the 4x wides by phase, the
+6-8x crops (the platform's edge, the scoreboard by night and day, the halos at the golden and the blue hour, the day's
+centre stripe) and the on-air captures (test mode, 16:05-16:07) are listed in the step's report.
+
+Numbers (node, `labs/set.js`):
+
+| | Night | Dawn | Day | Golden (2 or 4 banks) | Blue hour |
+|---|---|---|---|---|---|
+| head zone L*, wide / two / mcu / ots | 17.1 / 29.3 / 18.6 / 17.6 | 16.8 / 29.3 / 25.5 / 28.7 | 22.9 / 30.5 / 35.9 / 39.8 | 17.1 / 29.3 / 24.9 / 29.5 | 17.1 / 29.3 / 25.5 / 28.9 |
+| pitch light L*, wide / two / singles | 32 / 29 / 30 | 32 / 29 / 30 | 45 / 45 / 52-53 | 32 / 29 / 30 | 32 / 29 / 30 |
+| faces L* (Paco and Lola, Kai's and Rosa's stand-ins until step 6) | 68 / 59 | 68 / 59 | 68 / 59 | 68 / 59 | 68 / 59 |
+
+- Symmetry: 0 asymmetric blocks outside the scoreboard's (3-8 blocks, the board and its pennant on one side). Palette
+  only; the graphics zone black and ink but for the platform's light line (2 rows, 760 px).
+- Stripe edges: nearest to a head 10.8 px (two-shot), more than 12 px in the wide, the ots and the singles.
+- Motion: a still camera moves only the scoreboard's digits and the pennant; a slow push: 0 flip-backs in every framing.
+- Cost: background uncached 0.29-0.54 ms by framing (0.76 at worst with the profile's noise), cached 0.01 ms, desk
+  0.09-0.38 ms (WORLD NOW uncached 3.1-3.6 ms).
+- Tests: `test/full-time-set.test.js` 24/24; `test/v2-set.test.js` 72/72.
+
 ## Evidence (round 6)
+
 
 Renders (Chromium, the set lab; regenerate with `public/lab/v2-set.html?programme=full-time&framing=<f>&hour=<h>&zoom=4`
 or `v2-camera.html?programme=full-time&mode=gallery&hour=<h>`): the contact sheets of every phase and framing, the 4x
