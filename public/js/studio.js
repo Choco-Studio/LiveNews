@@ -14,6 +14,7 @@ import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
 import { Graphics } from './graphics/index.js';
+import { picturePan } from './pace.js';
 import { FrameGuard } from './graphics/guard.js';
 // WORLD WEATHER's weather centre (the standing presenter uses the v2 rig): loaded in the background at start-up
 let WEATHER = null;
@@ -230,21 +231,12 @@ export class Renderer {
         // else the story's own picture with the slow pan, else the map
         const f = card.footage ? scene.footageDeck?.frame(card.footage, 'full', t) : null;
         if (f) return this.drawFootage(ctx, f);
-        if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir);
+        if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir, program?.id);
         if (scene.remote && Number.isFinite(scene.remote.lat)) return drawWorldMap(ctx, t, dt, { lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
         break;
       }
       case 'full':
-        if (img?.full) {
-          // slow Ken Burns pan across a native-resolution pixel-art photo
-          const maxX = img.full.width - W;
-          const maxY = img.full.height - H;
-          const p = easeOut(Math.min(1, dt / 16));
-          const ox = Math.round(maxX * (scene.panDir > 0 ? p : 1 - p));
-          const oy = Math.round(maxY * (scene.panDir > 0 ? 1 - p : p));
-          ctx.drawImage(img.full, -ox, -oy);
-          return;
-        }
+        if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir, program?.id); // the slow pan across the photo
         break;
       case 'close': {
         const slot = scene.focus in (scene.cast || {}) ? scene.focus : 'A';
@@ -289,13 +281,9 @@ export class Renderer {
     ctx.drawImage(this.footCanvas, 0, 0, W, H);
   }
 
-  /** A slow pan across a native-resolution pixel-art photo (the full shot's Ken Burns). */
-  drawPan(ctx, pic, dt, dir) {
-    const maxX = pic.width - W;
-    const maxY = pic.height - H;
-    const p = easeOut(Math.min(1, dt / 16));
-    const ox = Math.round(maxX * (dir > 0 ? p : 1 - p));
-    const oy = Math.round(maxY * (dir > 0 ? 1 - p : p));
+  /** A slow pan across a native-resolution pixel-art photo (the full shot's rostrum move: pace.js picturePan). */
+  drawPan(ctx, pic, dt, dir, programId = null) {
+    const { ox, oy } = picturePan(dt, pic.width - W, pic.height - H, dir, programId);
     ctx.drawImage(pic, -ox, -oy);
   }
 

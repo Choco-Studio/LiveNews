@@ -94,7 +94,7 @@ export const TRANSITIONS = Object.freeze({
  *             share { map, single } (most of the programme body one shot type may take),
  *             patternRun (stories in a row with the same beat order), tossEvery (about one
  *             hand-over in this many opens on the two-shot), staticMax (a studio hold longer than
- *             this needs a move or a reaction)
+ *             this needs a move or a reaction), pan { speed, ease } (the full-screen picture's drift)
  *   moves     camera moves: max per episode, minGap between two, minDur, maxAmount (scale)
  *   strap     inAfterCut, minOnAir, outAtBlock (clear it in a block pause of at least this)
  *   gestures  speaker budget: perMin (marked gestures per minute of own speech), minGap between two
@@ -149,6 +149,9 @@ const BASE = {
     patternRun: 2,
     tossEvery: 3,
     staticMax: 12,
+    // the full-screen picture's pan (picturePan): px/s once under way, s of ease from rest (bibles: at most 4 px/s;
+    // 3 px/s is one whole pixel every 10 frames at 30 fps)
+    pan: { speed: 3, ease: 1.2 },
   },
   moves: { max: 4, minGap: 30, minDur: 4, maxAmount: 0.04 },
   strap: { inAfterCut: 1.0, minOnAir: 4, outAtBlock: 1.1 },
@@ -207,7 +210,7 @@ const PROGRAMMES = {
     // a shorter map that runs past 6 s cannot be split (the planner cuts it at 4-6 s whenever it can)
     // the format round (owner 4-5 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
     // THEIR WORDS on a sourced quote, and UNIT-8's definition card
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 13, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, pan: { speed: 2, ease: 1.6 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5, floor: 1.8, floorGrave: 0.6 }, // cosmos.md: <= 1 per 6 s
     listener: { reactionGap: 10, nodGap: 8, nodsPerMin: [0.6, 4] },
@@ -458,6 +461,29 @@ export function shotMax(programId, shot) {
   if (shot === 'full') return S.picture[1];
   if (shot === 'fact') return S.factMax;
   return S.studioMax;
+}
+
+/**
+ * The slow pan over a full-screen picture (the rostrum move over a still: studio.js draws the picture `mx` × `my` px
+ * larger than the screen, `dir` ±1 picks the way), `dt` s after its cut: whole-pixel offsets { ox, oy }. One axis
+ * only (a diagonal in whole pixels steps x and y on different frames: a staircase judder on every edge), the
+ * picture held at its vertical centre; the move eases in from rest (it never lurches off the cut at full speed, as
+ * the old 16 s ease-out did at ~7 px/s), then drifts at the profile's speed (shots.pan px/s: 3 px/s steps one pixel
+ * every 10 frames at 30 fps, a regular cadence) and eases out only if it reaches the far side, so a picture is
+ * never seen to stop dead on air. Pure.
+ */
+export function picturePan(dt, mx, my, dir = 1, programId = null) {
+  const pan = paceFor(programId).shots.pan;
+  const v = Math.max(0.1, pan.speed);
+  const e = Math.max(0.05, pan.ease);
+  const span = Math.max(0, mx);
+  // travel (px) after t s: a smoothstep ramp to speed v over e s, then constant speed, mirrored at the far end
+  const ramp = (t) => (t <= 0 ? 0 : t >= e ? v * (t - e / 2) : v * (t * t * t / (e * e) - (t * t * t * t) / (2 * e * e * e)));
+  const cruise = span / v + e; // the time (s) the full travel takes with both ramps
+  const t = Math.max(0, dt);
+  const x = Math.max(0, Math.min(span, t >= cruise ? span : t <= cruise / 2 ? ramp(t) : span - ramp(cruise - t)));
+  const ox = Math.round(dir > 0 ? x : span - x);
+  return { ox, oy: Math.round(Math.max(0, my) / 2) };
 }
 
 /**
