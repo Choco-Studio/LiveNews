@@ -28,3 +28,13 @@ export const P = {
   magenta: '#b55088',
   purple: '#68386c',
 };
+
+// The colours the channel's quantizers map to (the weather's nearest colour, the ads' shades): the palette as it was
+// before the pitch's greens, so nothing already drawn changes its look.
+export const QUANT = Object.freeze(Object.values(P));
+
+// Two more of ENDESGA 32's own greens, for FULL TIME's pitch (a mown stripe under the lights; the pitch in shadow or at
+// night). Drawn by name only: never a quantizer's choice.
+P.midGreen = '#3e8948';
+P.deepGreen = '#193c3e';
+

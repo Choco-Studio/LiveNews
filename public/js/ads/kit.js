@@ -50,7 +50,7 @@
 // BRAND: wordmark(str, style) cached custom lettering + drawMark; lazy(fn) memoises a
 //   factory so `const MARK = lazy(() => wordmark(...))` costs nothing per frame.
 // MUSIC: tune(...parts), rep(s, n) build tune strings (format in audio.js).
-import { P } from '../palette.js';
+import { P, QUANT } from '../palette.js';
 import * as FONT from '../font.js';
 import { clamp, easeOut, easeInOut, mulberry32 } from '../util.js';
 
@@ -2508,7 +2508,7 @@ export function rgb(hex) {
   }
   return v;
 }
-const PAL_LIST = Object.values(P);
+const PAL_LIST = QUANT;
 const SHADE = new Map();
 /**
  * The palette colour nearest to `hex` darkened by `k` (0..1): how a surface of

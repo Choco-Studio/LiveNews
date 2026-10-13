@@ -14,7 +14,7 @@
 //
 // The set is drawn into the frame's pixels (Uint32, 384 x 216) before any text, so the channel's graphics and the
 // wall's labels sit on top of it.
-import { P } from '../../palette.js';
+import { P, QUANT } from '../../palette.js';
 import { PK, colourTable, HASH_M } from './sky.js';
 
 const W = 384, H = 216;
@@ -204,7 +204,7 @@ function put(fb, x, y, c) {
 }
 
 // ------------------------------------------------------------------------------------------- out of focus
-const RGB = Object.values(P).map((hex) => {
+const RGB = QUANT.map((hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255, PK[Object.keys(P).find((k) => P[k] === hex)]];
 });

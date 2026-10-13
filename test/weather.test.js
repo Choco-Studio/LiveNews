@@ -11,7 +11,7 @@ import { validateChannel, loadChannel } from '../server/channel.js';
 import { isSpoken } from '../server/voice/plan.js';
 import { temperatureField, rampPos, tempColor, RAMP } from '../public/js/scenes/weather/field.js';
 import { iconPixels, ICON_SIZE } from '../public/js/scenes/weather/icons.js';
-import { P } from '../public/js/palette.js';
+import { P, QUANT } from '../public/js/palette.js';
 
 const quiet = { warn() {}, info() {}, error() {} };
 const fixture = () => JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
@@ -652,7 +652,8 @@ describe('the weather centre, round 3: shots, the moving sky, the studio, the bo
     assert.ok(dst.some((c) => c === packed(P.fog)), 'isobars are drawn');
     // the veil: palette colours, lighter at each level (never darker than the colour under it)
     const L = (c) => 0.2126 * (c & 255) + 0.7152 * ((c >>> 8) & 255) + 0.0722 * ((c >>> 16) & 255);
-    for (const c of PALETTE) {
+    // (every colour the weather's quantizer maps to: FULL TIME's pitch greens are drawn by name only, never veiled)
+    for (const c of new Set(QUANT.map(packed))) {
       let last = L(c);
       for (const m of sky.VEIL) {
         const v = m.get(c);

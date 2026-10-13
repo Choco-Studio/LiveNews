@@ -32,7 +32,7 @@
 //
 // The per-pixel work runs on a coarse node grid (every 4 px: cover, rain, the wind's offset, pressure) stepped
 // linearly along each row, and one texture read per pixel (two where it rains).
-import { P } from '../../palette.js';
+import { P, QUANT } from '../../palette.js';
 import { matchTracks } from './tracks.js';
 
 export { matchTracks };
@@ -571,7 +571,7 @@ function lab(r, g, b) {
   const X = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.9505), Y = f(0.2126 * R + 0.7152 * G + 0.0722 * B), Z = f((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.089);
   return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
 }
-const PAL_RGB = Object.values(P).map((hex) => {
+const PAL_RGB = QUANT.map((hex) => {
   const n = parseInt(hex.slice(1), 16);
   return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], pk: pack(hex) };
 });
