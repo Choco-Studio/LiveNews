@@ -26,7 +26,9 @@ import * as lab from '../public/js/v2/canvas25d/labs/set.js';
 import { TWOWAY } from '../public/js/v2/canvas25d/studio/remote.js';
 import { CAPTION, STRAP, TOP, TICKER } from '../public/js/graphics/layout.js';
 import { drawLinkGraphics } from '../public/js/graphics/remote.js';
-import { cloudTexture, warmCloudTexture } from '../public/js/scenes/weather/sky.js';
+import { cloudTexture, warmCloudTexture, decodeSky, warmSky } from '../public/js/scenes/weather/sky.js';
+import { WeatherDesk } from '../server/weather.js';
+import { twoWayField } from '../public/js/v2/canvas25d/studio/remote.js';
 
 const W = 384;
 function shot(o, t = 10) {
@@ -325,6 +327,35 @@ describe('round 2', () => {
       assert.equal(l.corr.length, 32 * 32);
       assert.ok(Math.abs(l.corr[0] - 1) < 0.01, 'unshifted, the texture matches itself');
     }
+  });
+});
+
+describe('round 2: the first cut', () => {
+  test('an episode\'s sky decodes ahead in slices, to the same numbers as decoded at once', async () => {
+    const report = await new WeatherDesk({ source: 'fixture', log: { info() {}, warn() {}, error() {} } }).report();
+    const a = JSON.parse(JSON.stringify(report.sky)), b = JSON.parse(JSON.stringify(report.sky));
+    let calls = 0;
+    while (!warmSky(a, 0)) calls++;
+    assert.ok(calls >= 10, `${calls} slices`);
+    assert.equal(warmSky(a, 0), true, 'and then it is done');
+    const A = decodeSky(a), B = decodeSky(b);
+    assert.ok(A && B && A !== B);
+    assert.equal(A.frames, B.frames);
+    for (const k of ['cloud', 'rain', 'u', 'v', 'mslp']) for (let f = 0; f < A.frames; f++) assert.deepEqual(A[k][f], B[k][f], `${k} frame ${f}`);
+    assert.equal(A.tracks.length, B.tracks.length);
+    assert.equal(decodeSky(a), A, 'cached per sky');
+  });
+
+  test('the two-way\'s field is made once and is the hatch it was (ink on black, denser behind the boxes)', () => {
+    const f = twoWayField();
+    assert.equal(twoWayField(), f);
+    const at = (x, y) => f[y * W + x];
+    assert.equal(at(0, 0), C.ink);
+    assert.equal(at(1, 0), C.black);
+    const y = TWOWAY.y + 20;
+    let ink = 0;
+    for (let x = 0; x < W; x++) if (at(x, y) === C.ink) ink++;
+    assert.equal(ink, W / 4, 'every fourth pixel in the band');
   });
 });
 

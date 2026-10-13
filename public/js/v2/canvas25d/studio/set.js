@@ -41,6 +41,8 @@ import { skyPhase, framePhase, setSkyClock, setSkyHour } from './city.js';
 import { skyWarmTasks } from './space.js';
 import { warmExpertStudio, EXPERT_STUDIOS } from './experts.js';
 import { drawPressRoom } from './press.js';
+import { twoWayField } from './remote.js';
+import { warmSky } from '../../../scenes/weather/sky.js';
 
 export { SET, setStyle, styleFor, drawWallContent, warmWallContent, prepareImage, setLive, setSkyClock, setSkyHour };
 
@@ -356,6 +358,7 @@ function warmPlan(ids) {
   for (const id of ids) plan.push({ style: resolveStyle(id) });
   for (const fn of wallWarmTasks()) plan.push({ fn });
   for (const fn of skyWarmTasks()) plan.push({ fn }); // COSMOS's planetarium: its noise fields, baked once
+  plan.push({ fn: twoWayField }); // the two-way's hatched field
   plan.push({ fn: () => { for (let s = 1; s <= 3; s++) logoPixels(s); } });
   for (const id of ids) for (const pass of [0, 1]) plan.push({ fn: () => warmDraw(resolveStyle(id), pass) });
   return plan;
@@ -435,8 +438,9 @@ function warmDraw(style, pass) {
 // The episode's own rooms, built ahead of their first shot: an expert's studio (studio/experts.js, 4-35 ms to build)
 // and the press room of a re-staged speaker (studio/press.js). They used to be built on the first frame of the
 // two-way or the location shot (a 60-240 ms frame on the cut); they are queued when the episode is first seen
-// (wallFromScene, on every studio cut) and built one per idle slice, a few seconds into the programme.
-const EPISODE_WARM = { ep: null, queue: [], timer: 0, scratch: null };
+// (wallFromScene, on every cut the Stage sees: the open's too) and built one per idle slice, a few seconds into the
+// programme. WORLD WEATHER's sky (scenes/weather/sky.js) is decoded the same way during its open, a few ms a slice.
+const EPISODE_WARM = { ep: null, queue: [], timer: 0, scratch: null, sky: null };
 function warmEpisodeRooms(ep) {
   if (!ep || ep === EPISODE_WARM.ep || typeof document === 'undefined' || typeof setTimeout !== 'function') return;
   EPISODE_WARM.ep = ep;
@@ -447,21 +451,26 @@ function warmEpisodeRooms(ep) {
     if (seg.kind === 'restage') rooms.add(seg.grave || seg.emotion === 'serious' ? 'press:grave' : 'press:press');
   }
   EPISODE_WARM.queue = [...rooms];
-  if (EPISODE_WARM.queue.length && !EPISODE_WARM.timer) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, 1500);
+  EPISODE_WARM.sky = ep.weather?.sky && typeof ep.weather.sky === 'object' ? ep.weather.sky : null;
+  if (EPISODE_WARM.sky) EPISODE_WARM.queue.unshift('sky');
+  if (EPISODE_WARM.queue.length && !EPISODE_WARM.timer) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, EPISODE_WARM.sky ? 500 : 1500);
 }
 function warmEpisodeSlice() {
   EPISODE_WARM.timer = 0;
-  const run = () => {
-    const job = EPISODE_WARM.queue.shift();
+  const run = (deadline) => {
+    const job = EPISODE_WARM.queue[0];
     if (!job) return;
+    let again = false;
     try {
       const [kind, name] = job.split(':');
-      if (kind === 'studio') warmExpertStudio(name);
+      if (kind === 'sky') again = !warmSky(EPISODE_WARM.sky, Math.min(4, Math.max(1, (deadline?.timeRemaining?.() ?? 4) - 1)));
+      else if (kind === 'studio') warmExpertStudio(name);
       else drawPressRoom((EPISODE_WARM.scratch ||= new Uint32Array(W * H)), name, 0);
     } catch {
       /* the room is built on its first frame instead */
     }
-    if (EPISODE_WARM.queue.length) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, 400);
+    if (!again) EPISODE_WARM.queue.shift();
+    if (EPISODE_WARM.queue.length) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, again ? 60 : 400);
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1000 });
   else run();

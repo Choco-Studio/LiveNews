@@ -4,7 +4,8 @@
 // isobars, the highs and lows travelling with the frames. Palette colours only, ordered dither, no blends.
 //
 //   decodeSky(sky)                   the episode's sky (base64 layers) as numbers, or null (cached per object); the
-//                                    wind is smoothed for the texture it carries (smoothGrid)
+//                                    wind is smoothed for the texture it carries (smoothGrid); warmSky(sky, ms)
+//                                    decodes it ahead in slices
 //   new SkyClock(S).at(hour)         the layers at a fractional hour: Catmull-Rom between the frames (smooth, no
 //                                    kink at each frame), clamped to each layer's range
 //   sampleLayer(S, grid, lat, lon)   one layer at a place: bilinear on the grid, longitude wrapping
@@ -112,6 +113,29 @@ export function decodeSky(sky) {
   if (!sky || typeof sky !== 'object') return null;
   const hit = DECODED.get(sky);
   if (hit !== undefined) return hit;
+  const steps = SKY_STEPS.get(sky) || decodeSteps(sky);
+  while (!steps.next().done);
+  return DECODED.get(sky) ?? null;
+}
+
+/**
+ * Decodes an episode's sky ahead, in slices of about `budgetMs` (the studio's warm-up queues it when the episode is
+ * first seen: decoded on the spot, it cost the first weather shot about 40 ms). -> true once decoded.
+ */
+export function warmSky(sky, budgetMs = 4) {
+  if (!sky || typeof sky !== 'object' || DECODED.has(sky)) return true;
+  let steps = SKY_STEPS.get(sky);
+  if (!steps) SKY_STEPS.set(sky, (steps = decodeSteps(sky)));
+  const t0 = now();
+  let r;
+  do r = steps.next();
+  while (!r.done && now() - t0 < budgetMs);
+  return !!r.done;
+}
+const SKY_STEPS = new WeakMap(); // sky -> its decode in progress
+
+/** decodeSky's work as steps: a layer's frame each, then the wind's smoothing a frame at a time. */
+function* decodeSteps(sky) {
   let out = null;
   const w = sky.w | 0, h = sky.h | 0, step = Number(sky.step), n = w * h;
   if (w >= 4 && h >= 4 && step > 0 && Array.isArray(sky.hours)) {
@@ -126,20 +150,26 @@ export function decodeSky(sky) {
         const a = decodeLayer(k, sky[k][f], n);
         if (a) S[k].push(a);
         else ok = false;
+        yield;
       }
     }
     if (ok) {
       S.frames = frames;
       // the wind that carries the cloud texture, smoothed over about 9 degrees: the texture then travels with the
       // flow instead of being sheared into streaks by every local gust
-      for (const k of ['u', 'v']) for (const f of S[k]) smoothGrid(f, w, h, 1, 2);
+      for (const k of ['u', 'v']) {
+        for (const f of S[k]) {
+          smoothGrid(f, w, h, 1, 2);
+          yield;
+        }
+      }
       S.systems = (Array.isArray(sky.systems) ? sky.systems : []).filter((s) => (s?.kind === 'H' || s?.kind === 'L') && Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.frame >= 0 && s.frame < frames);
       S.tracks = trackSystems(S);
       out = S;
     }
   }
   DECODED.set(sky, out);
-  return out;
+  SKY_STEPS.delete(sky);
 }
 
 /** A box blur of a grid in place (radius r cells, `passes` times; rows clamp, longitude wraps). */

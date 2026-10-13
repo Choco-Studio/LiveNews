@@ -12,7 +12,8 @@
 //   REMOTE                            the location's framing of the correspondent (MCU, left third)
 //   TWOWAY                            the two boxes' rects
 //   cropInto(src, cx, cy, out, w, h)  a w x h crop of a frame centred on (cx, cy), clamped to the frame
-//   composeTwoWay(px, left, right, accent, t)   the split screen from two box crops
+//   composeTwoWay(px, left, right, accent, t)   the split screen from two box crops (twoWayField: its field,
+//                                    made once; set.js warms it)
 import { C, bayer } from '../pixbuf.js';
 import { isLand } from './wall.js';
 
@@ -113,19 +114,28 @@ export function cropInto(src, cx, cy, out, w, h) {
  * the correspondent's place).
  */
 export function composeTwoWay(px, left, right, accent = C.red) {
-  for (let y = 0; y < H; y++) {
-    const o = y * W;
-    // a quiet ink hatch on black (the boxes carry the picture), a touch lighter in the band behind them
-    const band = y >= TWOWAY.y - 10 && y < TWOWAY.y + TWOWAY.h + 14;
-    for (let x = 0; x < W; x++) px[o + x] = (x + y) % (band ? 4 : 6) === 0 ? C.ink : C.black;
-  }
+  // the field is the same every frame: made once, copied (row spans for the rest: the first two-way frame was
+  // 70 ms of per-pixel loops)
+  px.set(twoWayField());
   const { w, h, y } = TWOWAY;
   for (const [bx, src] of [[TWOWAY.left, left], [TWOWAY.right, right]]) {
     // shadow, frame, picture
-    for (let j = 2; j < h + 3; j++) for (let i = 2; i < w + 3; i++) px[(y + j) * W + bx + i] = C.black;
-    for (let j = -1; j <= h; j++) for (let i = -1; i <= w; i++) px[(y + j) * W + bx + i] = C.fog;
+    for (let j = 2; j < h + 3; j++) px.fill(C.black, (y + j) * W + bx + 2, (y + j) * W + bx + w + 3);
+    for (let j = -1; j <= h; j++) px.fill(C.fog, (y + j) * W + bx - 1, (y + j) * W + bx + w + 1);
     for (let j = 0; j < h; j++) px.set(src.subarray(j * w, j * w + w), (y + j) * W + bx);
     // the accent rule under the box
-    for (let i = 0; i < w; i++) px[(y + h + 3) * W + bx + i] = accent;
+    px.fill(accent, (y + h + 3) * W + bx, (y + h + 3) * W + bx + w);
   }
+}
+
+/** The two-way's field: a quiet ink hatch on black (the boxes carry the picture), a touch denser behind them. */
+let FIELD2 = null;
+export function twoWayField() {
+  if (FIELD2) return FIELD2;
+  FIELD2 = new Uint32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const band = y >= TWOWAY.y - 10 && y < TWOWAY.y + TWOWAY.h + 14;
+    for (let x = 0; x < W; x++) FIELD2[y * W + x] = (x + y) % (band ? 4 : 6) === 0 ? C.ink : C.black;
+  }
+  return FIELD2;
 }
