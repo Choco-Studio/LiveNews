@@ -714,7 +714,8 @@ function worldNow(ctx, tl) {
   if (ctx.type === 'intro') {
     const out = introWithHeadlines(ctx, tl, 3);
     const w = out[out.length - 1];
-    if (ctx.duo && !ctx.grave) w.move = moveIn('push', Math.min(WIDE_MOVE, 0.008 * (tl.end - w.at - 1)), 0.5, tl.end - w.at - 0.5);
+    // (it settles 0.8 s before the planned cut: the real one came 0.1 s early on SEVEN DAYS, 0.4 s after the push)
+    if (ctx.duo && !ctx.grave) w.move = moveIn('push', Math.min(WIDE_MOVE, 0.008 * (tl.end - w.at - 1)), 0.5, tl.end - w.at - 0.8);
     return out;
   }
   if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : singleFraming(ctx), me, 'chat')];
