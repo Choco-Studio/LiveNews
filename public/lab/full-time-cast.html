@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Full Time Cast</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #sheet { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<!-- FULL TIME's presenters (docs/programmes/full-time.md §2): the owner's comparison sheets of the three candidate looks
+     of Kai Sprite and Rosa Rally, the looks on air in every framing, and the old renderer. ?sheet=candidates | pairs |
+     pairs-b | pairs-neutral | onair | legacy. window.__lab.sheet(name) redraws; window.__ready resolves when drawn.
+     See public/js/v2/canvas25d/labs/full-time-cast.js. -->
+<div class="bar"><select id="pick"></select><span id="info"></span></div>
+<canvas id="sheet" width="16" height="16"></canvas>
+<script type="module">
+import { createFullTimeLab, SHEETS } from '../js/v2/canvas25d/labs/full-time-cast.js';
+const lab = createFullTimeLab();
+const canvas = document.getElementById('sheet');
+const pick = document.getElementById('pick');
+for (const n of SHEETS) pick.add(new Option(n, n));
+const params = new URLSearchParams(location.search);
+pick.value = params.get('sheet') || 'candidates';
+async function draw(name) {
+  const t0 = performance.now();
+  const [w, h] = await lab.sheet(name, canvas);
+  document.getElementById('info').textContent = `${name}: ${w} x ${h}, ${Math.round(performance.now() - t0)} ms`;
+}
+window.__lab = { sheet: draw };
+pick.onchange = () => draw(pick.value);
+window.__ready = draw(pick.value);
+</script>
+</body>
+</html>

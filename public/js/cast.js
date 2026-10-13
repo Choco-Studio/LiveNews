@@ -1,5 +1,6 @@
 // Maps channel presenters (config/channel.json) to their pixel-art drawings.
-// Presenters without dedicated art yet borrow the closest existing design.
+// Presenters without dedicated art yet borrow the closest existing design. FULL TIME's Kai and Rosa have their own
+// (the candidate public/js/full-time-looks.js puts on air, in anchors.js and scenes/portraits.js).
 import { LOOKS } from './anchors.js';
 import { P } from './palette.js';
 
@@ -26,7 +27,7 @@ export function lookOf(id) {
 }
 
 /** Id understood by portraits.js drawCloseup for this presenter (every cast member has a portrait). */
-export function portraitOf(id, supported = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']) {
+export function portraitOf(id, supported = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam', 'kai', 'rosa']) {
   if (supported.includes(id)) return id;
   if (id === 'paco') return 'A';
   if (id === 'lola') return 'B';

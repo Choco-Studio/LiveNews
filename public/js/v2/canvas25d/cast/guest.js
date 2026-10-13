@@ -38,6 +38,7 @@ import { ada, drawStraight, drawHairBack, drawSpecs } from './ada.js';
 import { nova, drawCoils, drawHaloBack, drawWarmHead } from './nova.js';
 import { rhea, vic, mika, drawWaveCrop, drawFringeBob } from './correspondents.js';
 import { EXPERTS } from './experts.js';
+import { kai, rosa } from './full-time.js';
 import { drawReceding, drawPixie, drawHighTop, drawMop, drawWaves, drawWavesBack, drawBraids, drawBraidsBack } from './hair-experts.js';
 import { tier, hashInt } from './wardrobe-b.js';
 
@@ -182,9 +183,12 @@ const BY_STYLE = {
 // a receding hairline (senior men) moves short hair to the receding drawer when its colours allow
 const RECEDE_AT = 0.3;
 
-// The channel's own people: the drawer each one's hair is (the twin guard)
-const NAMED_DRAWER = { paco: 'shortHair', lola: 'bob', sam: 'crop', penny: 'sleek', max: 'textured', ada: 'straight', nova: 'coils', rhea: 'sleek', vic: 'waveCrop', mika: 'fringeBob', omar: 'receding', clara: 'pixie', dev: 'highTop', tomas: 'ring', june: 'undercut', amara: 'braids', leo: 'mop', ines: 'waves' };
-const NAMED_LOOKS = { paco, lola, sam, penny, max, ada, nova, rhea, vic, mika, ...EXPERTS };
+// The channel's own people: the drawer each one's hair is (the twin guard). FULL TIME's presenters by what the eye
+// reads of the look on air (full-time-looks.js): a pulled-back cut reads as the guests' sleek drawer (Rosa A's
+// ponytail, B's cornrows), a shaved head as a relative of their bald crown (Kai A), the rest by their own silhouette.
+const FT_DRAWER = { shaved: 'shaved', topknot: 'sleek', curtains: 'curtains', ponytail: 'sleek', cornrows: 'sleek', curls: 'mop' };
+const NAMED_DRAWER = { paco: 'shortHair', lola: 'bob', sam: 'crop', penny: 'sleek', max: 'textured', ada: 'straight', nova: 'coils', kai: FT_DRAWER[kai.hair.style] || 'crop', rosa: FT_DRAWER[rosa.hair.style] || 'sleek', rhea: 'sleek', vic: 'waveCrop', mika: 'fringeBob', omar: 'receding', clara: 'pixie', dev: 'highTop', tomas: 'ring', june: 'undercut', amara: 'braids', leo: 'mop', ines: 'waves' };
+const NAMED_LOOKS = { paco, lola, sam, penny, max, ada, nova, kai, rosa, rhea, vic, mika, ...EXPERTS };
 export const NAMED_IDS = Object.keys(NAMED_DRAWER);
 
 /** A hair ramp's colour family: what the eye reads at 1x (dark, brown, red, light, grey). */
@@ -202,13 +206,18 @@ export function skinGroup(ramp) {
   if (ramp[1] === P.tan) return 'mid';
   return 'deep';
 }
-// drawers that read alike at 1x (a bald crown and the professor's ring, a bob and a fringed bob, ...)
-const RELATED = { bald: 'ring', ring: 'bald', bob: 'fringeBob', fringeBob: 'bob', crop: 'waveCrop', waveCrop: 'crop', straight: 'waves', waves: 'straight', coils: 'highTop', highTop: 'coils' };
+// drawers that read alike at 1x (a bald crown and the professor's ring or a shaved head, a bob and a fringed bob, ...)
+const RELATED = { bald: ['ring', 'shaved'], ring: 'bald', shaved: 'bald', bob: 'fringeBob', fringeBob: 'bob', crop: 'waveCrop', waveCrop: 'crop', straight: 'waves', waves: 'straight', coils: 'highTop', highTop: 'coils' };
+const related = (a, b) => {
+  const r = RELATED[a];
+  return r === b || (Array.isArray(r) && r.includes(b));
+};
 // at this likeness or more a guest is a twin: the same drawer in the same colour family (4) and one more cue shared
 // (the skin's group, glasses, a beard or a moustache); for the anchors the same hair in the same colour is enough
 // (the channel's faces viewers know best). A guest whose hair has another silhouette is never anyone's twin.
 export const TWIN_AT = 4.5;
-const ANCHORS = new Set(['paco', 'lola', 'sam', 'penny', 'max', 'ada', 'nova']);
+// (Kai is not one: his face at 1x is the dome and the beard together, so a bald guest without a beard is nobody's twin)
+const ANCHORS = new Set(['paco', 'lola', 'sam', 'penny', 'max', 'ada', 'nova', 'rosa']);
 let NAMED_FEATURES = null;
 /** What the eye reads of each face of the channel at 1x: { id, drawer, family, skin, glasses, facial } (built once). */
 export function namedFeatures() {
@@ -224,7 +233,7 @@ export function namedFeatures() {
 }
 /** How alike two faces read (TWIN_AT and over: a twin). */
 export function likeness(a, b) {
-  let k = a.drawer === b.drawer ? 2 : RELATED[a.drawer] === b.drawer ? 1 : 0;
+  let k = a.drawer === b.drawer ? 2 : related(a.drawer, b.drawer) ? 1 : 0;
   if (a.family === b.family) k += 2;
   if (a.skin === b.skin) k += 1;
   if (a.glasses !== 'none' && b.glasses !== 'none') k += a.glasses === b.glasses ? 1.5 : 1;
@@ -234,7 +243,7 @@ export function likeness(a, b) {
 /** The named face a guest's features would twin (a hair of the same silhouette, and enough else alike), or null. */
 export function twinOf(f) {
   for (const n of namedFeatures()) {
-    if (f.drawer !== n.drawer && RELATED[f.drawer] !== n.drawer) continue;
+    if (f.drawer !== n.drawer && !related(f.drawer, n.drawer)) continue;
     if (likeness(f, n) >= TWIN_AT || (ANCHORS.has(n.id) && f.family === n.family)) return n.id;
   }
   return null;
@@ -257,6 +266,8 @@ function hairOf(spec) {
   if (spec.hair.receding >= RECEDE_AT && ['short-side', 'crop', 'short-textured'].includes(spec.hair.style)) keys = ['receding', ...keys.filter((k) => k !== 'receding')];
   const colours = [spec.hair.colour];
   while (colours.length < 3 && colours.at(-1) !== 'none') colours.push(TWIN_STEPS[colours.at(-1)]);
+  // a bald crown has no colour to step but its clipped sides: they go grey (Kai's shaved head and black beard)
+  if (colours[0] === 'none') colours.push(spec.age === 'senior' ? 'white' : 'salt-pepper');
   const g = spec.glasses;
   const frames = g === 'none' ? ['none'] : [g, g === 'rect' ? 'round' : 'rect', 'none'];
   let first = null;

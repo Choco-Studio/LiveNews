@@ -1651,7 +1651,7 @@ test('default path: the v2 modules the ads load (pixbuf, cast/index) keep their 
   assert.ok('bx0' in pb && 'bx1' in pb && 'by0' in pb && 'by1' in pb, 'PartBuffer bounds');
   pb.resolve(fr);
   const { LOOKS: looks, lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
-  for (const id of ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']) assert.ok(looks[id] && looks[id].parts, `LOOKS.${id}`);
+  for (const id of ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam', 'kai', 'rosa']) assert.ok(looks[id] && looks[id].parts, `LOOKS.${id}`);
   assert.equal(typeof lookFor, 'function');
   // the default page's module graph: main.js and its static imports, plus the modules the ads load
   // lazily (ads/cine.js), never reach the v2 runtime, direction, studio, camera or scene

@@ -686,7 +686,7 @@ test('wide shots: a smile never bends the mouth into a U; glasses never make a d
   const { actor } = await import('../public/js/v2/canvas25d/scene.js');
   const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
   const { drawCharacter } = await import('../public/js/v2/canvas25d/character.js');
-  for (const id of ['paco', 'lola', 'max', 'penny', 'sam']) {
+  for (const id of ['paco', 'lola', 'max', 'penny', 'sam', 'kai', 'rosa']) {
     const a = actor(id, { side: 1, seed: 5, emotions: [{ t0: -5, name: 'happy' }] });
     const buf = new PartBuffer();
     const head = drawCharacter(buf, a.look, poseAt(a, 0.3), { x: 192, y: 150, s: 1, gb: 0 });
@@ -1107,7 +1107,8 @@ test('skin: the forehead highlight is a short sheen above the key-side brow in c
   const { actor } = await import('../public/js/v2/canvas25d/scene.js');
   const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
   const { drawCharacter, GROUPS } = await import('../public/js/v2/canvas25d/character.js');
-  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam']) {
+  // (not Kai: his shaved dome's sheen is meant to be there, cast/hair-sport.js drawShaved)
+  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam', 'rosa']) {
     for (const s of [1.75, 3.4, 4]) {
       const buf = new PartBuffer();
       const a = actor(id, { side: 1, seed: 11 });
@@ -1310,13 +1311,13 @@ test('blinks: a listener through a whole WORLD NOW conversation blinks 12-17 tim
   }
 });
 
-test('skin at partner yaw: no shade island of ≤ 4 px inside lit skin (a mole or a scar on the cheek) and no lit island in the shade, 6 presenters, both seats, s 2.7 / 3.4 / 4', async () => {
+test('skin at partner yaw: no shade island of ≤ 4 px inside lit skin (a mole or a scar on the cheek) and no lit island in the shade, 8 presenters, both seats, s 2.7 / 3.4 / 4', async () => {
   const { actor, parts, frame, drawActors } = await import('../public/js/v2/canvas25d/scene.js');
   const { GROUPS } = await import('../public/js/v2/canvas25d/character.js');
   const W = 384, H = 216;
   const seen = new Uint8Array(W * H);
   const bad = [];
-  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam']) {
+  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam', 'kai', 'rosa']) {
     for (const s of [2.7, 3.4, 4]) {
       for (const side of [1, -1]) {
         for (const t of [1.2, 2.6]) {
