@@ -21,6 +21,8 @@
 //   FULL TIME     no glass, no room: the pitchside platform (pitch.js: the ground by the hour behind it), the canopy
 //                 with its orange cove and two studio lights, the slim columns, the curved black desk, one orange edge
 //                 light
+//   PAY ATTENTION the quiz studio (quiz.js): a low stage in a dark room, the board in a purple frame with its fog rim,
+//                 two moving heads on the wall's outer edges, the podium and two desks with shape lamps and scores
 // Everything is drawn in world units (the back wall Z = SET.wallZ, the pillars SET.flatsZ, WORLD NOW's city its
 // own far plane), so the camera's moves and zooms carry it; every pixel is a palette colour; out of focus
 // (cam.soft) lights turn to bokeh. What moves (windows, beacons, pulses, stars, the cursor, the desk line's
@@ -40,6 +42,7 @@ import { moneyWall } from './money.js';
 import { flashWall, CLOCK } from './flash.js';
 import { glowH, glowV, RAMPS, bokeh } from './light.js';
 import { drawGround, GROUND } from './pitch.js';
+import { quizRoom, quizFloor } from './quiz.js';
 
 const W = 384, H = 216;
 const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
@@ -1040,7 +1043,9 @@ function canopyColumns(fr, cam, soft) {
 /** The dressing switch (tests of the bare architecture; labs): set.js setDressing() also clears its caches. */
 export const DRESSING = { on: true };
 
-const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60, 'seven-days': sevenDays, 'full-time': fullTime };
+// (PAY ATTENTION: the quiz studio, quiz.js: the board's purple frame, the moving heads' brackets; the heads, their beams,
+// the lamps and the scores move: quiz.js's live drawer)
+const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60, 'seven-days': sevenDays, 'full-time': fullTime, 'pay-attention': quizRoom };
 // the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
 DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
 DESK_SWEEP['tech-bytes'] = { line: C.cyan, hot: C.white, warm: C.silver, every: 18, cross: 2.2 };
@@ -1059,8 +1064,9 @@ export const FLATS = {
   'full-time': (fr, cam, style, soft) => canopyColumns(fr, cam, soft), // the canopy's slim columns, an orange inlay
 };
 
-/** A programme's own floor in front of the desk (set.js, after the floor, before the desk): FULL TIME's platform edge. */
-export const FLOORS = { 'full-time': platformFront };
+/** A programme's own floor in front of the desk (set.js, after the floor, before the desk): FULL TIME's platform edge,
+ * PAY ATTENTION's low stage (its white nosing). */
+export const FLOORS = { 'full-time': platformFront, 'pay-attention': quizFloor };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
 export function drawDressing(fr, cam, style, soft = false) {

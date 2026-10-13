@@ -47,7 +47,7 @@ const WIPE = 0.3;
 const MODES = new Set(['idle', 'picture', 'map', 'figure', 'plate', 'rest']);
 // the idles that are words (MONEY MINUTE's wordmark, NEWS IN 60's dial and its "60", SEVEN DAYS's lettered tiles):
 // at rest (the two-way's studio box) their wall shows its field only, as a cropped word reads as a broken graphic
-const WORDY_IDLE = new Set(['wordmark', 'dial', 'week', 'fulltime']);
+const WORDY_IDLE = new Set(['wordmark', 'dial', 'week', 'fulltime', 'quiz']);
 const DEG = Math.PI / 180;
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
@@ -2248,6 +2248,45 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       IDLE.bot = top + nh;
       break;
     }
+    case 'quiz': {
+      // PAY ATTENTION's question board at rest: the programme's name in fog (the font's own pixels, so it draws without a
+      // DOM too), on one line or two (PAY / ATTENTION) as the free box allows, and under it the two players' marks, a
+      // circle and a square in fog outline: two players, one board. No gold (gold is a lit lamp) and no purple (the frame's)
+      const one = textPixels('PAY ATTENTION', 'body'), l1 = textPixels('PAY', 'body'), l2 = textPixels('ATTENTION', 'body');
+      const block = (u, two) => {
+        const w = (two ? Math.max(l1.width, l2.width) : one.width) * u;
+        const h = ((two ? 2 * one.cap + 3 : one.cap) + 4 + QUIZ_MARK) * u;
+        return [w, h];
+      };
+      let u = ts, two = false;
+      // (2 px of air either side: the head's own 6 px margin is already out of the free boxes)
+      const fits = (uu, tt) => fitsSomewhere(L, block(uu, tt)[0] + 2, block(uu, tt)[1] + 2 + reserve);
+      if (!fits(u, false)) {
+        if (fits(u, true)) two = true;
+        else if (u > 1 && fits(1, false)) u = 1;
+        else if (u > 1 && fits(1, true)) [u, two] = [1, true];
+        else [u, two] = [1, !fits(1, false)];
+      }
+      const [nw, nh] = block(u, two);
+      box = pickBox(L, nw + 2, nh + 2 + reserve, false);
+      const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
+      const cx = Math.round((f.x0 + f.x1) / 2);
+      const top = Math.round(f.y0 + Math.max(u, (fh - nh) * 0.45));
+      const stamp = (t, x, y) => { for (const [gx, gy] of t.pixels) rect(b, x + gx * u, y + gy * u, x + (gx + 1) * u, y + (gy + 1) * u, C.fog); };
+      let y = top;
+      if (two) {
+        stamp(l1, cx - Math.round((l1.width * u) / 2), y);
+        y += (one.cap + 3) * u;
+        stamp(l2, cx - Math.round((l2.width * u) / 2), y);
+      } else stamp(one, cx - Math.round((one.width * u) / 2), y);
+      y += (one.cap + 4) * u;
+      drawQuizMarks(b, cx, y, u);
+      IDLE.cx = cx;
+      IDLE.cy = top + Math.round(nh / 2);
+      IDLE.hw = Math.ceil(nw / 2);
+      IDLE.bot = top + nh;
+      break;
+    }
     case 'dial': {
       // the free box that holds the largest dial (the wide: the third beside Sam's head, r 14, not
       // the short band above it)
@@ -2316,6 +2355,20 @@ function drawIdle(b, L, spec, style, env, caption = '') {
     }
   }
   return sig;
+}
+
+// PAY ATTENTION's two players' marks under its name on the board at rest: a circle and a square, fog outlines on the
+// board's black, side by side (wall px at scale u; QUIZ_MARK px tall at u = 1)
+const QUIZ_MARK = 7;
+const QUIZ_CIRCLE = ['..###..', '.#...#.', '#.....#', '#.....#', '#.....#', '.#...#.', '..###..'];
+const QUIZ_SQUARE = ['#######', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '#######'];
+function drawQuizMarks(b, cx, y, u) {
+  const gap = 5;
+  const x0 = cx - Math.round(((7 * 2 + gap) * u) / 2);
+  for (const [k, art] of [[0, QUIZ_CIRCLE], [1, QUIZ_SQUARE]]) {
+    const ox = x0 + k * (7 + gap) * u;
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (art[j][i] === '#') rect(b, ox + i * u, y + j * u, ox + (i + 1) * u, y + (j + 1) * u, C.fog);
+  }
 }
 
 // FULL TIME's stopwatch (wall px at scale 1): the orange crown on its stem, a fog ring, a black face with the quarter
@@ -2395,7 +2448,7 @@ function clockOf(spec, style, env) {
     // and the background cache only invalidates when a pixel actually changed (the signature)
     return Math.round(env.t * (env.lod >= 1 ? 30 : 60));
   }
-  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week', 'fulltime'].includes(style.wallIdle)) {
+  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week', 'fulltime', 'quiz'].includes(style.wallIdle)) {
     if (env.lod >= 2) return 0;
     const R = Math.max(6, Math.round(23 * env.cs));
     // a dot moves ~1.2 px/s at the centre: step every quarter pixel of rotation (half rate at lod 1)
@@ -2749,8 +2802,17 @@ const STORY_WALL = {
   // the side screen shows "pictures and the idle FULL TIME emblem" (full-time.md §6): no map, no plate, and no figure
   // (a story's numbers are often ages, "22-YEAR-OLD"), except THE NUMBER's own figure (fullTimeWall below)
   'full-time': ['picture'],
+  // PAY ATTENTION's question board (pay-attention.md §6): a picture (PICTURE THIS's, when the director puts it there) or
+  // the board at rest; the questions themselves are the graphics' boards, never the set's screen (quizWall below)
+  'pay-attention': ['picture'],
   default: ['picture', 'map', 'figure', 'plate'],
 };
+/** PAY ATTENTION's board: a picture or the board at rest, laid out round the host at the centre seat (solo). */
+function quizWall(out) {
+  const m = out.mode;
+  const o = m === 'picture' || m === 'idle' || m === 'rest' ? out : { mode: 'idle' };
+  return { ...o, story: m === 'picture' ? o.story : false, soloSeat: true };
+}
 /** FULL TIME's side screen: a picture, THE NUMBER's figure on its own segment, else the emblem (never a map or plate). */
 function fullTimeWall(out, seg) {
   const m = out.mode;
@@ -2841,6 +2903,8 @@ export function wallFromScene(scene, styleIn) {
     out.story = true;
   }
   if (style.id === 'full-time') out = fullTimeWall(out, seg);
+  const quiz = style.id === 'pay-attention';
+  if (quiz) out = quizWall(out);
   // every field, every time: INTEGRATION keeps one wall object and Object.assign()s this into it per
   // cut, so a field left out would carry the previous story's kicker, image or place into this one
   out.image = out.mode === 'picture' ? out.image || null : null;
@@ -2857,7 +2921,9 @@ export function wallFromScene(scene, styleIn) {
   out.story = !!out.story;
   out.phase = phase;
   out.focus = focus;
-  out.solo = solo;
+  // (PAY ATTENTION: the host sits at the solo seat in front of the board whatever the cast, so its layout is the solo one)
+  out.solo = quiz ? true : solo;
+  delete out.soloSeat;
   if (w && Number.isFinite(w.since)) out.since = w.since;
   Object.assign(F2, { wall: w, img, seg, shots, kicker, framing, styleId: style.id, phase, focus, solo, out });
   return out;
