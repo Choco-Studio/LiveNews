@@ -409,6 +409,17 @@ function introWithHeadlines(ctx, tl, maxHeadlines, { floor = 0, minFrames = 2, b
       wide.place = 'phrase';
     }
   }
+  // frames, then a wide over the studio maximum: the teasers left after the frames on the reader's single, the
+  // greeting on the wide (the no-frame rule above; critic, polish round: COSMOS's one frame, then a 15.8 s wide)
+  if (out.length > 1 && tl.end - wide.at > maxWide && ctx.duo) {
+    const b = tl.bounds.find((x) => x.i === greet && !x.blocked);
+    if (b && b.t - wide.at >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) {
+      out.splice(out.length - 1, 0, ev(ctx, wide.at, wide.char, 'close', singleFraming(ctx), ctx.speaker, 'teaser', wide.place ? { place: wide.place } : null));
+      wide.at = round3(b.t);
+      wide.char = b.char;
+      delete wide.place;
+    }
+  }
   return out;
 }
 
@@ -586,7 +597,8 @@ const isFinally = (ctx) => ctx.feature === 'lighter' || /^\W*and finally\b/i.tes
 /**
  * A cut inside a sentence (a `mid` cue: the runtime's speech marks fire it), on the word in [lo, hi] that opens a
  * phrase: after a comma / colon / semicolon (rank 0), else after the phrase's accent (1), else after a content word
- * (2); never between an article or preposition and its noun, never on or just after a dry line. Ranks above
+ * (2); never between an article or preposition and its noun, never on a sentence's last word, never on or just
+ * after a dry line. Ranks above
  * `maxRank` do not count; ties go to the word nearest `near` (else the latest). → { t, char, word: true } | null
  */
 function wordCut(ctx, lo, hi, maxRank = 2, near = null) {
@@ -601,8 +613,11 @@ function wordCut(ctx, lo, hi, maxRank = 2, near = null) {
     if (!Number.isFinite(w.t) || w.t < lo - 1e-6) continue;
     if (w.t > hi + 1e-6) break;
     if (insideDry(ctx, w.t)) continue;
-    // a sentence's first word is a boundary cut, not a word cut
+    // a sentence's first word is a boundary cut, not a word cut; nor its last word (one word before the boundary:
+    // "on October | 8.", critic, polish round; the speech mark only fired with the next sentence, a picture held 8.9 s)
     if ((ctx.sentences || []).some((x) => Math.abs(x.start - w.char) <= 2)) continue;
+    const after = W[k + 1];
+    if (!after || (ctx.sentences || []).some((x) => Math.abs(x.start - after.char) <= 2)) continue;
     const rank = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char)) ? 0 : prev.stressed ? 1 : prev.content ? 2 : 3;
     if (rank > maxRank) continue;
     const better = rank < bestRank || (rank === bestRank && (near == null ? true : Math.abs(w.t - near) < Math.abs(best.t - near)));

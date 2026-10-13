@@ -462,6 +462,48 @@ test('planner: a MONEY MINUTE story never opens on the WIDE the previous story s
   assert.equal(s3[0].framing, 'mcu-r', `the next story opens on the MCU-R: ${s3.map((e) => e.framing).join(' ')}`);
 });
 
+test('planner: a cut inside a sentence never lands on its last word (one word before the boundary)', () => {
+  let mids = 0;
+  // (the live TECH BYTES story of 13 Oct: its picture was cut on "October | 8.", the speech mark fired only with the
+  // next sentence and the picture held 8.9 s; the company and model names in its copy are replaced)
+  const live = JSON.parse(fs.readFileSync(new URL('./fixtures/camera-polish-tb-last-word.json', import.meta.url), 'utf8'));
+  for (const name of ['world-now', 'world-now-long', 'tech-bytes', 'cosmos', 'money-minute', 'money-minute-long', 'news-60', 'live']) {
+    const ep = name === 'live' ? live : fixture(name);
+    for (let i = 0; i < ep.segments.length; i++) {
+      const plan = planSegment(ep, i, { gapAfter: (j) => gapAfter(ep, j).gap });
+      const ss = plan.ctx?.sentences || [];
+      const W = plan.ctx?.words || [];
+      for (const e of plan.events.filter((x) => x.kind === 'shot' && x.at > 0)) {
+        if (ss.some((x) => Math.abs(x.start - e.char) <= 2)) continue; // a sentence start
+        const k = W.findIndex((w) => w.char === e.char);
+        if (k < 0) continue;
+        mids++;
+        const after = W[k + 1];
+        assert.ok(after && !ss.some((x) => Math.abs(x.start - after.char) <= 2), `${name} seg ${i}: a cut on the last word of its sentence (char ${e.char})`);
+      }
+    }
+  }
+  assert.ok(mids > 0, 'the fixtures plan phrase cuts');
+});
+
+test('planner: an intro\'s headline frames, then a wide over the studio maximum: the teasers on the single, the greeting on the wide', () => {
+  const intro = 'Solar eclipse to be visible across northern Spain next August. Coming up: our number of the day. Later in the programme: bees use the sun as a compass even on cloudy days, scientists in Sweden say, after tracking hives across two long summers. This is COSMOS DESK. I\'m Dr Nova Reyes, with UNIT-8.';
+  const story = (id, text) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'science', hasImage: true, emotion: 'neutral', cues: [], text });
+  const ep = { id: 'coIntro', program: { id: 'cosmos', title: 'COSMOS DESK', theme: 'cosmos' }, cast: { A: 'nova', B: 'unit8' }, rundown: [], segments: [{ type: 'intro', anchor: 'A', text: intro, cues: [] }, story('s1', 'A total solar eclipse will be visible across northern Spain next August. Astronomers expect clear skies over the north coast.'), story('s2', 'Bees use the sun as a compass even when clouds cover it. The study tracked hives for two summers.'), story('s3', 'A comet returns to the inner solar system this winter. It was last seen in 1950.'), { type: 'outro', anchor: 'A', text: 'That is COSMOS DESK.', cues: [] }] };
+  const plan = planSegment(ep, 0, { gapAfter: (j) => gapAfter(ep, j).gap });
+  const shots = plan.events.filter((e) => e.kind === 'shot');
+  const end = plan.ctx.duration + gapAfter(ep, 0).gap;
+  const ends = [...shots.slice(1).map((e) => e.at), end];
+  assert.equal(shots[0].shot, 'montage', shots.map((e) => e.shot).join(' '));
+  assert.equal(shots.at(-1).shot, 'wide', 'the greeting on the wide');
+  const greet = plan.ctx.sentences.find((x) => /^this is/i.test(x.text.trim()));
+  assert.ok(shots.at(-1).at <= greet.t0 + 1e-6, 'the wide is back for the greeting');
+  shots.forEach((e, k) => {
+    if (e.shot !== 'montage') assert.ok(ends[k] - e.at <= paceFor('cosmos').shots.studioMax + 1e-6 && ends[k] - e.at >= 4 - 1e-6, `${e.shot}/${e.framing} ${(ends[k] - e.at).toFixed(2)} s`);
+  });
+  assert.ok(shots.some((e) => e.shot === 'close' && e.beat === 'teaser'), 'the teasers on the reader\'s single');
+});
+
 test('planner: a picture or map gives way near the middle of its window, not at the first sentence start it can', () => {
   const ep = fixture('world-now-long');
   const P = paceFor('world-now').shots;
