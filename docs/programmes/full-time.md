@@ -296,8 +296,8 @@ are different programmes. A shape fixes the order; a segment without material is
     (`'full-time'`, an open set), `studio/wall.js` (the screen: the story's picture or the FULL TIME emblem, a
     stopwatch at full time beside the name; THE NUMBER's own figure on its segment; never a map, a plate or a story's
     age). **The pitch's greens**: the channel's palette gained ENDESGA 32's own mid and deep greens for it
-    (`palette.js` `P_SET`: midGreen `#3e8948`, deepGreen `#193c3e`, the integrator's decision; read by name and kept
-    out of every palette-wide loop, so nothing else on the channel changes). Each stripe is one solid colour: the
+    (`palette.js`: `P.midGreen` `#3e8948`, `P.deepGreen` `#193c3e`, the integrator's decision; drawn by name only, the
+    quantisers keep the palette as it was, `QUANT`, so nothing else on the channel changes). Each stripe is one solid colour: the
     stripes behind the presenters' heads the darker value, the centre stripe between them the lit one; in the sun
     midGreen over darkGreen (the brightest pitch, under every face in every framing), under the floodlights darkGreen
     over deepGreen, at dawn deepGreen with a stripe of the darkGreen/deepGreen mix (12 L* apart). A centre stripe 4.2 m

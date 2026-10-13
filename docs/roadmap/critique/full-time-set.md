@@ -13,9 +13,9 @@ key; round 7: a programme's own floor in front of the desk), `studio/wall.js` (t
 FULL TIME emblem; THE NUMBER's own figure on its segment), `runtime/stage.js` (warmed with the others),
 `public/js/set.js` (the old renderer's `sport` theme), the labs (`v2-set.html`, `v2-camera.html`:
 `?programme=full-time&hour=…&zoom=1|3|4`; round 7: `mcu-b` and `ots-b`), `test/full-time-set.test.js` (24 tests) and
-`test/v2-set.test.js` (reads the drafts, so the drafted set meets every network set rule); round 8: `palette.js`
-(`P_SET`, ENDESGA 32's mid and deep greens for the pitch), `pixbuf.js`, `color.js`, `light.js` and
-`tools/measure-frame.mjs` (the two greens in the v2 tables).
+`test/v2-set.test.js` (reads the drafts, so the drafted set meets every network set rule); round 8: the pitch in
+ENDESGA 32's mid and deep greens (the integrator added them to `palette.js` on the branch tip), their L* in `light.js`
+and their families in `color.js`.
 
 **The panel** (QUALITY_LOOP.md's method): a lead pixel artist, a senior broadcast director and production designer, a
 first-time viewer. Categories, each 0–10: **composition and depth**, **light and the hour** (all five phases),
@@ -332,11 +332,11 @@ as before.
 
 What changed:
 
-- **The palette** (`palette.js`): `P_SET = { midGreen, deepGreen }`, ENDESGA 32's, readable as `P.midGreen` and
-  `P.deepGreen` and in the v2 renderer's `C`, `color.js` and the measuring tool, but defined so that no palette-wide
-  loop sees them (`Object.keys / values / entries` of `P`): the weather's and the ads' quantisers, the pictures' tables
-  and the opens' colour tables are exactly as before, so nothing else on the channel changes (the network set tests,
-  72/72, and the cast tests are unchanged).
+- **The palette** (`palette.js`, the integrator's commit on the branch tip): `P.midGreen` and `P.deepGreen`, ENDESGA
+  32's, drawn by name only; the weather's and the ads' quantisers keep the palette as it was (`QUANT`), so nothing
+  already drawn changes its look. The v2 renderer's `C`, `color.js` and the measuring tool pick them up by name; the
+  light model's hand-kept L* table has their values (51.1, 23.0). The network set tests (72/72) and the cast tests are
+  unchanged.
 - **The pitch** (faults 1, 2): every stripe one solid colour, no mesh between the presenters: by day midGreen over
   darkGreen, under the floodlights darkGreen over deepGreen, at dawn deepGreen with a calm darkGreen/deepGreen stripe
   (12 L* apart), the darker value always behind the heads. The pitch's light (L* of the mean luminance), day / night /
@@ -406,8 +406,8 @@ Numbers (node, `labs/set.js`, Kai and Rosa):
 
 - Stripe edges: nearest to a head 8.9 px (two-shot, Rosa's shoulder), 15.6 px in the wide, more than 12 px in the ots
   and the singles.
-- Symmetry: 0 asymmetric blocks outside the scoreboard's. Palette only (with `P_SET`); the graphics zone black and ink
-  but for the platform's light (three rows a column, 1,140 px).
+- Symmetry: 0 asymmetric blocks outside the scoreboard's. Palette only (with the two greens); the graphics zone black
+  and ink but for the platform's light (three rows a column, 1,140 px).
 - Motion: a still camera moves only the scoreboard's digits and the pennant; a slow push: 0 flip-backs in every framing.
 - Cost: background uncached 0.29-0.97 ms by framing, cached 0.01 ms (WORLD NOW uncached 3.1-3.6 ms).
 - Tests: `test/full-time-set.test.js` 24/24; `test/v2-set.test.js` 72/72.

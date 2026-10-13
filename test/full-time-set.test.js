@@ -440,7 +440,7 @@ describe('FULL TIME: the platform, the scoreboard, the light (the integrator\'s 
       assert.ok(night.L >= dawn.L + 2, `${framing}: the floodlit night ${night.L.toFixed(1)} over dawn ${dawn.L.toFixed(1)}`);
       for (const f of day.faces) assert.ok(day.L + 8 < f, `${framing}: the day's pitch ${day.L.toFixed(1)} well under the face ${f.toFixed(1)}`);
     }
-    // three grounds, three sets of values (ENDESGA 32's four greens, palette.js P_SET)
+    // three grounds, three sets of values (ENDESGA 32's four greens, palette.js)
     const [night, dawn, day] = PHASE_PALS.map((p) => JSON.stringify(p.pitch));
     assert.ok(night !== dawn && night !== day && dawn !== day, 'the day, the floodlit night and dawn each their own pitch');
   });

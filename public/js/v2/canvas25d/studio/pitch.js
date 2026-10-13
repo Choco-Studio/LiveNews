@@ -116,8 +116,8 @@ export function groundKey() {
 // halo: the glow's [inner, middle] steps, lifting darker pixels (halo())
 const toC = (v) => (Array.isArray(v) ? v.map(toC) : typeof v === 'string' && C[v] !== undefined ? C[v] : v);
 const pal = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, toC(v)]));
-// the pitch's values, in ENDESGA 32's four greens (L*: green 72, midGreen 51, darkGreen 35, deepGreen 23; palette.js
-// P_SET), each stripe one solid colour: the stripes beside the centre, behind the presenters' heads in the wide and
+// the pitch's values, in ENDESGA 32's four greens (L*: green 72, midGreen 51, darkGreen 35, deepGreen 23; palette.js:
+// midGreen and deepGreen drawn by name, never a quantiser's choice), each stripe one solid colour: the stripes beside the centre, behind the presenters' heads in the wide and
 // the two-shot, are the darker value; the centre stripe, between the presenters, the lit one. In the sun midGreen over
 // darkGreen (the brightest pitch, under every face in every framing); under the floodlights darkGreen over deepGreen;
 // at dawn, unlit, deepGreen with a stripe of the darkGreen/deepGreen mix (12 L* apart: calm), the darkest and the
