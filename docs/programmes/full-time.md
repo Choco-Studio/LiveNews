@@ -239,7 +239,7 @@ are different programmes. A shape fixes the order; a segment without material is
   colder) as for the press room. RECREATION and the source on screen throughout. The system's rules hold (a public adult in
   a public role; never a victim, a relative or a child; never on a court case, abuse or a death). At most one an edition.
 
-## 6. Look and sound (to build)
+## 6. Look and sound (graphics built; set, open and sound to build)
 
 - **Accent orange** (`P.orange`; dark type on it, already in the graphics' dark-ink set). Distinct from NEWS IN 60's yellow
   and the RECREATION tag's yellow by hue and by its place on screen.
@@ -275,7 +275,15 @@ are different programmes. A shape fixes the order; a segment without material is
   stage tag such as FIRST LEG when the source says it); the **stadium scoreboard** for SCORE CENTRE (rows with the sport's
   icon); the **COMING UP** calendar (a leaf a date); **THE MOMENT ON THE BOARD** (chalk on a dark green board); eleven
   sport icons at 11 × 11, drawn pixel by pixel (ball, racket, car side-on, bat and ball, oval ball, helmet, basketball,
-  glove, wheel, flag on a green, runner), each passing a silhouette test at 1x.
+  glove, bicycle, flag on a green, runner), each passing a silhouette test at 1x; a sport without one (baseball, ice
+  hockey) gets none, never a neighbour's.
+  - **Built (step 3)**: `public/js/scenes/cards-sport.js`, seen in `public/lab/sport.html` (`?dt=`, `?scale=1`,
+    `?overlay=1` with the top row and a caption over every board); critique in
+    `docs/roadmap/critique/full-time-graphics.md` (9.8). One type size a board (1x, the score column moved off the
+    middle or a long name on two lines before anything shrinks; the compact six-row board's last resort is the micro
+    face for every name together); the winner white on either side; every board credits its source (SCORE CENTRE on its
+    foot); the digits in the accent, never NEWS IN 60's yellow; the chalkboard draws only football, American football
+    and rugby (in metres), only distances from 1 to 70, and writes the source's own number.
 
 ## 7. Data robustness
 

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: FULL TIME graphics</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(768px, 1fr)); gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { width: 768px; height: 432px; image-rendering: pixelated; display: block; background: #000; }
+  canvas.icons { width: 704px; height: 176px; }
+  figcaption { padding: 4px 0; color: #8a8fa3; }
+</style>
+</head>
+<body>
+<h1>FULL TIME · scoreline, SCORE CENTRE, COMING UP, the moment on the board, the sport icons</h1>
+<p>From the cached desk of 13 Oct and the offline fixture desk (fictional clubs), and the hardest cases (long names, an away win, three figures, a sport with no icon). ?dt=seconds shows them at that moment; ?scale=1 at 1x; ?overlay=1 with the channel's top row and a caption over them, as on air.</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { ICONS, drawIcon, drawScoreline, drawScoreboard, drawComingUp, drawChalkboard } from '/js/scenes/cards-sport.js';
+import { drawTopRow } from '/js/graphics/bug.js';
+import { CaptionState, drawCaptions } from '/js/graphics/captions.js';
+import { CAPTION } from '/js/graphics/layout.js';
+const q = new URLSearchParams(location.search);
+const dt = Number(q.get('dt') ?? 4);
+const one = q.get('scale') === '1';
+// ?overlay=1: the channel's top row (bug, LIVE, clock) and a two-line caption over every frame, as on air
+const overlay = q.get('overlay') === '1';
+const DAY = 86_400_000;
+const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+const today = Math.floor(Date.now() / DAY) * DAY;
+const grid = document.getElementById('grid');
+const field = (ctx) => {
+  const g = ctx.createRadialGradient(192, 82, 10, 192, 82, 300);
+  g.addColorStop(0, P.ink);
+  g.addColorStop(1, P.black);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 384, 216);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(0, 0, 384, 24);
+  ctx.fillRect(0, 136, 384, 80);
+};
+const add = (name, draw, { w = 384, h = 216, cls = '', bg = true } = {}) => {
+  const fig = document.createElement('figure');
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  if (cls) cv.className = cls;
+  if (one) { cv.style.width = `${w}px`; cv.style.height = `${h}px`; }
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  if (bg) field(ctx);
+  draw(ctx);
+  if (overlay && w === 384) {
+    drawTopRow(ctx, 10, { onAt: 0, replay: false, program: { title: 'FULL TIME', color: P.orange }, programIn: 0, programOut: null, clock: '18:40' });
+    const cs = new CaptionState();
+    cs.update(0, 'Northgate County beat Saltmarsh three goals to two, and it finished goalless at Brightwater.', 0);
+    cs.update(5, 'Northgate County beat Saltmarsh three goals to two, and it finished goalless at Brightwater.', 0);
+    drawCaptions(ctx, 5, cs, { bottom: CAPTION.bottomFree });
+    ctx.fillStyle = P.black;
+    ctx.fillRect(0, 202, 384, 14);
+  }
+  const cap = document.createElement('figcaption');
+  cap.textContent = `${name} · dt ${dt}s`;
+  fig.append(cv, cap);
+  grid.append(fig);
+};
+// the eleven icons: white on the board's black, and in the accent on ink
+add('SPORT ICONS (11 x 11), white and in the accent', (ctx) => {
+  ctx.fillStyle = P.black;
+  ctx.fillRect(0, 0, 176, 44);
+  Object.keys(ICONS).forEach((k, i) => {
+    drawIcon(ctx, k, 4 + i * 15, 6, P.white);
+    drawIcon(ctx, k, 4 + i * 15, 26, P.orange);
+  });
+}, { w: 176, h: 44, cls: 'icons', bg: false });
+const SC = [
+  ['SCORELINE · two rows (no home claim)', { score: { a: 'Coventry', b: 'Newcastle', sa: 4, sb: 1, winner: 'Coventry', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['SCORELINE · home and away (the source says "home win")', { score: { a: 'Coventry', b: 'Newcastle', sa: 4, sb: 1, winner: 'Coventry', home: 'Coventry', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['SCORELINE · a draw', { score: { a: 'Starfield City', b: 'Ledgerton Rovers', sa: 2, sb: 2, draw: true, sport: 'football' }, source: 'Pixelburg Sport' }],
+  ['SCORELINE · long names, NFL', { score: { a: 'Buffalo Bills', b: 'Los Angeles Rams', sa: 37, sb: 34, winner: 'Buffalo Bills', draw: false, sport: 'american-football' }, source: 'The Guardian' }],
+  ['SCORELINE · the longest names, two rows', { score: { a: 'Wolverhampton Wanderers Women', b: 'Brighton & Hove Albion Women', sa: 2, sb: 1, winner: 'Wolverhampton Wanderers Women', draw: false, sport: 'football' }, source: 'Pixelburg Sport' }],
+  ['SCORELINE · the longest names, home and away, an away win', { score: { a: 'Brighton & Hove Albion', b: 'Wolverhampton Wanderers', sa: 3, sb: 0, winner: 'Brighton & Hove Albion', home: 'Wolverhampton Wanderers', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['SCORELINE · women\'s rugby, a stage', { score: { a: 'Saltmarsh Sirens', b: 'Kestrel Vale Women', sa: 31, sb: 12, winner: 'Saltmarsh Sirens', draw: false, sport: 'rugby', stage: 'SEMI-FINAL' }, source: 'Pixelburg Sport' }],
+];
+for (const [name, o] of SC) add(name, (ctx) => drawScoreline(ctx, dt, o, P.orange));
+const ROWS = [
+  { a: 'Northgate County', b: 'Saltmarsh', sa: 3, sb: 2, sport: 'football' },
+  { a: 'Brightwater Wanderers', b: 'Kestrel Vale', sa: 0, sb: 0, draw: true, sport: 'football' },
+  { a: 'Millbrook', b: 'Ashcombe', sa: 2, sb: 1, sport: 'football' },
+  { a: 'Bitport Comets', b: 'Harbourside Herons', sa: 98, sb: 91, sport: 'basketball', day: 'SUN' },
+  { a: 'Harbourside Hawks', b: 'Millbrook Foxes', sa: 24, sb: 17, sport: 'rugby' },
+  { a: 'Bills', b: 'Rams', sa: 37, sb: 34, sport: 'american-football', day: 'MON' },
+];
+add('SCORE CENTRE · three rows, night', (ctx) => drawScoreboard(ctx, dt, { scores: ROWS.slice(0, 3), title: "TODAY'S RESULTS", source: 'Pixelburg Sport' }, P.orange), { bg: false });
+add('SCORE CENTRE · four rows, long names, an away win, three figures', (ctx) => drawScoreboard(ctx, dt + 3, { scores: [{ a: 'Ashcombe', b: 'Brightwater Wanderers', sa: 1, sb: 2, sport: 'football' }, { a: 'Wolverhampton Wanderers', b: 'Brighton & Hove Albion', sa: 1, sb: 1, draw: true, sport: 'football' }, { a: 'Bitport Comets', b: 'Lanternhill Lynx', sa: 112, sb: 108, sport: 'basketball' }, { a: 'Kestrel Vale', b: 'Glimmerford', sa: 7, sb: 21, sport: 'ice-hockey' }], title: "TODAY'S RESULTS" }, P.orange), { bg: false });
+add('SCORE CENTRE · six rows, evening', (ctx) => drawScoreboard(ctx, dt + 3, { scores: ROWS, title: 'THE LATEST RESULTS', night: false, source: 'Pixelburg Sport / Sky Sports / The Guardian' }, P.orange), { bg: false });
+add('COMING UP · three dates', (ctx) => drawComingUp(ctx, dt, { title: 'COMING UP', fixtures: [{ event: 'STARFIELD CITY V GLIMMERFORD', date: iso(today + DAY), when: 'WEDNESDAY', sport: 'football' }, { event: 'BITPORT COMETS V LANTERNHILL LYNX', date: iso(today + 2 * DAY), when: 'THURSDAY', sport: 'basketball' }, { event: 'TYSON FURY V ANTHONY JOSHUA', date: '2026-12-11', when: '11 DECEMBER', sport: 'boxing' }], source: 'Pixelburg Sport / Sky Sports' }, P.orange));
+add('COMING UP · two long names in neighbouring columns, a sport without an icon', (ctx) => drawComingUp(ctx, dt, { title: 'COMING UP', fixtures: [{ event: 'WOLVERHAMPTON WANDERERS V BRIGHTON & HOVE ALBION', date: iso(today + DAY), when: 'WEDNESDAY', sport: 'football' }, { event: 'HARBOURSIDE HERONS VS LANTERNHILL LYNX', date: iso(today + 2 * DAY), when: 'THURSDAY', sport: 'basketball' }, { event: 'KESTREL VALE V GLIMMERFORD', date: iso(today + 3 * DAY), when: 'FRIDAY', sport: 'ice-hockey' }], source: 'Pixelburg Sport' }, P.orange));
+add('COMING UP · two dates, an event by its name', (ctx) => drawComingUp(ctx, dt, { title: 'THE WEEKEND AHEAD', fixtures: [{ event: 'ENGLAND V TONGA', date: iso(today + 4 * DAY), when: 'SATURDAY', sport: 'rugby' }, { event: 'THE ASHES', date: '2026-11-21', when: '21 NOVEMBER', sport: 'cricket' }], source: 'Sky Sports' }, P.orange));
+add('THE MOMENT ON THE BOARD · from 30 yards', (ctx) => drawChalkboard(ctx, dt, { chalk: { yards: 30, sport: 'football' } }));
+add('THE MOMENT ON THE BOARD · a 45-yard field goal', (ctx) => drawChalkboard(ctx, dt, { chalk: { yards: 45, sport: 'american-football' } }));
+add('THE MOMENT ON THE BOARD · a penalty from 45 metres (rugby)', (ctx) => drawChalkboard(ctx, dt, { chalk: { metres: 45, sport: 'rugby' } }));
+add('THE MOMENT ON THE BOARD · from the spot', (ctx) => drawChalkboard(ctx, dt, { chalk: { yards: 12, label: 'THE PENALTY SPOT', sport: 'football' } }));
+</script>
+</body>
+</html>
