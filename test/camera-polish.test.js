@@ -249,6 +249,9 @@ test('guard: a re-staged quote\'s hand-over stays on the presenter, so a long si
   assert.ok(cut && cut.shot === 'wide' && !cut.mid, `the hand-over on the WIDE: ${JSON.stringify(cut)}`);
   // inside the maximum with the hand-over (7.0 + 4.5 s of 12): no cut, the hand-over's length is known (no margin)
   assert.equal(holdCut(restage, 2, { ...onAir, held: 7.0 }, opts), null);
+  // nor at a phrase point before it (5.7 s held, 6.0 s to the end: inside the 12 s)
+  assert.equal(holdCut(restage, 1, { ...onAir, held: 5.7 }, { ...opts, point: { char: 140, t0: 10.9 } }), null);
+  assert.ok(holdCut(restage, 1, { ...onAir, held: 6.6 }, { ...opts, point: { char: 140, t0: 10.9 } }), 'past the maximum: the phrase point cuts');
   // a correspondent's hand-over goes to the two-way (director.js throwTo): the guard leaves it alone
   const cross = storyPlan(lines, { link: 'R2' }, { duration: 16.3 });
   cross.ctx.speaker = 'A';
