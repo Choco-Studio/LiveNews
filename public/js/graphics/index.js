@@ -23,7 +23,7 @@ import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, d
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
-import { drawLinkGraphics, drawFileCredit } from './remote.js';
+import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
 import { drawRecreation } from './recreation.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -240,8 +240,10 @@ export class Graphics {
     const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
     // two lines a page everywhere, above the strap too (owner: captions changed too fast): a sentence in one-line
     // pages flipped every 2.4 s in median and left scraps on screen for 1.4 s ("within days."); two-line pages hold
-    // about 3.5 s, as broadcast subtitles do
-    const perPage = 2;
+    // about 3.5 s, as broadcast subtitles do. Over a two-way, two lines above a two-line strap would cover the box
+    // labels and the rule under the boxes: there (and only then) the caption pages a line at a time
+    const settledTop = this.strap.cur && !scene.recreation ? this.strap.cur.barY - STRAP.tagH : STRAP.tagY;
+    const perPage = scene.shot === 'twoway' && !top && settledTop - CAPTION.gap - 2 * CAPTION.pitch < TWO_WAY_CLEAR ? 1 : 2;
     this.captions.update(t, text, scene.subtitleSince ?? null, frame?.speaking ? frame.charIndex : null, perPage);
 
     this.updateTickerList(t, scene);

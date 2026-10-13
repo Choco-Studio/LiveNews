@@ -225,6 +225,26 @@ describe('graphics', () => {
     assert.equal(g.captions.lines.length, 2);
   });
 
+  test('over a two-way, a caption above a two-line strap pages a line at a time (two lines covered the box labels)', () => {
+    const run = (headline) => {
+      const g = new Graphics({ now: () => 0 });
+      const scene = {
+        shot: 'twoway', program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, rundown: [], ticker: [], subtitles: true,
+        remote: { kind: 'correspondent', place: 'PARIS, FRANCE', desk: 'CULTURE CORRESPONDENT' },
+        lowerThird: { headline, kicker: 'WORLD', source: 'NPR', since: 0 },
+        subtitle: 'Let\'s bring in our Culture Correspondent, Leo Sepia, who has been following the story from Paris.', subtitleSince: 2,
+      };
+      for (let t = 0; t < 3; t += 0.05) g.update(t, scene);
+      return g;
+    };
+    const tall = run('DNA and vehicle-tracking help French investigators recover stolen Renoirs from a gallery');
+    assert.ok(tall.strap.cur.barY < STRAP.barY, 'a two-line strap');
+    assert.equal(tall.captions.lines.length, 1);
+    const one = run('French investigators recover stolen Renoirs');
+    assert.equal(one.strap.cur.barY, STRAP.barY, 'a one-line strap');
+    assert.equal(one.captions.lines.length, 2, 'room for two lines: they stay');
+  });
+
   test('a list of names is never split at its commas; a clause comma still is a good break', () => {
     const show = (s) => paginate(s).map((p) => p.lines.join(' / ')).join(' || ');
     assert.equal(show('Stations in Berlin, Munich and Frankfurt were almost empty during the morning rush hour.'), 'Stations in Berlin, Munich and Frankfurt were / almost empty during the morning rush hour.');
