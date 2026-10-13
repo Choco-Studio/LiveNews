@@ -47,7 +47,8 @@ above 9.7 in every category, and a round's score is its lowest category.
 - the A/B references: `ref-pink-noise.wav`, `ref-rain.wav`, `ref-pulsed-control.wav`;
 - the A/B's measures: `ab-measures.jsonl`;
 - an edition with a grave story: `edition-grave-mix.wav`, 158 s, with its cue log;
-- an 8-minute matchday edition: `edition-matchday-8min-mix.wav`, with its cue log.
+- an 8-minute matchday edition: `edition-matchday-8min-mix.wav`, with its cue log;
+- recordings on air: `onair-full-time-90s.mp4` and `onair-full-time-score-centre.mp4`.
 
 ## Round 1: score 8.9 (lowest: the sting)
 
@@ -224,6 +225,18 @@ segment.
 The lab now schedules the bed as the render goes (suspending every 4 s). The first attempt at this edition scheduled
 all eight minutes up front and was stopped after 37 minutes of rendering. Scheduled progressively, the same cue log
 renders in about two minutes. The 158 s edition gives an identical cue log and loudness either way.
+
+### On air
+
+Recorded with `tools/record.mjs` from the channel with FULL TIME on air (`DRAFTS_ON_AIR=full-time@world-weather`,
+`ROTATION_START=full-time`, the offline edition). The voices are the silent browser fallback, so the music is heard
+in the clear.
+- **The open:** `onair-full-time-90s.mp4`. The stadium open plays (shot `open` at 0.9 s, the montage at 11.2 s:
+  10.3 s).
+- **The scoreline sting:** the lead's scoreline card is cut to at 38.7 s. The crowd swell rises over the bed to a
+  momentary −20.8 LUFS at 39.4 s and is gone by 40.4 s (the bed is at −34 to −35).
+- **SCORE CENTRE:** `onair-full-time-score-centre.mp4`, from 195 s into the edition. The board cuts in at 26.6 s and
+  three `scoreTick` cues sound at 28.0, 30.6 and 33.9 s, one as each row flips in.
 
 ### Final scores
 
