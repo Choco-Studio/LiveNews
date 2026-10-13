@@ -390,6 +390,11 @@ describe('boards, round 2', () => {
     const L = cards.cardLayouts.ledger([{ value: '30%', label: 'less energy' }], 'BY THE NUMBERS', 'Circuit Weekly');
     assert.equal(L.fs, 3);
     assert.equal(L.items[0].labW, measureText(L.items[0].lab, 1));
+    // a fact that is only a figure: never cut at 3x ("$50 MILLI..."), its qualifier on the row's left
+    const B = cards.cardLayouts.ledger('ALMOST $50 MILLION', 'BY THE NUMBERS', 'TechCrunch');
+    assert.equal(B.items[0].fig, '$50 MILLION');
+    assert.equal(B.items[0].lab, 'ALMOST');
+    assert.equal(B.items[0].qual, '');
   });
 
   test('the breaking card\'s block sits in the middle of the frame, not in its top half', () => {

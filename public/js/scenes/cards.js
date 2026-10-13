@@ -948,11 +948,14 @@ function ledgerLayout(rows, label, source) {
   const blockH = 12 + n * rowH - 4 + (source ? 12 : 0);
   const top = clamp(Math.round(82 - blockH / 2), 30, SAFE_BOTTOM - blockH);
   const items = rows.map((r, i) => {
-    const fig = ellipsis(r.figure, 170, fs);
+    // (at 3x the figure has the width it was chosen for: "$50 MILLION" was cut to "$50 MILLI..." at 170 px)
+    const fig = ellipsis(r.figure, fs === 3 ? 200 : 170, fs);
     const fw = textW(fig, fs);
-    const qual = r.qual ? ellipsis(r.qual, 80, 1) : '';
+    // a figure without a label (a fact that is only "ALMOST $50 MILLION"): its qualifier reads as the row's label
+    const bare = !r.label && r.qual;
+    const qual = r.qual && !bare ? ellipsis(r.qual, 80, 1) : '';
     const qualW = qual ? measureText(qual, 1, 'micro') + 4 : 0;
-    const lab = ellipsis(r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
+    const lab = ellipsis(bare ? r.qual : r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
     return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1), y: top + 12 + i * rowH };
   });
   L = { label, source, top, items, fs, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: srcText(source, 300) };
@@ -1321,7 +1324,7 @@ export function drawFactCard(ctx, t, dt, o = {}) {
 export const cardLayouts = {
   rule: (fact, label = '', source = '') => ruleLayout(fact, label, source, rowsFor(fact, null)),
   stack: (numbers, label = '', source = '') => stackLayout(label, source, rowsFor('', numbers)),
-  ledger: (numbers, label = '', source = '') => ledgerLayout(rowsFor('', numbers), label, source),
+  ledger: (numbers, label = '', source = '') => ledgerLayout(typeof numbers === 'string' ? rowsFor(numbers, null) : rowsFor('', numbers), label, source),
   breaking: (headline, source = '') => breakingLayout(String(headline ?? ''), source),
 };
 
