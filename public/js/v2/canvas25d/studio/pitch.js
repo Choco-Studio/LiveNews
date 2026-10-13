@@ -60,7 +60,7 @@ export const GROUND = {
   stripe: 240, // mowing stripe width
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
-  far: { X: 990, Z: 6400, Y: -222, cols: 3, pitch: 6.4, gapless: true, halo: 50, mast: 6.4, far: true },
+  far: { X: 990, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, halo: 50, mast: 6.4, far: true },
   near: { X: 605, Z: 3600, Y: -139, cols: 5, pitch: 7.2, gapless: false, halo: 44, mast: 10.8 },
 };
 
@@ -110,7 +110,7 @@ const PALS = [
   // dawn: the night lifting behind the stand, the ground cold and in shadow, the floodlights off
   pal({ ...NIGHT, sky: ['ink', 'navy', 'purple', 'rust'], softSky: 'navy', town: 'black', roofEdge: 'purple', exit: 'ink', exitEdge: 'black', heads: ['slate', 'slate'], pitch: [-3, -8], line: 'slate', tower: 'ink', towerDark: 'black', head: 'ink', lamp: 'slate', halo: null, band: 'rust', pole: 'slate' }),
   // day: the stand in sun and shadow (the roof shades the upper tier, the sun on the lower), the pitch in the sun
-  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: [0, -3], line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog' }),
+  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: [4, 0], line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog' }),
   // the golden hour: the sky reddening behind the stand, its roof catching the last light, the banks coming on
   pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', pitch: [0, -4] }),
   // the blue hour: the last light a purple band over the roof, every bank on
@@ -260,10 +260,11 @@ function towerMast(cam, t, hd, P, soft) {
     fill(x0, y0, x0 + mw, yBase, soft ? d : c);
     return;
   }
-  // a lattice: two rails (the one toward the key lit), a rung every 4 px and a diagonal brace between (whole pixels)
+  // a lattice: two rails (the one toward the pitch lit by its light, so the pair mirrors), a rung every 4 px and a
+  // diagonal brace between (whole pixels)
   for (let y = y0; y < yBase; y++) {
-    put(x0, y, c);
-    put(x0 + mw - 1, y, d);
+    put(x0, y, t.X < 0 ? d : c);
+    put(x0 + mw - 1, y, t.X < 0 ? c : d);
     const r = (y - y0) % 4;
     if (r === 0) for (let x = x0 + 1; x < x0 + mw - 1; x++) put(x, y, d);
     else put(x0 + 1 + ((r - 1) % Math.max(1, mw - 2)), y, d);
@@ -296,7 +297,7 @@ function halo(hd, P, banks, soft) {
       if (x >= hd.x0 && x < hd.x0 + hd.w && y >= hd.y0 && y < hd.y0 + hd.h) continue; // the head itself
       const d = Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.15) / R;
       if (d >= 1) continue;
-      lift(x, y, d < 0.42 ? c0 : d < 0.7 ? c1 : c2);
+      lift(x, y, d < 0.5 ? c0 : d < 0.74 ? c1 : c2);
     }
   }
 }
@@ -537,8 +538,11 @@ function boards(cam, P, soft, guard) {
     // the channel's orange band: out of focus a dim block, in focus the band and FULL TIME in dark type, whole or not
     // at all (inside the frame, clear of the screen, the columns, the graphics and every person)
     if (soft) {
-      // out of focus: the band's light blurred to a dim glow, no type
-      fill(bx0, y0 + 1, bx1, y1, mute(P.band));
+      // out of focus: the band's light blurred to a dim rounded glow (its corners melt into the black board), no type
+      const c = mute(P.band), cr = Math.max(1, s);
+      fill(bx0 + cr, y0 + 1, bx1 - cr, y1, c);
+      fill(bx0, y0 + 1 + cr, bx0 + cr, y1 - cr, c);
+      fill(bx1 - cr, y0 + 1 + cr, bx1, y1 - cr, c);
       continue;
     }
     if (!guard(r) || people.some((b) => overlaps(r, b))) continue;
