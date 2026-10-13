@@ -336,7 +336,8 @@ export const ARMS = {
 // The glasses pushed up with one finger (owner, LISTA 13 "deslizar gafas"): the near hand rises with the index
 // up and the other fingers loosely curled, the back of the hand to the lens; the index fingertip lands on the
 // bridge (rig.js reachGlasses, `reachAt` 1), pushes the frame up about a pixel and holds it while the hand is
-// there, then the hand goes back down. Shorter than the pinch at the hinge (1.6 s); the planner puts the touch
+// there, then the hand goes back down. The hand comes from low on its own side with the index slanting in
+// (critic r3: straight up from under the chin, the back of the hand covered the whole lower face). Shorter than the pinch at the hinge (1.6 s); the planner puts the touch
 // in the pause between two sentences, so the hand passes the mouth only while nothing is said.
 const PUSH_UP = [0.5, 0.0, 0.62, 0.72, 0.8];
 ARMS.glasses.variants = {
@@ -346,8 +347,8 @@ ARMS.glasses.variants = {
     apex: 0.62,
     hold: 0.9,
     tracks: {
-      wrist: [[0, 'R'], [0.18, [-6.2, 19.4, 12.8]], [0.4, [-9.6, 5.0, 10.6]], [0.6, [-12.6, -8.0, 8.6]], [0.7, [-12.6, -9.0, 8.6], 's'], [0.9, [-12.6, -9.0, 8.6], 's'], [1.14, [-9.0, 4.0, 10.8]], [1.38, [-6.0, 15.0, 12.6]], [1.6, 'R', 's']],
-      dir: [[0, 'R'], [0.24, [-0.6, -0.2, 0.75]], [0.5, [-0.3, -0.93, 0.2]], [0.92, [-0.3, -0.93, 0.2], 's'], [1.2, [-0.5, -0.4, 0.75]], [1.44, [-0.75, 0.15, 0.62]], [1.6, 'R']],
+      wrist: [[0, 'R'], [0.18, [-6.2, 19.4, 12.8]], [0.4, [-9.6, 5.0, 10.6]], [0.6, [-10.8, -5.5, 9.2]], [0.7, [-10.8, -6.5, 9.2], 's'], [0.9, [-10.8, -6.5, 9.2], 's'], [1.14, [-9.0, 4.0, 10.8]], [1.38, [-6.0, 15.0, 12.6]], [1.6, 'R', 's']],
+      dir: [[0, 'R'], [0.24, [-0.6, -0.2, 0.75]], [0.5, [-0.55, -0.82, 0.16]], [0.92, [-0.55, -0.82, 0.16], 's'], [1.2, [-0.5, -0.4, 0.75]], [1.44, [-0.75, 0.15, 0.62]], [1.6, 'R']],
       curl: [[0, 'R'], [0.36, [0.4, 0.2, 0.55, 0.65, 0.72]], [0.6, PUSH_UP, 's'], [0.94, PUSH_UP, 's'], [1.36, 'R']],
       facing: [[0, 'R'], [0.5, -0.9, 's'], [0.94, -0.9, 's'], [1.36, 'R']],
       spread: [[0, 'R'], [0.6, 0.1], [0.94, 0.1], [1.36, 'R']],

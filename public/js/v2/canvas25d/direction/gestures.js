@@ -243,6 +243,7 @@ const CAPTION_W = CAPTION.maxW + 2 * CAPTION.padX;
 export const CAPTION_BOX = Object.freeze({ x0: (LAYOUT_W - CAPTION_W) / 2, x1: (LAYOUT_W + CAPTION_W) / 2, top: CAPTION.bottomStrap - CAPTION.pitch });
 const CAPTION_CLEAR = 4;
 const SINGLE_SCALE = 2.2; // presenter scale from which a framing counts as a single (the over-the-shoulder 2.41 too)
+const TAP_SCALE = 1.5; // presenter scale from which counting on the fingers reads (the two-shot's 1.86 does)
 const CPS = 14.5; // chars per second to estimate segment lengths from the episode summary
 /**
  * Identity of a gesture for the no-repeat rule: its family (variants that read alike on screen share
@@ -540,8 +541,12 @@ class SegmentPlan {
     if (variant && GESTURES[name].variants?.[variant]) ev.variant = variant;
     if (name === 'count') {
       ev.n = opts.n ?? countFromText(ctx.seg.text, w.char, ctx.sentences[sentenceOf(ctx, w.char)].end);
-      // counting on the fingers half the time (owner, LISTA 13): the other index taps each finger as it counts
-      if (!ev.variant && this.r() < 0.5) ev.variant = 'tap';
+      // counting on the fingers half the time (owner, LISTA 13): the other index taps each finger as it counts;
+      // not in a wide (critic r3: at a scale of ~1 the two hands together read as one blob of skin)
+      if (!ev.variant && this.r() < 0.5) {
+        const sc = scaleAt(ctx, w.t);
+        if (sc == null || sc >= TAP_SCALE) ev.variant = 'tap';
+      }
     }
     // chin while speaking: a brief touch; the long thinking pose only on the question or held into the pause
     if (name === 'chin' && !opts.variant) {

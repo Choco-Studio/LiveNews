@@ -1628,7 +1628,12 @@ test('counting on the fingers (count:tap): the other index lands on each counted
   let taps = 0, counts = 0;
   for (const res of ALL_SEGS('tech-bytes', 14)) for (const e of gesturesOf(res)) if (e.name === 'count') {
     counts++;
-    if (e.variant === 'tap') taps++;
+    if (e.variant !== 'tap') continue;
+    taps++;
+    // never in the wide, where the two hands together are one blob of skin (the two-shot reads it)
+    let cut = null;
+    for (const c of res.ctx.shots) if (c.at <= e.apexAt) cut = c;
+    assert.ok(!(cut && cut.shot === 'wide' && (cut.framing ?? 'wide') === 'wide'), `count:tap planned in the wide at ${e.at}`);
   }
   if (counts >= 4) assert.ok(taps > 0 && taps < counts, `count:tap ${taps} of ${counts} counts`);
 });
