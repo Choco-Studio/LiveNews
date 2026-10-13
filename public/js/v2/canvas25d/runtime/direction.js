@@ -766,9 +766,11 @@ export class LiveDirection {
     const i = p.index;
     const gap = typeof this.gapFn === 'function' ? this.gapFn(i) : GAP_AFTER;
     const onAir = { shot: s.shot, framing: s.framing ?? null, focus: s.focus, held: now() - s.shotSince };
-    // the next segment's opening shot (already planned in idle time; never planned here)
+    // the next segment's opening shot (already planned in idle time; never planned here; none for a link, which the
+    // director directs itself: its studio plan's wide never airs, and taken for the next opening it kept a MONEY
+    // MINUTE MCU-R 14.9 s on air into a re-staged guest, every cut to the WIDE refused as "continuing into it")
     const nextSeg = this.ep?.segments?.[i + 1];
-    const np = nextSeg ? this.plans.get(nextSeg) : null;
+    const np = nextSeg && nextSeg.type !== 'cross' ? this.plans.get(nextSeg) : null;
     const nextOpen = np ? cuesFromPlan(np, { hasImg: true })?.[0] || null : null;
     // how fast the voice really runs against the plan (a slower voice or a stalled page makes every shot longer)
     const t0 = point ? point.t0 : ctx?.sentences?.[si]?.t0;

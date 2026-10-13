@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { paceFor, picturePan, PROGRAMME_IDS, gapAfter } from '../public/js/pace.js';
 import { Director } from '../public/js/director.js';
-import { holdCut } from '../public/js/v2/canvas25d/runtime/direction.js';
+import { holdCut, LiveDirection, cuesFromPlan } from '../public/js/v2/canvas25d/runtime/direction.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
 import { fakeClock } from '../tools/pace/fakeplay.mjs';
 import { analyseTimeline } from '../tools/pace/camera.mjs';
@@ -258,6 +258,32 @@ test('guard: a re-staged quote\'s hand-over stays on the presenter, so a long si
   assert.equal(holdCut(cross, 2, onAir, opts), null);
   // a picture on air at a re-staged hand-over: the director cuts back to the presenter there, so its end is the hand-over
   assert.equal(holdCut(restage, 2, { shot: 'full', framing: null, focus: 'A', held: 5 }, opts), null);
+});
+
+test('guard: a link next is no "next opening" (its studio plan never airs): the long single before a re-staged guest gives way', () => {
+  const clock = fakeClock();
+  try {
+    const director = { scene: { shot: 'close', framing: 'mcu-r', focus: 'A', shotSince: 0, stinger: null, program: { id: 'money-minute' } }, setShot() {} };
+    const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+    live.schedule = () => {};
+    const story = { type: 'story', anchor: 'A', storyId: 's1', headline: 'Shops for families', source: 'BBC Business', category: 'business', hasImage: false, emotion: 'neutral', cues: [], link: 'R2', linkKind: 'restage', text: 'A secondhand store in Leeds opened its doors to families who cannot afford new clothes this winter. The founder said he and his wife struggled for years before the idea finally took off in the city. In the words of Thomas Cliffe, the founder, as reported by BBC Business:' };
+    const piece = { type: 'cross', part: 'piece', kind: 'restage', anchor: 'R2', reporter: 'g1', emotion: 'neutral', cues: [], text: 'We wanted everyone to shop with dignity.', recreation: true, storyId: 's1' };
+    const ep = { id: 'mmRestage', program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, cast: { A: 'penny' }, correspondents: { R2: 'g1' }, rundown: [], segments: [{ type: 'intro', anchor: 'A', text: 'This is MONEY MINUTE.', cues: [] }, story, piece, { type: 'outro', anchor: 'A', text: "That's MONEY MINUTE.", cues: [] }] };
+    live.episode(ep);
+    const p = live.planAt(1);
+    live.planAt(2); // the link's studio plan: a WIDE that never airs
+    const last = p.ctx.sentences.length - 1;
+    const t0 = p.ctx.sentences[last].t0;
+    // the MCU-R since the story's cut, the hand-over to come: past the 12 s maximum together
+    director.scene.shotSince = clock.now() - t0;
+    p.speechStart = clock.now() - t0;
+    live.framings.wide = 'wide'; // the episode's WIDE has aired (the guard's target)
+    assert.ok(t0 + (p.ctx.duration - t0) + 0.4 > 12, `the case: ${t0.toFixed(2)} + ${(p.ctx.duration - t0).toFixed(2)} s`);
+    const cue = live.holdCue(p, last, cuesFromPlan(p));
+    assert.ok(cue && cue.shot === 'wide', `the hand-over on the WIDE: ${JSON.stringify(cue)}`);
+  } finally {
+    clock.restore();
+  }
 });
 
 test('guard: the round-up\'s opening map carries its title on top of the map maximum', () => {
