@@ -259,7 +259,7 @@ function countTapForN(n) {
   const dur = +(last + 1.2).toFixed(2);
   const hold = last + 0.42;
   const tapK = [[0, 1], [POPS[0] + 0.1, 1, 's']];
-  const away = [[0, 1], [0.44, 1, 's'], [POPS[0] - 0.1, 0.62], [POPS[0], 0], [POPS[0] + 0.04, 0, 's']];
+  const away = [[0, 1.4], [0.44, 1.4, 's'], [POPS[0] - 0.1, 0.62], [POPS[0], 0], [POPS[0] + 0.04, 0, 's']];
   const give = [[0, 0], [POPS[0], 0, 's'], [POPS[0] + 0.05, 0.26], [POPS[0] + 0.15, 0, 's']];
   const pitch = [[0, 0]];
   const brow = [[0, 0]];
@@ -296,9 +296,11 @@ function countTapForN(n) {
       facing: [[0, 'R'], [0.42, 1, 's'], [dur - 0.6, 1, 's'], [dur - 0.3, 'R']],
       pole: [[0, 'R'], [0.5, [1, 1, 0]], [dur - 0.7, [1, 1, 0]], [dur, 'R']],
       // the tapping hand: across to the counting hand, the index out (rig.js tapFinger places it)
-      wristF: [[0, 'R'], [0.2, [7.6, 21.4, 12.6]], [0.46, [11.6, 3.0, 14.6]], [0.6, [12.6, 0.0, 15.0]], [0.7, [12.6, 0.0, 15.0], 's'], [hold, [12.6, 0.0, 15.0], 's'], [dur - 0.32, [7.2, 17.6, 13.6]], [dur, 'R', 's']],
-      // (the index comes down onto the fingertips from above: the hand stays over them, never across the palm)
-      dirF: [[0, 'R'], [0.32, [0.6, 0.0, 0.7]], [0.6, [0.78, 0.36, 0.5]], [0.72, [0.78, 0.36, 0.5], 's'], [hold + 0.04, [0.78, 0.36, 0.5], 's'], [dur - 0.3, [0.7, 0.25, 0.55]], [dur, 'R']],
+      // (its own keys sit where tapFinger holds it, so taking it on and off the fingers moves it little)
+      wristF: [[0, 'R'], [0.22, [4.4, 21.0, 15.6]], [0.42, [6.4, 0.0, 21.5]], [0.6, [10.7, -8.0, 22.0]], [0.7, [10.7, -8.0, 22.0], 's'], [hold + 0.2, [10.7, -8.0, 22.0], 's'], [dur - 0.24, [7.2, 15.6, 15.6]], [dur, 'R', 's']],
+      // (the index comes across onto the fingertips from in front: the tapping finger passes in front of the
+      // fingers it is not counting, never through them, critic r3; it turns back only once it is off the hand)
+      dirF: [[0, 'R'], [0.32, [0.62, -0.25, 0.74]], [0.6, [0.74, 0.32, -0.42]], [0.72, [0.74, 0.32, -0.42], 's'], [hold + 0.3, [0.74, 0.32, -0.42], 's'], [dur - 0.16, [0.7, 0.25, 0.55]], [dur, 'R']],
       curlF: [[0, 'R'], [0.42, POINT, 's'], [hold + 0.06, POINT, 's'], [dur - 0.3, 'R']],
       spreadF: [[0, 'R'], [0.5, 0.1], [hold, 0.1], [dur - 0.3, 'R']],
       facingF: [[0, 'R'], [0.44, -0.35, 's'], [dur - 0.6, -0.35, 's'], [dur - 0.3, 'R']],

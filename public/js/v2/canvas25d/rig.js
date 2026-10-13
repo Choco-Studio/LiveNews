@@ -459,13 +459,16 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
  * Fingertips meeting (steeple, hands joined): `touch` (0..1) closes the two hands' fingertips onto each other.
  * The contact point of each hand is between its index and middle fingertips, from the same hand skeleton
  * hands.js draws (handGeometry at a zero wrist, this frame's direction and shape); the two points are brought
- * level and side by side across the screen, the pads just touching, each wrist taking half the correction.
- * Across the screen the constraint is one-sided while it blends in: a gap closes with `touch`, an overlap is
- * pushed out at once (from a touch of 1/8), so the fingers never pass through each other on the way in or out. `tipGap`
+ * level and side by side across the screen, each wrist taking half the correction. Across the screen the pads of
+ * the closest pair of twin fingertips (index to index .. thumb to thumb) just touch, and the constraint is
+ * one-sided while it blends in: a gap closes with `touch`, an overlap is pushed out at once (from a touch of
+ * 1/50), so no finger passes through its twin on the way in or out (critic r3: the middle fingers, the longest,
+ * crossed while the hands rose, and the fingers read as a comb). `tipGap`
  * (body units) opens the fingertips by that much (a steeple's tap), `tipSettle` (body units, down) is the contact
  * beat: the joined hands settle about a pixel as the fingertips land, then hold still.
  */
 const TG = [newHandGeometry(), newHandGeometry()];
+const TIP_OF = [3, 7, 11, 15, 19]; // the fingertip joints: index, middle, ring, little finger, thumb
 const TARM = { wrist: [0, 0, 0], handDir: null, hand: null };
 // the fingertips' centres sit this many tip radii apart: the outlines just meet
 const TOUCH_GAP = 1.6;
@@ -478,12 +481,16 @@ function touchHands(L, armN, armF, sideN, w, settle, part) {
   const b = handGeometry(L, TARM, -sideN, TG[1]).J;
   // the far hand lies on the other screen side of the near one: its signed separation across the screen
   const across = -sideN;
-  const gap = TOUCH_GAP * TG[0].R[3] + Math.max(0, part);
-  const sep = (TWF[0] + (b[9] + b[21]) * 0.5 - (TWN[0] + (a[9] + a[21]) * 0.5)) * across;
-  const ex = (sep - gap) * across;
+  let d = Infinity;
+  for (let i = 0; i < 5; i++) {
+    const j = TIP_OF[i] * 3;
+    d = Math.min(d, (TWF[0] + b[j] - TWN[0] - a[j]) * across - TOUCH_GAP * TG[0].R[TIP_OF[i]]);
+  }
+  d -= Math.max(0, part);
+  const ex = d * across;
   const ey = TWF[1] + (b[10] + b[22]) * 0.5 - (TWN[1] + (a[10] + a[22]) * 0.5);
   const ez = TWF[2] + (b[11] + b[23]) * 0.5 - (TWN[2] + (a[11] + a[23]) * 0.5);
-  const k = w * 0.5, kx = (sep < gap ? Math.min(1, w * 8) : w) * 0.5, p = settle * w;
+  const k = w * 0.5, kx = (d < 0 ? Math.min(1, w * 50) : w) * 0.5, p = settle * w;
   TWN[0] += ex * kx;
   TWN[1] += ey * k + p;
   TWN[2] += ez * k;
@@ -495,12 +502,12 @@ function touchHands(L, armN, armF, sideN, w, settle, part) {
 /**
  * Counting on the fingers (count:tap): `tap` (0..1) puts the far hand's index fingertip on fingertip `tapK` of the
  * near hand (1 index .. 4 little finger, 5 thumb; between two whole numbers it slides from one fingertip to the
- * next), from above and the far hand's side, the pads just touching, so the tapping hand stays over the counting
- * fingers and never covers the palm; `tapAway` lifts it back up off the finger (1 ≈ a finger's width and more).
+ * next), from above, in front and a little from the far hand's side, the pads just touching, so the tapping hand
+ * stays over the counting fingers and never covers the palm; `tapAway` lifts it up off the finger and toward the
+ * lens (1 ≈ a finger's width and more), not across: lifting across, it went through the next finger (critic r3).
  * Only the far wrist moves to it.
  * `tapGive` (body units) pushes the counting hand a little away from the tap: it gives, and comes back.
  */
-const TIP_OF = [3, 7, 11, 15, 19]; // the fingertip joints: index, middle, ring, little finger, thumb
 function tapFinger(L, armN, armF, sideN, w, k, away, give) {
   TARM.handDir = armN.handDir;
   TARM.hand = armN.hand;
@@ -513,9 +520,9 @@ function tapFinger(L, armN, armF, sideN, w, k, away, give) {
   const across = -sideN; // the far hand's side of the near one
   const aw = clamp(away, 0, 1.5);
   const gap = TOUCH_GAP * TG[0].R[3];
-  const tx = TWN[0] + a[j0] + (a[j1] - a[j0]) * u + across * (gap * 0.45 + aw * 0.8);
+  const tx = TWN[0] + a[j0] + (a[j1] - a[j0]) * u + across * (gap * 0.45 + aw * 0.3);
   const ty = TWN[1] + a[j0 + 1] + (a[j1 + 1] - a[j0 + 1]) * u - gap * 0.9 - aw * 1.5;
-  const tz = TWN[2] + a[j0 + 2] + (a[j1 + 2] - a[j0 + 2]) * u + 0.4 + aw * 0.8;
+  const tz = TWN[2] + a[j0 + 2] + (a[j1 + 2] - a[j0 + 2]) * u + 0.4 + aw * 1.2;
   TWF[0] += (tx - b[9] - TWF[0]) * w;
   TWF[1] += (ty - b[10] - TWF[1]) * w;
   TWF[2] += (tz - b[11] - TWF[2]) * w;

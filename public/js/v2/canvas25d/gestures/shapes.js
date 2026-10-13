@@ -12,9 +12,9 @@ export const UP = [0.04, -1, 0.12];
 // tiers that read as fingers; one even curl read as a crumpled scrap, critic r3)
 export const RELAX = [0.16, 0.42, 0.5, 0.72, 0.8];
 export const THUMB = [-0.1, 0.95, 0.97, 0.98, 1];
-// the steeple's fingers: nearly straight and the same bend, so the four fingertips meet their twins in one line
-// (a softer little finger bent past the contact and crossed the other hand's fingers)
-export const STEEPLE = [0.24, 0.03, 0.03, 0.04, 0.05];
+// the steeple's fingers: nearly straight, each bent just enough that all five fingertips meet their twins at
+// once (the longest, the middle finger, straightest; the little finger and the thumb bend in to reach)
+export const STEEPLE = [0.26, 0.068, 0.03, 0.061, 0.176];
 export const CHIN = [0.32, 0.22, 0.7, 0.8, 0.86];
 export const GRIP = [0.3, 0.3, 0.34, 0.38, 0.44]; // holding the edge of the papers
 export const PEN = [0.42, 0.5, 0.64, 0.72, 0.78];

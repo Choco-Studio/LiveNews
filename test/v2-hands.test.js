@@ -1419,6 +1419,55 @@ test('fingertips meet (steeple family): level and pad to pad at the hold, never 
   assert.ok(Math.max(...after) - Math.min(...after) < 0.8, `the joined hands drift ${(Math.max(...after) - Math.min(...after)).toFixed(2)} px while held`);
 });
 
+/** The two hands' worst overlap as solids (body units; < 0 where the capsules of fingers, thumbs and palm rays overlap). */
+function handsClearance(look, sk) {
+  const caps = (g) => {
+    const J = g.J, R = g.R, P = (i) => [J[i * 3], J[i * 3 + 1], J[i * 3 + 2]], out = [];
+    for (let f = 0; f < 4; f++) {
+      for (let s = 0; s < 3; s++) out.push([P(f * 4 + s), P(f * 4 + s + 1), R[f * 4 + s], R[f * 4 + s + 1]]);
+      out.push([[...g.W], P(f * 4), R[f * 4] * 1.2, R[f * 4]]);
+    }
+    for (let s = 0; s < 3; s++) out.push([P(16 + s), P(17 + s), R[16 + s], R[17 + s]]);
+    return out;
+  };
+  const A = caps(handGeometry(look, sk.arms.L, -1, newHandGeometry())), B = caps(handGeometry(look, sk.arms.R, 1, newHandGeometry()));
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cl = (v) => Math.min(1, Math.max(0, v));
+  let worst = Infinity;
+  for (const [p1, q1, r1a, r1b] of A) for (const [p2, q2, r2a, r2b] of B) {
+    // closest points of two segments
+    const d1 = sub(q1, p1), d2 = sub(q2, p2), r = sub(p1, p2);
+    const a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r), c = dot(d1, r), b = dot(d1, d2), den = a * e - b * b;
+    let s = den > 1e-9 ? cl((b * f - c * e) / den) : 0;
+    let t = (b * s + f) / e;
+    if (t < 0) [t, s] = [0, cl(-c / a)];
+    else if (t > 1) [t, s] = [1, cl((b - c) / a)];
+    const x = sub([p1[0] + d1[0] * s, p1[1] + d1[1] * s, p1[2] + d1[2] * s], [p2[0] + d2[0] * t, p2[1] + d2[1] * t, p2[2] + d2[2] * t]);
+    worst = Math.min(worst, Math.sqrt(dot(x, x)) - (r1a + (r1b - r1a) * s) - (r2a + (r2b - r2a) * t));
+  }
+  return worst;
+}
+
+test('the hands never pass through each other (steeple family, counting on the fingers): only the pads press, a few hundredths of a hand', () => {
+  const evs = [null, 'tap', 'press'].map((variant) => ({ name: 'steeple', ...(variant ? { variant } : {}) }));
+  for (let n = 1; n <= 5; n++) evs.push({ name: 'count', variant: 'tap', n });
+  for (const ev of evs) {
+    const d = defOf(ev);
+    for (const id of PRESENTER_IDS) {
+      for (const side of [1, -1]) {
+        const a = actor(id, { side, seed: 23, gestures: [{ ...ev, t0: 0.3 }] });
+        let worst = Infinity, at = 0;
+        for (let t = 0.3; t <= 0.3 + d.dur; t += 1 / 30) {
+          const c = handsClearance(a.look, poseAt(a, t));
+          if (c < worst) [worst, at] = [c, t - 0.3];
+        }
+        // (the pads' outlines meet: TOUCH_GAP puts the tips' centres 1.6 radii apart, an overlap of ~0.4 tip radius)
+        assert.ok(worst >= -0.03 * a.look.arm.hand, `${id} ${label(ev)} side ${side}: the hands overlap by ${(-worst).toFixed(2)} at ${at.toFixed(2)} s`);
+      }
+    }
+  }
+});
+
 test('relaxed hands: graded curls, the two hands not twins, and a mirrored beat ends on the far hand\'s own rest', async () => {
   const { REST } = await import('../public/js/v2/canvas25d/gestures/index.js');
   for (const k of ['curl', 'curlF']) {
