@@ -3,7 +3,8 @@
 // cielo cambie"). The newsroom's back wall is floor-to-ceiling glass over a city, as at CNN's Hudson Yards or Sky
 // News's Osterley. The view is drawn the way a pixel artist paints a skyline, in few clean layers that each read
 // on their own:
-//   sky       four bands from the top down to the horizon, two-row dither steps between them; stars at night,
+//   sky       four bands from the top down to the horizon, a tall Bayer ramp between them (a gradient, never a
+//             dotted seam behind a head); stars at night,
 //             clouds by day, the sun low on the horizon at dawn and at the golden hour
 //   far       a low continuous skyline: the haze
 //   mid       a row of buildings standing in the glow, a few windows lit, the odd mast or tank on a roof
@@ -187,13 +188,48 @@ const sy = (Y) => P.hy + (Y - P.cy) * P.k;
 /** Screen row of a height above the horizon (negative: below it). */
 const rowOf = (h) => sy(P.hz - h);
 
-const STEP = 4; // units of dither between two sky bands
+const STEP = 4; // units of dither at the horizon's foot
+// Each change of sky colour is a ramp of the 4x4 Bayer's sixteen levels at least 10 px tall on screen (the
+// band's half width in units, set per frame from the plane's scale), so the sky reads as a gradient: a two-row
+// dither step read as a dotted line across the glass, right behind the presenters' heads in the singles. A ramp
+// never reaches the next change of colour (at most 45 % of the way to it, above and below).
+const RAMP_PX = 5;
+const RAMP_HW = new Float64Array(3).fill(STEP);
+function skyRamps(k) {
+  const s = PAL.sky;
+  for (let i = 0; i < 3; i++) {
+    if (s[i] === s[i + 1]) {
+      RAMP_HW[i] = STEP; // no change of colour there: nothing to ramp
+      continue;
+    }
+    // room up to the next change of colour above and below (the sky's top, the horizon)
+    let up = 120, down = BANDS[i] + 2;
+    for (let j = 0; j < 3; j++) {
+      if (j === i || s[j] === s[j + 1]) continue;
+      if (BANDS[j] > BANDS[i]) up = Math.min(up, BANDS[j] - BANDS[i]);
+      else down = Math.min(down, BANDS[i] - BANDS[j]);
+    }
+    RAMP_HW[i] = Math.max(STEP, Math.min(0.45 * Math.min(up, down), RAMP_PX / Math.max(1e-6, k)));
+  }
+}
+/** The sky's colour at height h when the whole row is one colour (no dither step there), else null. */
+function skyFlat(h) {
+  const s = PAL.sky;
+  for (let i = 0; i < 3; i++) {
+    const t = BANDS[i], hw = RAMP_HW[i];
+    if (h > t + hw) return s[i];
+    if (h > t - hw) return s[i] === s[i + 1] ? s[i] : null;
+  }
+  if (h > -2) return s[3];
+  if (h > -2 - STEP) return null;
+  return PAL.ground;
+}
 function skyColour(h, x, y) {
   const s = PAL.sky;
   for (let i = 0; i < 3; i++) {
-    const t = BANDS[i];
-    if (h > t + STEP) return s[i];
-    if (h > t - STEP) return (t + STEP - h) / (2 * STEP) > bay(x, y) ? s[i + 1] : s[i];
+    const t = BANDS[i], hw = RAMP_HW[i];
+    if (h > t + hw) return s[i];
+    if (h > t - hw) return (t + hw - h) / (2 * hw) > bay(x, y) ? s[i + 1] : s[i];
   }
   if (h > -2) return s[3];
   // below the horizon: the glow's last band, then the ground
@@ -217,6 +253,7 @@ export function drawCity(fr, cam, box, soft, phase = FRAME_PHASE) {
   STATE.glassCol.fill(1, xa, xb);
   AVENUES.fill(0);
   const k = P.k;
+  skyRamps(k);
   const yh = rowOf(0);
   const m = soft ? (c) => MUTE.get(c >>> 0) ?? c : (c) => c;
   const put = (x, y, c) => {
@@ -225,11 +262,13 @@ export function drawCity(fr, cam, box, soft, phase = FRAME_PHASE) {
   const fill = (x0, y0, x1, y1, c) => {
     for (let y = Math.max(ya, y0); y < Math.min(yb, y1); y++) for (let x = Math.max(xa, x0); x < Math.min(xb, x1); x++) px[y * W + x] = c;
   };
-  // 1. the sky and the ground's base
+  // 1. the sky and the ground's base (a row outside every dither step is one colour: filled at once)
   for (let y = ya; y < yb; y++) {
     const h = (yh - (y + 0.5)) / k;
     const row = y * W;
-    for (let x = xa; x < xb; x++) px[row + x] = skyColour(h, x, y);
+    const c = skyFlat(h);
+    if (c !== null) px.fill(c, row + xa, row + xb);
+    else for (let x = xa; x < xb; x++) px[row + x] = skyColour(h, x, y);
   }
   if (PAL.line) {
     // the blue hour's last light: a thin line along the horizon
@@ -500,6 +539,9 @@ export const GROUND = { h: 260, street: 240 };
 // the river: its centre's lateral X at a depth D (it comes down from the horizon behind Paco to the lower left)
 const riverX = (D) => -560 - (D - 4300) * 0.07 + 150 * Math.sin(D / 2500);
 const RIVER_W = 130;
+// scratch of the ground pass, kept (no allocation per redraw): which pixels are river, each row's block row
+const RIVER_MASK = new Uint8Array(W * H);
+const AV_INDEX = new Int16Array(H);
 function ground(fr, k, yh, xa, xb, ya, yb, m) {
   const px = fr.px;
   const g0 = Math.max(ya, Math.ceil(yh + 1));
@@ -516,7 +558,8 @@ function ground(fr, k, yh, xa, xb, ya, yb, m) {
   // where the grid is fine enough to draw (streets ≥ 4 px apart): rows below yGrid
   const yGrid = Math.max(g0, Math.ceil(yh + (4 / GROUND.street) * GROUND.h));
   // 1. the river: dark water, the sky's light in short ripples on it
-  const onRiver = new Uint8Array(W * (yb - g0));
+  const onRiver = RIVER_MASK;
+  onRiver.fill(0, 0, W * (yb - g0));
   const [water, ripple] = PAL.water;
   for (let y = g0; y < yb; y++) {
     const sc = sOf(y), D = f / sc, cx = xOf(riverX(D), y), hw = (RIVER_W / 2) * sc;
@@ -539,7 +582,7 @@ function ground(fr, k, yh, xa, xb, ya, yb, m) {
     }
   }
   // 3. the avenues: horizontal lines in rows that open out toward the camera; a bridge over the river
-  const avIndex = new Int16Array(H).fill(-1); // the block row each screen row belongs to
+  const avIndex = AV_INDEX.fill(-1); // the block row each screen row belongs to
   let n = 0, prevY = g0;
   for (let i = 1; i < 40; i++) {
     const y = Math.round(yh + 2.2 * Math.pow(i, 1.5));
@@ -579,10 +622,15 @@ function ground(fr, k, yh, xa, xb, ya, yb, m) {
   // 5. the blocks: their lights, a block busy or dark as a whole (by day: some roofs darker)
   for (let y = yGrid; y < yb; y++) {
     const sc = sOf(y);
+    let lastSt = NaN, busy = 0; // a block's busyness is one value along its run of the row
     for (let x = xa; x < xb; x++) {
       if (!dry(x, y)) continue;
       const X = P.cx + (x + 0.5 - 192) / sc;
-      const busy = hash(Math.floor(X / GROUND.street), avIndex[y], 6);
+      const stI = Math.floor(X / GROUND.street);
+      if (stI !== lastSt) {
+        lastSt = stI;
+        busy = hash(stI, avIndex[y], 6);
+      }
       if (day) {
         if (busy > 0.6 && ((x + y) & 1) === 0 && hash(Math.floor(X / 20), y, 8) < 0.5) put(x, y, C.ink);
         continue;
