@@ -430,6 +430,29 @@ export class LofiEngine {
     return at;
   }
 
+  /**
+   * PAY ATTENTION's countdown (pay-attention.md §6): `halves` ticks on the bed's half notes (two beats: 1.07 s at 112
+   * BPM), the first on the first half note of the bed's own grid at or after `at`, so a countdown is a whole number of
+   * half notes and ends on the grid (the reveal's moment). Without a bed (beds off), on the quiz's tempo from `at`.
+   * Returns { start, ticks, end, half } in context time; the director runs its countdown bar from start to end.
+   */
+  countdown(at, halves = 4) {
+    const bed = this.bed && this.bed.endAt === Infinity ? this.bed : null;
+    const half = 2 * (bed ? bed.spb : 60 / (PALETTES['pay-attention']?.bpm || 112));
+    let start = at;
+    if (bed) start = bed.t0 + Math.max(0, Math.ceil((at - bed.t0) / half - 1e-6)) * half;
+    const n = Math.max(1, Math.round(halves));
+    const ticks = [];
+    for (let i = 0; i < n; i++) {
+      const tk = start + i * half;
+      ticks.push(tk);
+      STINGS.quizTick(this, tk, { last: i === n - 1 });
+      this.noteLog(tk, 'countdown', 'quizTick');
+    }
+    this.log.push({ t: at, moment: 'countdown', action: 'ticks', detail: `${n} x ${half.toFixed(3)} s from ${start.toFixed(3)}` });
+    return { start, ticks, end: start + n * half, half };
+  }
+
   registerSting(g) {
     this.stingBuses.push(g);
     if (this.stingBuses.length > 24) this.stingBuses.shift();

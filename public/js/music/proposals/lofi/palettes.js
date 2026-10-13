@@ -28,6 +28,7 @@ export const PROGRAMMES = {
   'world-weather': { title: 'WORLD WEATHER', tonic: 60, scale: 'major', colour: COLOUR.weather, bpm: 92 },
   'seven-days': { title: 'SEVEN DAYS', tonic: 58, scale: 'major', colour: COLOUR.week, bpm: 84 },
   'full-time': { title: 'FULL TIME', tonic: 63, scale: 'major', colour: COLOUR.home, bpm: 116 },
+  'pay-attention': { title: 'PAY ATTENTION', tonic: 56, scale: 'major', colour: COLOUR.quiz, bpm: 112 },
   channel: { title: 'GLOBIT 24', tonic: 62, scale: 'major', colour: COLOUR.home, bpm: 84 },
 };
 
@@ -326,6 +327,47 @@ export const PALETTES = {
       moment: { energy: 0.6, gain: -8, lp: 3000, pocket: 0, bright: 1, layers: { kick: 0.6, snare: 0.45, hat: 0.5, bass: 0.75, keys: 0.7, pad: 0.4 } },
       ahead: { energy: 0.55, gain: -8, lp: 2800, pocket: 0, bright: 1, layers: { kick: 0.55, snare: 0.4, hat: 0.5, bass: 0.75, keys: 0.65, pad: 0.4 } },
       signoff: { energy: 0.55, gain: -8, lp: 2800, pocket: 0, bright: 1, layers: { kick: 0.6, snare: 0.5, hat: 0.5, bass: 0.75, keys: 0.6, pad: 0.4 } },
+    },
+  },
+
+  // ----------------------------------------------------- PAY ATTENTION (A-flat major)
+  // pay-attention.md §6: "a bed at 112 BPM: light, bright, plucked". In the open's key, straight: a pizzicato pluck
+  // breaking each chord in eighths an octave over the keys (the bed's voice), short plucked chords bouncing round it, a
+  // plucked triangle bass bouncing on root and octave, a soft kick, a snap on 2 and 4 and off-beat hats (the light kit:
+  // no snare, no crash), a low pad underneath. Its chords lean on 6ths, minor 7ths, the lydian IV and a suspended V (no
+  // maj7 or add9: the later-pass colour would be a 6/9 the parser reads as a slash). The moments: the welcome and the
+  // table bright; a question lighter and drier (no kit: the countdown's ticks, LofiEngine.countdown, fall on its half
+  // notes, and the reading needs room); the scores and the banter between; DOUBLE OR NOTHING after its drumroll held on
+  // a pedal; the sign-off, out on the bar line where the theme's tail takes over. Never a laugh, never applause.
+  'pay-attention': {
+    programme: 'pay-attention', title: 'PAY ATTENTION', key: 'A-flat major', tonic: 56, scale: 'major', bpm: 112, swing: 0.5, trim: 0,
+    mood: 'the week\'s news as a game: a pizzicato pluck in eighths, short plucked chords, a bouncing plucked bass, a light kit; bright, never shouty',
+    sections: {
+      A: ['Ab6', 'Fm7', 'Db6', 'Eb9sus'],
+      A2: ['Ab6', 'Cm7', 'Dbmaj7#11', 'Eb9sus'],
+      B: ['Fm7', 'Db6', 'Bbm7', 'Eb9sus'],
+    },
+    form: ['A', 'A2', 'A', 'B'],
+    colour: COLOUR.quiz,
+    keys: { inst: 'pluck', lo: 60, vel: 0.5, bright: 2200, decay: 0.09, roll: 0.006 },
+    pad: { wave: 'pulse25', lo: 50, lpTo: 850, attack: 0.9 },
+    bass: { style: 'bounce', wave: 'triangle', lp: 700 },
+    drums: 'light',
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'broken', oct: 12, wave: 'pulse25', decay: 0.1, bright: 2600, vel: 0.62 },
+    lead: { inst: 'bell', oct: 12 },
+    perc: 'snap', tex: 0,
+    fx: { reverb: 0.14, echo: 0.08, tremolo: 0 },
+    duckDb: -6,
+    moments: {
+      welcome: { energy: 0.65, gain: -7, lp: 3200, pocket: 0, bright: 1.05, comp: 'bouncy', layers: { arp: 1.15, keys: 0.45, bass: 0.8, kick: 0.5, hat: 0.4, perc: 0.45, pad: 0.35 }, entry: 'instant' },
+      // a question: the reading rule's room; the pluck carries the time, no kit (the countdown ticks on its half notes)
+      question: { energy: 0.4, gain: -9, lp: 2400, pocket: 0, bright: 0.95, layers: { arp: 0.8, bass: 0.6, pad: 0.45 } },
+      scores: { energy: 0.55, gain: -8, lp: 2800, pocket: 0, bright: 1, comp: 'bouncy', layers: { arp: 1, keys: 0.4, bass: 0.75, kick: 0.4, hat: 0.35, pad: 0.35 } },
+      chat: { energy: 0.45, gain: -9, lp: 2600, pocket: 0, bright: 0.95, comp: 'bouncy', layers: { arp: 0.85, keys: 0.35, bass: 0.65, pad: 0.4, perc: 0.35 } },
+      // DOUBLE OR NOTHING after its drumroll: the pluck and a held pedal, a notch tighter
+      double: { energy: 0.5, gain: -8.5, lp: 2600, pocket: 0, bright: 1, bass: 'pedal', layers: { arp: 0.9, bass: 0.7, pad: 0.55 } },
+      result: { energy: 0.7, gain: -7, lp: 3400, pocket: 0, bright: 1.05, comp: 'bouncy', layers: { arp: 1.2, keys: 0.5, bass: 0.85, kick: 0.55, hat: 0.45, perc: 0.5, pad: 0.35 } },
+      signoff: { energy: 0.55, gain: -8, lp: 3000, pocket: 0, bright: 1, comp: 'bouncy', layers: { arp: 1, keys: 0.4, bass: 0.75, kick: 0.45, hat: 0.35, pad: 0.35 } },
     },
   },
 

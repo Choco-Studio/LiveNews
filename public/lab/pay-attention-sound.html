@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz Sound Lab</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; max-width: 980px; }
+      button { font: inherit; margin: 2px 4px 2px 0; }
+      h2 { font-size: 13px; color: #feae34; margin: 18px 0 4px; }
+      #log { white-space: pre-wrap; color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size:14px">PAY ATTENTION: the theme, the bed, the countdown, the stings (pay-attention.md §6)</h1>
+    <p>
+      Every sound of the quiz rendered offline with the channel's own engines: the theme and its sign-off tail through the audio
+      stream's mixer (audio/synth.js renderTune, as the director plays them), the bed, its countdown ticks and the stings through the
+      bed engine (music/proposals/lofi, as music/live.js runs it), the house test voices at -16 LUFS. No laughter and no applause
+      anywhere: the owner's rule. Click to hear; tools/render-audio.mjs calls <code>window.__audio.render(opts)</code>;
+      <code>window.__audio.grid()</code> gives the last render's countdown ticks against the bed's half-note grid.
+    </p>
+    <h2>Theme</h2>
+    <div id="theme"></div>
+    <h2>Bed</h2>
+    <div id="bed"></div>
+    <h2>Countdown (ticks on the bed's half notes)</h2>
+    <div id="ticks"></div>
+    <h2>Stings</h2>
+    <div id="sting"></div>
+    <div id="log"></div>
+    <script type="module">
+      import { renderTune } from '../js/audio/synth.js';
+      import { themeFor, cueFor } from '../js/audio/themes.js';
+      import { durationOf } from '../js/scenes/opens/cues.js';
+      import { LofiEngine, LOOKAHEAD } from '../js/music/proposals/lofi/engine.js';
+      import { STINGS, QUIZ_STINGS } from '../js/music/proposals/lofi/stings.js';
+
+      const SR = 48000;
+      const ID = 'pay-attention';
+      const VOICE_BASE = '../js/music/proposals/broadcast/lab/voice/';
+
+      const clips = new Map();
+      async function clip(ctx, name) {
+        if (!clips.has(name)) clips.set(name, fetch(`${VOICE_BASE}${name}.ogg`).then((r) => r.arrayBuffer()));
+        const data = await clips.get(name);
+        return ctx.decodeAudioData(data.slice(0));
+      }
+      /** Speech regions [[a, b]] from voice placements [[t, name]] (gaps under 0.6 s merged). */
+      async function regionsOf(voice) {
+        const tmp = new OfflineAudioContext(1, 1, SR);
+        const out = [];
+        for (const [t, name] of voice) {
+          const b = await clip(tmp, name);
+          out.push([t, t + b.duration]);
+        }
+        out.sort((a, b) => a[0] - b[0]);
+        const merged = [];
+        for (const r of out) {
+          const last = merged[merged.length - 1];
+          if (last && r[0] - last[1] < 0.6) last[1] = Math.max(last[1], r[1]);
+          else merged.push([...r]);
+        }
+        return merged;
+      }
+      async function placeVoice(ctx, voice) {
+        for (const [t, name] of voice) {
+          const src = ctx.createBufferSource();
+          src.buffer = await clip(ctx, name);
+          src.connect(ctx.destination);
+          src.start(t);
+        }
+      }
+      const pack = (buf) => ({ sampleRate: buf.sampleRate, channels: [buf.getChannelData(0), buf.getChannelData(1)] });
+      function mixIn(ctx, buf, t = 0) {
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(t);
+      }
+
+      /** The open's theme as the director plays it: from the cut at volume 0.6, stopped (faded) on the cut. */
+      async function renderTheme({ seconds } = {}) {
+        const d = durationOf(ID);
+        const r = await renderTune(themeFor(ID, { duration: d }), { seconds: seconds ?? d + 1.4, volume: 0.6, startAt: 0, stopAt: d, sampleRate: SR });
+        return pack(r.buffer);
+      }
+      /** The sign-off's tail (audio.sfx('outro')) at sfx volume. */
+      async function renderCue({ name = 'outro', seconds = 5 } = {}) {
+        const r = await renderTune(cueFor(name, ID), { seconds, volume: 0.5, startAt: 0.05, sampleRate: SR });
+        return pack(r.buffer);
+      }
+
+      /**
+       * The bed engine as music/live.js runs it, on a timeline of cues [[t, moment, opts]] with the house voices [[t, clip]]
+       * ducking it; countdowns [[t, halves]] asked as the director asks them (LofiEngine.countdown); stem 'music' leaves the
+       * voices out (the ducking stays), 'voice' the music.
+       */
+      async function renderBed({ cues = [[0, 'welcome']], voice = [], countdowns = [], seconds = 20, stem = 'mix', seed = 'lab', tail = null } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const musicOut = ctx.createGain();
+        musicOut.gain.value = stem === 'voice' ? 0 : 1;
+        musicOut.connect(ctx.destination);
+        const engine = new LofiEngine(ctx, musicOut, { sharedStings: true, seed, noteLog: true });
+        const regions = await regionsOf(voice);
+        engine.speechPlan = regions;
+        const events = [];
+        for (const [t, moment, o] of cues) events.push({ t, cue: moment, opts: { programId: ID, ...(o || {}) } });
+        for (const [t, halves] of countdowns) events.push({ t, countdown: halves });
+        for (const [a, b] of regions) {
+          events.push({ t: Math.max(0, a - 0.12), speak: true });
+          events.push({ t: b, speak: false });
+        }
+        events.sort((x, y) => x.t - y.t || (x.cue ? -1 : 1));
+        const asked = [];
+        let next = 0;
+        const runUntil = (T) => {
+          while (next < events.length && events[next].t <= T) {
+            const e = events[next++];
+            engine.pump(e.t + LOOKAHEAD);
+            if (e.cue) engine.cue(e.cue, e.opts, e.t);
+            else if (e.countdown) asked.push({ at: e.t, ...engine.countdown(e.t, e.countdown), bed: engine.bed ? { t0: engine.bed.t0, spb: engine.bed.spb } : null });
+            else engine.setSpeaking(e.speak, e.t);
+          }
+          engine.pump(Math.min(T + LOOKAHEAD, seconds + 2));
+        };
+        const work = new Map();
+        const when = (time, fn) => {
+          const q = Math.max(1, Math.round((time * SR) / 128));
+          if (!work.has(q)) work.set(q, []);
+          work.get(q).push(fn);
+        };
+        const STEP = 2;
+        runUntil(STEP);
+        for (let T = STEP; T < seconds; T += STEP) when(T, () => runUntil(T + STEP));
+        for (const [q, fns] of [...work].sort((a, b) => a[0] - b[0])) {
+          ctx.suspend((q * 128) / SR).then(() => {
+            for (const fn of fns) fn();
+            ctx.resume();
+          });
+        }
+        if (stem !== 'music') await placeVoice(ctx, voice);
+        if (tail != null && stem !== 'voice') {
+          const r = await renderTune(cueFor('outro', ID), { seconds: 7, volume: 0.5, startAt: 0, sampleRate: SR });
+          mixIn(ctx, r.buffer, tail);
+        }
+        const out = await ctx.startRendering();
+        window.__lastLog = engine.log;
+        window.__lastNotes = engine.notes;
+        window.__grid = asked;
+        return pack(out);
+      }
+
+      /** One sting of the bed engine alone. */
+      async function renderSting({ name = 'quizRight', seconds = 3, at = 0.3 } = {}) {
+        const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const engine = new LofiEngine(ctx, ctx.destination, { sharedStings: true, seed: 'lab' });
+        STINGS[name](engine, at, {});
+        return pack(await ctx.startRendering());
+      }
+
+      const RENDER = { theme: renderTheme, cue: renderCue, bed: renderBed, sting: renderSting };
+      window.__audio = {
+        render: async (opts = {}) => (RENDER[opts.what || 'theme'] || renderTheme)(opts),
+        log: () => window.__lastLog,
+        notes: () => window.__lastNotes,
+        grid: () => window.__grid,
+        stings: QUIZ_STINGS,
+      };
+
+      let ac = null;
+      let playing = null;
+      async function play(opts) {
+        ac ??= new AudioContext();
+        playing?.stop();
+        const r = await window.__audio.render(opts);
+        const buf = ac.createBuffer(2, r.channels[0].length, r.sampleRate);
+        buf.copyToChannel(Float32Array.from(r.channels[0]), 0);
+        buf.copyToChannel(Float32Array.from(r.channels[1]), 1);
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        src.connect(ac.destination);
+        src.start();
+        playing = src;
+        document.getElementById('log').textContent = JSON.stringify(window.__grid || window.__lastLog || '', null, 1).slice(0, 2000);
+      }
+      const add = (where, label, opts) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.onclick = () => play(opts);
+        document.getElementById(where).append(b);
+      };
+      add('theme', 'the open (8.3 s)', { what: 'theme' });
+      add('theme', 'the sign-off: the theme\'s tail', { what: 'cue', name: 'outro' });
+      add('bed', 'welcome', { what: 'bed', seconds: 20, cues: [[0, 'welcome']] });
+      add('bed', 'a question under the voice', { what: 'bed', seconds: 16, cues: [[0, 'question']], voice: [[0.5, 'tb-story']] });
+      add('bed', 'scores', { what: 'bed', seconds: 14, cues: [[0, 'scores']] });
+      add('bed', 'banter', { what: 'bed', seconds: 14, cues: [[0, 'chat']], voice: [[0.4, 'tb-chat']] });
+      add('bed', 'the result and the table', { what: 'bed', seconds: 14, cues: [[0, 'result']] });
+      add('bed', 'sign-off and the tail', { what: 'bed', seconds: 12, cues: [[0, 'outro'], [5, 'signoffEnd']], tail: 6 });
+      add('ticks', 'a question, a countdown of 8 half notes, the reveal (right)', { what: 'bed', seconds: 16, cues: [[0, 'question'], [11.2, 'right']], countdowns: [[2.4, 8]] });
+      add('ticks', 'a countdown of 4 under the host reading', { what: 'bed', seconds: 12, cues: [[0, 'question']], voice: [[0.3, 'co-story']], countdowns: [[5.5, 4]] });
+      add('sting', 'right: two bright notes', { what: 'sting', name: 'quizRight' });
+      add('sting', 'wrong: a soft low note', { what: 'sting', name: 'quizWrong' });
+      add('sting', 'DOUBLE OR NOTHING: the drumroll', { what: 'sting', name: 'quizDrumroll', seconds: 7.5 });
+      add('sting', 'the countdown tick', { what: 'sting', name: 'quizTick', seconds: 1 });
+      add('sting', 'the drumroll in the bed: question, double, its question', { what: 'bed', seconds: 18, cues: [[0, 'scores'], [3.1, 'double'], [8.6, 'question', { double: true }]] });
+    </script>
+  </body>
+</html>

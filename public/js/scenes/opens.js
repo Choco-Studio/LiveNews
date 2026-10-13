@@ -28,6 +28,7 @@ import { GENERIC, drawGeneric } from './opens/generic.js';
 import { WEATHER_TITLES, drawWeatherTitles } from './opens/weathertitles.js';
 import { WEEK_TITLES, drawWeekTitles } from './opens/weektitles.js';
 import { FULLTIME_TITLES, drawFullTimeTitles } from './opens/fulltimetitles.js';
+import { PAYATTENTION_TITLES, drawPayAttentionTitles } from './opens/payattentiontitles.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
@@ -42,6 +43,8 @@ export const OPENS = {
   'world-weather': open(drawWeatherTitles, WEATHER_TITLES, TUNES.generic, durationOf('world-weather'), hitOf('world-weather')),
   'seven-days': open(drawWeekTitles, WEEK_TITLES, TUNES.generic, durationOf('seven-days'), hitOf('seven-days')),
   'full-time': open(drawFullTimeTitles, FULLTIME_TITLES, TUNES.generic, durationOf('full-time'), hitOf('full-time')),
+  // PAY ATTENTION (pay-attention.md §6; a draft: built ahead of its config entry): the lamps, the board, the plate
+  'pay-attention': open(drawPayAttentionTitles, PAYATTENTION_TITLES, TUNES.generic, durationOf('pay-attention'), hitOf('pay-attention')),
 };
 const FALLBACK = open(drawGeneric, GENERIC, TUNES.generic);
 /** The open for a programme id (own keys only: 'constructor' or '__proto__' get the generic open). */
@@ -130,7 +133,7 @@ export function drawProgrammeLockup(ctx, programId, info) {
 // timer slice (globe tables, sprites, backdrops), then one hidden lock-up frame of each open,
 // which also warms the top row and the text caches.
 if (HAS_DOM && typeof setTimeout === 'function') {
-  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS_TITLES, MONEY_TITLES, NEWS_TITLES, WEATHER_TITLES, WEEK_TITLES, FULLTIME_TITLES, GENERIC];
+  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS_TITLES, MONEY_TITLES, NEWS_TITLES, WEATHER_TITLES, WEEK_TITLES, FULLTIME_TITLES, PAYATTENTION_TITLES, GENERIC];
   const jobs = [];
   for (const p of progs) jobs.push(p.background);
   for (const p of progs) if (p.warmJobs) jobs.push(...p.warmJobs());

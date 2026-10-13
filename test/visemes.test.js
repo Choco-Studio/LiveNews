@@ -490,7 +490,8 @@ describe('sonic identity', () => {
 
   test('every programme open states the signature, then its own colour note', () => {
     // (FULL TIME is a draft, full-time.md §8: its theme is built and tested like the others')
-    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty, 'world-weather': COLOURS.weather, 'seven-days': COLOURS.week, 'full-time': COLOURS.sport };
+    // (PAY ATTENTION is built ahead of its draft entry, pay-attention.md §9: its theme is held to the same rules)
+    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty, 'world-weather': COLOURS.weather, 'seven-days': COLOURS.week, 'full-time': COLOURS.sport, 'pay-attention': COLOURS.quiz };
     const keys = new Set();
     for (const id of THEME_IDS) {
       const notes = leadNotes(themeFor(id));
