@@ -23,10 +23,12 @@ function clockIn(ms, tz) {
 // ---------------------------------------------------------------- the banks (picked fresh: none twice in six hours)
 
 export const BANKS = {
+  // (both presenters named, as every two-handed programme on the channel greets: a first-time viewer meets Rosa before
+  // she speaks; {R} is her full name)
   greeting: {
-    morning: ['Good morning, and welcome to {title}. I\'m {A}.', 'Good morning. This is {title}, the day in sport. I\'m {A}.', 'A very good morning to you. I\'m {A}, and this is {title}.', 'Morning, and welcome to {title}. I\'m {A}.', 'Good morning. I\'m {A}, and here is the day in sport on {title}.', 'Hello, and good morning. This is {title}, and I\'m {A}.'],
-    afternoon: ['Good afternoon, and welcome to {title}. I\'m {A}.', 'Good afternoon. This is {title}, the day in sport. I\'m {A}.', 'Hello, and welcome to {title} this afternoon. I\'m {A}.', 'Good afternoon. I\'m {A}, and this is {title}.', 'Afternoon, everyone, and welcome to {title}. I\'m {A}.', 'Hello. This is {title}, and I\'m {A}. Good afternoon.'],
-    evening: ['Good evening, and welcome to {title}. I\'m {A}.', 'Good evening. This is {title}, the day in sport. I\'m {A}.', 'Hello and good evening. I\'m {A}, and this is {title}.', 'A very good evening. This is {title}, and I\'m {A}.', 'Evening, everyone, and welcome to {title}. I\'m {A}.', 'Good evening. I\'m {A}, with the day in sport on {title}.'],
+    morning: ['Good morning, and welcome to {title}. I\'m {A}, with {R}.', 'Good morning. This is {title}, the day in sport. I\'m {A}, and with me is {R}.', 'A very good morning to you. I\'m {A}, with {R}, and this is {title}.', 'Morning, and welcome to {title}. I\'m {A}, alongside {R}.', 'Good morning. I\'m {A}, with {R}, and here is the day in sport on {title}.', 'Hello, and good morning. This is {title}. I\'m {A}, and {R} is with me.'],
+    afternoon: ['Good afternoon, and welcome to {title}. I\'m {A}, with {R}.', 'Good afternoon. This is {title}, the day in sport. I\'m {A}, and with me is {R}.', 'Hello, and welcome to {title} this afternoon. I\'m {A}, alongside {R}.', 'Good afternoon. I\'m {A}, with {R}, and this is {title}.', 'Afternoon, everyone, and welcome to {title}. I\'m {A}, with {R}.', 'Hello. This is {title}. I\'m {A}, and {R} is with me. Good afternoon.'],
+    evening: ['Good evening, and welcome to {title}. I\'m {A}, with {R}.', 'Good evening. This is {title}, the day in sport. I\'m {A}, and with me is {R}.', 'Hello and good evening. I\'m {A}, with {R}, and this is {title}.', 'A very good evening. This is {title}. I\'m {A}, and {R} is with me.', 'Evening, everyone, and welcome to {title}. I\'m {A}, alongside {R}.', 'Good evening. I\'m {A}, with {R} and the day in sport on {title}.'],
   },
   hello: ['[nod] Hello. Plenty to get through.', '[nod] Hello, everyone.', '[nod] Good to be here. Let\'s get going.', '[nod] Hello. Let\'s get started.', '[nod] Hi. Let\'s get to it.', '[nod] Hello again.', '[nod] Hello. Lots to talk about.', '[nod] Good to see you all.', '[nod] Hello. Shall we?', '[nod] Hi, everyone. Here we go.', '[nod] Hello. Settle in.', '[nod] Hello. On we go.'],
   results: {
@@ -35,19 +37,20 @@ export const BANKS = {
     PREVIEW: ['[point_screen] Before we look ahead, the latest results.', '[point_screen] First, the latest scores.', '[point_screen] The latest results first.', '[point_screen] Before the weekend, the scores so far.', '[point_screen] A look back at the latest results first.', '[point_screen] First, some results.'],
   },
   elsewhere: ['Elsewhere, ', 'Meanwhile, ', 'And elsewhere, '],
+  // (each a whole spoken line: never a bare "In tennis." that waits for a clause it does not get)
   transition: {
-    football: ['Football now.', 'To football.', 'Now, football.', 'To the football.', 'In football.', 'Some football.'],
-    f1: ['To the track now.', 'Formula One now.', 'To Formula One.', 'Motor racing now.', 'On the track.', 'In Formula One.'],
-    tennis: ['Tennis now.', 'To the tennis.', 'On the court now.', 'In tennis.', 'Some tennis.', 'To the courts.'],
-    cricket: ['Cricket now.', 'To the cricket.', 'In cricket.', 'Some cricket.', 'On to the cricket.', 'Cricket next.'],
-    rugby: ['Rugby now.', 'To the rugby.', 'In rugby.', 'Some rugby.', 'On to the rugby.', 'Rugby next.'],
-    'american-football': ['American football now.', 'To the NFL.', 'In American football.', 'Across the Atlantic, to American football.', 'The NFL now.', 'American football next.'],
-    basketball: ['Basketball now.', 'To the basketball.', 'On the court.', 'In basketball.', 'Some basketball.', 'Basketball next.'],
-    baseball: ['Baseball now.', 'To the baseball.', 'In baseball.', 'Some baseball.', 'Across the Atlantic, to baseball.', 'Baseball next.'],
-    boxing: ['To the ring now.', 'Boxing now.', 'In boxing.', 'To the boxing.', 'Some boxing.', 'Boxing next.'],
-    cycling: ['Cycling now.', 'To the cycling.', 'In cycling.', 'Some cycling.', 'On two wheels now.', 'Cycling next.'],
-    golf: ['Golf now.', 'To the golf.', 'In golf.', 'Some golf.', 'On the course.', 'Golf next.'],
-    athletics: ['Athletics now.', 'To the track.', 'In athletics.', 'Some athletics.', 'Athletics next.', 'On the track now.'],
+    football: ['Football now.', 'To football.', 'Now, football.', 'To the football.', 'Football next.', 'Some football.'],
+    f1: ['To the track now.', 'Formula One now.', 'To Formula One.', 'Motor racing now.', 'On the track.', 'Formula One next.'],
+    tennis: ['Tennis now.', 'To the tennis.', 'On the court now.', 'Tennis next.', 'Some tennis.', 'To the courts.'],
+    cricket: ['Cricket now.', 'To the cricket.', 'Some cricket now.', 'Some cricket.', 'On to the cricket.', 'Cricket next.'],
+    rugby: ['Rugby now.', 'To the rugby.', 'Some rugby now.', 'Some rugby.', 'On to the rugby.', 'Rugby next.'],
+    'american-football': ['American football now.', 'To the NFL.', 'The NFL next.', 'Across the Atlantic, to American football.', 'The NFL now.', 'American football next.'],
+    basketball: ['Basketball now.', 'To the basketball.', 'On the court.', 'Some basketball now.', 'Some basketball.', 'Basketball next.'],
+    baseball: ['Baseball now.', 'To the baseball.', 'Some baseball now.', 'Some baseball.', 'Across the Atlantic, to baseball.', 'Baseball next.'],
+    boxing: ['To the ring now.', 'Boxing now.', 'Some boxing now.', 'To the boxing.', 'Some boxing.', 'Boxing next.'],
+    cycling: ['Cycling now.', 'To the cycling.', 'Some cycling now.', 'Some cycling.', 'On two wheels now.', 'Cycling next.'],
+    golf: ['Golf now.', 'To the golf.', 'Some golf now.', 'Some golf.', 'On the course.', 'Golf next.'],
+    athletics: ['Athletics now.', 'To the track.', 'Some athletics now.', 'Some athletics.', 'Athletics next.', 'On the track now.'],
     other: ['Now, something different.', 'Elsewhere in sport.', 'Away from the big leagues.', 'Another story now.', 'Something else now.', 'Elsewhere now.'],
   },
   // Kai asks for one of Rosa's memories when the edition has no moment of the day
@@ -155,6 +158,18 @@ function strapTitle(title) {
   return t.replace(/^([^,]{3,40}), [^,]{3,50}, (?=\p{Ll})/u, '$1 ');
 }
 
+/**
+ * A strap that is the title cut off inside its aside: "Bills' Allen, 0-7 in OT games entering MNF" from "Bills' Allen,
+ * 0-7 in OT games entering MNF, finally gets over hump in wild win" (ESPN 13 Oct) names the record the story ends,
+ * not the news; the strap is made again from the title without its aside.
+ */
+export function cutInAside(headline, title) {
+  const h = String(headline || '').replace(/[\s.,;:]+$/, '');
+  const t = String(title || '');
+  if (!h || h.length >= t.length || !t.startsWith(h) || !/^\s*,/.test(t.slice(h.length))) return false;
+  return strapTitle(t) !== t && h.includes(',');
+}
+
 const fill = (t, vars) => t.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
 const daypart = (hour) => (hour < 12 && hour >= 4 ? 'morning' : hour < 18 && hour >= 12 ? 'afternoon' : 'evening');
 
@@ -189,6 +204,40 @@ export function freshResults(candidates, { now = Date.now(), tz = 'Europe/London
     }
   }
   return out;
+}
+
+/** The dated events ahead the desk's stories name, one per event, soonest first (today's only in the morning: by the
+ * afternoon a game "today" may be on or over, and the channel does not know which). */
+export function fixturesAhead(candidates, now = Date.now(), tz = 'Europe/London') {
+  const air = clockIn(now, tz);
+  const todayN = dayIn(now, tz).n;
+  const dayOf = (f) => (f.date ? Math.round(Date.parse(`${f.date}T00:00:00Z`) / (24 * HOUR)) : null);
+  const fixtures = [];
+  for (const s of candidates || []) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event) && !(dayOf(f) === todayN && air.hour >= 12) && !(dayOf(f) !== null && dayOf(f) < todayN)) fixtures.push({ ...f, source: s.source, sport: s.sport || null });
+  return fixtures.sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')));
+}
+
+/** The shape for the day and the hour (§4): MATCHDAY, PREVIEW or MIDWEEK, from the air time and the readable results and dates. */
+export function dayShape(air, results, fixtures) {
+  const matchday = (air.weekday === 6 && air.hour >= 15) || air.weekday === 0 || (air.weekday === 1 && air.hour < 10) || results >= 4;
+  const preview = !matchday && ((air.weekday === 5 && air.hour >= 6) || (air.weekday === 6 && air.hour < 14)) && fixtures >= 3 && results < 3;
+  return matchday ? 'MATCHDAY' : preview ? 'PREVIEW' : 'MIDWEEK';
+}
+
+/** The scoreline a story's words say (both teams and the score in its text), or undefined. */
+export function saidScoreline(story, text) {
+  const t = String(text || '');
+  return (story?.scorelines || []).find((r) => t.includes(String(r.a).split(' ').at(-1)) && t.includes(String(r.b).split(' ').at(-1)) && new RegExp(`\\b${r.sa}\\s*[-–]\\s*${r.sb}\\b|\\b${r.sb}\\s*[-–]\\s*${r.sa}\\b`).test(t));
+}
+
+/**
+ * Will the edition air as MATCHDAY or PREVIEW, the shapes without THE NUMBER (§4)? Asked before the shape is made,
+ * with the results the stories' words already say left out of SCORE CENTRE's count (`told`, pairs "A|B"), as the shape
+ * leaves them out: the answer is the shape's unless a story's result sentence is later cut.
+ */
+export function numberDayless({ candidates = [], now = Date.now(), tz = 'Europe/London', told = new Set() } = {}) {
+  const results = freshResults(candidates, { now, tz }).filter((r) => !told.has([r.a, r.b].sort().join('|'))).slice(0, 6);
+  return dayShape(clockIn(now, tz), results.length, fixturesAhead(candidates, now, tz).length) !== 'MIDWEEK';
 }
 
 const SPORT_ORDER = ['football', 'rugby', 'american-football', 'basketball', 'baseball', 'ice-hockey', 'handball'];
@@ -244,6 +293,27 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   // a story told in its time: the lead in at most five sentences, every other story in three (§4's budgets)
   const sentencesMax = (seg, k) => (k === 0 ? 5 : 3);
   const byId = new Map(candidates.map((s) => [s.id, s]));
+  // THE NUMBER is MIDWEEK's (§4: MATCHDAY and PREVIEW have none; on a results day the figures are the scores): on a day
+  // that will air as either, its story is told as any other, among its sport's stories, in the outlet's order and with
+  // its own result on its board ("Saltmarsh Sirens beat Kestrel Vale Women 31-12…", not "Our number of the day: 6,000").
+  // (Judged before the results the stories tell are known, from the calendar, the desk's fresh results and its dates:
+  // the shape below can only come out the same or MIDWEEK, which then loses the frame, never the story.)
+  const toldBefore = new Set(segs.filter((x) => x.type === 'story' && x.storyId).map((x) => saidScoreline(byId.get(x.storyId), x.text)).filter(Boolean).map((r) => [r.a, r.b].sort().join('|')));
+  if (numberDayless({ candidates, now, tz, told: toldBefore })) {
+    for (const seg of segs) {
+      if (seg.type !== 'story' || seg.feature !== 'number') continue;
+      delete seg.feature;
+      delete seg.numbers;
+      const story = byId.get(seg.storyId);
+      edit(seg, (t) => {
+        const parts = sentencesIn(t.replace(/^(?:\[[^\]]+\]\s*)*our number of the day:[^.]*\.\s*/i, ''));
+        const at = (x) => sourceIndex(story, x.replace(/^(?:\[[^\]]+\]\s*)*/, ''));
+        const known = parts.filter((x) => at(x) >= 0).sort((a, b) => at(a) - at(b));
+        let k = 0;
+        return parts.map((x) => (at(x) >= 0 ? known[k++] : x)).join(' ');
+      });
+    }
+  }
   // two stories about the same match or the same people are told one after the other, the second with a line that says
   // so ("Staying with that story."), never four stories apart (each story keeps the chats that follow it)
   {
@@ -328,6 +398,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   const stories = segs.filter((s) => s.type === 'story' && s.storyId);
   const told = new Set();
   let prevSport = null;
+  let handedOver = false; // (the last change of sport was a hand-over by name)
   stories.forEach((seg, k) => {
     const story = byId.get(seg.storyId);
     if (!story) return;
@@ -340,7 +411,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     // (from the story's own headline, never from a strap the validator already clipped; one that still runs long
     // goes up whole on two lines rather than as a scrap, graphics/strap.js)
     const max = program.headlineMax || 45;
-    if (String(seg.headline || '').length > max || /\b(?:will|would|could|can|is|are|was|were|be|has|have|had|to|of|for|and|the|a)$/i.test(String(seg.headline || '')) || QUOTE_ONLY.test(String(seg.headline || ''))) seg.headline = shortHeadline(strapTitle(story.title || seg.headline), max);
+    if (String(seg.headline || '').length > max || /\b(?:will|would|could|can|is|are|was|were|be|has|have|had|to|of|for|and|the|a)$/i.test(String(seg.headline || '')) || QUOTE_ONLY.test(String(seg.headline || '')) || cutInAside(seg.headline, story.title)) seg.headline = shortHeadline(strapTitle(story.title || seg.headline), max);
     edit(seg, (t) => {
       let parts = sentencesIn(t);
       // never a first sentence that leans on one the viewer did not hear ("On Tuesday they will oversee…"), nor a count
@@ -368,7 +439,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     if (story.sportTag) seg.kicker = story.sportTag;
     seg.sport = story.sport || null;
     const text = String(seg.text || '');
-    const sl = (story.scorelines || []).find((r) => text.includes(String(r.a).split(' ').at(-1)) && text.includes(String(r.b).split(' ').at(-1)) && new RegExp(`\\b${r.sa}\\s*[-–]\\s*${r.sb}\\b|\\b${r.sb}\\s*[-–]\\s*${r.sa}\\b`).test(text));
+    const sl = saidScoreline(story, text);
     // (a result said anywhere is told: SCORE CENTRE does not read it again; THE NUMBER keeps its own board)
     if (sl) told.add([sl.a, sl.b].sort().join('|'));
     if (sl && !seg.roundup && seg.feature !== 'number') {
@@ -399,13 +470,21 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     } else if (k > 0 && seg.feature !== 'number' && story.sport && story.sport !== prevSport) {
       // AROUND THE GROUNDS: a transition when the sport changes
       // a change of presenter with the sport: the one who read the last story hands over by name ("Rosa has the
-      // rugby."), which says the sport; else the presenter says it ("Some rugby.")
+      // rugby."), which says the sport; else the presenter says it ("Some rugby."). Never two hand-overs by name in a
+      // row (the step-7 recordings: five in a row made AROUND THE GROUNDS a relay of tosses): after one, the next
+      // presenter takes the sport up in their own words. Nor a toss at the end of a story with a scoreline or a chalk
+      // board: its last sentences air on that card, and a hand-over is said in vision (the step-7 recording: "Over to
+      // Kai for the tennis." over the Hawks' 24-17)
       const before = segs[segs.indexOf(seg) - 1];
       const to = presenters[seg.anchor]?.name ? String(presenters[seg.anchor].name).split(' ')[0] : null;
-      if (before?.type === 'story' && before.anchor !== seg.anchor && to && SPORT_NAME[story.sport] && !before.heavy && !seg.heavy) {
+      if (!handedOver && before?.type === 'story' && before.anchor !== seg.anchor && to && SPORT_NAME[story.sport] && !before.heavy && !seg.heavy && !before.score && !before.chalk) {
         const line = fill(pick(BANKS.handover, `${seed}~h${seg.storyId}`, recent), { N: to, S: SPORT_NAME[story.sport] });
         edit(before, (t) => `${t} [look_partner] ${line}`);
-      } else lead(pick(BANKS.transition[story.sport] || BANKS.transition.other, `${seed}~t${seg.storyId}`, recent));
+        handedOver = true;
+      } else {
+        lead(pick(BANKS.transition[story.sport] || BANKS.transition.other, `${seed}~t${seg.storyId}`, recent));
+        handedOver = false;
+      }
     }
     if (seg.feature === 'number') seg.kicker = 'THE NUMBER';
     prevSport = story.sport || prevSport;
@@ -413,16 +492,8 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
 
   // ---- SCORE CENTRE and COMING UP
   const results = freshResults(candidates, { now, tz }).filter((r) => !told.has([r.a, r.b].sort().join('|'))).slice(0, 6);
-  const fixtures = [];
-  // (today's events only in the morning: by the afternoon a game "today" may be on or over, and the channel does not
-  // know which)
-  const todayN = dayIn(now, tz).n;
-  const dayOf = (f) => (f.date ? Math.round(Date.parse(`${f.date}T00:00:00Z`) / (24 * HOUR)) : null);
-  for (const s of candidates) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event) && !(dayOf(f) === todayN && air.hour >= 12) && !(dayOf(f) !== null && dayOf(f) < todayN)) fixtures.push({ ...f, source: s.source, sport: s.sport || null });
-  fixtures.sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')));
-  const matchday = (air.weekday === 6 && air.hour >= 15) || air.weekday === 0 || (air.weekday === 1 && air.hour < 10) || results.length >= 4;
-  const preview = !matchday && ((air.weekday === 5 && air.hour >= 6) || (air.weekday === 6 && air.hour < 14)) && fixtures.length >= 3 && results.length < 3;
-  const shape = matchday ? 'MATCHDAY' : preview ? 'PREVIEW' : 'MIDWEEK';
+  const fixtures = fixturesAhead(candidates, now, tz);
+  const shape = dayShape(air, results.length, fixtures.length);
   const sources = (rows) => {
     const list = [...new Set(rows.map((r) => r.source).filter(Boolean))];
     return list.length && list.length <= 2 ? list.join(' / ') : channelName;
@@ -509,8 +580,8 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   if (shape === 'MATCHDAY' && scoreCentre) order.push([scoreCentre]);
   order.push(...middle);
   if (shape !== 'MATCHDAY' && scoreCentre) order.push([scoreCentre]);
-  if (number && shape === 'MIDWEEK') order.push(number);
-  else if (number) order.push(number);
+  // (THE NUMBER only airs MIDWEEK: on a MATCHDAY or PREVIEW its story was told as any other, above)
+  if (number) order.push(number);
   if (moment) order.push(moment);
   // no moment of the day: Rosa's memory still airs before the sign-off, asked for by Kai (the ritual a viewer waits for),
   // never after a grave or a serious story (a misconduct charge, a court case, a death)
@@ -538,7 +609,8 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   if (shape !== 'PREVIEW' && comingUp) order.push([comingUp]);
 
   // ---- greeting and hello, sign-off
-  const greeting = fill(pick(BANKS.greeting[part], `${seed}~g`, recent), { title, A });
+  const greeting = fill(pick(BANKS.greeting[part], `${seed}~g`, recent), { title, A, R: presenters.B?.name || 'Rosa Rally' });
+  let teases = null;
   if (intro) {
     // the headlines stay; the writer's greeting (from its first "Good morning", "Hello", "Welcome", "This is", "I'm" or
     // the programme's name) gives way to the greeting for the hour
@@ -563,6 +635,9 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
           const own = heads.find((h) => [...words(h)].filter((w) => tw.has(w)).length >= 3 && !QUOTE_ONLY.test(h.replace(/[.!?]+$/, '')));
           return own || `${shortHeadline(strapTitle(byId.get(x.storyId).title), 60).replace(/[.!?]*$/, '')}.`;
         });
+        // the montage cuts to the story each headline names (director.js playIntro, the v2 plan's montageCard): the
+        // writer's teases named its own three, and the strap under a spoken headline showed another story
+        teases = [...chosen.map((x) => x.storyId), ...sentencesIn(greeting).map(() => null)];
       }
       return `${heads.join(' ')} [nod] ${greeting}`.trim();
     });
@@ -577,6 +652,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
 
   episode.segments = [intro, hello, ...order.flat(), outro].filter(Boolean);
   episode.segments = keepPromises(episode.segments);
+  if (intro && teases) intro.teases = teases;
   // no maps: a world map under a result says nothing a sport bulletin needs (full-time.md §6: its pictures and its
   // boards); a story without a picture stands on its board or its presenter, a headline frame on its field
   for (const seg of episode.segments) delete seg.location;
@@ -612,6 +688,14 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     });
   }
   episode.storyIds = [...new Set(episode.segments.filter((s) => s.storyId).map((s) => s.storyId))];
+  // the rundown (the montage's frames and pips, STILL TO COME's tiles) is the stories on air, in their order, with the
+  // straps and sport tags they air with (never a story the shape left out, nor the writer's order)
+  if (Array.isArray(episode.rundown)) {
+    const entry = new Map(episode.rundown.map((r) => [r.storyId, r]));
+    const told = episode.segments.filter((s) => s.type === 'story' && s.storyId && s.feature !== 'scores' && s.feature !== 'fixtures' && entry.has(s.storyId));
+    const seen = new Set();
+    episode.rundown = told.filter((s) => !seen.has(s.storyId) && seen.add(s.storyId)).map((s) => ({ ...entry.get(s.storyId), headline: s.headline, ...(s.kicker ? { kicker: s.kicker } : {}) }));
+  }
   episode.sport = { shape, results: scoreCentre ? scoreCentre.scores.length : 0, fixtures: comingUp ? comingUp.fixtures.length : 0 };
   episode.segments = episode.segments.filter((s) => s.type !== 'story' || String(s.text || '').trim());
   return { shape, results: episode.sport.results, fixtures: episode.sport.fixtures, lines: recent.used };

@@ -184,7 +184,10 @@ describe('FULL TIME: the shape', () => {
     const handed = (n, sport) => new RegExp(`(?:${BANKS.handover.map((l) => l.replace('{N}', n).replace('{S}', sport).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
     assert.match(oka.text, handed('Kai', 'the rugby'));
     assert.doesNotMatch(stories[2].text, /^(?:Rugby now|To the rugby|In rugby|Some rugby|On to the rugby|Rugby next)\./);
-    assert.match(stories[2].text, handed('Rosa', 'the cricket'));
+    // never two hand-overs by name in a row (step 7: five in a row were a relay of tosses): Rosa takes the cricket up
+    // in her own words
+    assert.doesNotMatch(stories[2].text, handed('Rosa', 'the cricket'));
+    assert.ok(BANKS.transition.cricket.some((l) => stories[3].text.startsWith(l)), stories[3].text);
     // three different stories in the headlines, never the match and its reaction both
     assert.doesNotMatch(ep.segments[0].text, /Okafor/);
     assert.match(ep.segments[0].text, /Menon century/);

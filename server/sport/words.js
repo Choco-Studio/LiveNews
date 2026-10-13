@@ -94,6 +94,10 @@ const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|mave
 const EVAL_NAME = new RegExp(`\\b(?:[Aa]n?|[Tt]he)\\s+(?:${EVAL})\\s+\\p{Lu}`, 'u');
 const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare|magnificence|majesty|mastery)\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
 
+// a verdict carried in a "with" phrase on an act ("Josh Allen came through with his usual late-game theatrics in leading
+// the Bills to a 37-34 overtime win", ESPN 13 Oct): the phrase goes and the act, the result, stays
+const VERDICT_WITH = /\s+with\s+(?:his|her|their|its|a|an|some)\s+(?:(?:usual|trademark|customary|familiar|typical|now-familiar|late|late-game|last-gasp|individual|attacking|own)\s+)*(?:theatrics|heroics|brilliance|magic|wizardry|genius|artistry|flair|mastery|magnificence|majesty|masterclass)\b/giu;
+
 /**
  * A sentence without the outlets' praise or blame of a sporting act ("A brilliant goal from Bruno Guimaraes helps
  * Arsenal…" -> "A goal from Bruno Guimaraes helps Arsenal…"), or null when it judges a person outright ("Caicedo was
@@ -110,6 +114,7 @@ export function withoutJudgement(sentence) {
       out.push(p); // a quotation, attributed by its sentence
       continue;
     }
+    p = p.replace(VERDICT_WITH, '');
     if (VERDICT.test(p) || EVAL_STATE.test(p)) return null;
     p = p.replace(EVAL_ADV, '');
     if (EVAL_ADV_AFTER.test(p)) return null;
