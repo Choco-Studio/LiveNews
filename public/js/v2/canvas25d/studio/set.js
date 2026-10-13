@@ -32,14 +32,17 @@ import { C, Frame } from '../pixbuf.js';
 import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
-import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
-import { drawDressing, DESK_FRONTS, DRESSING, FLATS } from './dressing.js';
+import { updateWall, drawWallContent, wallFromScene as wallOfScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
+import { drawDressing, DESK_FRONTS, DRESSING, FLATS, RUNDOWN, rundownRows } from './dressing.js';
 import { drawLive, liveReset, setLive, LED_ROWS } from './live.js';
 import { RAMPS, litBy } from './light.js';
 import { drawSconce } from './sconce.js';
 import { skyPhase, framePhase, setSkyClock, setSkyHour } from './city.js';
+import { skyWarmTasks } from './space.js';
+import { warmExpertStudio, EXPERT_STUDIOS } from './experts.js';
+import { drawPressRoom } from './press.js';
 
-export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage, setLive, setSkyClock, setSkyHour };
+export { SET, setStyle, styleFor, drawWallContent, warmWallContent, prepareImage, setLive, setSkyClock, setSkyHour };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -352,6 +355,7 @@ function warmPlan(ids) {
   const plan = [];
   for (const id of ids) plan.push({ style: resolveStyle(id) });
   for (const fn of wallWarmTasks()) plan.push({ fn });
+  for (const fn of skyWarmTasks()) plan.push({ fn }); // COSMOS's planetarium: its noise fields, baked once
   plan.push({ fn: () => { for (let s = 1; s <= 3; s++) logoPixels(s); } });
   for (const id of ids) for (const pass of [0, 1]) plan.push({ fn: () => warmDraw(resolveStyle(id), pass) });
   return plan;
@@ -426,6 +430,74 @@ function warmDraw(style, pass) {
   drawFlats(fr, cam, style, !!pass);
   drawFloor(fr, cam, style);
   rasterDesk(fr, cam, WARM_CLIP, style.deskLine, style);
+}
+
+// The episode's own rooms, built ahead of their first shot: an expert's studio (studio/experts.js, 4-35 ms to build)
+// and the press room of a re-staged speaker (studio/press.js). They used to be built on the first frame of the
+// two-way or the location shot (a 60-240 ms frame on the cut); they are queued when the episode is first seen
+// (wallFromScene, on every studio cut) and built one per idle slice, a few seconds into the programme.
+const EPISODE_WARM = { ep: null, queue: [], timer: 0, scratch: null };
+function warmEpisodeRooms(ep) {
+  if (!ep || ep === EPISODE_WARM.ep || typeof document === 'undefined' || typeof setTimeout !== 'function') return;
+  EPISODE_WARM.ep = ep;
+  const rooms = new Set();
+  for (const seg of Array.isArray(ep.segments) ? ep.segments : []) {
+    if (seg?.type !== 'cross') continue;
+    if (seg.kind === 'expert' && EXPERT_STUDIOS.includes(seg.backdrop)) rooms.add(`studio:${seg.backdrop}`);
+    if (seg.kind === 'restage') rooms.add(seg.grave || seg.emotion === 'serious' ? 'press:grave' : 'press:press');
+  }
+  EPISODE_WARM.queue = [...rooms];
+  if (EPISODE_WARM.queue.length && !EPISODE_WARM.timer) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, 1500);
+}
+function warmEpisodeSlice() {
+  EPISODE_WARM.timer = 0;
+  const run = () => {
+    const job = EPISODE_WARM.queue.shift();
+    if (!job) return;
+    try {
+      const [kind, name] = job.split(':');
+      if (kind === 'studio') warmExpertStudio(name);
+      else drawPressRoom((EPISODE_WARM.scratch ||= new Uint32Array(W * H)), name, 0);
+    } catch {
+      /* the room is built on its first frame instead */
+    }
+    if (EPISODE_WARM.queue.length) EPISODE_WARM.timer = setTimeout(warmEpisodeSlice, 400);
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1000 });
+  else run();
+}
+
+/**
+ * The wall a scene asks for (wall.js wallFromScene, which the Stage calls on every studio cut); the first sight of an
+ * episode also queues its rooms for building in idle time.
+ */
+export function wallFromScene(scene, styleIn) {
+  if (scene?.episode) warmEpisodeRooms(scene.episode);
+  noteRundown(scene);
+  return wallOfScene(scene, styleIn);
+}
+
+// NEWS IN 60's rundown board shows the bulletin's own beats and marks the story on air (dressing.js RUNDOWN). The
+// running order and the story come with each studio cut (wallFromScene); the board changes on the cut's own frame
+// (drawBackground's opts.cut), never in the middle of a shot.
+const RUNDOWN_NEXT = { ref: null, rows: null, live: -1 };
+function noteRundown(scene) {
+  if (scene?.program?.id !== 'news-60' || !Array.isArray(scene.rundown) || !scene.rundown.length) return;
+  if (scene.rundown !== RUNDOWN_NEXT.ref) {
+    RUNDOWN_NEXT.ref = scene.rundown;
+    RUNDOWN_NEXT.rows = rundownRows(scene.rundown);
+  }
+  RUNDOWN_NEXT.live = scene.storyId ? scene.rundown.findIndex((r) => r?.storyId === scene.storyId) : -1;
+}
+/** On a cut: the board takes the pending running order; true when what it shows changed. */
+function applyRundown() {
+  const rows = RUNDOWN_NEXT.rows;
+  if (!rows) return false;
+  const live = RUNDOWN_NEXT.live < rows.length ? RUNDOWN_NEXT.live : -1;
+  if (RUNDOWN.rows === rows && RUNDOWN.live === live) return false;
+  RUNDOWN.rows = rows;
+  RUNDOWN.live = live;
+  return true;
 }
 
 /** Is a programme's set baked (labs, tests, the integrator's warm-up check)? */
@@ -622,6 +694,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   framePhase(phase);
   fillKey(cam, sSerial, wall.version, lod, phase);
   CACHE.frame = fr;
+  // NEWS IN 60's rundown board moves on with the story, on a cut only
+  if (opts.cut && style.id === 'news-60' && applyRundown()) CACHE.bgKey.fill(NaN);
   if (CACHE.on && sameKey(KEY, CACHE.bgKey, 10)) {
     fr.px.set(CACHE.bg);
     CACHE.hits++;
