@@ -171,6 +171,27 @@ describe('FULL TIME: SCORE CENTRE and COMING UP as board segments', () => {
     assert.equal(d.lastBoard, 'scores');
   });
 
+  test('the voice never waits for the board: a shot that has not held its minimum keeps the air until it may cut', async () => {
+    const { d, spoken } = speakingDirector();
+    const text = "Let's go through the scores. A beat B 1-0. C drew 2-2 with D. E beat F 3-1.";
+    const seg = { type: 'story', feature: 'scores', anchor: 'A', storyId: 'x1', hasImage: false, text, scoresTitle: 'THE LATEST RESULTS', cues: [], scores: [
+      { a: 'A', b: 'B', sa: 1, sb: 0, char: text.indexOf('A beat') },
+      { a: 'C', b: 'D', sa: 2, sb: 2, char: text.indexOf('C drew') },
+      { a: 'E', b: 'F', sa: 3, sb: 1, char: text.indexOf('E beat') },
+    ] };
+    d.setShot('close', { focus: 'A', storyId: null, card: null });
+    let cutAt = null;
+    const set = d.setShot.bind(d);
+    d.setShot = (shot, extra) => {
+      if (shot === 'scores' && cutAt === null) cutAt = spoken.length;
+      return set(shot, extra);
+    };
+    assert.equal(await d.playBoardSegment(seg, 0), true);
+    assert.equal(cutAt, 1, 'the voice started before the board cut in');
+    assert.equal(d.scene.shot, 'scores');
+    assert.ok(d.scene.card.rowTimes.every((t) => t === 0), 'rows read before the cut are on the board from its first frame');
+  });
+
   test('COMING UP: the calendar card, a leaf as each date is read; fewer than two dates is a story', async () => {
     const { d } = speakingDirector();
     const text = "Coming up in sport. On Wednesday, it's Starfield City against Glimmerford. On Thursday, Bitport Comets against Lanternhill Lynx.";

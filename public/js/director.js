@@ -679,14 +679,19 @@ export class Director {
       ? { scores, title: seg.scoresTitle || seg.headline, source: seg.source, rowTimes: times, night: !(hour >= 5.5 && hour < 19) }
       : { fixtures, title: seg.kicker || 'COMING UP', source: seg.source, leafTimes: times };
     const shot = scores ? 'scores' : 'fact';
-    // the board waits for the shot on air to have held its minimum (as every cut)
+    // the board cuts in once the shot on air has held its minimum (as every cut); the voice never waits for it: the
+    // intro line starts over the shot on air, as a story's first words do (an item read before the cut is on the board
+    // from its first frame)
+    let since = null;
+    const go = () => {
+      s.lowerThird = null;
+      this.setShot(shot, { focus: seg.anchor, storyId: null, card, wall: { mode: 'logo' }, framing: null, cameraMove: null });
+      this.lastBoard = scores ? 'scores' : 'fixtures';
+      since = s.shotSince;
+    };
     const wait = cutWait(s.program?.id, s.shotSince, now());
-    if (wait > 0.05) await sleep(wait * 1000);
-    s.lowerThird = null;
-    this.setShot(shot, { focus: seg.anchor, storyId: null, card, wall: { mode: 'logo' }, framing: null, cameraMove: null });
-    this.lastBoard = scores ? 'scores' : 'fixtures';
-    const since = s.shotSince;
-    const at = () => Math.max(0, now() - since);
+    const pending = wait > 0.05 ? this.cutWhenClear(wait, go) : (go(), null);
+    const at = () => (since === null ? 0 : Math.max(0, now() - since));
     const marked = items.map((x, i) => ({ c: x.char, i })).filter((m) => Number.isFinite(m.c));
     if (marked.length === items.length) {
       // (an item whose line starts the segment is on the board from the first frame)
@@ -707,6 +712,11 @@ export class Director {
         if (i < 1) return;
         for (let k = i - 1; k < times.length && (k === i - 1 || i === last); k++) times[k] = Math.min(times[k], at());
       }, { direct: true });
+    }
+    // (a segment shorter than the wait: the board still airs, at the end of the voice)
+    if (since === null) {
+      pending?.cancel?.();
+      go();
     }
     // every item on the board by the end, whatever the voice did
     for (let i = 0; i < times.length; i++) if (!Number.isFinite(times[i])) times[i] = at();
