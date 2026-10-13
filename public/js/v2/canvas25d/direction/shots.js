@@ -104,8 +104,13 @@ export function planShots(ctx) {
   const termCard = ctx.type === 'chat' && ctx.seg?.term?.term && PACE[id]?.shots?.terms;
   // STILL TO COME: the director plays its frame over the stories it names (director.js playStillToCome)
   const teaseFrame = ctx.type === 'chat' && ctx.seg?.stillToCome?.length && PACE[id]?.shots?.stillToCome;
+  // FULL TIME's board segments: the director holds SCORE CENTRE (shot 'scores') and COMING UP (the calendar card) for
+  // the whole segment (director.js playBoardSegment), so the plan says so (its neighbours plan around it)
+  const own = PACE[ctx.programId]?.shots;
+  const boardSeg = ctx.type === 'story' && ((ctx.seg?.feature === 'scores' && ctx.seg.scores?.length && own?.score) || (ctx.seg?.feature === 'fixtures' && ctx.seg.fixtures?.length >= 2 && own?.fixtures));
   if (termCard) out = [ev(ctx, 0, 0, 'fact', null, ctx.speaker, 'term')];
   else if (teaseFrame) out = [ev(ctx, 0, 0, 'tease', null, ctx.speaker, 'still-to-come')];
+  else if (boardSeg) out = [ev(ctx, 0, 0, ctx.seg.feature === 'scores' ? 'scores' : 'fact', null, ctx.speaker, ctx.seg.feature === 'scores' ? 'score-centre' : 'coming-up')];
   else switch (id) {
     case 'tech-bytes':
       out = techBytes(ctx, tl);
@@ -129,7 +134,7 @@ export function planShots(ctx) {
   out.sort((a, b) => a.at - b.at);
   // PACE: no map, picture or figure card planned past its maximum (pace.js shotMax; critic r1: a 12.8 s number card);
   // the single it hands back to is split like any other long single
-  if (ctx.type === 'story' && capMax(ctx, tl, out)) {
+  if (ctx.type === 'story' && !boardSeg && capMax(ctx, tl, out)) {
     out.sort((a, b) => a.at - b.at);
     if (SHOT_STYLES[id].singleSoft) splitLongSingles(ctx, tl, out, SHOT_STYLES[id].singleSoft);
   }

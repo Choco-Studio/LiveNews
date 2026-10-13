@@ -272,7 +272,7 @@ export const familyOf = (e) => {
 };
 const keyOf = familyOf;
 /** Legacy shots in which the presenter is not in vision: a gesture's apex never lands there. */
-const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines']);
+const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines', 'scores']);
 const GRAVE_AMP = [0.6, 0.7];
 const RAISE_CAP = 1; // the full palm-out raise_hand: per presenter per episode
 const REPEAT_GAP = 45; // s: one marked family never twice within this on air, whoever performs it

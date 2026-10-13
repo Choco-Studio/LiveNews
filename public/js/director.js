@@ -10,10 +10,11 @@ import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, knownBoard, storyBoard, changeBoard } from './pace.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 import { recreationOf } from './graphics/recreation.js';
+import { clockIn } from './gfx/clock.js';
 
 // a headline frame is never shorter than this, so a short teaser line still cuts with its voice
 const MONTAGE_FLASH = 1.2;
@@ -654,6 +655,65 @@ export class Director {
   }
 
   /**
+   * A board segment (FULL TIME's SCORE CENTRE and COMING UP, full-time.md §4): the board is on air for the whole
+   * segment and grows as it is read: a result's row flips in, a date's leaf drops, when the voice reaches the line
+   * that says it (the server's seg.scores[i].char / seg.fixtures[i].char; without them, at the sentence after the
+   * intro line that reads it). SCORE CENTRE fills the frame (shot 'scores': the stadium's board over the stand);
+   * COMING UP is the calendar card (shot 'fact'). The shot is the segment's own (direct: the v2 plan does not cut
+   * away from it) and no picture is borrowed (the segment's storyId is a candidate's, not its subject's).
+   * Returns false when it cannot play as a board (the caller tells it as a story).
+   */
+  async playBoardSegment(seg, index) {
+    const s = this.scene;
+    const scores = seg.feature === 'scores' && pace(s).shots.score && Array.isArray(seg.scores) && seg.scores.length ? seg.scores : null;
+    const fixtures = seg.feature === 'fixtures' && pace(s).shots.fixtures && Array.isArray(seg.fixtures) && seg.fixtures.length >= 2 ? seg.fixtures.slice(0, 3) : null;
+    const items = scores || fixtures;
+    if (!items) return false;
+    // (Infinity, not null: a row with no time yet stays off the board; null would take the drawer's default schedule)
+    const times = items.map(() => Infinity);
+    // (the ground follows the channel's London clock, with WORLD NOW's city phases: the night board from the blue
+    // hour, 19:00, to dawn, 05:30; the evening board by day)
+    const [hh, mm] = clockIn().time.split(':').map(Number);
+    const hour = hh + mm / 60;
+    const card = scores
+      ? { scores, title: seg.scoresTitle || seg.headline, source: seg.source, rowTimes: times, night: !(hour >= 5.5 && hour < 19) }
+      : { fixtures, title: seg.kicker || 'COMING UP', source: seg.source, leafTimes: times };
+    const shot = scores ? 'scores' : 'fact';
+    // the board waits for the shot on air to have held its minimum (as every cut)
+    const wait = cutWait(s.program?.id, s.shotSince, now());
+    if (wait > 0.05) await sleep(wait * 1000);
+    s.lowerThird = null;
+    this.setShot(shot, { focus: seg.anchor, storyId: null, card, wall: { mode: 'logo' }, framing: null, cameraMove: null });
+    this.lastBoard = scores ? 'scores' : 'fixtures';
+    const since = s.shotSince;
+    const at = () => Math.max(0, now() - since);
+    const marked = items.map((x, i) => ({ c: x.char, i })).filter((m) => Number.isFinite(m.c));
+    if (marked.length === items.length) {
+      // (an item whose line starts the segment is on the board from the first frame)
+      for (const m of marked) if (m.c <= 0) times[m.i] = 0;
+      const later = marked.filter((m) => m.c > 0);
+      await this.say(seg, null, {
+        direct: true,
+        marks: later.map((m) => m.c),
+        onMark: (k) => {
+          if (later[k]) times[later[k].i] = at();
+        },
+      });
+    } else {
+      // no offsets: the intro line, then a line an item; the last line brings in whatever is left (COMING UP reads two
+      // dates of one day in one line)
+      const last = splitSentences(seg.text).length - 1;
+      await this.say(seg, (i) => {
+        if (i < 1) return;
+        for (let k = i - 1; k < times.length && (k === i - 1 || i === last); k++) times[k] = Math.min(times[k], at());
+      }, { direct: true });
+    }
+    // every item on the board by the end, whatever the voice did
+    for (let i = 0; i < times.length; i++) if (!Number.isFinite(times[i])) times[i] = at();
+    return true;
+  }
+
+  /**
    * After a link's last part: the link stays on screen until the next segment cuts away from it (the shot on
    * air still shows the correspondent), then setShot clears it.
    */
@@ -806,6 +866,7 @@ export class Director {
       this.setShot('open', { storyId: null, card: null });
     }, (cut) => (tune = this.audio.playTune?.(open.tune, { volume: 0.6, startAt: cut }))); // scheduled at the stinger's start, heard from the cut
     this.introduced = new Set();
+    this.lastBoard = null; // the board type on air last (pace pickBoard: boards rotate)
     // The open never waits for pictures: its length is the theme's (the lock-up is still from 3.2 s
     // and the cut lands on the last hit). Pictures keep loading in the background; a story whose
     // picture is not ready yet falls back to its source wall / the montage's neutral field.
@@ -828,6 +889,8 @@ export class Director {
           await this.playIntro(seg, episode.segments[index + 1]);
           break;
         case 'story':
+          // FULL TIME's board segments: SCORE CENTRE, COMING UP (else told as any story)
+          if ((seg.feature === 'scores' || seg.feature === 'fixtures') && (await this.playBoardSegment(seg, index))) break;
           await this.playStory(seg);
           break;
         case 'cross':
@@ -1093,7 +1156,9 @@ export class Director {
   async playStory(seg) {
     const s = this.scene;
     const P = pace(s);
-    const hasImg = !!this.images.get(seg.storyId);
+    // (a segment that says it has no picture of its own borrows none: SCORE CENTRE's and COMING UP's storyId is a
+    // candidate's)
+    const hasImg = seg.hasImage !== false && !!this.images.get(seg.storyId);
     const lines = splitSentences(seg.text);
     // PACE (critics r1): the pause before the next segment's cut, the segment's estimated air (re-estimated from the
     // voice's own pace at every sentence) and at most one beat per cooldown of it
@@ -1147,24 +1212,21 @@ export class Director {
     let watch = null; // default path: the max-hold timer of the shot on air
     // v2: shots come from the plan's cues (cue.k > 0 arrive through shotFor at their sentence or word)
     const v2cues = this.v2?.shots(seg, hasImg, (cue) => shotFor(cue.k, cue)) || null;
-    const change = changeBoard(seg, s.program?.id);
-    const board = numbersBoard(seg, s.program?.id);
-    const known = board || change ? null : knownBoard(seg, s.program?.id);
-    const steps = board || known || change ? null : storyBoard(seg, s.program?.id);
-    const cardFor = (beat) =>
-      beat === 'map'
-        ? { ...seg.location }
-        : beat === 'fact'
-          ? change
-            ? { change, source: seg.source } // FROM → TO (pace shots.change)
-            : board
-              ? { numbers: board, label: boardTitle('numbers', seg), source: seg.source } // two or three spoken figures (pace shots.numbers); SEVEN DAYS's THE WEEK IN NUMBERS keeps its name
-              : known
-                ? { known, source: seg.source } // WHAT WE KNOW (pace shots.known)
-                : steps
-                  ? { timeline: steps, source: seg.source } // HOW WE GOT HERE (pace shots.timeline)
-                  : { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
-          : null;
+    // the story's board (pace pickBoard): its strongest that is not the type shown last (full-time.md §5: boards
+    // rotate); BY THE NUMBERS before every board but FROM → TO and FULL TIME's scoreline and chalkboard, as before
+    const picked = pickBoard(seg, s.program?.id, this.lastBoard);
+    const board = picked && ['change', 'score', 'chalk'].includes(picked.kind) ? null : numbersBoard(seg, s.program?.id);
+    const cardFor = (beat) => {
+      if (beat === 'map') return { ...seg.location };
+      if (beat !== 'fact') return null;
+      // (the type on air is remembered when the card is cut to, not when it is planned)
+      this.lastBoard = board ? 'numbers' : picked ? picked.kind : 'fact';
+      if (board) return { numbers: board, label: boardTitle('numbers', seg), source: seg.source }; // two or three spoken figures (pace shots.numbers); SEVEN DAYS's THE WEEK IN NUMBERS keeps its name
+      // FROM → TO, the scoreline, the chalkboard, WHO'S WHO, IN PROPORTION, WHAT HAPPENS NEXT, WHAT WE KNOW, HOW WE GOT
+      // HERE: { [kind]: value } (cards.js drawFactCard draws each by its field)
+      if (picked) return { [picked.kind]: picked.value, source: seg.source };
+      return { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source };
+    };
     // a story handed to a correspondent (seg.link): its last sentence, the hand-over, goes to the TWO-WAY, and no
     // planned beat cuts away from it. An expert's: from the introduction, the line before the question, so the
     // question is asked in the two-way and the answer can cut to the expert full frame
@@ -1210,7 +1272,10 @@ export class Director {
       const run = next ? untilChar(Math.min(chars, next.char)) : left();
       if (cue && run - wait > P.shots.factMax + 0.5) return false;
       stopCut(pending);
-      const go = () => this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall, card: { quote: seg.quote, source: seg.source, headline: seg.headline } });
+      const go = () => {
+        this.lastBoard = 'quote';
+        this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall, card: { quote: seg.quote, source: seg.source, headline: seg.headline } });
+      };
       if (wait > 0.05) pending = this.cutWhenClear(wait, go);
       else go();
       return true;

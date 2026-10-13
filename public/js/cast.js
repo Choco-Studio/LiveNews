@@ -42,4 +42,5 @@ export const THEME_ACCENT = {
   flash: P.yellow,
   weather: P.blue,
   week: P.pink, // SEVEN DAYS: coral, the flagship's red softened for the weekend
+  sport: P.orange, // FULL TIME (full-time.md §6): orange, dark type on it
 };

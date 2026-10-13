@@ -105,7 +105,8 @@ test('pace: SEVEN DAYS is calmer than WORLD NOW, with room to read its boards an
 
 test('pace: config/channel.json targetSeconds mirrors each profile\'s length target', () => {
   for (const id of PROGRAMME_IDS) {
-    const p = channel.programs[id];
+    // (a draft programme, FULL TIME until its step 7, keeps its profile beside the others)
+    const p = channel.programs[id] || channel.drafts?.[id];
     assert.ok(p, id);
     assert.deepEqual(p.targetSeconds, paceFor(id).length.target, `${id}.targetSeconds`);
   }

@@ -46,6 +46,7 @@ export const OVERLAYS = {
   location: 'news', // a correspondent link (graphics/remote.js): the correspondent before the place
   twoway: 'news', // the presenter and the correspondent side by side
   broll: 'news', // the place's footage (or the story's picture) under the correspondent's voice
+  scores: 'news', // FULL TIME's SCORE CENTRE: the stadium's board over the stand (captions under it, no strap)
   breakingCard: 'bug',
   ad: 'ad',
 };
@@ -80,7 +81,7 @@ export function programGraphics(program) {
 
 // A category that only repeats the programme's own beat tells the viewer nothing
 // ("WORLD" under WORLD NOW): without a kicker the tag falls back to the place, then NEWS.
-const PROGRAM_TOPIC = { world: 'WORLD', tech: 'TECH', space: 'SCIENCE', money: 'BUSINESS' };
+const PROGRAM_TOPIC = { world: 'WORLD', tech: 'TECH', space: 'SCIENCE', money: 'BUSINESS', sport: 'SPORT' };
 
 export const BREAKING_STRAP = 12; // minimum seconds a live breaking item takes over the strap
 export const BREAKING_TICKER = 90; // seconds from its first moment on air that it stays in the ticker rotation

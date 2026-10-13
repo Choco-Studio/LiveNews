@@ -706,7 +706,7 @@ export function comingLayout(fixtures, title, source) {
   });
 }
 
-/** COMING UP / THE WEEKEND AHEAD: o = { fixtures: [{ event, when, date, sport }] (two or three), title, source }. */
+/** COMING UP / THE WEEKEND AHEAD: o = { fixtures: [{ event, when, date, sport }] (two or three), title, source, leafTimes? }. */
 export function drawComingUp(ctx, dt, o, acc = P.orange) {
   const fixtures = (o.fixtures || []).slice(0, 3);
   if (fixtures.length < 2) return;
@@ -716,7 +716,9 @@ export function drawComingUp(ctx, dt, o, acc = P.orange) {
     if (!panel(ctx, dt, L.PY, L.PH, L.title, null, acc)) return;
     if (L.src) drawText(ctx, L.src, PX + PW - 12 - measureText(L.src, 1, 'micro'), L.PY + 10, S.microFog);
     L.cols.forEach((c, i) => {
-      const at = 0.3 + i * 0.35;
+      // (a leaf drops when its date is read: leafTimes[i] s from the board's first frame, Infinity until then; never
+      // before the panel has wiped in. Without leafTimes, one every 0.35 s)
+      const at = o.leafTimes ? Math.max(0.3, o.leafTimes[i] ?? Infinity) : 0.3 + i * 0.35;
       if (dt < at) return;
       const p = easeOutQuint(seg(dt, at, 0.35));
       const lx = c.cx - (L.LW >> 1);

@@ -175,7 +175,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories; numbers / known / timeline / change: BY THE NUMBERS, WHAT WE KNOW, HOW WE GOT HERE and FROM → TO boards
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, proportion: true, next: true, who: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories; numbers / known / timeline / change / proportion / next / who: BY THE NUMBERS, WHAT WE KNOW, HOW WE GOT HERE, FROM → TO, IN PROPORTION, WHAT HAPPENS NEXT and WHO'S WHO boards
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },
@@ -190,7 +190,7 @@ const PROGRAMMES = {
     holds: { signoff: 1.0, endcard: 3.0 },
     // the format round (owner 4 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
     // THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Ada translates a story's jargon
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, proportion: true, next: true, who: true, terms: true },
     moves: { max: 2, minGap: 60 }, // THE CATCH push (the bible's only move), one per exchange
     gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2, floor: 3 },
     listener: { reactionGap: 7, nodsPerMin: [1.5, 7] },
@@ -210,7 +210,7 @@ const PROGRAMMES = {
     // a shorter map that runs past 6 s cannot be split (the planner cuts it at 4-6 s whenever it can)
     // the format round (owner 4-5 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
     // THEIR WORDS on a sourced quote, and UNIT-8's definition card
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 13, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, pan: { speed: 2, ease: 1.6 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 13, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, pan: { speed: 2, ease: 1.6 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, proportion: true, next: true, who: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5, floor: 1.8, floorGrave: 0.6 }, // cosmos.md: <= 1 per 6 s
     listener: { reactionGap: 10, nodGap: 8, nodsPerMin: [0.6, 4] },
@@ -226,7 +226,7 @@ const PROGRAMMES = {
     holds: { signoff: 0.6, endcard: 3.0 },
     // the format round (owner 4 Oct, 9 Oct for MONEY MINUTE): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE
     // KNOW boards, IN THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Penny translates a story's jargon
-    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
+    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, proportion: true, next: true, who: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // money-minute.md: the camera never moves
     gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5, floor: 1.5, floorGrave: 0.5 },
     music: { minBed: 30, maxChangesPerMin: 1 },
@@ -262,6 +262,28 @@ const PROGRAMMES = {
     gestures: { perMin: 4.5, minGap: 6, beatsPerMin: 6, rest: 0.66, grave: 1.5, floor: 2 },
     listener: { reactionGap: 9, nodsPerMin: [0.8, 5] },
     music: { minBed: 30, fadeIn: 1.6, fadeOut: 2.2, maxChangesPerMin: 1.2 },
+  },
+  'full-time': {
+    label: 'punchy, never shouty',
+    // full-time.md §4: 6-8 minutes; MATCHDAY, MIDWEEK or PREVIEW in that order of blocks (a block without material is
+    // skipped). Lively like TECH BYTES (two presenters, a magazine), the results read crisply; SCORE CENTRE and COMING
+    // UP are board segments (the board on air for the segment, its rows and leaves timed to the voice: director.js
+    // playBoardSegment), held up to scoresMax
+    length: {
+      target: [360, 480],
+      blocks: ['headlines', 'greeting', 'lead', 'score-centre', 'breakdown', 'grounds', 'number', 'moment', 'coming-up', 'signoff'],
+    },
+    open: { firstWord: 0.5 },
+    gaps: { story: 0.85, handover: 0.75, chatTurn: 0.45, intoChat: 0.6, outOfChat: 0.8, beforeFinally: 1.1, block: 1.1 },
+    holds: { signoff: 1.2, endcard: 3.0 },
+    // the boards (full-time.md §5): a story's strongest, never the same type twice in a row: the scoreline, THE MOMENT
+    // ON THE BOARD, WHO'S WHO, IN PROPORTION, WHAT HAPPENS NEXT, WHAT WE KNOW; IN THEIR WORDS on a sourced quote. No
+    // BY THE NUMBERS (THE NUMBER is its own segment), no timeline or FROM → TO (the bible's boards are these)
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 8], cutsPerMinMax: 9, scoresMax: 40, quoteCard: true, score: true, chalk: true, fixtures: true, proportion: true, next: true, who: true, known: true },
+    moves: { max: 2, minGap: 60 },
+    gestures: { perMin: 5.5, minGap: 5, beatsPerMin: 8, rest: 0.58, grave: 2, floor: 2.5 },
+    listener: { reactionGap: 7, nodsPerMin: [1.2, 6] },
+    music: { minBed: 25, maxChangesPerMin: 1.5 },
   },
   'news-60': {
     label: 'brisk but readable',
@@ -424,21 +446,116 @@ export function timelineBoard(seg, programId) {
   return steps.length >= 2 ? steps : null;
 }
 
-/** The board a story's card carries beside its figures board: FROM → TO, else WHAT WE KNOW's points, else HOW WE GOT HERE's steps. */
-export function storyBoard(seg, programId) {
-  return changeBoard(seg, programId) || knownBoard(seg, programId) || timelineBoard(seg, programId);
+const str = (x) => typeof x === 'string' && x.trim() !== '';
+const CHALK_SPORTS = new Set(['football', 'american-football', 'rugby']);
+
+/** FULL TIME's scoreline (pace shots.score): seg.score { a, b, sa, sb, ... } from the sport shape (full-time.md §3.5). */
+export function scoreBoard(seg, programId) {
+  const c = seg?.score;
+  if (!paceFor(programId).shots.score || !c) return null;
+  return str(c.a) && str(c.b) && Number.isFinite(Number(c.sa)) && Number.isFinite(Number(c.sb)) && String(c.sa) !== '' && String(c.sb) !== '' ? c : null;
 }
 
-/** What a story's card shows, for its hold: the figures board's rows, else the known points or the steps, else the fact. */
-export function factText(seg, programId) {
+/** THE MOMENT ON THE BOARD (pace shots.chalk): seg.chalk { yards | metres, sport, label? }, one of the three grounds, 1-70. */
+export function chalkBoard(seg, programId) {
+  const c = seg?.chalk;
+  if (!paceFor(programId).shots.chalk || !c || !CHALK_SPORTS.has(c.sport)) return null;
+  const d = Number(c.yards ?? c.metres);
+  return d >= 1 && d <= 70 ? c : null;
+}
+
+/** IN PROPORTION (pace shots.proportion): seg.share { value, fraction, lead, label, qualifier? }, the writer's, said. */
+export function shareBoard(seg, programId) {
+  const c = seg?.share;
+  if (!paceFor(programId).shots.proportion || !c) return null;
+  return str(c.value) && str(c.label) && Number(c.fraction) > 0 && Number(c.fraction) < 1 ? c : null;
+}
+
+/** WHAT HAPPENS NEXT (pace shots.next): seg.next { when, date?, what }, a dated step ahead the presenter says. */
+export function nextBoard(seg, programId) {
+  const c = seg?.next;
+  if (!paceFor(programId).shots.next || !c) return null;
+  return str(c.when) && str(c.what) ? c : null;
+}
+
+/** WHO'S WHO (pace shots.who): seg.who [{ name, role }], two or three people the presenter names. */
+export function whoBoard(seg, programId) {
+  if (!paceFor(programId).shots.who || !Array.isArray(seg?.who)) return null;
+  const people = seg.who.filter((p) => p && str(p.name) && str(p.role)).slice(0, 3);
+  return people.length >= 2 ? people : null;
+}
+
+// a story's boards, strongest first (full-time.md §5: the scoreline, then WHO'S WHO / IN PROPORTION / WHAT HAPPENS NEXT /
+// WHAT WE KNOW; FROM → TO before them, HOW WE GOT HERE last, as before)
+const BOARD_ORDER = [
+  ['score', scoreBoard],
+  ['chalk', chalkBoard],
+  ['change', changeBoard],
+  ['who', whoBoard],
+  ['share', shareBoard],
+  ['next', nextBoard],
+  ['known', knownBoard],
+  ['timeline', timelineBoard],
+];
+
+/** Every board a story carries, strongest first: [{ kind, value }]. */
+export function storyBoards(seg, programId) {
+  const out = [];
+  for (const [kind, fn] of BOARD_ORDER) {
+    const value = fn(seg, programId);
+    if (value) out.push({ kind, value });
+  }
+  return out;
+}
+
+/**
+ * The board a story's card shows: its strongest, unless that is the same type as the board shown last (`last`, the
+ * director's memory) and it has another (full-time.md §5: boards rotate). A story whose only board repeats the last
+ * one's type still shows it: a result or a story's points are worth a repeat, a story without its board is not.
+ */
+export function pickBoard(seg, programId, last = null) {
+  const all = storyBoards(seg, programId);
+  return all.find((b) => b.kind !== last) || all[0] || null;
+}
+
+/** The board a story's card carries beside its figures board (pickBoard's, without the rotation memory). */
+export function storyBoard(seg, programId) {
+  return pickBoard(seg, programId)?.value || null;
+}
+
+/** A board's words, for its hold (read twice). */
+function boardText(b) {
+  const v = b.value;
+  switch (b.kind) {
+    case 'score':
+      return `${v.a} ${v.sa} ${v.b} ${v.sb} FT`;
+    case 'chalk':
+      return v.label || `${v.yards ?? v.metres} ${v.yards !== undefined ? 'YARDS' : 'METRES'}`;
+    case 'change':
+      return `${v.label} ${v.from} ${v.to}`;
+    case 'who':
+      return v.map((p) => `${p.name} ${p.role}`).join(' ');
+    case 'share':
+      return [v.lead, v.value, v.label, v.qualifier].filter(Boolean).join(' ');
+    case 'next':
+      return `${v.when} ${v.what}`;
+    case 'known':
+      return v.join(' ');
+    case 'timeline':
+      return v.map((p) => `${p.when} ${p.what}`).join(' ');
+    default:
+      return '';
+  }
+}
+
+/** What a story's card shows, for its hold: FROM → TO, the figures board's rows, else the story's board, else the fact. */
+export function factText(seg, programId, last = null) {
   const change = changeBoard(seg, programId);
-  if (change) return `${change.label} ${change.from} ${change.to}`;
+  if (change && !scoreBoard(seg, programId) && !chalkBoard(seg, programId)) return `${change.label} ${change.from} ${change.to}`;
   const board = numbersBoard(seg, programId);
   if (board) return board.map((n) => [n.qualifier, n.value, n.label].filter(Boolean).join(' ')).join(' ');
-  const known = knownBoard(seg, programId);
-  if (known) return known.join(' ');
-  const steps = timelineBoard(seg, programId);
-  if (steps) return steps.map((p) => `${p.when} ${p.what}`).join(' ');
+  const b = pickBoard(seg, programId, last);
+  if (b) return boardText(b);
   return seg?.fact || seg?.numbers?.[0]?.value || '';
 }
 
@@ -460,6 +577,7 @@ export function shotMax(programId, shot) {
   if (shot === 'map') return S.map[1];
   if (shot === 'full') return S.picture[1];
   if (shot === 'fact') return S.factMax;
+  if (shot === 'scores') return S.scoresMax || 40; // SCORE CENTRE: a board segment, on air for its whole segment
   return S.studioMax;
 }
 

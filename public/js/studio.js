@@ -10,6 +10,7 @@ import { lookOf, portraitOf, presenterName, THEME_ACCENT } from './cast.js';
 import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
 import * as cards from './scenes/cards.js';
+import { drawScoreboard } from './scenes/cards-sport.js';
 import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
@@ -218,7 +219,10 @@ export class Renderer {
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
-        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, known: card.known, timeline: card.timeline, change: card.change, term: card.term, quote: card.quote, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, known: card.known, timeline: card.timeline, change: card.change, term: card.term, quote: card.quote, score: card.score, chalk: card.chalk, fixtures: card.fixtures, leafTimes: card.leafTimes, title: card.title, share: card.share, next: card.next, who: card.who, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+      case 'scores':
+        // FULL TIME's SCORE CENTRE (director.js playBoardSegment): the stadium's board filling the frame, a row as it is read
+        return drawScoreboard(ctx, dt, card, THEME_ACCENT[program?.theme] || P.orange);
       case 'weather':
         if (WEATHER) return WEATHER.drawWeather(ctx, t, scene, this.audio);
         return drawWorldMap(ctx, t, dt, {}); // the idle world until the weather centre has loaded

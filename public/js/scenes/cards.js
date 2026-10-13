@@ -25,6 +25,8 @@ import { backdrop, lazyBackdrop } from './opens/kit.js';
 import { drawEarth, globeTexture } from './opens/world.js';
 import { drawProgrammeLockup } from './opens.js';
 import { drawIdentScene, IDENT_WARM } from './opens/ident.js';
+import { drawShare, drawNext, drawWho } from './cards-more.js';
+import { drawScoreline, drawComingUp, drawChalkboard } from './cards-sport.js';
 
 export const STINGER_DURATION = 0.8; // seconds
 
@@ -156,8 +158,8 @@ function layoutCache(limit = 120) {
 }
 
 /** Programme accents (THEME_ACCENT values); anything else falls back to brand red. */
-const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow, P.pink]);
-const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink };
+const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow, P.pink, P.orange]);
+const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink, 'full-time': P.orange };
 const accentFor = (programId, accent) => (ACCENTS.has(accent) ? accent : (typeof programId === 'string' && Object.hasOwn(PROGRAM_ACCENT, programId) && PROGRAM_ACCENT[programId]) || P.red);
 
 // ---------------------------------------------------------------------------
@@ -1267,7 +1269,8 @@ const FACT_STYLES = {
 
 /**
  * Fact card. o = { fact, label, source, image, numbers: [{ value, label, qualifier? }], programId,
- * accent, headline (MONEY MINUTE's paper title), quote: { text, by } (shown when there is no fact) }.
+ * accent, headline (MONEY MINUTE's paper title), quote: { text, by } (shown when there is no fact), or one board:
+ * known, change, timeline, term, share, next, who, and FULL TIME's score, chalk, fixtures (+ title, leafTimes) }.
  */
 export function drawFactCard(ctx, t, dt, o = {}) {
   const opts = o || {};
@@ -1281,6 +1284,31 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   }
   const style = typeof opts.programId === 'string' && Object.hasOwn(FACT_STYLES, opts.programId) ? FACT_STYLES[opts.programId] : RULE_STYLE;
   const acc = accentFor(opts.programId, opts.accent);
+  // FULL TIME's boards (cards-sport.js) and the story boards of cards-more.js: each on the card's own ground
+  if (opts.score?.a && opts.score?.b) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawScoreline(ctx, dt, opts, acc);
+  }
+  if (opts.chalk) {
+    cardGround(ctx, dt, null, factField);
+    return drawChalkboard(ctx, dt, opts);
+  }
+  if (Array.isArray(opts.fixtures) && opts.fixtures.length >= 2) {
+    cardGround(ctx, dt, null, factField);
+    return drawComingUp(ctx, dt, opts, acc);
+  }
+  if (Array.isArray(opts.who) && opts.who.length >= 2) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawWho(ctx, dt, opts, acc);
+  }
+  if (opts.share?.value && opts.share?.label) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawShare(ctx, dt, opts, acc);
+  }
+  if (opts.next?.when && opts.next?.what) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawNext(ctx, dt, opts, acc);
+  }
   if (opts.term?.term && opts.term?.plain) {
     cardGround(ctx, dt, null, inkField);
     return drawTerm(ctx, dt, opts.term, acc);

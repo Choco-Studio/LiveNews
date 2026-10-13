@@ -418,7 +418,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   // know which)
   const todayN = dayIn(now, tz).n;
   const dayOf = (f) => (f.date ? Math.round(Date.parse(`${f.date}T00:00:00Z`) / (24 * HOUR)) : null);
-  for (const s of candidates) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event) && !(dayOf(f) === todayN && air.hour >= 12) && !(dayOf(f) !== null && dayOf(f) < todayN)) fixtures.push({ ...f, source: s.source });
+  for (const s of candidates) for (const f of s.fixtures || []) if (!fixtures.some((x) => x.event === f.event) && !(dayOf(f) === todayN && air.hour >= 12) && !(dayOf(f) !== null && dayOf(f) < todayN)) fixtures.push({ ...f, source: s.source, sport: s.sport || null });
   fixtures.sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')));
   const matchday = (air.weekday === 6 && air.hour >= 15) || air.weekday === 0 || (air.weekday === 1 && air.hour < 10) || results.length >= 4;
   const preview = !matchday && ((air.weekday === 5 && air.hour >= 6) || (air.weekday === 6 && air.hour < 14)) && fixtures.length >= 3 && results.length < 3;
@@ -428,8 +428,10 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     return list.length && list.length <= 2 ? list.join(' / ') : channelName;
   };
   let scoreCentre = null;
+  let centreRows = [];
   if (results.length >= 3) {
     const { text, rows } = resultText(results, seed, recent);
+    centreRows = rows;
     const rTitle = resultsTitle(rows, now, tz);
     const today = dayIn(now, tz).n;
     scoreCentre = {
@@ -575,6 +577,36 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
 
   episode.segments = [intro, hello, ...order.flat(), outro].filter(Boolean);
   episode.segments = keepPromises(episode.segments);
+  // where each result and each date is read: the board's row flips in, the calendar's leaf drops, when the voice
+  // reaches the sentence that says it (director.js playBoardSegment; char offsets into the final text)
+  const sentenceStart = (text, at) => {
+    let i = at;
+    while (i > 0 && !/[.!?]\s/.test(text.slice(i - 2, i))) i--;
+    return i;
+  };
+  if (scoreCentre) {
+    let from = 0;
+    scoreCentre.scores.forEach((row, i) => {
+      const at = scoreCentre.text.indexOf(resultLine(centreRows[i]), from);
+      if (at < 0) return;
+      row.char = sentenceStart(scoreCentre.text, at);
+      from = at + 1;
+    });
+  }
+  if (comingUp) {
+    const lower = comingUp.text.toLowerCase();
+    let from = 0;
+    let last = -1;
+    comingUp.fixtures.forEach((f) => {
+      const at = lower.indexOf(titleCase(f.event).toLowerCase(), from);
+      if (at < 0) return;
+      // the first date of a day comes in with its day ("Tomorrow, it's ..."), a second of the same day with its name
+      const start = sentenceStart(comingUp.text, at);
+      f.char = start === last ? at : start;
+      last = start;
+      from = at + 1;
+    });
+  }
   episode.storyIds = [...new Set(episode.segments.filter((s) => s.storyId).map((s) => s.storyId))];
   episode.sport = { shape, results: scoreCentre ? scoreCentre.scores.length : 0, fixtures: comingUp ? comingUp.fixtures.length : 0 };
   episode.segments = episode.segments.filter((s) => s.type !== 'story' || String(s.text || '').trim());

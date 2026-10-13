@@ -59,7 +59,7 @@ const now = () => performance.now() / 1000;
 const minShot = (scene) => paceFor(scene.program?.id).shots.cooldown;
 const STINGER = CHANNEL.stinger; // s (cards.js STINGER_DURATION)
 const GAP_AFTER = 0.3; // s: the plan's pause when no episode profile is known
-export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage']);
+export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores']);
 const STUDIO = new Set(['wide', 'close']);
 const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide']);
 
