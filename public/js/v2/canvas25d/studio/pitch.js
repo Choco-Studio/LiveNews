@@ -39,29 +39,33 @@ const bay16 = (x, y) => B16[((y & 3) << 2) | (x & 3)];
 // --------------------------------------------------------------------------- geometry (world units, Y down)
 export const GROUND = {
   canopyY: -129, // the canopy's fascia on the set plane (dressing.js draws it; the network's soffit line)
-  pitchY: 170, // the pitch's surface (the platform's deck is SET.floorY: raised 118 above it)
+  // the pitch's surface (the platform's deck is SET.floorY: raised 68 above it). Its level sets the boards' row: in the
+  // wide just under the screen's foot (the screen hides the band between the presenters, so the wide carries two bands
+  // and the screen's emblem, not four FULL TIMEs), in the network's two-shot clear above the presenters' crowns
+  pitchY: 120,
   stand: {
     Z: 6000,
-    half: 860, // the stand's ends (world X): beyond them the open corners, a low terrace under the towers
+    half: 800, // the stand's ends (world X): beyond them the open corners, a low terrace under the towers
     roof: -186, // the roof's fascia top
     fascia: -174, // the fascia's foot (its underside below, dark)
     under: -162, // the underside's foot: the upper tier starts
     balcony: -102, // the balcony front (the upper tier's foot)
     lower: -90, // the lower tier's top
     corner: -26, // the corner terraces' top
-    wall: 132, // the lower tier's foot: the pitch-side wall below
+    wall: 82, // the lower tier's foot: the pitch-side wall below
     exits: [-700, 700], // lit exits (vomitories) in the upper tier, world X (clear of every head in every framing)
     seat: 6, // world units per pixel of a seat at scale 1 (a seat is 2 x 3 such pixels)
     aisle: 16, // a stair every 16 seats
   },
-  boards: { Z: 5700, top: 130, every: 400, pad: 3 }, // FULL TIME bands at X = 0, ±400, ±800... (clear of the near masts)
+  boards: { Z: 5700, top: 80, every: 400, pad: 3 }, // FULL TIME bands at X = 0, ±400, ±800... (clear of the near masts)
   board: { Z: 6000, X: 0, Y0: -342 }, // the scoreboard (wide: y 5-13, over the screen)
   pennant: { X: 102, top: -342 }, // its pole beside the board (the cloth is live)
   stripe: 240, // mowing stripe width
   touch: 5640, // the far touchline's Z (just in front of the boards)
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
-  far: { X: 990, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, halo: 50, mast: 6.4, far: true },
-  near: { X: 605, Z: 3600, Y: -139, cols: 5, pitch: 7.2, gapless: false, halo: 44, mast: 10.8 },
+  far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, halo: 50, mast: 6.4, far: true },
+  // (the near pair close enough that their feet are behind the desk in the wide: never a mast standing on the pitch)
+  near: { X: 476, Z: 2800, Y: -122, cols: 5, pitch: 5.6, gapless: false, halo: 34, mast: 8.4 },
 };
 
 // --------------------------------------------------------------------------- the hour
@@ -108,9 +112,9 @@ const PALS = [
   // night: a black sky, the floodlit pitch, the stand dark with its lower tier in the spill
   pal(NIGHT),
   // dawn: the night lifting behind the stand, the ground cold and in shadow, the floodlights off
-  pal({ ...NIGHT, sky: ['ink', 'navy', 'purple', 'rust'], softSky: 'navy', town: 'black', roofEdge: 'purple', exit: 'ink', exitEdge: 'black', heads: ['slate', 'slate'], pitch: [-3, -8], line: 'slate', tower: 'ink', towerDark: 'black', head: 'ink', lamp: 'slate', halo: null, band: 'rust', pole: 'slate' }),
+  pal({ ...NIGHT, sky: ['ink', 'navy', 'purple', 'rust'], softSky: 'navy', town: 'black', roofEdge: 'purple', exit: 'ink', exitEdge: 'black', heads: ['slate', 'slate'], pitch: [0, -7], line: 'slate', tower: 'ink', towerDark: 'black', head: 'ink', lamp: 'slate', halo: null, band: 'rust', pole: 'slate' }),
   // day: the stand in sun and shadow (the roof shades the upper tier, the sun on the lower), the pitch in the sun
-  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: [4, 0], line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog' }),
+  pal({ ...NIGHT, sky: ['navy', 'steel', 'steel', 'fog'], softSky: 'steel', town: 'slate', roof: 'slate', roofEdge: 'fog', exit: 'black', exitEdge: 'ink', balcony: 'slate', balconyEdge: 'steel', crowdBg: 'slate', step: 'ink', heads: ['steel', 'ink'], softTier: 'slate', softHead: 'steel', body: 'ink', wall: 'ink', boardEdge: 'slate', pitch: [0, -3], line: 'fog', tower: 'steel', towerDark: 'slate', head: 'fog', lamp: 'fog', lampOff: 'fog', halo: null, pole: 'fog' }),
   // the golden hour: the sky reddening behind the stand, its roof catching the last light, the banks coming on
   pal({ ...NIGHT, sky: ['navy', 'purple', 'darkRed', 'rust'], softSky: 'purple', town: 'maroon', roofEdge: 'rust', balcony: 'maroon', balconyEdge: 'brown', heads: ['brown', 'slate'], boardEdge: 'maroon', pitch: [0, -4] }),
   // the blue hour: the last light a purple band over the roof, every bank on
@@ -133,6 +137,12 @@ const hash = (a, b, c = 0) => {
 const kOf = (cam, Z) => (F * cam.zoom) / (Z - cam.z);
 const lOf = (c) => L_OF.get(c >>> 0) ?? 50;
 const mod = (a, n) => ((a % n) + n) % n;
+/** The left edge of a w px wide object centred at screen x cx, rounded symmetrically about the frame's centre line
+ *  (a pair at ±X lands on mirrored pixels: a plain round() breaks its .5 ties the same way on both sides). */
+const symX0 = (cx, w) => {
+  const off = cx - 192, a = Math.round(Math.abs(off) - w / 2);
+  return off >= 0 ? 192 + a : 192 - a - w;
+};
 
 // the frame's clip box (the open back of the set) and its pixels
 const BOX = { x0: 0, y0: 0, x1: W, y1: H };
@@ -245,14 +255,14 @@ export function towerHead(cam, t) {
   const lw = s, gap = t.gapless ? 0 : s;
   const w = t.cols * lw + (t.cols - 1) * gap + 2 * s, h = 4 * lw + 3 * gap + 2 * s;
   const cx = 192 + (t.X - cam.x) * k, cy = cam.hy + (t.Y - cam.y) * k;
-  const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
+  const x0 = symX0(cx, w), y0 = Math.round(cy - h / 2);
   return { x0, y0, w, h, s, lw, gap, cx: x0 + w / 2, cy: y0 + h / 2, R: t.halo * k, k };
 }
 
 function towerMast(cam, t, hd, P, soft) {
   const k = hd.k;
   const mw = Math.max(1, Math.round(t.mast * k));
-  const x0 = Math.round(hd.cx - mw / 2);
+  const x0 = symX0(hd.cx, mw);
   const yBase = Math.round(cam.hy + (GROUND.pitchY - cam.y) * k);
   const y0 = hd.y0 + hd.h;
   const c = P.tower, d = P.towerDark;
@@ -396,7 +406,7 @@ function stand(cam, P, soft) {
   }
   // the lit exits (vomitories): a small warm opening at the foot of the tier, its dark frame
   for (const X of G.exits) {
-    const ex = Math.round(xOf(X) - s);
+    const ex = symX0(xOf(X), 2 * s);
     fill(ex - s, yBal - 4 * s, ex + 3 * s, yBal, P.exitEdge);
     fill(ex, yBal - 3 * s, ex + 2 * s, yBal, soft ? mute(P.exit) : P.exit);
   }
@@ -532,7 +542,7 @@ function boards(cam, P, soft, guard) {
   const n = Math.ceil(2400 / G.every);
   for (let i = -n; i <= n; i++) {
     const cx = 192 + (i * G.every - cam.x) * k;
-    const bx0 = Math.round(cx - bw / 2), bx1 = bx0 + bw;
+    const bx0 = symX0(cx, bw), bx1 = bx0 + bw;
     if (bx1 <= BOX.x0 || bx0 >= BOX.x1) continue;
     const r = { x0: bx0, y0: y0 + 1, x1: bx1, y1 };
     // the channel's orange band: out of focus a dim block, in focus the band and FULL TIME in dark type, whole or not
