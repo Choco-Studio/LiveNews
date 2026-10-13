@@ -245,6 +245,79 @@ function countForN(n) {
 }
 BASE_COUNT.forN = countForN;
 
+/**
+ * count:tap with n fingers (1..5): counting on the fingers (owner, LISTA 13 "golpecito al juntar dedos"). The near
+ * hand comes up open, palm to the lens, fingers apart; the far hand's index taps its fingers one by one on the
+ * approved rhythm (POPS), index first, the thumb fifth (rig.js tapFinger puts the fingertip exactly on the
+ * finger, whatever the presenter's hands). Each tap lands with its speed and stops on the finger, the counting
+ * hand gives a little under it and comes back (the contact beat); between two taps the index lifts off and slides
+ * to the next finger. The first tap is the apex (the planner's stressed word), as in count.
+ */
+const OPENED = [0.2, 0.04, 0.06, 0.1, 0.16];
+function countTapForN(n) {
+  const last = POPS[n - 1];
+  const dur = +(last + 1.2).toFixed(2);
+  const hold = last + 0.42;
+  const tapK = [[0, 1], [POPS[0] + 0.1, 1, 's']];
+  const away = [[0, 1], [0.44, 1, 's'], [POPS[0] - 0.1, 0.62], [POPS[0], 0], [POPS[0] + 0.04, 0, 's']];
+  const give = [[0, 0], [POPS[0], 0, 's'], [POPS[0] + 0.05, 0.26], [POPS[0] + 0.15, 0, 's']];
+  const pitch = [[0, 0]];
+  const brow = [[0, 0]];
+  for (let k = 1; k < n; k++) {
+    const p = POPS[k], q = POPS[k - 1];
+    // lift off, slide over to the next finger while away, come down on it with its speed and stop
+    away.push([q + 0.14, 0.75, 's'], [p - 0.1, 0.55], [p, 0], [p + 0.04, 0, 's']);
+    tapK.push([q + 0.16, k, 's'], [p - 0.08, k + 1, 's']);
+    give.push([p, 0, 's'], [p + 0.05, 0.26], [p + 0.15, 0, 's']);
+  }
+  away.push([hold, 0, 's'], [hold + 0.24, 1, 's'], [dur, 1]);
+  tapK.push([dur - 0.3, n, 's'], [dur, 1]);
+  give.push([dur, 0]);
+  for (let k = 0; k < n; k++) {
+    const p = POPS[k];
+    pitch.push([p + 0.06, 0.02], [p + 0.16, 0.045], [p + 0.32, 0]);
+    brow.push([p + 0.1, 0.32 + 0.04 * k], [p + 0.32, 0.14]);
+  }
+  pitch.push([dur, 0]);
+  brow.push([dur - 0.2, 0]);
+  return {
+    dur,
+    stroke: 0.22,
+    apex: POPS[0] - 0.02,
+    hold,
+    focus: 'both',
+    tracks: {
+      // the counting hand: up in front of the chest toward the middle, open, palm to the lens
+      // (as high as count's own hand: a head-and-shoulders single still sees it above the strap)
+      wrist: [[0, 'R'], [0.18, [-7.6, 21.6, 12.6]], [0.46, [-9.8, 4.2, 13.8]], [0.56, [-10.3, 2.9, 14.1]], [0.68, [-10.2, 3.2, 14.0], 's'], [hold, [-10.2, 3.2, 14.0], 's'], [dur - 0.36, [-6.6, 17.0, 13.6]], [dur, 'R', 's']],
+      dir: [[0, 'R'], [0.3, [-0.45, -0.4, 0.6]], [0.6, [-0.14, -1, 0.2]], [0.72, [-0.12, -1, 0.16], 's'], [hold + 0.04, [-0.12, -1, 0.16], 's'], [dur - 0.3, [-0.7, 0.25, 0.55]], [dur, 'R']],
+      curl: [[0, 'R'], [0.42, OPENED, 's'], [hold + 0.06, OPENED, 's'], [dur - 0.3, 'R']],
+      spread: [[0, 'R'], [0.5, 0.55], [hold, 0.55], [dur - 0.3, 'R']],
+      facing: [[0, 'R'], [0.42, 1, 's'], [dur - 0.6, 1, 's'], [dur - 0.3, 'R']],
+      pole: [[0, 'R'], [0.5, [1, 1, 0]], [dur - 0.7, [1, 1, 0]], [dur, 'R']],
+      // the tapping hand: across to the counting hand, the index out (rig.js tapFinger places it)
+      wristF: [[0, 'R'], [0.2, [7.6, 21.4, 12.6]], [0.46, [11.6, 3.0, 14.6]], [0.6, [12.6, 0.0, 15.0]], [0.7, [12.6, 0.0, 15.0], 's'], [hold, [12.6, 0.0, 15.0], 's'], [dur - 0.32, [7.2, 17.6, 13.6]], [dur, 'R', 's']],
+      // (the index comes down onto the fingertips from above: the hand stays over them, never across the palm)
+      dirF: [[0, 'R'], [0.32, [0.6, 0.0, 0.7]], [0.6, [0.78, 0.36, 0.5]], [0.72, [0.78, 0.36, 0.5], 's'], [hold + 0.04, [0.78, 0.36, 0.5], 's'], [dur - 0.3, [0.7, 0.25, 0.55]], [dur, 'R']],
+      curlF: [[0, 'R'], [0.42, POINT, 's'], [hold + 0.06, POINT, 's'], [dur - 0.3, 'R']],
+      spreadF: [[0, 'R'], [0.5, 0.1], [hold, 0.1], [dur - 0.3, 'R']],
+      facingF: [[0, 'R'], [0.44, -0.35, 's'], [dur - 0.6, -0.35, 's'], [dur - 0.3, 'R']],
+      poleF: [[0, 'R'], [0.5, [-1, 1, -0.2]], [dur - 0.7, [-1, 1, -0.2]], [dur, 'R']],
+      tap: [[0, 0], [0.24, 0, 's'], [0.54, 1, 's'], [hold, 1, 's'], [hold + 0.34, 0, 's'], [dur, 0]],
+      tapK,
+      tapAway: away,
+      tapGive: give,
+      shN: [[0, 0], [0.18, 0.3], [0.55, -0.35], [dur - 0.7, -0.3], [dur - 0.3, 0.08], [dur, 0]],
+      shF: [[0, 0], [0.2, 0.25], [0.57, -0.3], [dur - 0.68, -0.26], [dur - 0.28, 0.06], [dur, 0]],
+      pitch,
+      brow,
+      lookX: [[0, 0], [0.5, -0.12], [0.8, 0], [dur, 0]],
+      lean: [[0, 0], [0.5, 0.01], [dur - 0.6, 0.01], [dur, 0]],
+    },
+  };
+}
+BASE_COUNT.variants = { tap: { ...countTapForN(3), forN: countTapForN } };
+
 LIBRARY.raise_hand.variants = {
   // two open palms at chest height: "let me be clear", calmer and lower than the single raised hand
   two: {

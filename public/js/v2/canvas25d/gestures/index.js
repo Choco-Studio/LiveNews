@@ -97,6 +97,13 @@ export const REST = {
   touch: 0,
   tipGap: 0,
   tipSettle: 0,
+  // counting on the fingers (rig.js tapFinger): tap 0..1 puts the far index on the counting hand's finger tapK (1 index ..
+  // 4 little finger, 5 thumb; continuous, it slides from one fingertip to the next), tapAway how far it is pulled back
+  // between two taps (0 touching), tapGive (body units) how much the counting hand gives under a tap
+  tap: 0,
+  tapK: 1,
+  tapAway: 1,
+  tapGive: 0,
   // how much each hand rests on the desk (gestures/fidget.js applyArmPlant; never authored by a gesture)
   plant: 1,
   plantF: 1,
@@ -115,10 +122,10 @@ REST.proF = pronationSide(REST.dirF, -1);
 }
 
 /** Channels that OVERRIDE (a gesture blends them toward its own value); every other channel adds. */
-export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY', 'reachAt', 'touch', 'tipGap', 'tipSettle'];
+export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY', 'reachAt', 'touch', 'tipGap', 'tipSettle', 'tap', 'tapK', 'tapAway', 'tapGive'];
 const OVERRIDE = new Set(ARM_CHANNELS);
 /** Override channels that belong to both hands at once (the papers prop, the fingertip contact). */
-const BOTH_ARMS = new Set(['hold', 'tilt', 'touch', 'tipGap', 'tipSettle']);
+const BOTH_ARMS = new Set(['hold', 'tilt', 'touch', 'tipGap', 'tipSettle', 'tap', 'tapK', 'tapAway', 'tapGive']);
 /** Hand-shape channels: evaluated 40 ms late (fingers follow the hand). */
 export const FINGER_CHANNELS = new Set(['curl', 'curlF', 'spread', 'spreadF']);
 /** Channels the lag pose needs (hair / earring follow-through): body and head position. */
@@ -328,25 +335,31 @@ export function registerGestures(defs) {
         v.desc ??= g.desc;
         v.focus ??= g.focus;
         prepareDef(v);
+        // a count-like variant has its own per-n definitions (count:tap)
+        if (v.forN) countable(v, name, vn);
       }
     }
-    if (g.forN) {
-      const make = g.forN;
-      const cache = new Map();
-      g.forN = (n) => {
-        const k = Math.max(1, Math.min(5, Math.round(n) || 2));
-        let d = cache.get(k);
-        if (!d) {
-          d = prepareDef({ desc: g.desc, focus: g.focus, ...make(k) });
-          d.name = name;
-          d.n = k;
-          cache.set(k, d);
-        }
-        return d;
-      };
-    }
+    if (g.forN) countable(g, name, null);
     GESTURES[name] = g;
   }
+}
+
+/** Wrap a definition's forN(n) generator: one prepared definition per n (1..5), cached. */
+function countable(g, name, variant) {
+  const make = g.forN;
+  const cache = new Map();
+  g.forN = (n) => {
+    const k = Math.max(1, Math.min(5, Math.round(n) || 2));
+    let d = cache.get(k);
+    if (!d) {
+      d = prepareDef({ desc: g.desc, focus: g.focus, ...make(k) });
+      d.name = name;
+      if (variant) d.variant = variant;
+      d.n = k;
+      cache.set(k, d);
+    }
+    return d;
+  };
 }
 
 /**
@@ -407,7 +420,7 @@ export function defOf(ev) {
   if (!base) return null;
   let d = base;
   if (ev.variant && base.variants && base.variants[ev.variant]) d = base.variants[ev.variant];
-  if (ev.n != null && base.forN && d === base) d = base.forN(ev.n);
+  if (ev.n != null && d.forN) d = d.forN(ev.n);
   return d;
 }
 

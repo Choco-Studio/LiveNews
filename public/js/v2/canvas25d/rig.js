@@ -437,6 +437,8 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0, TW, clamp(c.reachAt || 0, 0, 1));
   }
   if (touch > 0.001) touchHands(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, touch, c.tipSettle || 0, c.tipGap || 0);
+  const tap = clamp(c.tap || 0, 0, 1);
+  if (tap > 0.001) tapFinger(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, tap, c.tapK || 1, c.tapAway ?? 1, c.tapGive || 0);
   for (let pass = 0; pass < 2; pass++) {
     const arm = sk.arms[pass === 0 ? near : far];
     const TW = pass === 0 ? TWN : TWF;
@@ -488,6 +490,36 @@ function touchHands(L, armN, armF, sideN, w, settle, part) {
   TWF[0] -= ex * kx;
   TWF[1] -= ey * k - p;
   TWF[2] -= ez * k;
+}
+
+/**
+ * Counting on the fingers (count:tap): `tap` (0..1) puts the far hand's index fingertip on fingertip `tapK` of the
+ * near hand (1 index .. 4 little finger, 5 thumb; between two whole numbers it slides from one fingertip to the
+ * next), from above and the far hand's side, the pads just touching, so the tapping hand stays over the counting
+ * fingers and never covers the palm; `tapAway` lifts it back up off the finger (1 ≈ a finger's width and more).
+ * Only the far wrist moves to it.
+ * `tapGive` (body units) pushes the counting hand a little away from the tap: it gives, and comes back.
+ */
+const TIP_OF = [3, 7, 11, 15, 19]; // the fingertip joints: index, middle, ring, little finger, thumb
+function tapFinger(L, armN, armF, sideN, w, k, away, give) {
+  TARM.handDir = armN.handDir;
+  TARM.hand = armN.hand;
+  const a = handGeometry(L, TARM, sideN, TG[0]).J;
+  TARM.handDir = armF.handDir;
+  TARM.hand = armF.hand;
+  const b = handGeometry(L, TARM, -sideN, TG[1]).J;
+  const kk = clamp(k, 1, 5) - 1, k0 = Math.floor(kk), k1 = Math.min(4, k0 + 1), u = kk - k0;
+  const j0 = TIP_OF[k0] * 3, j1 = TIP_OF[k1] * 3;
+  const across = -sideN; // the far hand's side of the near one
+  const aw = clamp(away, 0, 1.5);
+  const gap = TOUCH_GAP * TG[0].R[3];
+  const tx = TWN[0] + a[j0] + (a[j1] - a[j0]) * u + across * (gap * 0.45 + aw * 0.8);
+  const ty = TWN[1] + a[j0 + 1] + (a[j1 + 1] - a[j0 + 1]) * u - gap * 0.9 - aw * 1.5;
+  const tz = TWN[2] + a[j0 + 2] + (a[j1 + 2] - a[j0 + 2]) * u + 0.4 + aw * 0.8;
+  TWF[0] += (tx - b[9] - TWF[0]) * w;
+  TWF[1] += (ty - b[10] - TWF[1]) * w;
+  TWF[2] += (tz - b[11] - TWF[2]) * w;
+  TWN[0] -= across * give * w;
 }
 
 /**

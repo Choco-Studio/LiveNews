@@ -538,7 +538,11 @@ class SegmentPlan {
       if (sc != null && sc < SINGLE_SCALE) variant = variant === 'lift' ? 'offer' : 'offer_far';
     }
     if (variant && GESTURES[name].variants?.[variant]) ev.variant = variant;
-    if (name === 'count') ev.n = opts.n ?? countFromText(ctx.seg.text, w.char, ctx.sentences[sentenceOf(ctx, w.char)].end);
+    if (name === 'count') {
+      ev.n = opts.n ?? countFromText(ctx.seg.text, w.char, ctx.sentences[sentenceOf(ctx, w.char)].end);
+      // counting on the fingers half the time (owner, LISTA 13): the other index taps each finger as it counts
+      if (!ev.variant && this.r() < 0.5) ev.variant = 'tap';
+    }
     // chin while speaking: a brief touch; the long thinking pose only on the question or held into the pause
     if (name === 'chin' && !opts.variant) {
       const full = GESTURES.chin;

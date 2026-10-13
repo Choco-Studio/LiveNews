@@ -76,7 +76,11 @@ const allEvents = () => {
   const out = [];
   for (const [name, g] of Object.entries(GESTURES)) {
     out.push({ name });
-    for (const v of Object.keys(g.variants || {})) out.push({ name, variant: v });
+    for (const v of Object.keys(g.variants || {})) {
+      out.push({ name, variant: v });
+      // a count-like variant (count:tap) has its own per-n definitions
+      if (g.variants[v].forN) for (const n of [1, 2, 4, 5]) out.push({ name, variant: v, n });
+    }
     if (g.forN) for (const n of [1, 2, 4, 5]) out.push({ name, n });
   }
   return out;
@@ -1538,4 +1542,44 @@ test('relaxed hands live: irregular finger micro-shifts (never a loop), and the 
   assert.ok(sd / mean > 0.35, `the changes come at irregular moments (cv ${(sd / mean).toFixed(2)})`);
   assert.ok(maxOff <= 0.3, `idle curl offsets up to ${maxOff.toFixed(2)}`);
   assert.ok(joined > 0, 'the joined pose airs within three minutes');
+});
+
+test('counting on the fingers (count:tap): the other index lands on each counted fingertip, lifts off between taps, the counting hand gives', () => {
+  const POPS = [0.62, 1.06, 1.6, 2.12, 2.64];
+  const TIP = [3, 7, 11, 15, 19];
+  for (const id of ['max', 'unit8', 'paco', 'lola']) {
+    for (const side of [1, -1]) {
+      for (const n of [3, 5]) {
+        const a = actor(id, { side, seed: 11, gestures: [{ name: 'count', variant: 'tap', n, t0: 0.3 }] });
+        const nearK = side > 0 ? 'R' : 'L', farK = side > 0 ? 'L' : 'R';
+        const at = (t) => {
+          const sk = poseAt(a, t);
+          const gn = handGeometry(a.look, sk.arms[nearK], side, newHandGeometry()), gf = handGeometry(a.look, sk.arms[farK], -side, newHandGeometry());
+          return { gn, gf };
+        };
+        for (let k = 0; k < n; k++) {
+          // on the tap: the index pad on the fingertip, from above (its centre within ~1.5 tip radii), never inside it
+          const { gn, gf } = at(0.3 + POPS[k] + 0.02);
+          const j = TIP[k] * 3;
+          const dx = gf.J[9] - gn.J[j], dy = gf.J[10] + gf.J[11] * TILT - (gn.J[j + 1] + gn.J[j + 2] * TILT);
+          const d = Math.hypot(dx, dy) * 3.4, r = gn.R[TIP[k]] * 3.4;
+          assert.ok(d <= 3.2 * r + 1, `${id} side ${side} n ${n}: tap ${k + 1} lands ${d.toFixed(2)} px from the fingertip (radius ${r.toFixed(2)})`);
+          assert.ok(dy < 0, `${id} side ${side}: tap ${k + 1} comes from above`);
+          // between taps the index lifts off the finger by a pixel or more
+          if (k + 1 < n) {
+            const m = at(0.3 + (POPS[k] + POPS[k + 1]) / 2);
+            const lift = Math.hypot(m.gf.J[9] - gf.J[9], m.gf.J[10] - gf.J[10]) * 3.4;
+            assert.ok(lift >= 1, `${id}: the index stays on the finger between taps (${lift.toFixed(2)} px)`);
+          }
+        }
+      }
+    }
+  }
+  // the planner counts on the fingers some of the time (TECH BYTES: Max)
+  let taps = 0, counts = 0;
+  for (const res of ALL_SEGS('tech-bytes', 14)) for (const e of gesturesOf(res)) if (e.name === 'count') {
+    counts++;
+    if (e.variant === 'tap') taps++;
+  }
+  if (counts >= 4) assert.ok(taps > 0 && taps < counts, `count:tap ${taps} of ${counts} counts`);
 });
