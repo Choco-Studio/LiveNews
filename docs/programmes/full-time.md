@@ -325,14 +325,16 @@ are different programmes. A shape fixes the order; a segment without material is
   - **Built**:
     - the cue sheet `'full-time'` in `public/js/scenes/opens/cues.js` (10.3 s; the clock 89:55 → 90:00 on the first
       blast; the flip on the long one);
-    - the stadium, ray-cast pixel by pixel, in `public/js/scenes/opens/fulltimetitles.js`;
+    - the stadium, ray-cast pixel by pixel, in `public/js/scenes/opens/fulltimetitles.js`: mown stripes in solid bands
+      (`P.green`/`P.midGreen` lit, `P.darkGreen`/`P.deepGreen` before the light); the far stand with stairs, a concourse
+      and three lit exits; a still cut closer on each blast (wide, mid, the board's clock at the emblem's place, FULL
+      TIME at 2x beside it), never a zoom; the far stand's scarves up on the long blast;
     - the emblem, a digital stopwatch, in `public/js/scenes/opens/sport.js`;
     - the theme in `public/js/audio/themes.js` (`fullTimeTitles`): the whistle's three blasts on the brass, the
       signature then the colour #5 rising to the 6th on the hit, E-flat;
     - the lab at `public/lab/opens.html?id=full-time`.
 
-    Critique: `docs/roadmap/critique/full-time-open.md` (final round 9.6; the lowest category is picture craft, and
-    that file says why).
+    Critique: `docs/roadmap/critique/full-time-open.md` (final round 9.8).
 - **Music.** The bed: 116 BPM, punchy drums, bass and muted guitar. SCORE CENTRE: a ticking bed of its own, a tick per row.
   The lead's scoreline card: a crowd swell, if the A/B test says it sounds like a crowd and not like rain; otherwise a
   brass stab and a timpani hit. After a grave story the music rule holds (nothing under it nor in the segment after),
@@ -343,7 +345,8 @@ are different programmes. A shape fixes the order; a segment without material is
       the rig's `punchKick`/`punchSnare`), the bass in eighths, the palm-muted guitar (`mute`) and a low pad, with its
       moments.
     - **SCORE CENTRE:** the `scores` moment is its ticking bed. The row tick is `audio.sfx('scoreTick')`, from the
-      director's `playBoardSegment` as each row flips in.
+      director's `playBoardSegment` as each row flips in. The bed's own ticks leave room for it (`LofiEngine.rowTick`,
+      asked through `music/live.js`): none within 150 ms of a row's tick.
     - **The scoreline sting:** `STINGS.scoreSting`, ducked under the voice, with both candidates kept (`scoreCrowd`,
       `scoreBrass`). The A/B picked the crowd swell (`SCORE_STING`). The director cues it when the lead's scoreline card
       is cut to (`seg.scoreSting`).
@@ -352,7 +355,8 @@ are different programmes. A shape fixes the order; a segment without material is
     - **The tail:** `buildOutro('full-time')` in `audio/themes.js`.
     - **Lab and tests:** `public/lab/full-time-sound.html`; tests in `test/full-time-sound.test.js`.
 
-    Critique, with the A/B's evidence: `docs/roadmap/critique/full-time-sound.md`.
+    Critique, with the A/B's evidence: `docs/roadmap/critique/full-time-sound.md` (final round 9.8; the owner chooses
+    between the two sting candidates by ear).
 - **Graphics**: the strap's tag is the sport (FOOTBALL, F1, TENNIS, CRICKET, RUGBY, BASKETBALL, BASEBALL, BOXING, CYCLING,
   GOLF, ATHLETICS; NFL, NBA, MLB only when the link says the league: the London Lions against the Trail Blazers is
   BASKETBALL); the **scoreline card** (vertical rows or the horizontal home–away board, §3.5; scores at 3x; FT, DRAW and a

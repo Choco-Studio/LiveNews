@@ -43,7 +43,8 @@ above 9.7 in every category, and a round's score is its lowest category.
 **Renders** are in `/tmp/full-time-sound/`:
 - the theme: `theme.wav` (rounds 1 and 1b: `theme-r1*.wav`);
 - the open with sound: `full-time-open.mp4`;
-- the two sting candidates: `sting-A-crowd-swell.wav`, `sting-B-brass-timpani.wav`;
+- the two sting candidates: `sting-A-crowd-swell.wav` (round 4; round 3's is `sting-A-crowd-swell-r3.wav`) and
+  `sting-B-brass-timpani.wav`;
 - the A/B references: `ref-pink-noise.wav`, `ref-rain.wav`, `ref-pulsed-control.wav`;
 - the A/B's measures: `ab-measures.jsonl`;
 - an edition with a grave story: `edition-grave-mix.wav`, 158 s, with its cue log;
@@ -92,7 +93,7 @@ Defects:
 3. **Ticks against the voice.** The ticks under speech were 17–19 dB under the voice broadband and about 12 dB in
    1–5 kHz: audible, unobtrusive.
 
-## Round 3 (final): score 9.6 (lowest: the sting)
+## Round 3: score 9.6 (lowest: the sting)
 
 Fixed from round 2:
 - the crowd's rumble is at 0.07, so its centroid rose to 694 Hz;
@@ -238,7 +239,7 @@ in the clear.
 - **SCORE CENTRE:** `onair-full-time-score-centre.mp4`, from 195 s into the edition. The board cuts in at 26.6 s and
   three `scoreTick` cues sound at 28.0, 30.6 and 33.9 s, one as each row flips in.
 
-### Final scores
+### Round 3's scores
 
 | Category | Score | What keeps it from 10 |
 |---|---|---|
@@ -251,3 +252,124 @@ in the clear.
 The round's score is 9.6. That is under the bar for the sting, and it is reported as such. The next step is a
 listening test with the owner (both candidates are in `stings.js`, `SCORE_STING` picks one). Brass B is the bible's
 fallback and needs no claim that it sounds like anything.
+
+## Round 4 (final): score 9.8
+
+The coordinator's notes on round 3 were taken as this round's defect list:
+1. **The row tick against the bed's ticks.** During SCORE CENTRE the row's tick fell between the bed's eighth ticks: a
+   flam.
+2. **The whistle on a phone speaker** had never been checked.
+3. **The sting's realism.** The owner now chooses by ear between the two WAVs. Until then the crowd stays the default
+   and both stay in `stings.js`; "nobody has listened" no longer counts against it, but its realism can still improve.
+4. **116 BPM next to NEWS IN 60's 120.** That is the bible's tempo, and not a fault if the two beds are clearly
+   distinct.
+
+### The row tick and the bed's tick grid
+
+`LofiEngine.rowTick(at)` (`engine.js`): the bed's own ticks leave room for a row's tick, none within 150 ms of it.
+- Each bed tick goes through a gain of its own. A bed tick still to come within 150 ms is silenced.
+- A bed tick that has just sounded moves the row's tick to 150 ms after it.
+- `music/live.js` `rowTick()` asks the engine. The director plays the row's tick when the engine says, and the row
+  flips in with it, so picture and sound stay together. Without a bed (?beds=0, after grave news) the tick plays at
+  once.
+
+Measured in the lab (`ticks-grid`: SCORE CENTRE's bed, 28 s, nine rows read at irregular moments, the voices over it,
+each row's tick asked for 30 ms ahead as the director does):
+
+| Row tick asked at (s) | Nearest bed tick before | Nearest bed tick after | Row tick late by | Bed tick silenced |
+|---|---|---|---|---|
+| 1.13 | 999 ms (the bed's first bar) | 999 ms | 0 | none |
+| 4.07 | 128 ms | 150 ms | 20 ms | +108 ms |
+| 6.91 | 128 ms | 150 ms | 22 ms | +113 ms |
+| 10.30 | 106 ms | 150 ms | 0 | +106 ms |
+| 13.55 | 41 ms | 150 ms | 109 ms | +110 ms |
+| 16.20 | 105 ms | 150 ms | 45 ms | +111 ms |
+| 19.42 | 38 ms | 223 ms | 0 | +38 ms |
+| 22.77 | 49 ms | 209 ms | 0 | +49 ms |
+| 25.05 | 97 ms | 160 ms | 0 | +97 ms |
+
+- **Before:** 8 of 9 row ticks landed 38–128 ms from a bed tick, which is a flam.
+- **After:** none is within 150 ms of a bed tick that sounds. 8 of the bed's 104 ticks were silenced. The row's tick is
+  at most 109 ms late, and its row flips in with it.
+
+### The whistle on a phone speaker
+
+The simulated phone (`phone.mjs`):
+- mono;
+- band-limited 300 Hz–7 kHz with 4th-order Butterworth filters;
+- a mild tanh saturation on the mix.
+
+The stems come from the lab at the whole theme's own level (`renderTheme({ solo: [2] })`, the whistle, and
+`{ mute: [2] }`, the band).
+
+| Blast | Whistle over the band, phone band above 800 Hz | On the whistle's own harmonics |
+|---|---|---|
+| 1 (5.0–5.2 s) | +6.0 dB | +11.1 dB |
+| 2 (5.5–5.7 s) | +8.4 dB | +14.7 dB |
+| 3, long (6.0–7.0 s) | +7.7 dB | +18.7 dB |
+
+Between the blasts, the mix's envelope on the whistle's first two harmonics dips 24.9 dB (5.23–5.49 s) and 24.4 dB
+(5.73–5.99 s). The three blasts stay distinct and above the band on a phone speaker, so the theme is unchanged.
+
+### The sting: a fuller crowd
+
+`scoreCrowd` now has:
+- thirty voices (from 22), each with formants sized to its pitch (a woman's a little higher than a man's) and every
+  throat a little different;
+- four callers breaking out of the roar at its peak, one after another at uneven moments, each a rising "eh" opening to
+  "ah" (formant glides, a pitch rise and fall);
+- the ground's own dark 1.5 s tail (a convolver: low-passed noise, 20 ms predelay).
+
+The level is unchanged: momentary peak −18.3 LUFS, against −18.7 in round 3. The A/B's measures (`ab-measures.jsonl`):
+
+| | Crowd, round 4 | Crowd, round 3 | Pink | Rain | Pulsed control |
+|---|---|---|---|---|---|
+| Centroid | 684 Hz | 694 Hz | 2,928 Hz | 4,357 Hz | 845 Hz |
+| Over 4 kHz | −28.1 dB | −27.8 dB | −1.1 dB | +4.9 dB | −23.2 dB |
+| Flatness | 0.021 | 0.022 | 0.575 | 0.871 | 0.026 |
+| Formant | 6.8 dB (794, 1,260 Hz) | 7.0 dB | 1.0 dB | 3.1 dB | 16.4 dB |
+| Rise; 12 dB fall | 0.5 s; 0.9 s | 0.5 s; 0.9 s | | | |
+| 3–7 Hz pulse ratio; 3–8 Hz modulation | 1.20; 0.33 | 3.25; 0.85 | 2.10; 0.29 | 2.16; 0.68 | 6.88; 6.49 |
+
+It still passes every criterion. The laugh test's margin is now wide: 1.20 passes even the first, pre-registered
+criterion (under 2.0) that round 3 had to recalibrate. The callers and the uneven comings and goings leave no common
+pulse.
+
+### FULL TIME's bed next to NEWS IN 60's
+
+The tempos are 116 and 120 BPM (the bible's). Everything else differs:
+
+| | NEWS IN 60 | FULL TIME |
+|---|---|---|
+| Kit | none (`drums: 'none'`) | the punchy kit: kick, backbeat snare, eighth hats |
+| Rhythm | a woodblock tock and tick on every beat (`perc: 'clock'`) | the palm-muted guitar on the off-beats, the bass in driving eighths |
+| Bass | a staccato triangle | a triangle in eighths |
+| Harmony | an electric piano and a pad in E minor / G major | the muted guitar and a low pad in E-flat major |
+
+SCORE CENTRE's ticking bed is FULL TIME's only ticking bed. It uses a dry high click in eighths (not NEWS IN 60's
+woodblock) over the bass and guitar. The two cannot be mistaken for each other.
+
+### The edition renders, again
+
+The renders use the new crowd and the row ticks through `rowTick`.
+
+**The 8-minute matchday edition:**
+- the mix is −13.5 LUFS (LRA 3.0 LU, true peak −1.9 dBFS);
+- the music alone is −30.6 LUFS (LRA 6.7 LU) and the voices −13.4 LUFS;
+- under the voice the medians are as in round 3 (headlines 19.6 LU, SCORE CENTRE 23.4, chats 26.6, sign-off 23.1);
+- the closest window is 19.0 LU, the sting under the voice, against 19.3 before: the fuller crowd is 0.3 dB louder.
+
+**The grave edition** has the same cue log as round 3: silence under the grave story and in SCORE CENTRE after it,
+whose three row ticks still sound (no bed, so at once).
+
+### Final scores
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| The theme's identity and mix | 9.8 | The whistle measured on a phone speaker: 6–8 dB over the band above 800 Hz, 11–19 dB on its harmonics, 24 dB dips between blasts. Loudness as the other opens. The pea whistle's flutter is still a stylisation of a whistle on brass, by design. |
+| The bed's groove, and fatigue over 8 min | 9.8 | The most varied bed on the channel; clearly not NEWS IN 60's despite the near tempo. The kit is synthesised (a pitch-swept sine, a filtered noise crack). |
+| The scoreline sting | 9.8 | Thirty voices with sized formants, callers at the peak, the ground's tail. A crowd by every measure, with a wide margin on the laugh test. The owner's ear decides between the two candidates. |
+| SCORE CENTRE's ticks | 9.8 | No row tick within 150 ms of a bed tick; the row and its tick together. A row's tick can come up to 0.11 s after the voice reaches it. |
+| The grave rules | 9.9 | Unchanged and tested. |
+
+The round's score is 9.8, above the bar in every category.
