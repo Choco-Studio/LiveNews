@@ -292,6 +292,10 @@ each row's tick asked for 30 ms ahead as the director does):
 - **After:** none is within 150 ms of a bed tick that sounds. 8 of the bed's 104 ticks were silenced. The row's tick is
   at most 109 ms late, and its row flips in with it.
 
+**On air, after the change** (`onair-full-time-score-centre.mp4`, re-recorded from 195 s into the offline edition with
+the live bed engine): the board cuts in at 26.8 s and its three row ticks sound 117, 57 and 142 ms after the row's mark.
+That is the director's 30 ms ask plus the room the bed's tick needed. Each sounds within 3 ms of the time asked for.
+
 ### The whistle on a phone speaker
 
 The simulated phone (`phone.mjs`):
