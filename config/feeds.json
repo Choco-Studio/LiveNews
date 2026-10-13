@@ -24,5 +24,10 @@
   { "name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index", "category": "tech", "weight": 0.8 },
   { "name": "TechCrunch", "url": "https://techcrunch.com/feed/", "category": "tech", "weight": 0.7 },
   { "name": "NASA", "url": "https://www.nasa.gov/feed/", "category": "science", "weight": 0.9 },
-  { "name": "ScienceDaily", "url": "https://www.sciencedaily.com/rss/top/science.xml", "category": "science", "weight": 0.7 }
+  { "name": "ScienceDaily", "url": "https://www.sciencedaily.com/rss/top/science.xml", "category": "science", "weight": 0.7 },
+  {"name": "BBC Sport", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "category": "sport", "weight": 1.1},
+  {"name": "Guardian Sport", "url": "https://www.theguardian.com/uk/sport/rss", "category": "sport", "weight": 1.0},
+  {"name": "Sky Sports", "url": "https://www.skysports.com/rss/12040", "category": "sport", "weight": 0.9},
+  {"name": "ESPN", "url": "https://www.espn.com/espn/rss/news", "category": "sport", "weight": 0.9},
+  {"name": "France 24 Sport", "url": "https://www.france24.com/en/sport/rss", "category": "sport", "weight": 0.9}
 ]

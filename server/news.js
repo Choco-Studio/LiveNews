@@ -11,6 +11,7 @@ import { guardedFetch, readCapped } from './net.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
 import { sentencesIn, sameWord } from './facts.js';
+import { notSport } from './sport/desk.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
@@ -469,6 +470,8 @@ const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:be
 const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\/|^https?:\/\/[^/]+\/(?:[a-z]{2}\/)?(?:programs?|programmes|tv-shows|shows|podcasts?|documentaries)\/|^https?:\/\/(?:www\.)?aljazeera\.com\/video\/(?:witness|the-stream|inside-story|101-east|people-power|fault-lines|al-jazeera-world|talk-to-al-jazeera|the-listening-post|counting-the-cost|upfront|the-bottom-line|featured-documentaries|al-jazeera-investigations|the-take|the-cure|earthrise|rewind|my-lebanon)\//i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
+  // FULL TIME's own rules for the sport feeds (server/sport/desk.js): gossip, odds, live pages, video pages, columns…
+  if (s?.category === 'sport' && notSport(s)) return true;
   return PROGRAMME_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));
 };
 

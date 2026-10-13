@@ -234,6 +234,20 @@ export function nextSteps(sentences, { published = Date.now(), now = Date.now() 
   return out;
 }
 
+/**
+ * Every dated moment ahead a sentence names, from the day the story was published: [{ when, date, index, end }] (a day
+ * that has passed, or a loose date in an old story, is left out). FULL TIME's fixture reader uses it.
+ */
+export function datesAhead(sentence, { published = Date.now(), now = Date.now() } = {}) {
+  const out = [];
+  const re = new RegExp(WHEN_RE.source, 'gi');
+  for (let m; (m = re.exec(String(sentence || ''))); ) {
+    const w = whenOf(m, published, now);
+    if (w) out.push({ ...w, index: m.index, end: m.index + m[0].length });
+  }
+  return out;
+}
+
 /** WHAT HAPPENS NEXT: the first dated step ahead the story states ("The Budget will take place" on 28 OCTOBER). */
 export function nextFrom(sentences, opts = {}) {
   return nextSteps(sentences, opts)[0] || null;
