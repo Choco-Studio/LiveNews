@@ -76,7 +76,11 @@ const allEvents = () => {
   const out = [];
   for (const [name, g] of Object.entries(GESTURES)) {
     out.push({ name });
-    for (const v of Object.keys(g.variants || {})) out.push({ name, variant: v });
+    for (const v of Object.keys(g.variants || {})) {
+      out.push({ name, variant: v });
+      // a count-like variant (count:tap) has its own per-n definitions
+      if (g.variants[v].forN) for (const n of [1, 2, 4, 5]) out.push({ name, variant: v, n });
+    }
     if (g.forN) for (const n of [1, 2, 4, 5]) out.push({ name, n });
   }
   return out;
@@ -435,6 +439,8 @@ test('timing: anchored to a stressed word (stroke 0.2-0.3 s before, apex ±0.1 s
             assert.ok(e.at >= ctx.duration - 0.15 - 1e-9, 'papers after the last word');
             continue;
           }
+          // the glasses push goes in a pause between two sentences, never on a word (its own test below)
+          if (e.name === 'glasses') continue;
           const w = ctx.words.find((x) => x.char === e.word);
           assert.ok(w, 'anchored to a word');
           const lead = pid === 'cosmos' ? [0.3, 0.3] : [0.2, 0.3];
@@ -1060,7 +1066,7 @@ test('the episode\'s own gesture policy replaces the client mirror when the cont
   assert.deepEqual([...seen.nod], ['nod'], `nod-only policy: ${[...seen.nod]}`);
 });
 
-test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question, glasses the question', () => {
+test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question; the glasses a pause', () => {
   const NEG = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/i;
   const UNC = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/i;
   let seen = 0;
@@ -1075,10 +1081,7 @@ test('meaning (critics r2): head shakes need a negation, contrast or doubt, shru
         const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
         if (e.name === 'shake_head') assert.ok(NEG.test(text), `${pid}: shake_head on "${text}"`);
         if (e.name === 'shrug') assert.ok(UNC.test(text), `${pid}: shrug on "${text}"`);
-        if (e.name === 'glasses') {
-          assert.ok(ctx.question, `${pid}: glasses without a question`);
-          assert.equal(ctx.sentences.findIndex((x) => ctx.question.char < x.end), si, `${pid}: glasses outside the question`);
-        }
+        if (e.name === 'glasses') assert.ok(glassesInPause(ctx, e), `${pid}: glasses at ${e.at.toFixed(2)} not in a pause`);
       }
     }
   }
@@ -1166,6 +1169,68 @@ test('glasses: the index fingertip sits on the hinge of the glasses (glassesAnch
         assert.ok(c.blink < 0.05, `seed ${seed} t0 ${t0.toFixed(1)}: blink ${c.blink.toFixed(2)} at the hinge`);
       }
     }
+  }
+});
+
+/** The fingertip-at-the-frame window of a glasses event (reach ≥ 0.5), as played: [from, to] s. */
+function glassesWindow(e) {
+  const d = defOf(e), rate = rateOf(e);
+  let a = Infinity, b = -Infinity;
+  const s = actor('ada', { side: 1, seed: 3, gestures: [{ ...e, t0: 0.3 }], armIdle: false });
+  for (let t = 0; t <= d.dur / rate; t += 0.01) {
+    poseAt(s, 0.3 + t);
+    if (s._c.reach >= 0.5) {
+      a = Math.min(a, t);
+      b = Math.max(b, t);
+    }
+  }
+  return [e.at + a, e.at + b];
+}
+/** The touch falls in a pause: no stressed word under it, a sentence boundary right at it. */
+function glassesInPause(ctx, e) {
+  const [a, b] = glassesWindow(e);
+  if (ctx.words.some((w) => w.stressed && w.t >= a - 0.05 && w.t <= b)) return false;
+  return ctx.sentences.some((s, k) => k > 0 && s.t0 >= a - 0.1 && s.t0 <= b + 0.6);
+}
+
+test('glasses (owner, LISTA 13): pushed up between two sentences, never under a stressed word, at most once per 180 s per presenter, only by wearers', () => {
+  // both ways of doing it end at rest and reach the frame: by the hinge (a pinch) and with one finger on the bridge
+  const push = defOf({ name: 'glasses', variant: 'push' });
+  assert.ok(push && push.variant === 'push' && push._ch.some((c) => c.ch === 'reachAt'), 'the one-finger push exists');
+  let seen = 0, pushes = 0;
+  for (const ep of episodes('tech-bytes', 14)) {
+    const res = planEpisode(ep);
+    let t = 0;
+    const last = {};
+    res.forEach((r) => {
+      for (const e of gesturesOf(r).filter((x) => x.name === 'glasses')) {
+        seen++;
+        if (e.variant === 'push') pushes++;
+        assert.ok(LOOKS[r.ctx.speakerId]?.glasses, `${r.ctx.speakerId} wears no glasses`);
+        assert.ok(glassesInPause(r.ctx, e), `glasses at ${e.at.toFixed(2)} of "${r.ctx.seg.text.slice(0, 40)}" not in a pause`);
+        assert.ok(r.ctx.type !== 'intro' && r.ctx.type !== 'outro', 'no glasses in the greeting or the sign-off');
+        const abs = t + e.at;
+        if (last[e.slot] != null) assert.ok(abs - last[e.slot] >= 170, `glasses again after ${(abs - last[e.slot]).toFixed(0)} s`);
+        last[e.slot] = abs;
+      }
+      t += r.ctx.duration + 0.7;
+    });
+  }
+  assert.ok(seen > 0, 'the glasses still air');
+  assert.ok(pushes > 0 && pushes < seen, `both ways air (${pushes} pushes of ${seen})`);
+  // the frame rides up with the fingertip's push and comes down as the fingers let go, never before the finger is there
+  for (const variant of [null, 'push']) {
+    const a = actor('ada', { side: 1, seed: 11, gestures: [{ name: 'glasses', t0: 0.3, ...(variant ? { variant } : {}) }] });
+    let lifted = 0, early = 0;
+    for (let t = 0.3; t < 2.4; t += 1 / 60) {
+      const sk = poseAt(a, t);
+      if (sk.face.glassesLift >= 0.5) {
+        lifted++;
+        if (a._c.reach < 0.85 || a._c.reachY > -0.07) early++;
+      }
+    }
+    assert.ok(lifted >= 8, `${variant || 'frame'}: the frame rides up (${lifted} frames)`);
+    assert.equal(early, 0, `${variant || 'frame'}: the frame never moves without the finger on it`);
   }
 });
 
@@ -1300,4 +1365,289 @@ test('caption box (critic r2 stage find): planned arm gestures clear the subtitl
   for (const pid of ['world-now', 'tech-bytes', 'cosmos']) {
     for (const res of ALL_SEGS(pid, 6)) for (const e of gesturesOf(res)) if (defOf(e).arm) assert.ok(gestureVisible(res.ctx, e), `${pid}: ${e.name}:${e.variant || ''} hidden`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// polish (owner, LISTA 13 "Manos: golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada, rendimiento")
+
+/** The fingertip contact points (between index and middle tips) of both hands, screen px at scale s, and their gap. */
+function tipContact(look, sk, s) {
+  const gL = handGeometry(look, sk.arms.L, -1, newHandGeometry()), gR = handGeometry(look, sk.arms.R, 1, newHandGeometry());
+  const tip = (g) => [((g.J[9] + g.J[21]) / 2) * s, ((g.J[10] + g.J[22]) / 2 + ((g.J[11] + g.J[23]) / 2) * TILT) * s];
+  const a = tip(gL), b = tip(gR);
+  return { mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + sk.body.y * s], sep: b[0] - a[0], dy: b[1] - a[1], r: gL.R[3] * s };
+}
+
+test('fingertips meet (steeple family): level and pad to pad at the hold, never through each other, a contact beat that settles and holds', () => {
+  for (const variant of [null, 'tap', 'press']) {
+    const d = defOf({ name: 'steeple', variant });
+    for (const id of PRESENTER_IDS) {
+      for (const side of [1, -1]) {
+        const a = actor(id, { side, seed: 11, gestures: [{ name: 'steeple', t0: 0.3, ...(variant ? { variant } : {}) }] });
+        const s = 3.4;
+        // at the hold the two contact points are level and just touch (centres 1.2-2.2 tip radii apart across)
+        for (const lt of [d.apex + 0.12, (d.apex + d.hold) / 2, d.hold - 0.02]) {
+          const sk = poseAt(a, 0.3 + lt);
+          if (variant === 'tap' && a._c.tipGap > 0.01) continue; // between the taps the fingertips are apart on purpose
+          const c = tipContact(a.look, sk, s);
+          const across = c.sep * -side; // the far hand's side of the near one (seat B mirrors)
+          assert.ok(Math.abs(c.dy) < 0.35, `${id} ${variant || 'steeple'} side ${side} t ${lt.toFixed(2)}: fingertips ${c.dy.toFixed(2)} px apart vertically`);
+          assert.ok(Math.abs(across) >= 1.2 * c.r && Math.abs(across) <= 2.2 * c.r, `${id} ${variant || 'steeple'}: fingertips ${Math.abs(across).toFixed(2)} px apart (tip radius ${c.r.toFixed(2)})`);
+        }
+        // from the moment the contact engages to its release, the fingers never cross (the signed gap stays positive)
+        let crossed = 0;
+        for (let t = 0.3; t < 0.3 + d.dur; t += 1 / 60) {
+          const sk = poseAt(a, t);
+          if (a._c.touch < 0.2) continue;
+          const c = tipContact(a.look, sk, s);
+          if (Math.sign(c.sep) !== Math.sign(tipContact(a.look, poseAt(a, 0.3 + d.hold - 0.05), s).sep)) crossed++;
+        }
+        assert.equal(crossed, 0, `${id} ${variant || 'steeple'} side ${side}: fingertips passed through each other`);
+      }
+    }
+  }
+  // the contact beat (paco, s 3.4): the joined hands land, drop about a pixel within 0.15 s, and are then still
+  const a = actor('paco', { side: 1, seed: 11, gestures: [{ name: 'steeple', t0: 0.3 }] });
+  const d = defOf({ name: 'steeple' });
+  const ys = [];
+  for (let t = 0.3 + d.apex - 0.04; t <= 0.3 + d.hold; t += 1 / 60) ys.push(tipContact(a.look, poseAt(a, t), 3.4).mid[1]);
+  const land = Math.min(...ys.slice(0, 6));
+  const settled = ys[Math.round(0.2 * 60)];
+  assert.ok(settled - land >= 0.6 && settled - land <= 1.6, `the contact settles ${(settled - land).toFixed(2)} px`);
+  // stop dead: after the settle the contact moves less than a pixel in all (the body's breath included)
+  const after = ys.slice(Math.round(0.25 * 60));
+  assert.ok(Math.max(...after) - Math.min(...after) < 0.8, `the joined hands drift ${(Math.max(...after) - Math.min(...after)).toFixed(2)} px while held`);
+});
+
+/** The two hands' worst overlap as solids (body units; < 0 where the capsules of fingers, thumbs and palm rays overlap). */
+function handsClearance(look, sk) {
+  const caps = (g) => {
+    const J = g.J, R = g.R, P = (i) => [J[i * 3], J[i * 3 + 1], J[i * 3 + 2]], out = [];
+    for (let f = 0; f < 4; f++) {
+      for (let s = 0; s < 3; s++) out.push([P(f * 4 + s), P(f * 4 + s + 1), R[f * 4 + s], R[f * 4 + s + 1]]);
+      out.push([[...g.W], P(f * 4), R[f * 4] * 1.2, R[f * 4]]);
+    }
+    for (let s = 0; s < 3; s++) out.push([P(16 + s), P(17 + s), R[16 + s], R[17 + s]]);
+    return out;
+  };
+  const A = caps(handGeometry(look, sk.arms.L, -1, newHandGeometry())), B = caps(handGeometry(look, sk.arms.R, 1, newHandGeometry()));
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cl = (v) => Math.min(1, Math.max(0, v));
+  let worst = Infinity;
+  for (const [p1, q1, r1a, r1b] of A) for (const [p2, q2, r2a, r2b] of B) {
+    // closest points of two segments
+    const d1 = sub(q1, p1), d2 = sub(q2, p2), r = sub(p1, p2);
+    const a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r), c = dot(d1, r), b = dot(d1, d2), den = a * e - b * b;
+    let s = den > 1e-9 ? cl((b * f - c * e) / den) : 0;
+    let t = (b * s + f) / e;
+    if (t < 0) [t, s] = [0, cl(-c / a)];
+    else if (t > 1) [t, s] = [1, cl((b - c) / a)];
+    const x = sub([p1[0] + d1[0] * s, p1[1] + d1[1] * s, p1[2] + d1[2] * s], [p2[0] + d2[0] * t, p2[1] + d2[1] * t, p2[2] + d2[2] * t]);
+    worst = Math.min(worst, Math.sqrt(dot(x, x)) - (r1a + (r1b - r1a) * s) - (r2a + (r2b - r2a) * t));
+  }
+  return worst;
+}
+
+test('the hands never pass through each other (steeple family, counting on the fingers): only the pads press, a few hundredths of a hand', () => {
+  const evs = [null, 'tap', 'press'].map((variant) => ({ name: 'steeple', ...(variant ? { variant } : {}) }));
+  for (let n = 1; n <= 5; n++) evs.push({ name: 'count', variant: 'tap', n });
+  for (const ev of evs) {
+    const d = defOf(ev);
+    for (const id of PRESENTER_IDS) {
+      for (const side of [1, -1]) {
+        const a = actor(id, { side, seed: 23, gestures: [{ ...ev, t0: 0.3 }] });
+        let worst = Infinity, at = 0;
+        for (let t = 0.3; t <= 0.3 + d.dur; t += 1 / 30) {
+          const c = handsClearance(a.look, poseAt(a, t));
+          if (c < worst) [worst, at] = [c, t - 0.3];
+        }
+        // (the pads' outlines meet: TOUCH_GAP puts the tips' centres 1.6 radii apart, an overlap of ~0.4 tip radius)
+        assert.ok(worst >= -0.03 * a.look.arm.hand, `${id} ${label(ev)} side ${side}: the hands overlap by ${(-worst).toFixed(2)} at ${at.toFixed(2)} s`);
+      }
+    }
+  }
+});
+
+test('relaxed hands: graded curls, the two hands not twins, and a mirrored beat ends on the far hand\'s own rest', async () => {
+  const { REST } = await import('../public/js/v2/canvas25d/gestures/index.js');
+  for (const k of ['curl', 'curlF']) {
+    const c = REST[k];
+    // fingers slightly curled (no paddle, no claw), index the most open, little finger the most tucked
+    for (let q = 1; q < 5; q++) assert.ok(c[q] >= 0.2 && c[q] <= 0.75, `${k}[${q}] = ${c[q]}`);
+    for (let q = 2; q < 5; q++) assert.ok(c[q] > c[q - 1], `${k}: graded from index to little finger`);
+  }
+  assert.notDeepEqual(REST.curl, REST.curlF, 'the resting hands are not twins');
+  for (const v of ['beat', 'offer', 'lift', 'turn']) {
+    const far = defOf({ name: 'raise_hand', variant: `${v}_far` });
+    const ch = far._ch.find((c) => c.ch === 'curlF');
+    assert.deepEqual(ch.keys[ch.keys.length - 1][1], REST.curlF, `${v}_far ends on the far hand's rest`);
+  }
+});
+
+test('resting hands keep their place on the desk while the body breathes and sways (seated); a gesture still lifts them off', () => {
+  const buf = new PartBuffer();
+  const box = (g) => {
+    let x0 = 999, y0 = 999, x1 = -1, y1 = -1;
+    for (let i = 0; i < buf.mat.length; i++) {
+      if (!buf.mat[i] || buf.grp[i] !== g) continue;
+      const x = i % buf.w, y = (i / buf.w) | 0;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+    return [x0, y0, x1, y1];
+  };
+  // how far each edge of a box wandered over the takes
+  const range = (list) => Math.max(...[0, 1, 2, 3].map((k) => Math.max(...list.map((b) => b[k])) - Math.min(...list.map((b) => b[k]))));
+  for (const id of ['paco', 'lola', 'penny', 'unit8']) {
+    const a = actor(id, { side: 1, seed: 11, papers: true });
+    for (const s of [1.86, 3.4]) {
+      const seen = { A: [], B: [], P: [] }, free = [];
+      RASTER_STATS.hits = 0;
+      RASTER_STATS.misses = 0;
+      for (let t = 0.3; t < 5.5; t += 1 / 30) {
+        const sk = poseAt(a, t);
+        buf.clear();
+        drawCharacter(buf, a.look, sk, { x: 192, y: 60, s, gb: 0, clip: false, desk: true });
+        seen.A.push(box(GROUPS.handA));
+        seen.B.push(box(GROUPS.handB));
+        seen.P.push(box(GROUPS.props));
+      }
+      // a hand at rest reuses its raster (the desk frame does not breathe)
+      assert.ok(RASTER_STATS.hits >= RASTER_STATS.misses * 4, `${id} s ${s}: ${RASTER_STATS.hits} raster hits, ${RASTER_STATS.misses} misses`);
+      for (let t = 0.3; t < 5.5; t += 1 / 30) {
+        buf.clear();
+        drawCharacter(buf, a.look, poseAt(a, t), { x: 192, y: 60, s, gb: 0, clip: false });
+        free.push(box(GROUPS.handA));
+      }
+      // (a pixel at most: the wrist under the sleeve's hem follows the forearm's angle)
+      assert.ok(range(seen.A) <= 1, `${id} s ${s}: the screen-left hand wandered ${range(seen.A)} px on the desk`);
+      assert.ok(range(seen.B) <= 1, `${id} s ${s}: the screen-right hand wandered ${range(seen.B)} px on the desk`);
+      assert.ok(range(seen.P) <= 1, `${id} s ${s}: the script slid ${range(seen.P)} px`);
+      // not seated (standing, runtime/standing.js), the hands still follow the body
+      // (UNIT-8 does not sway)
+      if (id !== 'unit8') assert.ok(range(free) > range(seen.A), `${id} s ${s}: without a desk the hands follow the body`);
+    }
+  }
+  // a gesture owns its arm: at its apex the hand is where the gesture puts it, not planted
+  const g = actor('paco', { side: 1, seed: 11, gestures: [{ name: 'raise_hand', t0: 0.3 }] });
+  const sk = poseAt(g, 0.3 + GESTURES.raise_hand.apex);
+  assert.ok(sk.arms.R.plant < 0.01 && sk.arms.L.plant > 0.99, `plant near ${sk.arms.R.plant}, far ${sk.arms.L.plant}`);
+});
+
+test('knuckles (close-ups): valleys and caps as clean clusters, never a lone pixel, on the back of every hand shape', () => {
+  // knuckles on the back of the hand at the close-up scales: valleys and caps, never a lone pixel
+  const L = LOOKS.paco, m = matsOf(L);
+  for (const s of [2.7, 3.4, 4.2]) {
+    for (const name of ['open', 'fist', 'relaxed', 'steeple', 'count2']) {
+      const sh = SHAPES[name];
+      const buf = new PartBuffer();
+      const arm = { wrist: [0, 0, 0], handDir: sh.dir ? [...sh.dir] : [0.05, -1, 0.12], hand: { curl: [...sh.curl], spread: sh.spread ?? 0.2, facing: -(sh.facing ?? 1), sup: 0 } };
+      const toS = (x, y, z = 0) => [150 + x * s, 120 + (y + z * TILT) * s];
+      drawHand(buf, L, m, arm, 1, toS, s, 13, 23);
+      // every detail pixel of the hand (decal: knuckles, nails, creases) has a neighbour of the same tone
+      const det = matsOf(L) && MAT.flags;
+      let lone = 0;
+      for (let i = buf.w + 1; i < buf.mat.length - buf.w - 1; i++) {
+        const mt = buf.mat[i];
+        if (!mt || buf.grp[i] !== 13 || !(det[mt] & 1)) continue;
+        let ok = false;
+        for (const o of [-1, 1, -buf.w, buf.w, -buf.w - 1, -buf.w + 1, buf.w - 1, buf.w + 1]) if (buf.mat[i + o] === mt && buf.tone[i + o] === buf.tone[i]) ok = true;
+        if (!ok) lone++;
+      }
+      assert.equal(lone, 0, `${name} at s ${s}: ${lone} lone detail pixels`);
+    }
+  }
+  // a nail needs a fingertip seen along its length: fingers pointing at the lens carry no nail dots (the light detail
+  // pixels left are the knuckles' caps and the thumb's nail)
+  for (const s of [3.4, 4.2]) {
+    const light = (dir) => {
+      const buf = new PartBuffer();
+      const arm = { wrist: [0, 0, 0], handDir: dir, hand: { curl: [...SHAPES.open.curl], spread: SHAPES.open.spread, facing: -1, sup: 0 } };
+      drawHand(buf, L, m, arm, 1, (x, y, z = 0) => [150 + x * s, 120 + (y + z * TILT) * s], s, 13, 23);
+      let n = 0;
+      for (let i = 0; i < buf.mat.length; i++) if (buf.mat[i] && buf.grp[i] === 13 && MAT.flags[buf.mat[i]] & 1 && buf.tone[i] === 0) n++;
+      return n;
+    };
+    const up = light([0.05, -1, 0.12]), lens = light([0.1, -0.3, 0.95]);
+    assert.ok(up >= 20 && lens * 4 <= up, `s ${s}: ${lens} light detail pixels on fingers pointing at the lens, ${up} on fingers up`);
+  }
+});
+
+test('relaxed hands live: irregular finger micro-shifts (never a loop), and the joined pose meets fingertip to fingertip', () => {
+  const a = actor('paco', { side: 1, seed: 11 });
+  const starts = [];
+  let prev = null, moving = false, maxOff = 0, joined = 0;
+  const rest = poseAt(actor('paco', { side: 1, seed: 11, armIdle: false }), 1).arms.R.hand.curl.slice();
+  for (let t = 6; t < 186; t += 1 / 30) {
+    const sk = poseAt(a, t);
+    const cur = sk.arms.R.hand.curl;
+    if (prev) {
+      const d = Math.max(...cur.map((v, q) => Math.abs(v - prev[q])));
+      if (d > 0.002 && !moving) starts.push(t);
+      moving = d > 0.002;
+    }
+    prev = cur.slice();
+    // the idle offsets stay small: relaxed fingers, never a fist or a flat board (the index's tap on the desk aside)
+    for (let q = 2; q < 5; q++) maxOff = Math.max(maxOff, Math.abs(cur[q] - rest[q]));
+    // the joined pose: fingertips level and side by side, never into each other
+    if (a._c.touch > 0.99) {
+      joined++;
+      const c = tipContact(a.look, sk, 3.4);
+      assert.ok(Math.abs(c.dy) < 0.4 && c.sep >= 1.2 * c.r, `joined hands at ${t.toFixed(2)}: dy ${c.dy.toFixed(2)}, gap ${c.sep.toFixed(2)} px`);
+    }
+  }
+  const gaps = starts.slice(1).map((t, i) => t - starts[i]);
+  const mean = gaps.reduce((x, y) => x + y, 0) / gaps.length;
+  const sd = Math.sqrt(gaps.reduce((x, y) => x + (y - mean) ** 2, 0) / gaps.length);
+  assert.ok(starts.length >= 20, `${starts.length} finger changes in 3 minutes`);
+  assert.ok(sd / mean > 0.35, `the changes come at irregular moments (cv ${(sd / mean).toFixed(2)})`);
+  assert.ok(maxOff <= 0.3, `idle curl offsets up to ${maxOff.toFixed(2)}`);
+  assert.ok(joined > 0, 'the joined pose airs within three minutes');
+});
+
+test('counting on the fingers (count:tap): the other index lands on each counted fingertip, lifts off between taps, the counting hand gives', () => {
+  const POPS = [0.62, 1.06, 1.6, 2.12, 2.64];
+  const TIP = [3, 7, 11, 15, 19];
+  for (const id of ['max', 'unit8', 'paco', 'lola']) {
+    for (const side of [1, -1]) {
+      for (const n of [3, 5]) {
+        const a = actor(id, { side, seed: 11, gestures: [{ name: 'count', variant: 'tap', n, t0: 0.3 }] });
+        const nearK = side > 0 ? 'R' : 'L', farK = side > 0 ? 'L' : 'R';
+        const at = (t) => {
+          const sk = poseAt(a, t);
+          const gn = handGeometry(a.look, sk.arms[nearK], side, newHandGeometry()), gf = handGeometry(a.look, sk.arms[farK], -side, newHandGeometry());
+          return { gn, gf };
+        };
+        for (let k = 0; k < n; k++) {
+          // on the tap: the index pad on the fingertip, from above (its centre within ~1.5 tip radii), never inside it
+          const { gn, gf } = at(0.3 + POPS[k] + 0.02);
+          const j = TIP[k] * 3;
+          const dx = gf.J[9] - gn.J[j], dy = gf.J[10] + gf.J[11] * TILT - (gn.J[j + 1] + gn.J[j + 2] * TILT);
+          const d = Math.hypot(dx, dy) * 3.4, r = gn.R[TIP[k]] * 3.4;
+          assert.ok(d <= 3.2 * r + 1, `${id} side ${side} n ${n}: tap ${k + 1} lands ${d.toFixed(2)} px from the fingertip (radius ${r.toFixed(2)})`);
+          assert.ok(dy < 0, `${id} side ${side}: tap ${k + 1} comes from above`);
+          // between taps the index lifts off the finger by a pixel or more
+          if (k + 1 < n) {
+            const m = at(0.3 + (POPS[k] + POPS[k + 1]) / 2);
+            const lift = Math.hypot(m.gf.J[9] - gf.J[9], m.gf.J[10] - gf.J[10]) * 3.4;
+            assert.ok(lift >= 1, `${id}: the index stays on the finger between taps (${lift.toFixed(2)} px)`);
+          }
+        }
+      }
+    }
+  }
+  // the planner counts on the fingers some of the time (TECH BYTES: Max)
+  let taps = 0, counts = 0;
+  for (const res of ALL_SEGS('tech-bytes', 14)) for (const e of gesturesOf(res)) if (e.name === 'count') {
+    counts++;
+    if (e.variant !== 'tap') continue;
+    taps++;
+    // never in the wide, where the two hands together are one blob of skin (the two-shot reads it)
+    let cut = null;
+    for (const c of res.ctx.shots) if (c.at <= e.apexAt) cut = c;
+    assert.ok(!(cut && cut.shot === 'wide' && (cut.framing ?? 'wide') === 'wide'), `count:tap planned in the wide at ${e.at}`);
+  }
+  if (counts >= 4) assert.ok(taps > 0 && taps < counts, `count:tap ${taps} of ${counts} counts`);
 });

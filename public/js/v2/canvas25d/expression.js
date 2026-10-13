@@ -87,8 +87,9 @@ export function solveFace(c, f, m) {
   f.jaw = c.jaw || 0;
   f.level = c.level || 0;
   f.ohold = c.ohold || 0;
-  // the glasses touch (HANDS' reach 0..1, hold ~0.3 s at its peak) pushes the frame up a pixel
-  f.glassesLift = clamp(Math.max(c.glassesLift || 0, ((c.reach || 0) - 0.7) / 0.25), 0, 1);
+  // the glasses ride up a pixel with the fingertip's push (HANDS' reachY, up = negative) while the hand is at them
+  // (reach ≥ 0.85), and settle back as the fingers let go: the frame moves with the finger, never before it arrives
+  f.glassesLift = clamp(Math.max(c.glassesLift || 0, (c.reach || 0) >= 0.85 ? -(c.reachY || 0) / 0.15 : 0), 0, 1);
   f.t = c.t || 0;
   // for faces drawn by a look's own hook (UNIT-8's indicator): the live source and its state
   f.speech = c.speech || null;

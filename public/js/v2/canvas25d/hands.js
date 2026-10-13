@@ -31,7 +31,8 @@
 // sleeve, so the hand comes OUT of the sleeve instead of being stuck on it.
 // Finish passes keep clean clusters: no lone detail, line or highlight pixel,
 // separations only between fingers at least 2 px wide (a closed hand below the
-// close-up scale reads as one mass), knuckles as a ridge on a closed hand.
+// close-up scale reads as one mass), knuckles as their valleys (the separations running on into the back of
+// the hand) and, on a bent finger at the largest scale, a 2 px lit cap.
 //
 // Draw order and groups inside drawArm (z is the arm's base depth from
 // character.js; each arm owns z .. z+3):
@@ -47,7 +48,7 @@
 // No allocation per frame: scratch buffers are module level and sized for the
 // largest close-up; the hot loops use Math.sqrt (no Math.hypot) and no closures.
 import { P } from '../../palette.js';
-import { TILT, clamp } from './space.js';
+import { TILT, clamp, ik } from './space.js';
 import { material, toneN, MAT, LIGHT } from './pixbuf.js';
 import { matKey } from './cast/base.js';
 import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
@@ -519,9 +520,92 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
     sleeveRim(buf, ga, m.sleeve, hm.rim);
   }
 
-  // ---- the hand (snapped inputs: see snapArm)
-  handGeometry(L, snapArm(arm), side, HG);
-  rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z + 3);
+  // ---- the hand (snapped inputs: see snapArm); a hand resting on the desk is drawn in the desk's own frame
+  // (plantArm), so while the body breathes and sways around it its raster stays the same and is reused
+  if (arm.deskHand) {
+    DESK_ARM.wrist = arm.deskWrist;
+    DESK_ARM.handDir = arm.handDir;
+    DESK_ARM.hand = arm.hand;
+    handGeometry(L, snapArm(DESK_ARM), side, HG);
+    rasterHand(buf, L, hm, HG, snapBasis(PD), s, gh, z + 3);
+  } else {
+    handGeometry(L, snapArm(arm), side, HG);
+    rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z + 3);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hands resting on the desk keep their place (owner, LISTA 13 "mano relajada": weight). The rig's wrist targets
+// live in body space, which breathes, sways, leans and nods with the torso; a hand lying on the desk should not
+// (it slid up to 2 px with the body at s 3.4, and the script under it with it). character.js brackets the
+// drawing of a seated presenter with plantBegin / plantEnd; plantArm moves each resting arm's wrist to the
+// body-space point drawn where its desk target is (the target without the body's motion), weighted by
+// arm.plant, and solves the elbow again; a fully resting hand is drawn in the desk frame (constant raster).
+
+const PB = new Float64Array(8), PD = new Float64Array(8); // body and desk bases of the presenter being drawn
+let plantOn = false;
+const DESK_ARM = { wrist: null, handDir: null, hand: null };
+
+/** Start planting for one presenter: its body projection and the desk's (the same without the body's motion). */
+export function plantBegin(toS, toDesk) {
+  projBasis(toS, PB);
+  projBasis(toDesk, PD);
+  plantOn = true;
+}
+
+/** Stop planting (after the presenter's props and arms are drawn). */
+export function plantEnd() {
+  plantOn = false;
+}
+
+/** The body-space point drawn where desk-space point (x, y, z) is, at the same depth: into `out`. */
+export function plantPoint(x, y, z, out) {
+  if (!plantOn) {
+    out[0] = x;
+    out[1] = y;
+    out[2] = z;
+    return out;
+  }
+  const rx = px(PD, x, y, z) - PB[0] - z * PB[6], ry = py(PD, x, y, z) - PB[1] - z * PB[7];
+  const det = PB[2] * PB[5] - PB[4] * PB[3] || 1e-9;
+  out[0] = (rx * PB[5] - PB[4] * ry) / det;
+  out[1] = (PB[2] * ry - rx * PB[3]) / det;
+  out[2] = z;
+  return out;
+}
+
+/** A scratch arm (plantArm's output): the shape objects are shared with the solved arm, the joints its own. */
+export function newPlantedArm() {
+  return { shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: null, hand: null, desk: null, pole: null, plant: 0, deskHand: false, deskWrist: null };
+}
+
+const PT3 = [0, 0, 0], PT4 = [0, 0, 0];
+/**
+ * The solved arm with its resting hand kept on the desk, into `out` (newPlantedArm): the wrist goes to the
+ * body-space point of its desk target by arm.plant and the elbow is solved again; a hand fully at rest that
+ * lands exactly there is flagged `deskHand` (drawn in the desk frame). Outside plantBegin/End, a copy.
+ */
+export function plantArm(L, arm, out) {
+  out.handDir = arm.handDir;
+  out.hand = arm.hand;
+  out.desk = arm.desk;
+  out.pole = arm.pole;
+  out.plant = arm.plant;
+  out.deskWrist = arm.desk;
+  for (let i = 0; i < 3; i++) {
+    out.shoulder[i] = arm.shoulder[i];
+    out.elbow[i] = arm.elbow[i];
+    out.wrist[i] = arm.wrist[i];
+  }
+  out.deskHand = false;
+  const p = arm.plant;
+  if (!plantOn || !(p > 0.001) || !arm.desk) return out;
+  plantPoint(arm.desk[0], arm.desk[1], arm.desk[2], PT3);
+  for (let i = 0; i < 3; i++) PT4[i] = arm.wrist[i] + (PT3[i] - arm.wrist[i]) * p;
+  ik(out.shoulder, PT4, L.arm.upper, L.arm.fore, arm.pole, out.elbow, out.wrist);
+  const ex = out.wrist[0] - PT3[0], ey = out.wrist[1] - PT3[1], ez = out.wrist[2] - PT3[2];
+  out.deskHand = p >= 0.999 && ex * ex + ey * ey + ez * ez < 1e-4;
+  return out;
 }
 
 // the armhole seam runs from the shoulder top to the armpit, SEAM_DOWN sleeve radii below the shoulder joint
@@ -1011,6 +1095,26 @@ function rasterPasses(L, hm, g, B, s, hullN) {
   // ---- clean clusters (owner 17:50 "no noise"): no lone detail, line or highlight pixel survives, and a
   // separation broken into dashes is joined into one line
   if (lod >= 1) cleanClusters();
+  // lines stay lines: where separations and folds pile up into a dark clump (UNIT-8's curled fingers, every gap a
+  // joint line, read as holes), the pixels inside it go back to their form tone
+  if (lod >= 2) thinLines();
+}
+
+/** A line pixel with lines on all four sides is inside a clump. */
+function thinLines() {
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) {
+      const k = o + i;
+      if (TN[k] !== 4) continue;
+      const l = TN[k - 1] === 4 || TN[k - 1] === 5, u = TN[k - LW] === 4 || TN[k - LW] === 5;
+      if (l && u && TN[k + 1] === 4 && TN[k + LW] === 4) TN[k] = 5;
+    }
+  }
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) if (TN[o + i] === 5) TN[o + i] = BT[o + i] === 0 ? 1 : BT[o + i];
+  }
 }
 
 /** Write the finished local raster into the PartBuffer (outline and shadow against the face skin). */
@@ -1225,10 +1329,51 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
   const y0 = Math.max(0, Math.floor(Math.min(ay, byy) - R) - by0), y1 = Math.min(bh, Math.ceil(Math.max(ay, byy) + R) + 1 - by0);
   const inv = len2 > 1e-9 ? 1 / len2 : 0;
   const invS = 1 / s;
+  // each row visits only its span of the bone's capsule (convex: the hull of the two end circles), not the whole
+  // bounding box (a diagonal finger's box is mostly empty): a superset of every pixel the tests below accept,
+  // so the raster is the same. A blunt tip reaches a little past its circle (the superellipse's corners).
+  const Rs = blunt ? R * 1.25 : R, R2 = Rs * Rs, RL = Rs * Math.sqrt(len2);
   for (let j = y0; j < y1; j++) {
     const cy = by0 + j + 0.5;
     const o = j * LW;
-    for (let i = x0; i < x1; i++) {
+    const ry = cy - ay, ryb = cy - byy;
+    let lo = Infinity, hi = -Infinity;
+    if (R2 >= ry * ry) {
+      const w = Math.sqrt(R2 - ry * ry);
+      lo = ax - w;
+      hi = ax + w;
+    }
+    if (R2 >= ryb * ryb) {
+      const w = Math.sqrt(R2 - ryb * ryb);
+      if (bxx - w < lo) lo = bxx - w;
+      if (bxx + w > hi) hi = bxx + w;
+    }
+    if (len2 > 1e-9) {
+      // the strip between the two ends: 0 ≤ (p − a)·d ≤ |d|², |(p − a) × d| ≤ Rs|d|, each linear in x on the row
+      let s0 = -Infinity, s1 = Infinity;
+      const dd = ry * dy, cr = ry * dx;
+      if (dx > 1e-12) {
+        s0 = ax - dd / dx;
+        s1 = ax + (len2 - dd) / dx;
+      } else if (dx < -1e-12) {
+        s0 = ax + (len2 - dd) / dx;
+        s1 = ax - dd / dx;
+      } else if (dd < 0 || dd > len2) s1 = -Infinity;
+      if (dy > 1e-12) {
+        s0 = Math.max(s0, ax + (cr - RL) / dy);
+        s1 = Math.min(s1, ax + (cr + RL) / dy);
+      } else if (dy < -1e-12) {
+        s0 = Math.max(s0, ax + (cr + RL) / dy);
+        s1 = Math.min(s1, ax + (cr - RL) / dy);
+      } else if (cr > RL || cr < -RL) s1 = -Infinity;
+      if (s0 <= s1) {
+        if (s0 < lo) lo = s0;
+        if (s1 > hi) hi = s1;
+      }
+    }
+    if (hi < lo) continue;
+    const i0 = Math.max(x0, Math.floor(lo - bx0) - 1), i1 = Math.min(x1, Math.ceil(hi - bx0) + 1);
+    for (let i = i0; i < i1; i++) {
       const cx = bx0 + i + 0.5;
       const uRaw = ((cx - ax) * dx + (cy - ay) * dy) * inv;
       const u = uRaw < 0 ? 0 : uRaw > 1 ? 1 : uRaw;
@@ -1556,9 +1701,19 @@ function contactShadow() {
   }
 }
 
+const NAIL = [true, true, true, true, true];
+const NAIL_LEN = 3; // px: the shortest last finger bone on screen that carries a nail
 /** Close-up finish: knuckles, nails, joint creases, wrist crease, thenar crease (or robot pins). */
 function details(g, B, s, lod, robot, back) {
   const J = g.J, R = g.R, curl = g.curl;
+  // a nail needs a fingertip seen along its length: on a finger pointing at the lens the last bone is a pixel or
+  // two long and its nail is a light dot (critic r3: a tent leaning to the lens drew a dotted column of them)
+  for (let q = 0; q < 5; q++) {
+    const a = q < 4 ? q * 4 + 2 : 18, b = a + 1;
+    const dx = px(B, J[b * 3], J[b * 3 + 1], J[b * 3 + 2]) - px(B, J[a * 3], J[a * 3 + 1], J[a * 3 + 2]);
+    const dy = py(B, J[b * 3], J[b * 3 + 1], J[b * 3 + 2]) - py(B, J[a * 3], J[a * 3 + 1], J[a * 3 + 2]);
+    NAIL[q] = dx * dx + dy * dy >= NAIL_LEN * NAIL_LEN;
+  }
   // ---- per-bone pixel details
   for (let j = 0; j < bh; j++) {
     const o = j * LW;
@@ -1572,9 +1727,9 @@ function details(g, B, s, lod, robot, back) {
         const c = curl[a - 1];
         // nails: on the back view, the end of an extended finger wide enough to carry a 2 px nail
         // (no PIP creases: at these sizes they were 1 px specks across every finger)
-        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62 && FW[a - 2] * TAPER[3] >= 2.6) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
+        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62 && FW[a - 2] * TAPER[3] >= 2.6 && NAIL[a - 2]) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
       } else if (a === 1) {
-        if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6) TN[k] = 8;
+        if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6 && NAIL[4]) TN[k] = 8;
       }
     }
   }
@@ -1583,19 +1738,7 @@ function details(g, B, s, lod, robot, back) {
   // it: a 1 px lit dot is a lone speck), broken between the fingers; a pixel the silhouette refuses leaves its
   // mate alone, and cleanClusters() takes that one out
   if (back) {
-    for (let fi = 0; fi < 4; fi++) {
-      const q = fi * 4;
-      // the top of the knuckle: the joint pushed to the back of the hand
-      const r = R[q];
-      const x3 = J[q * 3] - g.n[0] * r, y3 = J[q * 3 + 1] - g.n[1] * r, z3 = J[q * 3 + 2] - g.n[2] * r;
-      const X = Math.floor(px(B, x3, y3, z3)) - bx0, Y = Math.floor(py(B, x3, y3, z3)) - by0;
-      if (curl[fi + 1] >= 0.55 ? FW[fi] >= 2.2 : lod >= 3 && FW[fi] >= 2.6) {
-        ridgePx(X, Y, 0);
-        ridgePx(X + 1, Y, 0);
-        ridgePx(X, Y + 1, 2);
-        ridgePx(X + 1, Y + 1, 2);
-      }
-    }
+    if (!robot) knuckles(g, B, s, lod);
   } else if (!robot) {
     // wrist crease across the heel of the palm, then the thenar crease at the largest scales
     creaseLine(g, B, -0.15, 0.07, 0.14, 0.06);
@@ -1616,6 +1759,78 @@ function details(g, B, s, lod, robot, back) {
   }
 }
 
+/**
+ * Knuckles on the back of the hand (close-ups; critic: a lit and a shaded row across them read as a glove seam).
+ * Each metacarpal head is its own small bump under the key light (upper left): a lit cap on its upper-left
+ * shoulder, a crescent of shade on its lower-right one; a bent finger raises its knuckle (a bigger, crisper
+ * bump), a flat hand keeps only soft caps. Between two heads the valley that the fingers' separations run
+ * into continues a little toward the wrist as a short shade line. Painted only where the back of the hand or
+ * that finger's root is the visible surface, never on the silhouette (it keeps the outline), never over a line.
+ */
+const KX = new Float64Array(4), KY = new Float64Array(4), KR = new Float64Array(4), KZ = new Float64Array(4);
+function knuckles(g, B, s, lod) {
+  const J = g.J, R = g.R, n = g.n, f = g.f, curl = g.curl;
+  // the fingers' direction on screen, and across it (along the row of knuckles)
+  const fx = px(B, f[0], f[1], f[2]) - px(B, 0, 0, 0), fy = py(B, f[0], f[1], f[2]) - py(B, 0, 0, 0);
+  const fl = Math.sqrt(fx * fx + fy * fy) || 1;
+  const ux = fx / fl, uy = fy / fl;
+  for (let fi = 0; fi < 4; fi++) {
+    KR[fi] = 0;
+    if (FW[fi] < 2.2) continue;
+    const q = fi * 4, r = R[q];
+    // the top of the head: on the back of the hand, a little toward the wrist from the joint's centre
+    const x3 = J[q * 3] - n[0] * r * 0.8 - f[0] * r * 0.3, y3 = J[q * 3 + 1] - n[1] * r * 0.8 - f[1] * r * 0.3, z3 = J[q * 3 + 2] - n[2] * r * 0.8 - f[2] * r * 0.3;
+    KX[fi] = px(B, x3, y3, z3) - bx0;
+    KY[fi] = py(B, x3, y3, z3) - by0;
+    KR[fi] = r * s;
+    KZ[fi] = z3 + r * 1.5; // anything in front of this is another part (the thumb, the other hand)
+  }
+  // the valleys between neighbouring heads: the separation of the two fingers runs on into the back of the
+  // hand as a short shade line toward the wrist (the main read of the knuckles at every close scale)
+  for (let fi = 0; fi < 3; fi++) {
+    if (!KR[fi] || !KR[fi + 1]) continue;
+    const mx = (KX[fi] + KX[fi + 1]) * 0.5, my = (KY[fi] + KY[fi + 1]) * 0.5, rk = (KR[fi] + KR[fi + 1]) * 0.5;
+    // (between two folded fingers the knuckles are the edge of the fist: only a dimple there, never a stroke that
+    // joins the fold line into a glyph)
+    const folded = curl[fi + 1] >= 0.7 && curl[fi + 2] >= 0.7;
+    const len = rk * (folded ? 0.35 : lod >= 3 ? 0.9 : 0.6);
+    let lx = -1, ly = -1;
+    for (let q = 0; q <= 6; q++) {
+      const u = rk * 0.35 - (len * q) / 6;
+      const i = Math.floor(mx + ux * u), j = Math.floor(my + uy * u);
+      if (i === lx && j === ly) continue;
+      lx = i;
+      ly = j;
+      knucklePx(i, j, 2, Math.max(KZ[fi], KZ[fi + 1]), -1);
+    }
+  }
+  // a raised knuckle (a bent finger, at the largest scale) catches the key on its upper-left shoulder: a 2 px
+  // lit cap along the row of knuckles, never on a flat hand (inside the form a highlight reads as a scratch)
+  if (lod < 3) return;
+  for (let fi = 0; fi < 4; fi++) {
+    if (!KR[fi] || curl[fi + 1] < 0.35) continue;
+    const rk = KR[fi];
+    const cx = KX[fi] + L2X * rk * 0.5, cy = KY[fi] + L2Y * rk * 0.5;
+    // the second pixel: along the row, on the lit side
+    const ax = -uy, ay = ux, sg = ax * L2X + ay * L2Y >= 0 ? 1 : -1;
+    const i0 = Math.floor(cx), j0 = Math.floor(cy);
+    const i1 = Math.floor(cx + ax * sg), j1 = Math.floor(cy + ay * sg);
+    if (knucklePx(i0, j0, 0, KZ[fi], fi + 2) && (i1 !== i0 || j1 !== j0)) knucklePx(i1, j1, 0, KZ[fi], fi + 2);
+  }
+}
+
+/** A knuckle detail pixel: on the back plate (or finger fi's root), inside the hand, visible, not over a line. */
+function knucklePx(i, j, tone, maxZ, own) {
+  if (i < 1 || j < 1 || i >= bw - 1 || j >= bh - 1) return false;
+  const k = j * LW + i;
+  const o = OWN[k];
+  if (o !== 0 && !(o === own && SEG[k] === 0)) return false;
+  if (TN[k] === 4 || (TN[k] >= 8 && TN[k] !== 8 + tone) || ZB[k] > maxZ) return false;
+  if (OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) return false;
+  TN[k] = 8 + tone;
+  return true;
+}
+
 /** Paint a detail tone at local (X, Y) if a hand pixel is there and is the visible surface. */
 function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   if (X < 0 || Y < 0 || X >= bw || Y >= bh) return;
@@ -1623,16 +1838,6 @@ function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   if (OWN[k] < 0 || TN[k] === 4) return;
   if (onlyOwn >= 0 && OWN[k] !== onlyOwn) return;
   if (ZB[k] < minDepth) return;
-  TN[k] = 8 + tone;
-}
-
-/** A knuckle pixel: inside the hand only (never on its silhouette, which keeps the outline), not over a line. */
-function ridgePx(X, Y, tone) {
-  if (X < 1 || Y < 1 || X >= bw - 1 || Y >= bh - 1) return;
-  const k = Y * LW + X;
-  // inside the hand only (never on its silhouette, which keeps the outline) and not over a line
-  if (OWN[k] < 0 || TN[k] === 4 || OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) return;
-  if (tone === 2 && TN[k] === 8) return; // the lit row wins where the ridge doubles back
   TN[k] = 8 + tone;
 }
 

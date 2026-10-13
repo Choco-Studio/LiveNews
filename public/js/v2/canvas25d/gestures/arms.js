@@ -12,6 +12,13 @@ import { POINT, FIST, OPEN, THUMB, STEEPLE, CHIN, GRIP, FLAT, PINCH } from './sh
 
 const RELAXED = [0.35, 0.4, 0.45, 0.5, 0.55];
 
+/**
+ * The fingertip contact of a two-handed gesture (rig.js touchHands): on from `t0` (the start of the stroke, while
+ * the hands are still apart: from then on they cannot pass through each other), closing slowly at first, the
+ * fingertips landing at `t1`, held to `t2`, the hands free again by `t3`; `dur` the definition's length.
+ */
+export const TOUCH_HOLD = (t0, t1, t2, t3, dur) => [[0, 0], [t0, 0, 's'], [+(t0 + (t1 - t0) * 0.6).toFixed(3), 0.2], [t1, 1, 's'], [t2, 1, 's'], [t3, 0, 's'], [dur, 0]];
+
 export const ARMS = {
   point_camera: {
     dur: 1.6,
@@ -121,18 +128,30 @@ export const ARMS = {
     apex: 0.62,
     hold: 1.62,
     focus: 'both',
+    // owner (LISTA 13, "golpecito al juntar dedos"): the palms turn to face each other and the fingertips MEET
+    // (rig.js touchHands: `touch` puts them pad to pad, whatever the presenter's hands); on the word they land
+    // with a contact beat (`tipSettle`: the joined hands settle about a pixel) and then hold dead still until the
+    // release, where the fingertips part first and the hands go down. The tent leans toward the lens with the
+    // wrists apart (critic r3: upright palms together read as prayer; backs of the hands overlapping as a clasp).
     tracks: {
-      wrist: [[0, 'R'], [0.2, [-6.4, 19.8, 14.16]], [0.52, [-10.4, 9.6, 17.6]], [0.62, [-10.9, 9.0, 18.0]], [0.76, [-10.7, 9.2, 17.9], 's'], [1.1, [-10.8, 9.0, 17.9]], [1.22, [-10.7, 9.2, 17.9], 's'], [1.62, [-10.7, 9.3, 17.9], 's'], [1.98, [-6.6, 19.7, 13.88]], [2.2, 'R', 's']],
-      wristF: [[0, 'R'], [0.22, [6.4, 19.8, 14.16]], [0.54, [10.4, 9.6, 17.6]], [0.64, [10.9, 9.0, 18.0]], [0.78, [10.7, 9.2, 17.9], 's'], [1.12, [10.8, 9.0, 17.9]], [1.24, [10.7, 9.2, 17.9], 's'], [1.64, [10.7, 9.3, 17.9], 's'], [2.0, [6.6, 19.7, 13.88]], [2.2, 'R', 's']],
-      dir: [[0, 'R'], [0.26, [-0.7, 0.0, 0.7]], [0.58, [-0.4, -0.78, 0.48]], [0.7, [-0.42, -0.77, 0.48], 's'], [1.68, [-0.42, -0.77, 0.48], 's'], [2.04, [-0.75, 0.2, 0.55]], [2.2, 'R']],
-      dirF: [[0, 'R'], [0.28, [0.7, 0.0, 0.7]], [0.6, [0.4, -0.78, 0.48]], [0.72, [0.42, -0.77, 0.48], 's'], [1.7, [0.42, -0.77, 0.48], 's'], [2.06, [0.75, 0.2, 0.55]], [2.2, 'R']],
+      // (the hands keep their speed into the contact and stop there within 40 ms: no soft landing)
+      wrist: [[0, 'R'], [0.2, [-6.4, 19.8, 14.16]], [0.5, [-9.9, 11.8, 16.9]], [0.62, [-10.15, 9.9, 17.15]], [0.66, [-10.15, 9.9, 17.15], 's'], [1.62, [-10.15, 9.9, 17.15], 's'], [1.8, [-8.6, 13.2, 16.4]], [2.0, [-5.4, 19.7, 13.88]], [2.2, 'R', 's']],
+      wristF: [[0, 'R'], [0.21, [6.4, 19.8, 14.16]], [0.5, [9.9, 11.8, 16.9]], [0.62, [10.15, 9.9, 17.15]], [0.66, [10.15, 9.9, 17.15], 's'], [1.64, [10.15, 9.9, 17.15], 's'], [1.82, [8.6, 13.2, 16.4]], [2.02, [5.4, 19.7, 13.88]], [2.2, 'R', 's']],
+      dir: [[0, 'R'], [0.26, [-0.6, -0.36, 0.72]], [0.58, [-0.42, -0.68, 0.6]], [0.7, [-0.42, -0.68, 0.6], 's'], [1.68, [-0.42, -0.68, 0.6], 's'], [1.88, [-0.55, -0.32, 0.77]], [2.08, [-0.75, 0.2, 0.55]], [2.2, 'R']],
+      dirF: [[0, 'R'], [0.28, [0.6, -0.36, 0.72]], [0.6, [0.42, -0.68, 0.6]], [0.72, [0.42, -0.68, 0.6], 's'], [1.7, [0.42, -0.68, 0.6], 's'], [1.9, [0.55, -0.32, 0.77]], [2.1, [0.75, 0.2, 0.55]], [2.2, 'R']],
+      // the palms face each other (no camera pole: the hands never roll as they rise past the lens direction)
+      palm: [[0, 'R'], [0.5, [-1, 0, 0]], [1.7, [-1, 0, 0]], [2.2, 'R']],
+      palmF: [[0, 'R'], [0.52, [1, 0, 0]], [1.72, [1, 0, 0]], [2.2, 'R']],
+      palmW: [[0, 0], [0.06, 1, 's'], [2.14, 1, 's'], [2.2, 0]],
+      palmWF: [[0, 0], [0.06, 1, 's'], [2.14, 1, 's'], [2.2, 0]],
       curl: [[0, 'R'], [0.36, [0.3, 0.3, 0.32, 0.35, 0.4]], [0.66, STEEPLE, 's'], [1.66, STEEPLE, 's'], [2.04, 'R']],
       curlF: [[0, 'R'], [0.38, [0.3, 0.3, 0.32, 0.35, 0.4]], [0.68, STEEPLE, 's'], [1.68, STEEPLE, 's'], [2.06, 'R']],
       facing: [[0, 'R'], [0.5, -0.3, 's'], [1.7, -0.3, 's'], [2.05, 'R']],
       facingF: [[0, 'R'], [0.52, -0.3, 's'], [1.72, -0.3, 's'], [2.07, 'R']],
-      // the fingertips part and meet again once: a small thinking beat
-      spread: [[0, 'R'], [0.62, 0.2], [1.0, 0.2, 's'], [1.1, 0.32], [1.22, 0.2, 's'], [2.0, 'R']],
-      spreadF: [[0, 'R'], [0.64, 0.2], [1.02, 0.2, 's'], [1.12, 0.32], [1.24, 0.2, 's'], [2.02, 'R']],
+      spread: [[0, 'R'], [0.62, 0.2], [1.62, 0.2], [2.0, 'R']],
+      spreadF: [[0, 'R'], [0.64, 0.2], [1.64, 0.2], [2.02, 'R']],
+      touch: TOUCH_HOLD(0.12, 0.58, 1.62, 2.04, 2.2),
+      tipSettle: [[0, 0], [0.61, 0, 's'], [0.66, 0.42], [0.72, 0.32, 's'], [1.62, 0.32, 's'], [1.86, 0, 's'], [2.2, 0]],
       pole: [[0, 'R'], [0.5, [0.7, 1, -0.2]], [1.7, [0.7, 1, -0.2]], [2.2, 'R']],
       poleF: [[0, 'R'], [0.5, [-0.7, 1, -0.2]], [1.7, [-0.7, 1, -0.2]], [2.2, 'R']],
       shN: [[0, 0], [0.2, 0.15], [0.62, -0.3], [1.7, -0.25], [2.05, 0.05], [2.2, 0]],
@@ -303,12 +322,44 @@ export const ARMS = {
       spread: [[0, 'R'], [0.7, 0.06], [1.16, 0.06], [1.64, 'R']],
       pole: [[0, 'R'], [0.5, [0.7, 1, 0.1]], [1.16, [0.7, 1, 0.1]], [1.9, 'R']],
       reach: [[0, 0, 's'], [0.48, 0, 's'], [0.8, 1, 's'], [1.1, 1, 's'], [1.4, 0, 's'], [1.9, 0, 's']],
-      // at the hinge the fingertip nudges the frame up about 1 px and lets it settle (the adjustment itself)
-      reachY: [[0, 0], [0.84, 0, 's'], [0.92, -0.32, 's'], [1.0, -0.26], [1.1, 0, 's'], [1.9, 0]],
+      // at the hinge the fingertip nudges the frame up about 1 px and holds it there until the hand leaves: the
+      // glasses ride up with the push and settle back only as the fingers let go (expression.js glassesLift)
+      reachY: [[0, 0], [0.84, 0, 's'], [0.92, -0.32, 's'], [1.0, -0.26], [1.08, -0.22, 's'], [1.14, -0.22, 's'], [1.4, 0, 's'], [1.9, 0]],
       shN: [[0, 0], [0.2, 0.15], [0.7, -0.4], [1.12, -0.36], [1.6, 0.04], [1.9, 0]],
       pitch: [[0, 0], [0.7, 0.02], [0.9, -0.012], [1.1, 0.008], [1.9, 0]],
       roll: [[0, 0], [0.72, 0.018], [1.12, 0.015], [1.9, 0]],
       brow: [[0, 0], [0.7, 0.12], [0.94, 0.2], [1.6, 0]],
+    },
+  },
+};
+
+// The glasses pushed up with one finger (owner, LISTA 13 "deslizar gafas"): the near hand rises with the index
+// up and the other fingers loosely curled, the back of the hand to the lens; the index fingertip lands on the
+// bridge (rig.js reachGlasses, `reachAt` 1), pushes the frame up about a pixel and holds it while the hand is
+// there, then the hand goes back down. The hand comes from low on its own side with the index slanting in
+// (critic r3: straight up from under the chin, the back of the hand covered the whole lower face). Shorter than the pinch at the hinge (1.6 s); the planner puts the touch
+// in the pause between two sentences, so the hand passes the mouth only while nothing is said.
+const PUSH_UP = [0.5, 0.0, 0.62, 0.72, 0.8];
+ARMS.glasses.variants = {
+  push: {
+    dur: 1.6,
+    stroke: 0.26,
+    apex: 0.62,
+    hold: 0.9,
+    tracks: {
+      wrist: [[0, 'R'], [0.18, [-6.2, 19.4, 12.8]], [0.4, [-9.6, 5.0, 10.6]], [0.6, [-10.8, -5.5, 9.2]], [0.7, [-10.8, -6.5, 9.2], 's'], [0.9, [-10.8, -6.5, 9.2], 's'], [1.14, [-9.0, 4.0, 10.8]], [1.38, [-6.0, 15.0, 12.6]], [1.6, 'R', 's']],
+      dir: [[0, 'R'], [0.24, [-0.6, -0.2, 0.75]], [0.5, [-0.55, -0.82, 0.16]], [0.92, [-0.55, -0.82, 0.16], 's'], [1.2, [-0.5, -0.4, 0.75]], [1.44, [-0.75, 0.15, 0.62]], [1.6, 'R']],
+      curl: [[0, 'R'], [0.36, [0.4, 0.2, 0.55, 0.65, 0.72]], [0.6, PUSH_UP, 's'], [0.94, PUSH_UP, 's'], [1.36, 'R']],
+      facing: [[0, 'R'], [0.5, -0.9, 's'], [0.94, -0.9, 's'], [1.36, 'R']],
+      spread: [[0, 'R'], [0.6, 0.1], [0.94, 0.1], [1.36, 'R']],
+      pole: [[0, 'R'], [0.5, [0.6, 1, 0.2]], [0.94, [0.6, 1, 0.2]], [1.6, 'R']],
+      reach: [[0, 0, 's'], [0.36, 0, 's'], [0.62, 1, 's'], [0.88, 1, 's'], [1.14, 0, 's'], [1.6, 0, 's']],
+      // (the bridge for the whole reach; back to the hinge only while the hand is away, so the track ends at rest)
+      reachAt: [[0, 0], [0.3, 1, 's'], [1.3, 1, 's'], [1.6, 0]],
+      reachY: [[0, 0], [0.64, 0, 's'], [0.72, -0.34, 's'], [0.8, -0.28], [0.86, -0.24, 's'], [0.9, -0.24, 's'], [1.12, 0, 's'], [1.6, 0]],
+      shN: [[0, 0], [0.2, 0.12], [0.62, -0.3], [0.9, -0.26], [1.4, 0.03], [1.6, 0]],
+      pitch: [[0, 0], [0.62, 0.015], [0.74, -0.01], [0.9, 0.005], [1.6, 0]],
+      brow: [[0, 0], [0.6, 0.08], [0.76, 0.14], [1.3, 0]],
     },
   },
 };

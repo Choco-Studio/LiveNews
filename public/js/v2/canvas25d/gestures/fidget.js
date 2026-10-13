@@ -11,6 +11,12 @@
 // perf.listen (the stage flips it at every turn, so a tap in flight would pop;
 // and the owner wants listeners almost still, 22:50 note 6).
 //
+// Between those moves the hands are not frozen either (owner, LISTA 13 "mano relajada"): now and then
+// one or two fingers of one hand settle a little more open or more curled, and stay so (microShift);
+// a hand that lands from a slide settles into the desk under its own weight (a small sink, then rest).
+// Neither repeats on a beat: every change is drawn from the hash, at an irregular moment, and about half
+// the chances pass with nothing.
+//
 // Pure in t (seeded by perf.seed), allocation-free, O(1) per evaluation:
 // time is cut into slots of P seconds; slot k holds one pose drawn from a hash
 // of (seed, k) and the transition from the previous slot's pose happens at a
@@ -29,7 +35,8 @@ import { defOf, rateOf } from './index.js';
 // dy < 0 lifts the hand onto the 0.7 u thick script.
 const POSES = [
   { N: [0, 0, 0], F: [0, 0, 0], cN: 0, cF: 0 }, // the reference rest
-  { N: [-1.3, 0, 0.5], F: [1.3, 0, 0.5], cN: 0.06, cF: 0.06 }, // closer together over the script
+  // hands joined over the script: the fingertips meet (rig.js touchHands, `touch`), never pass into each other
+  { N: [-1.3, 0, 0.5], F: [1.3, 0, 0.5], cN: 0.06, cF: 0.06, touch: 1 },
   { N: [1.1, 0, -0.7], F: [-1.0, 0, -0.6], cN: -0.05, cF: -0.04 }, // apart, more relaxed
   { N: [-2.4, -0.55, 1.6], F: [0.3, 0, 0], cN: -0.14, cF: 0.04 }, // near hand flat on the script
   { N: [-0.3, 0, 0], F: [2.4, -0.55, 1.6], cN: 0.04, cF: -0.14 }, // far hand flat on the script
@@ -114,12 +121,78 @@ export function applyArmIdle(c, L, perf, t) {
   const lift = a === b || u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u);
   addArm(c.wrist, a.N, b.N, e, lift, wN);
   addArm(c.wristF, a.F, b.F, e, lift, wF);
+  // landing: the hand gives a little under its weight after the slide (down, then back half way) and the
+  // fingers relax with it; robots land exactly
+  if (a !== b && !T.robot && u > 0.92 && u < 1.6) {
+    const v = Math.sin(Math.PI * clamp01((u - 0.92) / 0.68));
+    const sink = 0.16 * v * v;
+    c.wrist[1] += sink * wN;
+    c.wristF[1] += sink * wF;
+    for (let q = 1; q < 5; q++) {
+      c.curl[q] += sink * 0.25 * wN;
+      c.curlF[q] += sink * 0.25 * wF;
+    }
+  }
+  if (!T.robot) {
+    microShift(c.curl, seed, tt, 0, wN);
+    microShift(c.curlF, seed, tt, 1, wF);
+  }
+  // the joined pose closes the fingertips onto each other as the hands slide in, and lets go as they slide out;
+  // only while both hands are the idle layer's (a gesture on either arm frees them)
+  const ta = a.touch || 0, tb = b.touch || 0;
+  if (ta || tb) c.touch += (ta + (tb - ta) * e) * Math.min(wN, wF);
   const cN = (a.cN + (b.cN - a.cN) * ef) * wN, cF = (a.cF + (b.cF - a.cF) * ef) * wF;
   for (let q = 0; q < 5; q++) {
     c.curl[q] += cN * (q === 0 ? 0.5 : 1);
     c.curlF[q] += cF * (q === 0 ? 0.5 : 1);
   }
   applyTap(c, perf, seed, T, t, wN);
+}
+
+/**
+ * How much each hand rests on the desk (c.plant near, c.plantF far, 0..1): 1 unless a planned gesture owns
+ * that arm (the same ownership curve the idle layer yields with: up over 0.25 s from the gesture's t0, back
+ * over 0.6 s after its end). character.js keeps a resting hand where it lies while the body breathes, sways
+ * and leans (hands.js plantArm). Runs whether or not the idle hands are on (perf.armIdle).
+ */
+export function applyArmPlant(c, perf, t) {
+  gestureOwn(perf, t, OWN);
+  c.plant = 1 - OWN[0];
+  c.plantF = 1 - OWN[1];
+}
+
+const clamp01 = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u);
+
+// micro-shifts: slots of MICRO s per hand (the two hands out of phase); in each, with odds 0.55, one finger (or
+// two neighbours) takes a new small offset, eased over MICRO_EASE s at a hashed moment, and keeps it until the
+// next change
+const MICRO = 2.9, MICRO_EASE = 0.42, MICRO_AMP = 0.13;
+/** The micro offset of finger q (1..4) in slot k of hand `hand` (0 near, 1 far): 0 when the slot changes nothing. */
+function microOffset(seed, hand, k, q) {
+  // the offset a slot sets holds until a later slot sets another: walk back to the last slot that changed it
+  for (let j = k, n = 0; j >= 1 && n < 8; j--, n++) {
+    if (h01(seed, j * 2 + hand, 21) > 0.55) continue; // this slot passed with nothing
+    const f = 1 + Math.floor(h01(seed, j * 2 + hand, 22) * 4); // the finger it moves
+    const two = h01(seed, j * 2 + hand, 23) < 0.35; // and its neighbour toward the little finger
+    if (q !== f && !(two && q === Math.min(4, f + 1))) continue;
+    return (h01(seed, j * 2 + hand, 24) - 0.5) * 2 * MICRO_AMP;
+  }
+  return 0;
+}
+/** Add the hand's micro-shifts to its curl channel (weight wt: yields to gestures like the rest of this layer). */
+function microShift(curl, seed, tt, hand, wt) {
+  if (wt <= 0) return;
+  const t = tt - hand * MICRO * 0.5;
+  const k = Math.floor(t / MICRO);
+  if (k < 1) return;
+  // the change of slot k happens at a hashed moment inside it; before that, slot k − 1's offsets still hold
+  const at = k * MICRO + MICRO * (0.1 + 0.6 * h01(seed, k * 2 + hand, 25));
+  const e = smooth((t - at) / MICRO_EASE);
+  for (let q = 1; q < 5; q++) {
+    const a = microOffset(seed, hand, k - 1, q), b = microOffset(seed, hand, k, q);
+    if (a === 0 && b === 0) continue;
+    curl[q] += (a + (b - a) * e) * wt;
+  }
 }
 
 function addArm(w, a, b, e, lift, wt) {

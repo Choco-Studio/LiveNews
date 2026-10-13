@@ -17,7 +17,8 @@
 //   6. speech                          speech.js (visemes → mouth, emphasis → brows +
 //                                      small nods); behaviour.js listening nods
 // Then partner space is mirrored to screen space for whoever sits on the
-// right (solve), and both arms are solved with 3D two-bone IK (elbow pole hints).
+// right (solve), both wrist targets are placed (the glasses reach, the fingertip contact of a steeple),
+// and both arms are solved with 3D two-bone IK (elbow pole hints).
 //
 // Gesture events: perf.gestures = [{ name, t0, speed?, n?, variant?, amp? }] sorted by t0.
 //   variant  a named variant of the gesture (gestures/index.js defOf)
@@ -44,7 +45,7 @@
 // { t0, t1, target, amt? }, gestures[] entries { name, t0, speed?, n?, variant?, amp? }).
 // FACES adds channels through expression.js FACE_REST (reset here every frame).
 import { REST, GESTURES, ARM_CHANNELS, defOf, rateOf } from './gestures/index.js';
-import { applyArmIdle } from './gestures/fidget.js';
+import { applyArmIdle, applyArmPlant } from './gestures/fidget.js';
 import { evalTrack, copy } from './tracks.js';
 import { applyEmotion, solveFace, FACE_REST } from './expression.js';
 import { applyLook, applyListen } from './behaviour.js';
@@ -52,7 +53,7 @@ import { applyIdle } from './idle.js';
 import { applySpeech } from './speech.js';
 import { glassesAnchor } from './glasses.js';
 import { handGeometry, newHandGeometry } from './hands.js';
-import { clamp, smooth, TILT } from './space.js';
+import { clamp, smooth, TILT, ik } from './space.js';
 
 export { evalTrack } from './tracks.js';
 export { EMOTIONS } from './expression.js';
@@ -231,7 +232,7 @@ function applyGestureRange(c, list, upto, t, mode) {
       const tt = ch.finger ? Math.max(0, lt - FINGER_LAG) : lt;
       if (ch.override) {
         // the arm the interrupter takes over fades; the other one keeps this gesture's weight
-        let wa = !by ? w : (ch.far ? takeF : ch.ch === 'hold' || ch.ch === 'tilt' ? takeN || takeF : takeN) ? wArm : w;
+        let wa = !by ? w : (ch.far ? takeF : ch.both ? takeN || takeF : takeN) ? wArm : w;
         // the glasses reach moves the solved wrist (not the wrist channel the interrupter starts from):
         // let it go slowly, or the hand would drop from the face in a few frames
         if (by && ch.ch === 'reach' && takeN) wa = w * (1 - smooth((t - cut) / 0.7));
@@ -250,6 +251,9 @@ function applyGestureRange(c, list, upto, t, mode) {
         } else {
           let v = evalTrack(ch.keys, tt);
           if (from) v += (from[ch.ch] - ch.start) * decay;
+          // an interrupting gesture's fingertip contact waits for its hands to be back on their own path (the
+          // contact pulling two hands together from wherever the other gesture left them would yank them)
+          if (from && ch.ch === 'touch') v *= 1 - decay;
           c[ch.ch] += (v - c[ch.ch]) * wa;
         }
       } else {
@@ -282,6 +286,7 @@ export function evaluate(L, perf, t, c = newChannels()) {
   const seed = perf.seed ?? (L.id.length * 31 + 7);
   applyEmotion(c, perf, t, persona); // 2
   applyArmIdle(c, L, perf, t); // 2b: the hands' idle life on the desk (gestures/fidget.js), under the gestures
+  applyArmPlant(c, perf, t); // how much each hand rests on the desk (the gestures that own it lift it off)
   let gestLook = applyGestures(c, perf.gestures || [], t); // 3
   gestLook = applyLook(c, perf, t, gestLook); // 4
   applyIdle(c, persona, perf, t, seed, gestLook); // 5
@@ -323,34 +328,10 @@ export function evaluateLag(L, perf, t, c = newChannels()) {
 // ---------------------------------------------------------------------------
 // Solve: partner space → screen space, IK
 
-function ik(S, T, L1, L2, pole, E, Wt) {
-  let dx = T[0] - S[0], dy = T[1] - S[1], dz = T[2] - S[2];
-  let d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
-  const maxD = (L1 + L2) * 0.995, minD = Math.abs(L1 - L2) + 0.5;
-  const dc = clamp(d, minD, maxD);
-  dx /= d;
-  dy /= d;
-  dz /= d;
-  d = dc;
-  Wt[0] = S[0] + dx * d;
-  Wt[1] = S[1] + dy * d;
-  Wt[2] = S[2] + dz * d;
-  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
-  const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
-  // pole direction made perpendicular to the shoulder→wrist axis
-  const pd = pole[0] * dx + pole[1] * dy + pole[2] * dz;
-  let px = pole[0] - dx * pd, py = pole[1] - dy * pd, pz = pole[2] - dz * pd;
-  const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
-  px /= pl;
-  py /= pl;
-  pz /= pl;
-  E[0] = S[0] + dx * a + px * h;
-  E[1] = S[1] + dy * a + py * h;
-  E[2] = S[2] + dz * a + pz * h;
-}
-
 function newSkeleton() {
-  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 } });
+  // desk: the wrist's target on the desk without the shoulders' and the breath's lift; plant: how much the hand
+  // rests there (character.js keeps a resting hand on its place while the body moves, hands.js plantArm)
+  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 }, desk: [0, 0, 0], pole: [0, 0, 0], plant: 0 });
   return {
     body: { x: 0, y: 0, lean: 0, breathe: 0 },
     shoulder: { L: 0, R: 0 },
@@ -362,8 +343,8 @@ function newSkeleton() {
   };
 }
 
-const TW = [0, 0, 0];
-const PW = [0, 0, 0];
+const TWN = [0, 0, 0], TWF = [0, 0, 0]; // wrist targets of the near and far arm
+const LIFT = [0, 0]; // each arm's lift (shoulder and breath) in this solve
 const ANCHOR = [0, 0];
 // a head frame in BODY space (head-local units → body units) for glasses.js glassesAnchor
 const BODY_HEAD = {
@@ -418,9 +399,10 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   const A = L.arm;
   const armScale = (A.upper + A.fore) / 37;
   const reach = clamp(c.reach, 0, 1);
+  const touch = clamp(c.touch || 0, 0, 1);
+  // the wrist targets of both arms first (the fingertip contact moves both), then the IK of each
   for (let pass = 0; pass < 2; pass++) {
     const sideKey = pass === 0 ? near : far;
-    const suffix = pass === 0 ? '' : 'F';
     const arm = sk.arms[sideKey];
     const sx = sideKey === 'R' ? 1 : -1;
     const lift = c.breathe * 0.45 + (sideKey === near ? c.shN : c.shF);
@@ -428,9 +410,12 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.shoulder[1] = T.shoulderJoint[1] - lift;
     arm.shoulder[2] = 0;
     const w = pass === 0 ? c.wrist : c.wristF;
+    const TW = pass === 0 ? TWN : TWF;
     TW[0] = arm.shoulder[0] + w[0] * m * armScale;
     TW[1] = arm.shoulder[1] + w[1] * armScale + lift * 0.6;
     TW[2] = w[2] * armScale;
+    LIFT[pass] = lift;
+    arm.plant = clamp(pass === 0 ? c.plant : c.plantF, 0, 1);
     const d = pass === 0 ? c.dir : c.dirF;
     const dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
     arm.handDir[0] = (d[0] * m) / dl;
@@ -449,14 +434,99 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.hand.palm[1] = pv[1];
     arm.hand.palm[2] = pv[2];
     arm.hand.palmW = clamp(pass === 0 ? c.palmW : c.palmWF, 0, 1);
-    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0);
+    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0, TW, clamp(c.reachAt || 0, 0, 1));
+  }
+  if (touch > 0.001) touchHands(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, touch, c.tipSettle || 0, c.tipGap || 0);
+  const tap = clamp(c.tap || 0, 0, 1);
+  if (tap > 0.001) tapFinger(L, sk.arms[near], sk.arms[far], near === 'R' ? 1 : -1, tap, c.tapK || 1, c.tapAway ?? 1, c.tapGive || 0);
+  for (let pass = 0; pass < 2; pass++) {
+    const arm = sk.arms[pass === 0 ? near : far];
+    const TW = pass === 0 ? TWN : TWF;
+    // the target on the desk: the same without the shoulders' and the breath's lift (the body moves, the desk not)
+    arm.desk[0] = TW[0];
+    arm.desk[1] = TW[1] + LIFT[pass] * 0.4;
+    arm.desk[2] = TW[2];
     const pole = pass === 0 ? c.pole : c.poleF;
-    PW[0] = pole[0] * m;
-    PW[1] = pole[1];
-    PW[2] = pole[2];
-    ik(arm.shoulder, TW, A.upper, A.fore, PW, arm.elbow, arm.wrist);
+    arm.pole[0] = pole[0] * m;
+    arm.pole[1] = pole[1];
+    arm.pole[2] = pole[2];
+    ik(arm.shoulder, pass === 0 ? TWN : TWF, A.upper, A.fore, arm.pole, arm.elbow, arm.wrist);
   }
   return sk;
+}
+
+/**
+ * Fingertips meeting (steeple, hands joined): `touch` (0..1) closes the two hands' fingertips onto each other.
+ * The contact point of each hand is between its index and middle fingertips, from the same hand skeleton
+ * hands.js draws (handGeometry at a zero wrist, this frame's direction and shape); the two points are brought
+ * level and side by side across the screen, each wrist taking half the correction. Across the screen the pads of
+ * the closest pair of twin fingertips (index to index .. thumb to thumb) just touch, and the constraint is
+ * one-sided while it blends in: a gap closes with `touch`, an overlap is pushed out at once (from a touch of
+ * 1/50), so no finger passes through its twin on the way in or out (critic r3: the middle fingers, the longest,
+ * crossed while the hands rose, and the fingers read as a comb). `tipGap`
+ * (body units) opens the fingertips by that much (a steeple's tap), `tipSettle` (body units, down) is the contact
+ * beat: the joined hands settle about a pixel as the fingertips land, then hold still.
+ */
+const TG = [newHandGeometry(), newHandGeometry()];
+const TIP_OF = [3, 7, 11, 15, 19]; // the fingertip joints: index, middle, ring, little finger, thumb
+const TARM = { wrist: [0, 0, 0], handDir: null, hand: null };
+// the fingertips' centres sit this many tip radii apart: the outlines just meet
+const TOUCH_GAP = 1.6;
+function touchHands(L, armN, armF, sideN, w, settle, part) {
+  TARM.handDir = armN.handDir;
+  TARM.hand = armN.hand;
+  const a = handGeometry(L, TARM, sideN, TG[0]).J;
+  TARM.handDir = armF.handDir;
+  TARM.hand = armF.hand;
+  const b = handGeometry(L, TARM, -sideN, TG[1]).J;
+  // the far hand lies on the other screen side of the near one: its signed separation across the screen
+  const across = -sideN;
+  let d = Infinity;
+  for (let i = 0; i < 5; i++) {
+    const j = TIP_OF[i] * 3;
+    d = Math.min(d, (TWF[0] + b[j] - TWN[0] - a[j]) * across - TOUCH_GAP * TG[0].R[TIP_OF[i]]);
+  }
+  d -= Math.max(0, part);
+  const ex = d * across;
+  const ey = TWF[1] + (b[10] + b[22]) * 0.5 - (TWN[1] + (a[10] + a[22]) * 0.5);
+  const ez = TWF[2] + (b[11] + b[23]) * 0.5 - (TWN[2] + (a[11] + a[23]) * 0.5);
+  const k = w * 0.5, kx = (d < 0 ? Math.min(1, w * 50) : w) * 0.5, p = settle * w;
+  TWN[0] += ex * kx;
+  TWN[1] += ey * k + p;
+  TWN[2] += ez * k;
+  TWF[0] -= ex * kx;
+  TWF[1] -= ey * k - p;
+  TWF[2] -= ez * k;
+}
+
+/**
+ * Counting on the fingers (count:tap): `tap` (0..1) puts the far hand's index fingertip on fingertip `tapK` of the
+ * near hand (1 index .. 4 little finger, 5 thumb; between two whole numbers it slides from one fingertip to the
+ * next), from above, in front and a little from the far hand's side, the pads just touching, so the tapping hand
+ * stays over the counting fingers and never covers the palm; `tapAway` lifts it up off the finger and toward the
+ * lens (1 ≈ a finger's width and more), not across: lifting across, it went through the next finger (critic r3).
+ * Only the far wrist moves to it.
+ * `tapGive` (body units) pushes the counting hand a little away from the tap: it gives, and comes back.
+ */
+function tapFinger(L, armN, armF, sideN, w, k, away, give) {
+  TARM.handDir = armN.handDir;
+  TARM.hand = armN.hand;
+  const a = handGeometry(L, TARM, sideN, TG[0]).J;
+  TARM.handDir = armF.handDir;
+  TARM.hand = armF.hand;
+  const b = handGeometry(L, TARM, -sideN, TG[1]).J;
+  const kk = clamp(k, 1, 5) - 1, k0 = Math.floor(kk), k1 = Math.min(4, k0 + 1), u = kk - k0;
+  const j0 = TIP_OF[k0] * 3, j1 = TIP_OF[k1] * 3;
+  const across = -sideN; // the far hand's side of the near one
+  const aw = clamp(away, 0, 1.5);
+  const gap = TOUCH_GAP * TG[0].R[3];
+  const tx = TWN[0] + a[j0] + (a[j1] - a[j0]) * u + across * (gap * 0.45 + aw * 0.3);
+  const ty = TWN[1] + a[j0 + 1] + (a[j1 + 1] - a[j0 + 1]) * u - gap * 0.9 - aw * 1.5;
+  const tz = TWN[2] + a[j0 + 2] + (a[j1 + 2] - a[j0 + 2]) * u + 0.4 + aw * 1.2;
+  TWF[0] += (tx - b[9] - TWF[0]) * w;
+  TWF[1] += (ty - b[10] - TWF[1]) * w;
+  TWF[2] += (tz - b[11] - TWF[2]) * w;
+  TWN[0] -= across * give * w;
 }
 
 /**
@@ -470,7 +540,8 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
 const RG = newHandGeometry();
 const RARM = { wrist: [0, 0, 0], handDir: null, hand: null };
 const REACH_Z = 7.5; // body units: the fingertip's depth, in front of the face plane
-function reachGlasses(L, sk, arm, reach, sideKey, nudgeY = 0) {
+const BRIDGE = [0, 0];
+function reachGlasses(L, sk, arm, reach, sideKey, nudgeY, TW, at) {
   const h = sk.head;
   BODY_HEAD.L = L;
   BODY_HEAD.cx = L.headAt[0] + h.x;
@@ -481,6 +552,12 @@ function reachGlasses(L, sk, arm, reach, sideKey, nudgeY = 0) {
   BODY_HEAD.yaw = h.yaw;
   BODY_HEAD.pitch = h.pitch;
   glassesAnchor(BODY_HEAD, sideKey === 'R' ? 'templeR' : 'templeL', ANCHOR);
+  // `reachAt` 1: the bridge instead (one finger pushing the glasses up the nose)
+  if (at > 0) {
+    glassesAnchor(BODY_HEAD, 'bridge', BRIDGE);
+    ANCHOR[0] += (BRIDGE[0] - ANCHOR[0]) * at;
+    ANCHOR[1] += (BRIDGE[1] - ANCHOR[1]) * at;
+  }
   RARM.handDir = arm.handDir;
   RARM.hand = arm.hand;
   handGeometry(L, RARM, sideKey === 'R' ? 1 : -1, RG);

@@ -18,7 +18,7 @@
 import { P } from '../../palette.js';
 import { clamp } from './space.js';
 import { material } from './pixbuf.js';
-import { handGeometry, newHandGeometry, projBasis } from './hands.js';
+import { handGeometry, newHandGeometry, projBasis, plantPoint } from './hands.js';
 import { REST } from './gestures/index.js';
 
 export const DESK_Y = 29.6; // body-space height of the desk top (neck base 30 u above it, SET.neckY)
@@ -65,6 +65,7 @@ export function drawProps(buf, L, m, sk, toS, s, g, z) {
 // Attachment of the stack's front-bottom edge to the hands (midpoint of the wrists), flat and upright
 const OFF0 = [0, 2.6, 5.2], OFF1 = [0, 4.1, 1.5];
 const BAND = new Float64Array(8);
+const DESK3 = [0, 0, 0];
 const TOP = new Float64Array(8);
 
 /** Corner k of the stack: local (lx, ly, lz) from the front-bottom edge, rotated about x by the tilt. */
@@ -82,9 +83,11 @@ function drawPapers(buf, sk, s, g, z, M, pr) {
   const wl = sk.arms.L.wrist, wr = sk.arms.R.wrist;
   const ox = OFF0[0] + (OFF1[0] - OFF0[0]) * tilt, oy = OFF0[1] + (OFF1[1] - OFF0[1]) * tilt, oz = OFF0[2] + (OFF1[2] - OFF0[2]) * tilt;
   const hx = (wl[0] + wr[0]) / 2 + ox, hy = (wl[1] + wr[1]) / 2 + oy, hz = (wl[2] + wr[2]) / 2 + oz;
-  const ax = REST_X + (hx - REST_X) * e;
-  const ay = DESK_Y + (Math.min(hy, DESK_Y) - DESK_Y) * e; // never through the desk
-  const az = REST_Z + PD + (hz - REST_Z - PD) * e;
+  // its place on the desk, in body space (character.js plants it: the body breathes and sways, the desk does not)
+  plantPoint(REST_X, DESK_Y, REST_Z + PD, DESK3);
+  const ax = DESK3[0] + (hx - DESK3[0]) * e;
+  const ay = DESK3[1] + (Math.min(hy, DESK3[1]) - DESK3[1]) * e; // never through the desk
+  const az = DESK3[2] + (hz - DESK3[2]) * e;
   // standing it up lifts the back edge about the front edge (77 degrees at tilt 1)
   const al = tilt * 1.35;
   const ca = Math.cos(al), sa = Math.sin(al);
@@ -191,12 +194,13 @@ function restArmL(L) {
 /** Pen centre and unit direction in body space for a hand geometry: [cx, cy, cz, dx, dy, dz]. */
 function penFrame(g, out) {
   const { W, f, t, n, H } = g;
-  // it crosses the hand through the thumb-index web, lying along the index and tilted out:
-  // a loose hand covers its middle, the nib shows past the knuckles and the cap behind the thumb
-  out[0] = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 + n[0] * H * 0.12;
-  out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
-  out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
-  const dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
+  // it crosses the hand through the thumb-index web, toward the thumb's side and back into the desk: a loose
+  // hand covers its middle, the nib shows past the knuckles and the cap below the wrist (the resting hands point
+  // toward the lens: lying along the index, the pen hid behind the fingers)
+  out[0] = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 - n[0] * H * 0.05;
+  out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 - n[1] * H * 0.05;
+  out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 - n[2] * H * 0.05;
+  const dx = f[0] * 0.3 + t[0] * 0.8 + n[0] * 0.2, dy = f[1] * 0.3 + t[1] * 0.8 + n[1] * 0.2, dz = f[2] * 0.3 + t[2] * 0.8 + n[2] * 0.2 - 0.7;
   const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   out[3] = dx / dl;
   out[4] = dy / dl;
@@ -213,6 +217,10 @@ function drawPen(buf, L, sk, s, g, z, M) {
   const rest = restArmL(L);
   handGeometry(L, rest, -1, HG_REST);
   penFrame(HG_REST, PEN_DESK);
+  // (the pen left lying on the desk keeps its place there while the body moves)
+  plantPoint(PEN_DESK[0], PEN_DESK[1], PEN_DESK[2], DESK3);
+  PEN_DESK[0] = DESK3[0];
+  PEN_DESK[1] = DESK3[1];
   // 0 while the hand rests (idle shifts included), 1 once it is well clear of the desk
   const dw = Math.sqrt((arm.wrist[0] - rest.wrist[0]) ** 2 + (arm.wrist[1] - rest.wrist[1]) ** 2 + (arm.wrist[2] - rest.wrist[2]) ** 2);
   let u = clamp((dw - 3) / 2.5, 0, 1);
