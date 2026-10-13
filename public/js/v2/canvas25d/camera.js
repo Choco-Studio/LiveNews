@@ -424,12 +424,28 @@ export const easeMove = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : 0.5 - 0.5 * Math.cos(M
  * to from / (1 + amount), wider than the framing, so a move never starts with a
  * jump whether or not its event was a cut.
  */
-export function moveScale(move, dt) {
+export function moveScale(move, dt, cap = Infinity) {
   if (!move || !(move.amount > 0) || !(move.dur > 0)) return move?.from > 0 ? move.from : 1;
-  const a = Math.min(MOVE_CEILING, move.amount);
+  const a = Math.min(MOVE_CEILING, move.amount, cap);
   const from = move.from > 0 ? move.from : 1;
   const e = easeMove((dt - (move.delay || 0)) / move.dur);
   return move.type === 'pull' ? from / (1 + a * e) : from * (1 + a * e);
+}
+
+// A presenter is drawn at a whole number of head pixels (quantScale): in a wide (22 px heads) a move across a bucket
+// edge makes both presenters jump a whole 4.5 % smaller or bigger in one frame while the set glides (measured: the
+// WORLD NOW sign-off's 4 % pull shrank them 22 → 21 px at frame 143). Where a head pixel is that coarse (under
+// SMALL_HEAD px), a move stops short of the edge: the set and the presenters' places still glide, their size holds.
+const SMALL_HEAD = 40;
+
+/** The largest move amount (scale fraction) that keeps a small head's quantised size, Infinity for close shots. */
+export function moveCap(base, type = 'push') {
+  const h0 = 22 * kAt(base, SET.presenterZ);
+  if (!(h0 > 0) || h0 >= SMALL_HEAD) return Infinity;
+  const r = Math.round(h0);
+  const margin = 0.02; // px kept from the bucket edge (rounding)
+  if (type === 'pull') return Math.max(0, h0 / (r - 0.5 + margin) - 1);
+  return Math.max(0, (r + 0.5 - margin) / h0 - 1);
 }
 
 const SCRATCH = makeCamera();
@@ -456,7 +472,7 @@ function baseOf(spec) {
  */
 export function cameraAt(spec, dt = 0, out = SCRATCH) {
   const base = baseOf(spec);
-  const f = moveScale(spec?.move, dt);
+  const f = moveScale(spec?.move, dt, spec?.move ? moveCap(base, spec.move.type) : Infinity);
   if (f === 1) return base;
   // dolly: the presenters' depth gets k·f; x, y, hy and zoom stay, so the move is monotone
   const Zs = SET.presenterZ;
