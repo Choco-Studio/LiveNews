@@ -13,7 +13,9 @@ key; round 7: a programme's own floor in front of the desk), `studio/wall.js` (t
 FULL TIME emblem; THE NUMBER's own figure on its segment), `runtime/stage.js` (warmed with the others),
 `public/js/set.js` (the old renderer's `sport` theme), the labs (`v2-set.html`, `v2-camera.html`:
 `?programme=full-time&hour=…&zoom=1|3|4`; round 7: `mcu-b` and `ots-b`), `test/full-time-set.test.js` (24 tests) and
-`test/v2-set.test.js` (reads the drafts, so the drafted set meets every network set rule).
+`test/v2-set.test.js` (reads the drafts, so the drafted set meets every network set rule); round 8: `palette.js`
+(`P_SET`, ENDESGA 32's mid and deep greens for the pitch), `pixbuf.js`, `color.js`, `light.js` and
+`tools/measure-frame.mjs` (the two greens in the v2 tables).
 
 **The panel** (QUALITY_LOOP.md's method): a lead pixel artist, a senior broadcast director and production designer, a
 first-time viewer. Categories, each 0–10: **composition and depth**, **light and the hour** (all five phases),
@@ -318,6 +320,97 @@ and a calm day pitch; a darker one, near L* 25, a night stripe without a checker
 bottom rows reach the grass (a network camera decision, as the screen was).
 
 ---
+
+## Round 8 — the palette's two greens, Kai and Rosa, the glows; the panel again, from scratch
+
+The integrator (after round 7): the palette is widened by ENDESGA 32's own mid and deep greens (`#3e8948`, `#193c3e`),
+for the pitch only; the network's wide stays as it is for every programme and the platform's drop to the grass is not
+required in it (both decisions now in the bible's §6); the platform's strip must not be taken for a graphics line; the
+halos must read as light, not plates; rebase onto the branch tip, where Kai's and Rosa's own looks are merged, and check
+every framing with their real heads; even stripes if they can be had. The panel looked again from scratch, as hard
+as before.
+
+What changed:
+
+- **The palette** (`palette.js`): `P_SET = { midGreen, deepGreen }`, ENDESGA 32's, readable as `P.midGreen` and
+  `P.deepGreen` and in the v2 renderer's `C`, `color.js` and the measuring tool, but defined so that no palette-wide
+  loop sees them (`Object.keys / values / entries` of `P`): the weather's and the ads' quantisers, the pictures' tables
+  and the opens' colour tables are exactly as before, so nothing else on the channel changes (the network set tests,
+  72/72, and the cast tests are unchanged).
+- **The pitch** (faults 1, 2): every stripe one solid colour, no mesh between the presenters: by day midGreen over
+  darkGreen, under the floodlights darkGreen over deepGreen, at dawn deepGreen with a calm darkGreen/deepGreen stripe
+  (12 L* apart), the darker value always behind the heads. The pitch's light (L* of the mean luminance), day / night /
+  dawn: wide 42 / 28 / 25, two-shot 41 / 28 / 25, singles 46-47 / 31-32 / 28; every face over it (Kai 58-60, Rosa
+  67-69: Kai's olive skin is now the darker face, 11 L* over the day's pitch in his single).
+- **The stripes** (fault 5): as even as the heads allow: a 4.2 m centre stripe, then 6 m (was 4 m and 6.5 m). With
+  Kai's and Rosa's own heads (Rosa's ponytail included) no edge comes within 8.9 px of a head in any framing. Even
+  stripes cannot be had: in the two-shot every edge between 2.2 m and 8 m from the halfway line passes behind a
+  presenter's head (and between 2.8 m and 6.2 m in the wide), so equal stripes would need to be wider than 16 m or put
+  edges behind the heads.
+- **The glows** (fault 3): each lit head now glows in steps, as the channel's other lights do: an inner step and a
+  middle step of light, then a fringe where every other pixel takes the middle step, so the glow's edge melts into the
+  sky (steel and slate over the night's ink, fog and steel over the blue hour's navy, tan and tanShade over the golden
+  hour's red). The rings follow the head's exact centre: a ring tied to the rounded head stepped back and forth
+  against its growing radius under a push (2 flip-backs in the ots, now 0).
+- **The platform's strip** (fault 4): its diodes every other pixel (orange, then a step down), its light falling down
+  the riser's top in two more steps (rust, brown) and broken at each panel joint: a light on the set, as the desk's own
+  LED line is, not a ruled graphics line. On air (test mode, by day and with the clock forced to night) it reads as
+  the platform's lit edge, clear of the captions' and the ticker's rows.
+- **Kai and Rosa**: both labs seat their own looks; the OTS's sky bands stay off their heads in every phase (tested
+  with Rosa's ponytail); Kai's orange collar no longer confuses the boards' check (the bands are found on the bare
+  set).
+
+Still open (the panel, round 8), none of them, in the panel's view, a fault at the gate:
+
+1. **The two-shot still shows one lit centre stripe** between the presenters (with the halfway line, the darker
+   stripes behind them and the next lit stripe in the top corners): the head rule leaves no room for more edges there
+   (director).
+2. **The glow's fringe is a checker** at 6x and closer (at 1-4x a soft edge); the stripes' widths still differ (4.2 m
+   and 6 m) (pixel artist).
+3. **The night's deepGreen leans teal** beside darkGreen (ENDESGA's deep green); the floodlit night is the darker
+   pitch, as asked, rather than the vivid green of a real floodlit pitch (director).
+4. **The strip sits three rows over the ticker** on air: its diodes and falloff carry it, at a glance (first-time
+   viewer).
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Composition and depth | 9.8 | 1 |
+| Light and the hour | 9.8 | 3 |
+| Pixel craft and palette | 9.8 | 2 |
+| Presenters' integration | 9.8 | 1 (the wedge between them), 4 |
+| Motion discipline | 9.9 | — (the minute and the pennant only; 0 flip-backs under a push) |
+| Distinctness | 9.9 | — |
+| Performance | 9.9 | — (0.29-0.97 ms uncached, under a third of WORLD NOW's city) |
+
+**Round score: 9.8. Passed** (the gate is above 9.7). The integrator's decisions (the main screen above the desk, the
+network's wide unchanged, ENDESGA 32's two greens for the pitch) are recorded in the bible's §6; everything the panel
+asked for on screen is built or, where the network's wide or the head rule rules it out (the drop to the grass, even
+stripes), measured and stated.
+
+---
+
+## Evidence (round 8)
+
+Renders (Chromium, the set lab with Kai and Rosa; `public/lab/v2-set.html?programme=full-time&framing=<f>&hour=<h>&zoom=4`,
+`framing=mcu-b` or `ots-b` for Rosa): the contact sheets of every phase and framing, the 4x wides by phase, the 6-8x
+crops (the platform's strip, the scoreboard, the glows at night, the blue hour and the golden hour) and the on-air
+captures are listed in the step's report.
+
+Numbers (node, `labs/set.js`, Kai and Rosa):
+
+| | Night | Dawn | Day | Golden (2 or 4 banks) | Blue hour |
+|---|---|---|---|---|---|
+| head zone L*, wide / two / mcu / ots | 15.2 / 20.3 / 18.7 / 17.8 | 14.9 / 20.2 / 25.6 / 29.2 | 22.9 / 30.8 / 35.5 / 40.5 | 15.2 / 20.4 / 25.0 / 29.9 | 15.2 / 20.3 / 25.6 / 29.5 |
+| pitch light L*, wide / two / singles | 28 / 28 / 31-32 | 25 / 25 / 28 | 42 / 41 / 46-47 | 28 / 28 / 31-32 | 28 / 28 / 31-32 |
+| faces L* (Kai / Rosa) | 58-60 / 67-69 | 58-60 / 67-69 | 58-60 / 67-69 | 58-60 / 67-69 | 58-60 / 67-69 |
+
+- Stripe edges: nearest to a head 8.9 px (two-shot, Rosa's shoulder), 15.6 px in the wide, more than 12 px in the ots
+  and the singles.
+- Symmetry: 0 asymmetric blocks outside the scoreboard's. Palette only (with `P_SET`); the graphics zone black and ink
+  but for the platform's light (three rows a column, 1,140 px).
+- Motion: a still camera moves only the scoreboard's digits and the pennant; a slow push: 0 flip-backs in every framing.
+- Cost: background uncached 0.29-0.97 ms by framing, cached 0.01 ms (WORLD NOW uncached 3.1-3.6 ms).
+- Tests: `test/full-time-set.test.js` 24/24; `test/v2-set.test.js` 72/72.
 
 ## Evidence (round 7)
 

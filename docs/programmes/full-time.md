@@ -284,8 +284,8 @@ are different programmes. A shape fixes the order; a segment without material is
   - **Built (step 5, the set)**: `public/js/v2/canvas25d/studio/pitch.js` (the ground on its own depth planes: the
     channel's sky by the hour with the town through the open corners; four floodlight towers, a pair in the far corners
     and a pair in front of the stand, whose four banks come on one at a time from 17:00, one every 24 minutes, all lit
-    at night and in the blue hour, none by day or at dawn; static posterised halos, at the golden hour a warm glare
-    lifting the red sky as the blue hour's halo lifts its navy; the far stand: a dark upper tier of empty seats with two
+    at night and in the blue hour, none by day or at dawn; static stepped glows round the lit heads, warm at the
+    golden hour; the far stand: a dark upper tier of empty seats with two
     lit exits, a still two-tone crowd in the lower tier on a seeded seat table; the stand's scoreboard on its roof,
     right of the screen, in its own frame on two legs with its shadow on the roof's lit edge, and the pennant on a pole
     beside it, both drawn live; the boards: two FULL TIME bands in the wide, whole or not at all and never behind a
@@ -295,21 +295,29 @@ are different programmes. A shape fixes the order; a segment without material is
     the desk, its edge's orange LED strip panel by panel, the riser's black panels under it), `studio/styles.js`
     (`'full-time'`, an open set), `studio/wall.js` (the screen: the story's picture or the FULL TIME emblem, a
     stopwatch at full time beside the name; THE NUMBER's own figure on its segment; never a map, a plate or a story's
-    age). The pitch's stripes are two values, each one colour or a 50 % mix of two (no Bayer pattern): the stripes
-    beside the centre, behind the presenters' heads, darkGreen in every phase; the centre stripe carries the light, the
-    green/darkGreen mix in the sun (the brightest pitch, L* 58 as the eye mixes it, under every face in every framing),
-    the darkGreen/black mix under the floodlights and at dawn (the darkest green the palette can make). The stripes are
-    laid so that no edge passes within 6 px of a head in any framing (a centre stripe 4 m wide, then 6.5 m). In the
-    over-the-shoulder the sky's bands are kept off the presenter's head (the head stands in the second band). Out of
+    age). **The pitch's greens**: the channel's palette gained ENDESGA 32's own mid and deep greens for it
+    (`palette.js` `P_SET`: midGreen `#3e8948`, deepGreen `#193c3e`, the integrator's decision; read by name and kept
+    out of every palette-wide loop, so nothing else on the channel changes). Each stripe is one solid colour: the
+    stripes behind the presenters' heads the darker value, the centre stripe between them the lit one; in the sun
+    midGreen over darkGreen (the brightest pitch, under every face in every framing), under the floodlights darkGreen
+    over deepGreen, at dawn deepGreen with a stripe of the darkGreen/deepGreen mix (12 L* apart). A centre stripe 4.2 m
+    wide, then 6 m: no edge passes within 8 px of a head in any framing (with Kai's and Rosa's own heads); even stripes
+    cannot, since in the two-shot an edge between |X| 2.2 and 8 m from the halfway line passes behind a head. In the
+    over-the-shoulder the sky's bands are kept off the presenter's head (the head stands in the second band). The lit
+    floodlights glow in steps (an inner step, a middle step, a fringe of every other pixel), never a flat disc. Out of
     focus (the singles) the sky is one tone, the roofline a soft step, the crowd one dim tone, the stripes keep their
     two values and the halfway line is a dim soft line. In the wide the platform's light sits in the free rows between
-    the captions and the lower third (to y 196) and the ticker (from y 202); the deck under the captions is ink, the
-    riser under the ticker black. What the wide cannot show: the platform's foot, its steps, and the grass and touchline
-    in front of it. The network's wide sees the pitch's surface only from 11 m out (its bottom row), which is behind
-    the desk front (9-9.6 m) and the presenters (10 m); a riser at any edge in front of the desk runs below the frame.
+    the captions and the lower third (to y 196) and the ticker (from y 202), with its falloff down the riser (orange,
+    rust, brown) and a break at each panel joint, so it reads as a light on the set, not a graphics rule; the deck
+    under the captions is ink, the riser under the ticker black.
+  - **The wide and the grass (the integrator's decision, step 5)**: the network's wide stays as it is for every
+    programme; a FULL TIME-only camera would break the channel's shared framings and camera grammar. The platform reads
+    in the wide by its deck, its LED strip and its riser; its drop to the grass is not required there. (The wide's
+    bottom row meets the pitch's surface 11 m out, behind the desk front, 9-9.6 m, and the presenters, 10 m: the
+    platform's foot, its steps and the grass and touchline in front of it are below or beside the frame.)
     Labs: `public/lab/v2-set.html` and `v2-camera.html` with `?programme=full-time&hour=<0-24>&zoom=1|3|4` (the set lab
-    also frames `mcu-b` and `ots-b`, the singles on presenter B); tests `test/full-time-set.test.js`; critique
-    `docs/roadmap/critique/full-time-set.md`.
+    also frames `mcu-b` and `ots-b`, the singles on presenter B; both labs seat Kai and Rosa); tests
+    `test/full-time-set.test.js`; critique `docs/roadmap/critique/full-time-set.md`.
 - **The open (≈10 s, 120 BPM).** A dark ground; the floodlights bang on bank by bank on the beat (a low thunk each); the
   camera sweeps down to the centre circle; the scoreboard flips to FULL TIME on the referee's final whistle — three
   blasts, the last long (the common "two short and one long" is the same call) — played by the brass; the emblem is a
@@ -371,7 +379,7 @@ are different programmes. A shape fixes the order; a segment without material is
    (`director.js` `playBoardSegment`: SCORE CENTRE fills the frame, COMING UP holds the calendar, a row or a leaf as
    its line is read), the v2 planner's board segments; critique in `docs/roadmap/critique/full-time-director.md`.*
 5. **Set, open, theme and bed.** *Gate: renders and recordings critiqued above 9.7.* The set is built (§6; its critique
-   stands at 9.7 after the integrator's round, still at the gate, not above it: `docs/roadmap/critique/full-time-set.md`).
+   passed at 9.8 in round 8, `docs/roadmap/critique/full-time-set.md`).
 6. **Cast**: Kai and Rosa and their voices (A/B for the owner). *Gate: QUALITY_LOOP's character rubric above 9.7.*
    *Looks built (§2): three candidates each, A on air in both renderers; critique in
    `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*
