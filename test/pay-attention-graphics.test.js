@@ -41,6 +41,45 @@ function fakeCanvas(width = 384, height = 216) {
   return cv;
 }
 
+/**
+ * A canvas that also keeps the clip state (save, restore, rect, clip): each fill and image records the clips it was
+ * drawn under, so a test can tell a glyph cut by its board's edge from one inside its own rising mask.
+ */
+function inkCanvas(width = 384, height = 216) {
+  const cv = fakeCanvas(width, height);
+  const ctx = cv.getContext('2d');
+  let clips = [];
+  const stack = [];
+  let pending = null;
+  ctx.save = () => stack.push(clips.slice());
+  ctx.restore = () => { clips = stack.pop() || []; };
+  ctx.beginPath = () => { pending = null; };
+  ctx.rect = (x, y, w, h) => { pending = { x, y, w, h }; };
+  ctx.clip = () => { if (pending) clips.push(pending); };
+  const fill = ctx.fillRect.bind(ctx);
+  ctx.fillRect = (x, y, w, h) => { fill(x, y, w, h); ctx.fills.at(-1).clips = clips.slice(); };
+  const draw = ctx.drawImage.bind(ctx);
+  ctx.drawImage = (img, ...a) => { draw(img, ...a); ctx.images.at(-1).clips = clips.slice(); };
+  return cv;
+}
+const INK = new WeakMap();
+/** A text image's glyph pixels (font.js draws each as one scale x scale square), as a box on the screen, or null. */
+function inkOf(im) {
+  const img = im.img;
+  if (!img || im.sw !== undefined || typeof img.getContext !== 'function') return null;
+  let k = INK.get(img);
+  if (k === undefined) {
+    const f = img.getContext('2d').fills || [];
+    k = f.length && f.every((p) => p.w === p.h && p.w <= 3)
+      ? { x0: Math.min(...f.map((p) => p.x)), y0: Math.min(...f.map((p) => p.y)), x1: Math.max(...f.map((p) => p.x + p.w)), y1: Math.max(...f.map((p) => p.y + p.h)), color: f[0].c }
+      : null;
+    INK.set(img, k);
+  }
+  return k && { x0: im.x + k.x0, y0: im.y + k.y0, x1: im.x + k.x1, y1: im.y + k.y1, color: k.color };
+}
+const cut = (a, c) => ({ x0: Math.max(a.x0, c.x), y0: Math.max(a.y0, c.y), x1: Math.min(a.x1, c.x + c.w), y1: Math.min(a.y1, c.y + c.h), color: a.color });
+const same = (a, b) => a && b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
 const HN = 120 / 112;
 const NOW = Date.parse('2026-10-13T20:20:00Z');
 const LOLA = { seat: 'A', name: 'LOLA', id: 'lola' };
@@ -271,6 +310,10 @@ describe('PAY ATTENTION graphics', () => {
     assert.deepEqual(hm.map((s) => s.n), [6]);
     const rv = G.layoutText(HM.masked, 350, 4, HM.sentence).lines.flatMap((l) => l.words.flatMap((w) => w.segs)).filter((s) => s.k === 'h').map((s) => s.s);
     assert.deepEqual(rv, ['$1.3', 'billion']);
+    // a column of air at the lit span's two ends only: "$1.3 BILLION" keeps a plain space between its words
+    const lit = G.layoutText(HM.masked, 350, 4, HM.sentence).lines.flatMap((l) => l.words.flatMap((w) => w.segs)).filter((s) => s.k === 'h');
+    assert.deepEqual(lit.map((s) => s.padL), [1, 0]);
+    assert.deepEqual(lit.map((s) => s.w), [17 + 1, 37 + 1], 'each word measured, one column of air at each end of the span');
   });
 
   test('WHERE IN THE WORLD?: three pins framed inside the map, their tags inside it and apart, even "UNITED ARAB EMIRATES"', () => {
@@ -364,5 +407,53 @@ describe('PAY ATTENTION graphics', () => {
     assert.deepEqual(off, [], 'every colour from palette.js');
     // the quiz's look: purple only as a fill in its fog rim, never magenta or cyan (COSMOS's and TECH BYTES's)
     assert.ok(!FILLS.some((f) => f.c === P.magenta || f.c === P.cyan));
+  });
+
+  test('every text on every lab board, at its moments and every 0.2 s between, is whole inside its board', async () => {
+    // (the lab's own boards and clocks; a glyph may be hidden by its own rising mask, never cut by its board's edge or
+    // the map's: those two clips are the structure, every text must sit inside them whole, comma tails and accents too)
+    const { quizCases, MOMENTS } = await import('../public/lab/quiz-cases.js');
+    const pics = Object.fromEntries(['device', 'ice', 'corridor', 'rocket', 'owl', 'phone'].map((k) => [k, fakeCanvas(512, 288)]));
+    const cases = quizCases({ Q: G, pics, HN, NOW });
+    assert.equal(cases.length, 27, 'every board of the lab');
+    const faults = [];
+    let checked = 0;
+    for (const [id, , def] of cases) {
+      const times = new Set(MOMENTS.map((m) => def.moments[m]));
+      for (let t = 0; t <= def.len + 0.01; t += 0.2) times.add(Math.round(t * 100) / 100);
+      for (const t of times) {
+        const ctx = inkCanvas().getContext('2d');
+        def.draw(ctx, t);
+        const i = ctx.fills.findIndex((f, k) => f.c === P.black && ctx.fills[k + 1]?.c === P.slate && ctx.fills[k + 1].h === 1 && ctx.fills[k + 1].y === f.y);
+        if (i < 0) continue;
+        const b = ctx.fills[i];
+        const board = { x: b.x, y: b.y, w: b.w, h: b.h };
+        const structure = (c) => same(c, board) || same(c, G.MAP);
+        const golds = ctx.fills.filter((f) => f.c === P.yellow && f.h === 11);
+        for (const im of ctx.images) {
+          const ink = inkOf(im);
+          if (!ink) continue;
+          let vis = ink;
+          for (const c of im.clips.filter((c) => !structure(c))) vis = cut(vis, c);
+          if (vis.x1 <= vis.x0 || vis.y1 <= vis.y0) continue;
+          checked++;
+          const where = `${id} at ${t}: text ink ${vis.x0},${vis.y0}..${vis.x1},${vis.y1}`;
+          if (vis.x0 < board.x || vis.x1 > board.x + board.w || vis.y0 < board.y || vis.y1 > board.y + board.h) faults.push(`${where} outside its board ${JSON.stringify(board)}`);
+          if (vis.y0 < 28 || vis.y1 > 134) faults.push(`${where} outside y 28..134`);
+          for (const c of im.clips.filter((c) => same(c, G.MAP))) if (vis.x0 < c.x || vis.x1 > c.x + c.w || vis.y0 < c.y || vis.y1 > c.y + c.h) faults.push(`${where} cut by the map's edge`);
+          // a lit (gold) word never touches the white type beside it: a column of air either side
+          const whole = vis.x0 === ink.x0 && vis.x1 === ink.x1 && vis.y0 === ink.y0 && vis.y1 === ink.y1;
+          if (ink.color === P.white && whole) {
+            for (const g of golds) {
+              if (vis.y1 <= g.y || vis.y0 >= g.y + g.h) continue;
+              if (vis.x1 > g.x - 1 && vis.x0 < g.x + g.w + 1) faults.push(`${where} touches a gold box at ${g.x}..${g.x + g.w}`);
+            }
+          }
+        }
+      }
+    }
+    assert.ok(checked > 3000, `${checked} texts checked`);
+    if (process.env.QUIZ_FAULTS) console.log(`${checked} texts checked`, [...new Set(faults.map((f) => f.replace(/ at [\d.]+:/, ":").replace(/ink [\d,.]+/, "ink")))].join("\n"));
+    assert.deepEqual(faults.slice(0, 12), [], `${faults.length} faults`);
   });
 });

@@ -349,8 +349,10 @@ Measured on the development archive, with a model of the planner that counts sto
    read in full; simulated weeks for the scores' variance (§4.2).*
 3. **Graphics**: the question board, the lock-ins, the reveal, PICTURE THIS, LETTER BY LETTER, the map round, HOW MANY?,
    the scores and the table. *Gate: the lab page at 1x and 4x, a hostile critique above 9.7.*
-   - **Built, passed at 9.75 in round 4** (`docs/roadmap/critique/pay-attention-graphics.md`). The boards are in
-     `scenes/cards-quiz.js` and the lab in `public/lab/quiz.html`.
+   - **Built, passed at 9.75 in round 5** (`docs/roadmap/critique/pay-attention-graphics.md`). After round 4's pass,
+     the reviewer found the question column's credit line cut by the board's edge. A test now checks every text's glyphs
+     inside its board, on every lab board, every 0.2 s. The boards are in `scenes/cards-quiz.js` and the lab in
+     `public/lab/quiz.html`.
    - The boards' text fit is in `scenes/quiz-fit.js`. The desk refuses by it whatever would not fit its box: a tile holds
      three 1x lines of 150 px, and all 41 headlines of the week's pool fit.
    - Two choices beyond the bible's words:

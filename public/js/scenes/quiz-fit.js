@@ -83,14 +83,20 @@ function wordsOf(pieces) {
       push({ k: 'm', n: p.n, w: p.n * MASK_UNIT - 1 });
       continue;
     }
-    for (const part of String(p.s).split(/(\s+)/)) {
-      if (!part) continue;
+    const parts = String(p.s).split(/(\s+)/).filter(Boolean);
+    const last = parts.length - 1 - [...parts].reverse().findIndex((x) => !/^\s+$/.test(x));
+    const first = parts.findIndex((x) => !/^\s+$/.test(x));
+    parts.forEach((part, k) => {
       if (/^\s+$/.test(part)) {
         cur = null;
-        continue;
+        return;
       }
-      push({ k: p.k, s: part, w: measureText(part) });
-    }
+      // (a lit span's gold box takes a column of air at its two ends, in its width, so punctuation never touches it;
+      // between the words of one span, only the lit space: "$1.3 BILLION" reads as it aired)
+      const padL = p.k === 'h' && k === first ? 1 : 0;
+      const padR = p.k === 'h' && k === last ? 1 : 0;
+      push({ k: p.k, s: part, w: measureText(part) + padL + padR, padL });
+    });
   }
   return words;
 }
