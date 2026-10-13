@@ -191,8 +191,16 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   if (!Number.isFinite(t0)) return null;
   const dry = ctx.dryLine;
   if (dry && t0 >= dry.t0 - (point ? DRY_LEAD : 0.05) && t0 <= dry.t1 + DRY_HOLD) return null;
-  // (a story handed to a correspondent: its last sentence, the hand-over, cuts to the two-way: director.js throwTo)
-  const throwAt = ctx.seg?.link && ctx.sentences?.length > 1 ? ctx.sentences[ctx.sentences.length - 1].t0 : null;
+  // (a story handed to a correspondent: its last sentence, the hand-over, cuts to the two-way: director.js throwTo; an
+  // expert's hand-over is two sentences, the introduction and the question (shots.js `hand`). Counting from the
+  // question made a 7 s picture look 11 s long: the guard cut it back to the reader mid-sentence 1.7 s before the
+  // two-way, which then waited the cooldown and came in mid-word (critic, polish round: a 21.8 s two-way after it))
+  // A re-staged quote's hand-over stays on the presenter instead (throwTo keeps a studio shot on air): a studio shot
+  // carries it to the segment's end, and the hand-over's start is a cut between the two studio shots like any other
+  // (critic, polish round: a live MONEY MINUTE held its MCU-R 14.9 s into the guest's words)
+  const restaged = ctx.seg?.linkKind === 'restage' && STUDIO.has(onAir.shot);
+  const hand = ctx.seg?.link && !restaged ? (ctx.seg.linkKind === 'expert' && ctx.sentences?.length > 2 ? 2 : 1) : 0;
+  const throwAt = hand && ctx.sentences?.length > hand ? ctx.sentences[ctx.sentences.length - hand].t0 : null;
   const end = Number.isFinite(throwAt) ? throwAt : (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
   let next = end;
   for (const c of cues || []) if (c.k > 0 && Number.isFinite(c.at) && c.at > t0 + 0.05 && c.at < next) next = c.at;
@@ -206,8 +214,17 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   if (greeting) return { k: 1000 + si, char, at: t0, sentence: si, mid: false, shot: 'wide', framing: wideFraming ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'greeting', guard: true };
   // (a picture round-up item, QUICK BYTES or IN BRIEF, runs to its end over its own picture: shots.js capMax gives it
   // the same 3 s)
-  const quick = onAir.shot === 'full' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0;
-  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + quick - HOLD_MARGIN) return null;
+  // (and the round-up's opening map carries its title line over the world view on top of the map maximum: shots.js
+  // capMax gives it the same, so item 1 is never handed back to its reader for its last seconds between two maps;
+  // nor in the middle of its voice-over: no phrase-mark cut on that map, a sentence start at most. The plan's zoom to
+  // item 1 marks it, whether the writer flagged the item as a round-up or the planner recognised one)
+  const zoom = onAir.shot === 'map' ? (plan.events || []).find((e) => e.kind === 'shot' && e.zoom && e.shot === 'map') : null;
+  if (zoom && point) return null;
+  const quick = (onAir.shot === 'full' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0) + (zoom && Number.isFinite(zoom.at) ? Math.min(3, Math.max(0, zoom.at)) : 0);
+  // (a studio shot that runs on through a re-staged hand-over to the segment's end, the recorded voice's words known:
+  // no margin, a single held 11.8 s of TECH BYTES's 12 is no cut)
+  const margin = restaged && next === end ? 0 : HOLD_MARGIN;
+  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + quick - margin) return null;
   let shot, framing;
   if (onAir.shot === 'close') {
     if (programId === 'news-60') return null;
@@ -584,7 +601,8 @@ export class LiveDirection {
     this.story = { seg, cues, handler: apply };
     apply(cues[0]);
     // the first line comes a breath after the cut from the open (pace open.firstWord; world-now.md 0.5 s)
-    const breath = paceFor(this.scene.program?.id).open.firstWord;
+    // (less the voice's own start-up: the director's openBreath)
+    const breath = typeof this.director.openBreath === 'function' ? this.director.openBreath() : paceFor(this.scene.program?.id).open.firstWord;
     return new Promise((r) => setTimeout(r, breath * 1000)).then(() => this.director.say(seg)).then(() => {
       // PACE: only a headline frame is held to its floor here; a studio wide's cooldown is the next story's opening cut's
       // to wait for (it cuts when the wide has held it), so the next voice is never delayed (NEWS IN 60: 1.5 s of dead air)
@@ -748,9 +766,11 @@ export class LiveDirection {
     const i = p.index;
     const gap = typeof this.gapFn === 'function' ? this.gapFn(i) : GAP_AFTER;
     const onAir = { shot: s.shot, framing: s.framing ?? null, focus: s.focus, held: now() - s.shotSince };
-    // the next segment's opening shot (already planned in idle time; never planned here)
+    // the next segment's opening shot (already planned in idle time; never planned here; none for a link, which the
+    // director directs itself: its studio plan's wide never airs, and taken for the next opening it kept a MONEY
+    // MINUTE MCU-R 14.9 s on air into a re-staged guest, every cut to the WIDE refused as "continuing into it")
     const nextSeg = this.ep?.segments?.[i + 1];
-    const np = nextSeg ? this.plans.get(nextSeg) : null;
+    const np = nextSeg && nextSeg.type !== 'cross' ? this.plans.get(nextSeg) : null;
     const nextOpen = np ? cuesFromPlan(np, { hasImg: true })?.[0] || null : null;
     // how fast the voice really runs against the plan (a slower voice or a stalled page makes every shot longer)
     const t0 = point ? point.t0 : ctx?.sentences?.[si]?.t0;
@@ -766,10 +786,15 @@ export class LiveDirection {
   studioCut0(cue, held = false) {
     const s = this.scene;
     if (!STUDIO.has(s.shot) || !STUDIO.has(cue.shot)) return;
-    const wait = cue.k > 0 && !held ? minShot(s) - (now() - (s.shotSince || 0)) : 0;
+    // (the shot on air counts from its last visible cut: the director's onAir() leaves out a re-set of the same two-shot)
+    const onAir = typeof this.director.onAir === 'function' ? this.director.onAir() : now() - (s.shotSince || 0);
+    const wait = cue.k > 0 && !held ? minShot(s) - onAir : 0;
     if (wait > 0) {
       const p = s.segPlan;
-      setTimeout(() => s.segPlan === p && p.speechEnd == null && this.studioCut(cue, true), wait * 1000);
+      // (the director's word-safe timer: a cut the cooldown held back lands between two words, never inside one)
+      const later = () => s.segPlan === p && p.speechEnd == null && this.studioCut(cue, true);
+      if (typeof this.director.cutWhenClear === 'function') this.director.cutWhenClear(wait, later);
+      else setTimeout(later, wait * 1000);
       return;
     }
     const reframe = s.shot === cue.shot && s.focus === cue.focus && (s.framing ?? null) !== cue.framing;

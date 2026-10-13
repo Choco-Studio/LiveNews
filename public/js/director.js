@@ -53,6 +53,27 @@ function quoteIn(line, quote) {
   return head.length >= 12 && fold(line).includes(head);
 }
 
+// A cut held back by the cooldown never lands inside a word: when its time comes while a voice is mid-word it waits
+// for the next word's first sound (or the silence after it), polled this often (s), at most WORD_WAIT s
+const WORD_POLL = 0.012;
+const WORD_WAIT = 0.8;
+
+/** Cancel a cut scheduled with Director.cutWhenClear (or a plain timer). */
+function stopCut(h) {
+  if (h && typeof h === 'object') h.cancel();
+  else clearTimeout(h);
+}
+
+/** What a full-screen card shows (two cards with the same content are one shot; a different one is a cut). */
+function cardKey(card) {
+  if (!card) return '';
+  try {
+    return JSON.stringify(card);
+  } catch {
+    return String(card);
+  }
+}
+
 /** Seconds a segment should air, before its voice runs (recorded length, else its characters). */
 const estimateSeg = (seg) => (Number.isFinite(seg?.audio?.duration) ? seg.audio.duration : String(seg?.text || '').length / CPS_EST);
 
@@ -118,20 +139,74 @@ export class Director {
     // Every ad and every montage frame is a new clip even when the shot name
     // repeats, so its clock must restart (or it opens mid-way, at its end slate).
     const restart = shot === 'ad' || shot === 'montage';
-    const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId) || (this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null)); // v2: a new framing (single → ots) is a cut
+    // a full-screen card that gives way to another card (BY THE NUMBERS → the quote card IN THEIR WORDS) is a cut the
+    // viewer sees: its clock restarts, so the cooldown and the maxima count from it (a 13 s "card" aired once, WORLD NOW)
+    const newCard = shot === 'fact' && s.shot === 'fact' && 'card' in extra && cardKey(extra.card) !== cardKey(s.card);
+    const reframed = !!this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null); // v2: a new framing (single → ots) is a cut
+    const changed = restart || newCard || reframed || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
     Object.assign(s, extra);
     // a cut away from a correspondent link's shots (back to the studio, a card, a stinger) ends the link on screen
     if (changed && s.remote && !LINK_SHOTS.has(shot) && s.linkDone) this.clearLink();
     else if (changed && s.recreation && s.linkDone) this.clearLink(); // a recreation over its quote card (old renderer)
     if (changed) {
       this.mapRun = shot === 'map' ? (this.mapRun || 0) + 1 : 0; // PACE: map cuts in a row (shots.mapRun)
-      if (!(shot === 'wide' && s.shot === 'wide')) this.seenSince = now(); // PACE: a focus re-set of the wide is no visible cut
+      // PACE: a focus re-set of the wide is no visible cut (v2: a new framing of it, the two-shot ⇄ the wide, is one)
+      if (!(shot === 'wide' && s.shot === 'wide') || reframed) this.seenSince = now();
       s.shot = shot;
       s.shotSince = now();
       if (shot === 'full') s.panDir = Math.random() < 0.5 ? 1 : -1;
       if (this.v2 && !('framing' in extra)) s.framing = s.cameraMove = null; // v2: a framing belongs to the cue that set it
       this.musicShot(shot, extra);
     }
+  }
+
+  /**
+   * A cut the cooldown holds back `wait` s (pace.js cutWait): applied then, unless a voice is in the middle of a word
+   * at that moment; it then lands on the next word's first sound (or in the silence after it), never inside a word
+   * (a picture change half-way through a syllable is the sloppiest edit there is; measured on air: a story's
+   * opening cut 0.18 s into its first word, TECH BYTES, and NEWS IN 60's first item 0.6 s into it). At most
+   * WORD_WAIT s later than asked. Returns a handle for stopCut().
+   */
+  cutWhenClear(wait, apply) {
+    const h = { timer: 0, cancelled: false, cancel: () => ((h.cancelled = true), clearTimeout(h.timer)) };
+    const word = () => {
+      try {
+        const f = this.audio?.speechFrame?.(performance.now(), undefined, this.cutFrame || (this.cutFrame = {}));
+        return f && f.speaking && f.wordIndex >= 0 ? `${f.sentenceIndex}:${f.wordIndex}` : null;
+      } catch {
+        return null;
+      }
+    };
+    const fire = () => {
+      if (h.cancelled) return;
+      h.cancelled = true;
+      apply();
+    };
+    const at = () => {
+      if (h.cancelled) return;
+      const first = word();
+      if (!first) return fire();
+      const until = now() + WORD_WAIT;
+      const poll = () => {
+        if (h.cancelled) return;
+        if (word() !== first || now() >= until) return fire();
+        h.timer = setTimeout(poll, WORD_POLL * 1000);
+      };
+      h.timer = setTimeout(poll, WORD_POLL * 1000);
+    };
+    if (wait > 0.02) h.timer = setTimeout(at, wait * 1000);
+    else fire();
+    return h;
+  }
+
+  /**
+   * The wait (s) from the cut out of the open to the call that speaks the first line: the programme's breath
+   * (pace open.firstWord) less the silence a playing voice adds by itself (as every pause between segments does),
+   * so the first word is heard on the breath, not a voice start-up later (measured 0.62 s against WORLD NOW's 0.5).
+   */
+  openBreath() {
+    const breath = pace(this.scene).open.firstWord;
+    return Math.max(0.05, breath - (this.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0));
   }
 
   /** The music's view of a cut (the recorder's music track, tools/showcase/lib/music.mjs, made live). */
@@ -459,7 +534,7 @@ export class Director {
     const engine = recorded ? null : this.audio.sentenceTimes?.(seg.text, seg.anchor);
     const starts = engine?.starts.length === lines.length ? engine.starts : sentenceStarts(lines, recorded?.words, CPS_EST);
     const end = engine?.starts.length === lines.length ? engine.end : Number.isFinite(recorded?.duration) ? recorded.duration : seg.text.length / CPS_EST;
-    const plan = planLink({ part: seg.part, starts, end, current: s.shot, held: now() - s.shotSince, min: P.shots.min, broll, ...this.linkNext(rest, end, P) });
+    const plan = planLink({ part: seg.part, starts, end, current: s.shot, held: now() - s.shotSince, min: P.shots.min, max: P.shots.studioMax, broll, ...this.linkNext(rest, end, P) });
     const story = { headline: seg.headline, source: seg.source || '', anchorName: remote.name, showName: false, breaking: false, kicker: seg.kicker, category: seg.category };
     // the correspondent's name and desk in the lower third with their first words (as broadcasters do), then the
     // story's headline again
@@ -474,7 +549,7 @@ export class Director {
     };
     let pending = null;
     const cut = (shot) => {
-      clearTimeout(pending);
+      stopCut(pending);
       const apply = () => {
         // FILE and the clip's credit whenever the place's footage is on screen (B-roll, or behind the correspondent)
         s.fileCredit = footage && (shot === 'broll' || shot === 'location') ? remote.credit : null;
@@ -482,9 +557,10 @@ export class Director {
         if (seg.part === 'piece' && shot !== 'broll') nameStrap();
       };
       if (s.shot === shot) return;
-      // the plan cuts once the floor allows; a voice running ahead of its estimate waits the cooldown here
+      // the plan cuts once the floor allows; a voice running ahead of its estimate waits the cooldown here (never
+      // landing inside a word)
       const wait = cutWait(s.program?.id, s.shotSince, now());
-      if (wait > 0.05) pending = setTimeout(apply, wait * 1000);
+      if (wait > 0.05) pending = this.cutWhenClear(wait, apply);
       else apply();
     };
     // the story's strap carries on through the link (its name strap aside)
@@ -494,7 +570,7 @@ export class Director {
     await this.say(seg, (i) => {
       if (i > 0 && plan[i]) cut(plan[i]);
     });
-    clearTimeout(pending);
+    stopCut(pending);
   }
 
   /**
@@ -834,7 +910,8 @@ export class Director {
   async playWeather(seg, index) {
     const s = this.scene;
     s.lowerThird = null;
-    if (s.shot !== 'weather') this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
+    const opening = s.shot !== 'weather'; // the cut from the open (or a break) into the weather centre
+    if (opening) this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
     s.weather = { data: this.episode?.weather || null, seg, index, since: now(), dur: estimateSeg(seg), hot: null, hotAt: 0, pin: null, pinAt: 0, gesture: null, gestureAt: 0 };
     // the opening close-up names the presenter (the strap enters a beat after the cut and leaves after a few
     // seconds, as a name super does)
@@ -852,6 +929,9 @@ export class Director {
       ...(Array.isArray(seg.pins) ? seg.pins : []).map((p) => ({ char: p.char, pin: p })),
       ...(Array.isArray(seg.gestures) ? seg.gestures : []).map((g) => ({ char: g.char, gesture: g })),
     ].sort((a, b) => a.char - b.char);
+    // the first words a breath after the cut from the open, as every programme's (pace open.firstWord; measured: WORLD
+    // WEATHER's first word 0.13 s after the cut, against its 0.6 s)
+    if (opening) await sleep(this.openBreath() * 1000);
     await this.say(seg, null, {
       marks: cues.map((m) => m.char),
       onMark: (i) => {
@@ -876,7 +956,7 @@ export class Director {
     const frames = Math.min(3, teaserLines(seg, splitSentences(seg.text)), s.rundown.length);
     if (frames < 2) {
       this.setShot('wide', { focus: seg.anchor, wall: { mode: 'rundown' } });
-      await sleep(P.open.firstWord * 1000); // the first line a breath after the open
+      await sleep(this.openBreath() * 1000); // the first line a breath after the open
       return this.say(seg);
     }
     const cardOf = (k) => {
@@ -888,22 +968,22 @@ export class Director {
     let pending = null;
     let greeted = false;
     const cut = (apply) => {
-      clearTimeout(pending);
+      stopCut(pending);
       pending = null;
       // the frame follows the voice (owner 22:50: "la foto anterior porque el audio se adelanta"): a cut waits
-      // only so long as to never flash a frame (MONTAGE_FLASH), not for the full headline floor
+      // only so long as to never flash a frame (MONTAGE_FLASH), not for the full headline floor (never inside a word)
       const wait = Math.min(P.holds.montage, MONTAGE_FLASH) - (now() - s.shotSince);
-      if (wait > 0.02) pending = setTimeout(() => ((pending = null), apply()), wait * 1000);
+      if (wait > 0.02) pending = this.cutWhenClear(wait, () => ((pending = null), apply()));
       else apply();
     };
-    await sleep(P.open.firstWord * 1000); // the first line a breath after the open
+    await sleep(this.openBreath() * 1000); // the first line a breath after the open
     await this.say(seg, (i) => {
       if (i > 0 && i < frames) cut(() => this.setShot('montage', { card: { index: cardOf(i) } }));
       else if (i === frames) cut(() => ((greeted = true), this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null })));
     });
     // a greeting too short for the last frame's floor stays on the montage: the story cuts straight from it (or its
     // breaking stinger covers it); a studio wide set now would air for just the after-intro pause (owner 20:40 (2))
-    clearTimeout(pending);
+    stopCut(pending);
     if (!greeted && next?.type !== 'story') this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
   }
 
@@ -1030,14 +1110,16 @@ export class Director {
     let sentAt = null; // when the sentence on air started
     // seconds until the next segment's cut, from now: the sentences left at the voice's own pace so far, less what
     // the sentence on air has already spoken (a cut the cooldown delayed comes in mid-sentence)
-    const left = () => {
-      if (spoke == null) return est + after;
+    // `untilChar(c)`: seconds from now until the voice reaches character c of the segment (the same estimate)
+    const untilChar = (c) => {
+      if (spoke == null) return (c / Math.max(1, chars)) * est;
       const done = starts[sentence] ?? chars;
       const span = sentAt - spoke;
       // (a short first sentence and its pause say little about the pace: the voice's own rate only past 2.5 s / 30 chars)
       const rate = span > 2.5 && done > 30 ? done / span : chars / Math.max(0.5, est);
-      return Math.max(0, (chars - done) / rate - (now() - sentAt)) + after;
+      return Math.max(0, (c - done) / rate - (now() - sentAt));
     };
+    const left = () => untilChar(chars) + after;
     // (beats spaced by the median band's lower bound: the cooldown is a floor, not the rhythm; owner 18:52 median 5-7 s.
     // The band's middle was tried: it dropped the map of every short COSMOS story, so the lower bound stays)
     const spacing = Math.max(P.shots.cooldown, P.shots.median[0]);
@@ -1096,7 +1178,7 @@ export class Director {
       const remote = link?.type === 'cross' ? this.remoteOf(link) : null;
       if (!remote) return;
       thrown = true;
-      clearTimeout(pending);
+      stopCut(pending);
       clearTimeout(watch);
       s.remote = remote;
       s.linkDone = false;
@@ -1104,45 +1186,53 @@ export class Director {
         if (STUDIO.has(s.shot) && (s.shot === 'wide' || s.focus === seg.anchor)) return; // already on the presenter
         const back = () => this.setShot('close', { focus: seg.anchor, storyId: seg.storyId, wall, card: null, framing: null, cameraMove: null });
         const wait = cutWait(s.program?.id, s.shotSince, now());
-        if (wait > 0.05) pending = setTimeout(back, wait * 1000);
+        if (wait > 0.05) pending = this.cutWhenClear(wait, back);
         else back();
         return;
       }
       const go = () => this.setShot('twoway', { focus: seg.anchor, storyId: seg.storyId, card: null, framing: null, cameraMove: null });
       const wait = cutWait(s.program?.id, s.shotSince, now());
-      if (wait > 0.05) pending = setTimeout(go, wait * 1000);
+      if (wait > 0.05) pending = this.cutWhenClear(wait, go);
       else go();
     };
     // IN THEIR WORDS (pace profile shots.quoteCard): the sentence that reads a quote the story's source carries
     // (seg.quote, grounded by the validator) goes to the quote card, held the minimum like any beat
     // (never before a re-staging: the person says those words themselves next)
     const quoteAt = P.shots.quoteCard && seg.quote?.text && !seg.roundup && !restage ? lines.findIndex((l, k) => k > 0 && quoteIn(l, seg.quote.text)) : -1;
-    const cutQuote = () => {
+    const cutQuote = (cue = null) => {
       const wait = cutWait(s.program?.id, s.shotSince, now());
       // only with room for the card to air the minimum before the next segment's cut (as any later beat)
       if (left() - wait < P.shots.min + 1) return false;
-      clearTimeout(pending);
+      // v2: the card holds until the plan's next cue (else the next segment's cut): never past a fact card's maximum
+      // (critic, polish round: a live COSMOS quote read as the story's long last sentence held its card 10.7 s; the
+      // plan's own shot carries that sentence instead)
+      const next = cue && v2cues ? v2cues.find((c) => c.k > cue.k) : null;
+      const run = next ? untilChar(Math.min(chars, next.char)) : left();
+      if (cue && run - wait > P.shots.factMax + 0.5) return false;
+      stopCut(pending);
       const go = () => this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall, card: { quote: seg.quote, source: seg.source, headline: seg.headline } });
-      if (wait > 0.05) pending = setTimeout(go, wait * 1000);
+      if (wait > 0.05) pending = this.cutWhenClear(wait, go);
       else go();
       return true;
     };
     const shotFor = (i, cue = null) => {
       if (thrown) return 0;
       // the quote's sentence belongs to the quote card, whatever beat the plan had for it
-      if (cue && quoteAt > 0 && cue.sentence === quoteAt && !cue.mid && cutQuote()) return 0;
+      if (cue && quoteAt > 0 && cue.sentence === quoteAt && !cue.mid && cutQuote(cue)) return 0;
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
       if (i === 0 && cue.keep && STUDIO.has(s.shot)) return 0; // v2: a short pickup ("Thanks, Ada.") stays on the studio shot on air; the card comes with its line
       const beat = cue.shot;
       const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat), framing: cue.framing, cameraMove: cue.move });
       // Hold every shot for at least the profile's minimum before cutting away (cut cooldown); the opening cut too when
-      // a studio shot is on air (NEWS IN 60's 2.5 s intro wide: the story's voice starts over it, no dead pause)
-      clearTimeout(pending);
-      const held = now() - s.shotSince;
-      const MIN_SHOT = P.shots.cooldown;
+      // a studio shot is on air (NEWS IN 60's 2.5 s intro wide: the story's voice starts over it, no dead pause).
+      // The shot on air counts from its last visible cut: a chat's re-set of the same two-shot (a new focus, the same
+      // camera) is no cut (critic, polish round: the cooldown counted from that re-set and a TECH BYTES story cut to
+      // its reader 0.18 s into her first word). A cut held back lands between words, never inside one
+      stopCut(pending);
+      const held = this.onAir();
       const wait = i === 0 && !STUDIO.has(s.shot) ? 0 : cutWait(s.program?.id, now() - held, now());
       if (wait <= 0.05) apply();
-      else pending = setTimeout(apply, wait * 1000);
+      else pending = this.cutWhenClear(wait, apply);
       return i === 0 ? Math.max(0, wait) : 0;
     };
     // ---- default path (PACE, critics r1)
@@ -1182,16 +1272,15 @@ export class Director {
     // story's end); i = -1: the max-hold relief (its timer already checked the room)
     const cutTo = (i, beat) => {
       if (thrown) return 0;
-      clearTimeout(pending);
+      stopCut(pending);
       const held = this.onAir();
-      const MIN_SHOT = P.shots.cooldown;
       const wait = (i === 0 && !STUDIO.has(s.shot)) || i < 0 ? 0 : cutWait(s.program?.id, now() - held, now()); // pace.js cooldown
       // (1 s of margin: the voice's real length is only estimated until it has spoken a while; a later beat that might
       // air under the minimum is better dropped: critic r1, a 3.2 s picture at a story's end)
       if (i > 0 && left() - wait < P.shots.min + 1) return 0;
       if (wait > 0.05) {
         opening = i === 0;
-        pending = setTimeout(() => ((opening = false), apply(beat)), wait * 1000);
+        pending = this.cutWhenClear(wait, () => ((opening = false), apply(beat)));
       } else apply(beat);
       return Math.max(0, wait);
     };
@@ -1232,6 +1321,6 @@ export class Director {
       else guard(i);
     });
     clearTimeout(watch);
-    clearTimeout(pending);
+    stopCut(pending);
   }
 }

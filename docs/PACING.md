@@ -6,6 +6,211 @@ well: transitions, cooldowns... entertaining, polished programmes of up to 10 mi
 This document is the PACE stream's record: how the channel's rhythm is measured, the targets (one table,
 `public/js/pace.js`), the numbers before and after, what still limits programme length, and what wave 3 should reuse.
 
+<!-- CAMERA-POLISH:BEGIN -->
+## Camera and rhythm polish (13 Oct): every programme measured frame by frame
+
+Owner, 13 Oct: *"con un nivel real"*. The camera (each programme's shot grammar, smooth moves) and the rhythm (transitions,
+the pauses between blocks, the waits) were measured on air as a senior director would check a cut: every frame, every
+cut against the words, every move against its ease.
+
+**Method.** Two servers aired the rotation from WORLD NOW: the offline desk (`PROVIDERS=mock`,
+`FEEDS_FILE=config/feeds.fixture.json`) and the live feeds, Kokoro voices on both; a third started on SEVEN DAYS
+(`ROTATION_START=seven-days`). Each programme was saved from the station's history with the break after it and the
+next programme's open. `tools/pace/trace.mjs --item <saved> --start open --until next-open+6 --fps 30 --camera` plays
+it on Playwright's fake clock and writes one row per frame (the shot, framing and move on air, the Stage's camera as
+drawn, the presenters' head sizes, each voice's sentence and word). "Before" is the same item on the same server with
+the scripts of the commit before the polish (`--js-root`), so voices and pictures are identical. `tools/pace/camera.mjs`
+measures it (cut rate, shortest / median / longest shot, shots over their maximum, cuts inside a word, two cuts close
+together, jump cuts, eyelines, a single on air over another voice, the voice under a segment cut, dead air, shots held
+over silence, every pause against its profile, the waits after the open and before the end card, and every camera move:
+its start against its cut, the ease at both ends, frame-to-frame speed change, pixels per frame, steps going back,
+presenters jumping a head pixel). `camera-compare.mjs` makes the before / after tables; `--frames` keeps the frames
+of a window for filmstrips. Each programme was then recorded with sound (`tools/record.mjs --item`) on the final code.
+
+### What changed
+
+- **Cuts between words (director.js `cutWhenClear`).** A cut that the cooldown holds back lands on the next word's
+  first sound (or at once in silence, at most 0.8 s later), never inside a word: before, COSMOS cut inside a word 5
+  times in one offline programme and 3 times live, TECH BYTES, NEWS IN 60, WORLD NOW and SEVEN DAYS once each. Every
+  pending cut (story beats, the montage, the link's two-way and its return, the quote card) goes through it.
+- **The cooldown counts from the last cut the viewer saw (director.js `onAir`).** A chat's re-set of the same two-shot
+  (a new focus, the same camera) is no cut; the cooldown counted from that re-set and a TECH BYTES story cut to its
+  reader 0.18 s into her first word. A new card (BY THE NUMBERS → IN THEIR WORDS) is a cut, and a v2 framing change.
+- **The open's breath (director.js `openBreath`).** The first word comes `open.firstWord` after the open's cut, less
+  the voice's own start-up when a voice plays: WORLD NOW, TECH BYTES, MONEY MINUTE 0.63 → 0.43-0.46 s (target 0.5),
+  COSMOS 0.82 → 0.66 s (0.7), NEWS IN 60 0.43 → 0.23-0.26 s (0.3), SEVEN DAYS 0.73 → 0.53 s (0.6); WORLD WEATHER spoke
+  0.10 s after the open, now 0.53-0.56 s (0.6).
+- **The picture's pan (pace.js `picturePan`, `shots.pan`; studio.js).** A full-screen picture drifts on one axis at
+  3 px/s (COSMOS 2), eased from rest over 1.2 s (1.6) by whole pixels, still moving when it is cut. Before, it moved at
+  about 7 px/s from the cut's first frame, on both axes (a one-pixel staircase), and stopped dead at its margin.
+- **Moves that keep the presenters' size (camera.js `moveCap`).** A push or pull on the wide is capped where its 22 px
+  heads would round to another whole pixel (2.2 %, was 4 %): the heads stepped 22 → 21 px mid-move on WORLD NOW's and
+  SEVEN DAYS's sign-off pulls, 22 → 23 px on SEVEN DAYS's greeting push. Larger heads keep the full move. The greeting push
+  is at rest 0.8 s before its planned cut (it ended 0.4 s before the real one).
+- **The guard (runtime/direction.js `holdCut`).** An expert's hand-over is two sentences (a 21.8 s two-way followed a
+  cut back to the reader 1.7 s before it); the round-up's opening map carries its title line on top of the map maximum
+  and is never cut by a phrase mark (the reader flashed 4.4 s between two maps); a re-staged quote's hand-over stays on
+  the presenter, so a studio shot carries it and the guard may cut between the studio shots there (an MCU-R held
+  14.9 s), with no margin when the shot runs on to the segment's end (the words are known); a link next is no "next
+  opening" for the guard (its studio plan never airs, and every cut to the WIDE before a re-staged guest was refused).
+- **The links (linkplan.js `capHolds`).** A correspondent's or expert's full frame past the studio maximum gives way to
+  their pictures or the two-way in two or three parts (a LOCATION held 24.2 s live, twice).
+- **The planner's rhythm (direction/shots.js).** A story never opens on the single the previous story ended on (the
+  same presenter's other single instead; SEVEN DAYS held an OTS 17.0 s and an MCU-L 15.9 s across stories); NEWS IN 60
+  reads the previous item by the planner's own round-up test (16.2 s on one MCU-L) and MONEY MINUTE by the previous
+  story's own plan (a WIDE 16.5 s across two stories); a long MONEY MINUTE intro plays WIDE → MCU-R → WIDE for the
+  greeting (the guard alone held the last WIDE 15.1 s), and an intro's headline frames followed by a wide over the
+  maximum put the remaining teasers on the reader's single (COSMOS: 15.8 s); a story carries at most
+  max(2, floor(L / ideal)) shots at the programme's median (COSMOS); COSMOS never plans two cuts closer than its 4.5 s
+  cooldown; no lead-in wide before a chat with a card of its own (a 2.3 s wide before STILL TO COME); the closing wide
+  capped by the studio maximum; a picture or map gives way near the middle of its window; a split single alternates
+  single ⇄ OTS down the run (a 13.6 s OTS); the quote card is refused when it would hold past the card maximum (10.7 s
+  live); capMax may cut a picture as late as its maximum when its return single merges (8.9 s); a cut inside a sentence
+  never lands on its last word ("on October | 8.": its mark fired with the next sentence).
+- **Tools.** `trace.mjs --camera / --item / --js-root / --frames`, `camera.mjs`, `camera-compare.mjs` (section 2).
+
+### Before / after (final code)
+
+| programme | cuts/min (cap) | shortest / median / longest (s) | over max | cuts in a word | open → word (s) | move defects | flagged |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| WORLD NOW, off | 8.66 → 8.66 (8) | 4.16 / 5.81 / 13.46 → 4.09 / 6.04 / 13.46 | 0 → 0 | 0 → 0 | 0.63 → 0.46 (0.5) | 1 → 0 | 2 → 1 |
+| WORLD NOW, live | 7.71 → 7.71 (8) | 3.99 / 7.03 / 21.75 → 4.16 / 7.26 / 12.08 | 1 → 0 | 1 → 0 | 0.63 → 0.43 (0.5) | 1 → 0 | 4 → 2 |
+| TECH BYTES, off | 9.12 → 9.61 (9) | 3.99 / 5.79 / 13.17 → 3.99 / 5.73 / 9.67 | 1 → 0 | 1 → 0 | 0.63 → 0.43 (0.5) | 0 → 0 | 5 → 3 |
+| TECH BYTES, live | 8.11 → 8.39 (9) | 2.28 / 7.26 / 13.56 → 3.99 / 6.9 / 12.44 | 2 → 0 | 0 → 0 | 0.59 → 0.43 (0.5) | 0 → 0 | 6 → 1 |
+| NEWS IN 60, off | 10.06 → 10.09 (10) | 3.99 / 5.3 / 9.04 → 4.13 / 5.13 / 9.04 | 0 → 0 | 1 → 0 | 0.43 → 0.23 (0.3) | 0 → 0 | 2 → 1 |
+| NEWS IN 60, live | 7.66 → 8.53 (10) | 3.99 / 6.48 / 16.24 → 4.06 / 6.6 / 9.64 | 1 → 0 | 1 → 0 | 0.43 → 0.26 (0.3) | 0 → 0 | 3 → 1 |
+| COSMOS DESK, off | 8.19 → 7.54 (7) | 4.09 / 6.8 / 15.74 → 4.09 / 7.57 / 12.67 | 1 → 0 | 5 → 0 | 0.82 → 0.66 (0.7) | 0 → 0 | 7 → 1 |
+| COSMOS DESK, live | 7.5 → 7.23 (7) | 4.49 / 7.29 / 24.16 → 4.65 / 7.85 / 13.53 | 3 → 0 | 3 → 0 | 0.82 → 0.66 (0.7) | 0 → 0 | 7 → 1 |
+| WORLD WEATHER, off | 1.62 → 1.62 (8) | 13.6 / 19.54 / 106.16 → 13.6 / 19.54 / 106.16 | 0 → 0 | 0 → 0 | 0.1 → 0.56 (0.6) | 0 → 0 | 2 → 1 |
+| WORLD WEATHER, live | 1.39 → 1.39 (8) | 12.77 / 25.28 / 107.55 → 12.77 / 25.28 / 107.55 | 0 → 0 | 0 → 0 | 0.1 → 0.53 (0.6) | 0 → 0 | 2 → 1 |
+| MONEY MINUTE, off | 8.82 → 8.83 (8) | 4.13 / 6.07 / 13.43 → 4.13 / 6.11 / 11.45 | 2 → 1 | 0 → 0 | 0.63 → 0.43 (0.5) | 0 → 0 | 3 → 2 |
+| MONEY MINUTE, live | 6.88 → 7.75 (8) | 3.86 / 7.03 / 24.16 → 3.86 / 7.06 / 12.24 | 4 → 0 | 0 → 0 | 0.59 → 0.43 (0.5) | 0 → 0 | 6 → 2 |
+| SEVEN DAYS, live | 7.55 → 8.02 (7) | 3.99 / 7.06 / 17.03 → 3.99 / 7.09 / 11.91 | 2 → 0 | 1 → 0 | 0.73 → 0.53 (0.6) | 3 → 0 | 7 → 1 |
+
+Full tables per programme (every measure, offline and live): `/tmp/polish-camera/measurements.md`.
+
+### Critique rounds
+
+Six categories, each 0-10, as a senior director scores a programme: **grammar** (framings, every story change a visible
+cut, jump cuts, eyelines), **cuts** (between words, in pauses, cards), **lengths** (floor, median band, maxima, cut
+rate), **moves** (eases, presenters' size, rest before the cut), **pictures** (the full-screen pan), **rhythm** (the
+open's breath, pauses, the wait before the end card). A round's score is a programme's lowest category.
+
+| round | what changed | WORLD NOW | TECH BYTES | NEWS IN 60 | COSMOS | WEATHER | MONEY | SEVEN DAYS |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| r0 | the code before the polish | 7.5 pictures | 7.5 pictures | 7.5 pictures | 7.0 cuts | 7.0 rhythm | 7.5 pictures | 7.5 pictures |
+| r1 | cuts between words, the cooldown from the last visible cut, a card is a cut, the open's breath, the picture's pan | 8.5 moves | 8.4 lengths | 8.6 grammar | 8.6 lengths | — | — | — |
+| r2 | moves that keep the heads' size, the guard (expert, round-up), the links' cap, the planner's rhythm | 9.0 grammar | 8.8 lengths | 8.6 grammar | 8.9 lengths | 8.8 moves | 8.5 lengths | 8.8 lengths |
+| r3 (final) | every story change a visible cut, the MONEY MINUTE intro, the re-staged hand-over, the quote card, capMax, no last-word cut, COSMOS's intro, a link is no next opening | 9.3 lengths | 9.2 lengths | 9.4 lengths | 9.3 lengths | 8.8 moves | 9.2 lengths | 9.0 lengths |
+
+(r1 was measured on the offline desk for four programmes, the live defects carried from r0 until r2 measured them again; SEVEN DAYS from r2 on, once the weekend server had produced it. A score names its weakest category.)
+
+Final, per category:
+
+| programme | grammar | cuts | lengths | moves | pictures | rhythm | round |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| WORLD NOW | 9.6 (a glance in an OTS) | 9.8 | 9.3 (8.66 cuts/min off; live median 7.26 s) | 9.8 | 9.8 | 9.7 | 9.3 |
+| TECH BYTES | 9.7 | 9.8 | 9.2 (9.61 cuts/min off; live median 6.9 s) | 9.8 (none) | 9.8 | 9.3 (a guest's 1.4 s pause) | 9.2 |
+| NEWS IN 60 | 9.7 (the bible's metronome) | 9.8 | 9.4 (10.09 cuts/min off; live median 6.6 s) | 10 (locked off) | 9.8 | 9.7 | 9.4 |
+| COSMOS DESK | 9.7 | 9.8 | 9.3 (7.54 / 7.23 cuts/min) | 10 (locked off) | 9.8 | 9.5 (chat pauses) | 9.3 |
+| WORLD WEATHER | 9.5 (107 s with no cut) | 9.7 | 9.5 (the format) | 8.8 (the wall's 2 px judder) | — | 9.8 | 8.8 |
+| MONEY MINUTE | 9.7 | 9.7 | 9.2 (8.83 cuts/min off; a card 8.7 s off; a 3.9 s picture live) | 10 (locked off) | 9.8 | 9.6 (a link's pause) | 9.2 |
+| SEVEN DAYS | 9.8 | 9.8 | 9.0 (8.02 cuts/min) | 9.8 | 9.8 | 9.7 | 9.0 |
+
+### Defects found and their state (ten or more per programme; WORLD WEATHER five)
+
+Times are seconds into the trace (open at ~10 s); "off" = the offline desk, "live" = the live feeds; ✓ fixed, ◐ better,
+✗ open (why in the next section).
+
+**WORLD NOW.** 1 ✓ sign-off pull: the heads step 22 → 21 px mid-move (off 323.5, live 363.5). 2 ✓ live: an expert's
+two-way held 21.8 s (max 15) after a cut back to the reader 1.7 s before the hand-over (182.1). 3 ✓ live: that cut landed
+inside a word (word 6 of sentence 3). 4 ✓ the full-screen picture starts at ~7 px/s on the cut's first frame. 5 ✓ it
+drifts on both axes (a one-pixel diagonal staircase). 6 ✓ it stops dead at its margin while on air. 7 ✓ open → first
+word 0.63 s (0.5). 8 ✓ live round-up: the reader flashed 4.4 s between the opening world map and item 2's map (322.5).
+9 ✓ off: story 26 opened on the MCU-R story 25 ended on, a 10.3 s hold with no visible cut (289.3). 10 ✓ live: a picture
+cut on a sentence's last word (story 7). 11 ✗ cut rate 8.66 / min off (8). 12 ✗ live median 7.26 s (5-7). 13 ✗ live:
+A glances at the partner in her own OTS 1.5 s before the cut (283.2).
+
+**TECH BYTES.** 1 ✓ off: the closing wide held 13.2 s (12) over the chats and sign-off. 2 ✓ off: a story cut to its
+reader inside her first word (42.0), the cooldown counted from a re-set two-shot. 3 ✓ a card giving way to another card
+(BY THE NUMBERS → IN THEIR WORDS) was no cut for the cooldown: the second card's clock never restarted. 4 ✓ live: an OTS
+held 13.6 s (12), the same framing twice after a split (146.7). 5 ✓ live: a 2.3 s wide (floor 4) before STILL TO COME's
+own card, two cuts 2.3 s apart (236.9). 6 ✓ live: a glance at the partner in a single 2.1 s before the cut (241.5; gone with that wide).
+7 ✓ live: a picture held 8.9 s (8), its cut planned on "October | 8." fired with the next sentence (345.0). 8 ✓ the
+picture's lurch, staircase and dead stop (WORLD NOW 4-6). 9 ✓ open → first word 0.63 s (0.5). 10 ◐ live median 7.26 →
+6.90 s (4.5-6.5). 11 ✗ cut rate 9.12 → 9.61 / min off (9). 12 ✗ off: a re-staged guest's one line holds 1.25 s past
+its last word and the pause back is 1.39 s (0.75): the guest's shot keeps the programme's 4 s floor.
+
+**NEWS IN 60.** 1 ✓ story 1's opening cut, held by the cooldown over the intro wide, landed inside the reader's first
+word (off and live, 10.8). 2 ✓ live: the item after the round-up and the next one both opened on MCU-L: 16.2 s with no
+visible cut (49.3). 3 ✓ the intro wide aired 3.99 s (floor 4). 4 ✓ open → first word 0.43 s (0.3). 5-7 ✓ every FULL's
+lurch, staircase and dead stop (a 7.1 s picture stopped on air). 8 ◐ live median 6.48 → 6.60 s (4-6): live items read
+long. 9 ✗ cut rate 10.06 → 10.09 / min off (10). 10 ✗ (bible) every item MCU-L → FULL: a metronome the format asks for.
+
+**COSMOS DESK.** 1-5 ✓ off: five cuts inside a word (a card, a single, two two-ways, an OTS: 55.5, 197.8, 214.9, 228.3,
+256.6). 6-8 ✓ live: three more (272.0, 342.6, 363.1). 9 ✓ off: the intro wide held 15.7 s (15) after its one headline
+frame. 10 ✓ live: IN THEIR WORDS held 10.7 s and 9.9 s (card max 9) on a long quote sentence. 11 ✓ live: a
+correspondent's LOCATION held 24.2 s (15). 12 ✓ short stories took map + picture + reader in 10 s (the shot budget).
+13 ✓ open → first word 0.82 s (0.7). 14 ✓ the picture's pan (COSMOS now 2 px/s, eased over 1.6 s). 15 ◐ cut rate 8.19 →
+7.54 / min off, 7.50 → 7.23 live (7). 16 ✗ the pauses into and out of the chats run 1.0-1.2 s against 0.75-0.96.
+
+**WORLD WEATHER.** The weather centre directs its own camera (`scenes/weather*`, outside this stream's files): five
+defects were verified, not ten. 1 ✓ the first word came 0.10 s after the open's cut (0.6): no breath. 2 ✗ the wall's
+flies between zones move in 2 px steps at uneven intervals, a judder (filmstrip). 3 ✗ one wall view runs up to 107 s with
+no cut, the flies the only change. 4 ✗ the trace sees the whole centre as one `weather` shot per zone, so its boards
+(HOT & COLD, WARNINGS, THE NEXT THREE DAYS) and the presenter's views cannot be measured: the median 19.5 / 25.3 s
+against the studio band is the analyser's blind spot, not a measure. 5 ✗ no weather band exists for the analyser.
+
+**MONEY MINUTE.** 1 ✓ off: a correspondent's LOCATION held 13.4 s (12). 2 ✓ live: the same 24.2 s. 3 ✓ live: the intro's
+last WIDE held 15.1 s (12): the guard had cut its MCU-R back early. 4 ✓ live: a WIDE held 16.5 s across two stories (a
+story with no sentence start to cut on stayed on its WIDE, the next opened on it). 5 ✓ live: the MCU-R held 14.9 s into a
+re-staged guest's words. 6 ✓ open → first word 0.63 s (0.5). 7 ✓ the picture's lurch, staircase and dead stop.
+8 ✗ off: a figure card held 8.68 s (8): no sentence pause fits and MONEY MINUTE cuts only in a pause. 9 ✗ live: a
+picture aired 3.86 s (floor 4), the plan's 4.0 s less the voice's own timing. 10 ✗ cut rate 8.82 → 8.83 / min off (8).
+11 ✗ live: the pause into a link 0.69-0.73 s (0.38).
+
+**SEVEN DAYS.** 1 ✓ an OTS held 17.0 s across two stories by one presenter (no visible cut). 2 ✓ an MCU-L held 15.9 s
+the same way. 3 ✓ a cut inside a word (62.5). 4 ✓ the greeting push: the heads step 22 → 23 px mid-move. 5 ✓ the
+sign-off pull: 22 → 21 px. 6 ✓ the push ended 0.4 s before the cut (0.73 s now). 7 ✓ open → first word 0.73 s (0.6).
+8 ✓ the picture's lurch, staircase and dead stop. 9 ✓ the wide's 3.9-4 % moves on 22 px heads (2.2 % now). 10 ✓ the
+sign-off: last word → end card 1.79 s (1.8). 11 ✗ cut rate 7.55 → 8.02 / min (7): the two holds of 1-2 are visible cuts now.
+
+### Still short of 9.7 (honest)
+
+No programme reaches 9.7 in every category; the stop condition was not met. What holds each one back:
+
+- **The cut rate (every programme but WEATHER).** WORLD NOW 8.66 / min offline (cap 8), TECH BYTES 9.61 (9), NEWS IN 60
+  10.09 (10), COSMOS 7.54 / 7.23 (7), MONEY MINUTE 8.83 (8), SEVEN DAYS 8.02 (7). Part of it is this round's own doing:
+  story changes that aired as no cut (one presenter's same single across two stories, 15-17 s) and holds past a maximum
+  (COSMOS's intro, a guard hand-over) are visible cuts now. The caps also fight the median bands: a 5-7 s median means
+  8.5-12 cuts a minute, a cap of 8 needs a 7.5 s mean. A looser single split (WORLD NOW / SEVEN DAYS `singleSoft` 12.5)
+  was probed on the plans and dropped: it made 25-35 s holds elsewhere. One of the two targets should move (PACE / owner).
+- **The live median.** WORLD NOW 7.26 s (5-7), TECH BYTES 6.9 (4.5-6.5), NEWS IN 60 6.6 (4-6), MONEY MINUTE 7.1 (5-7):
+  live copy reads longer than the fixtures; the planner holds the floor and the maxima, not the median.
+- **MONEY MINUTE.** A figure card holds 8.68 s offline (8): no sentence pause fits, and the format cuts only in a pause.
+  A live picture airs 3.86 s (floor 4): the plan's 4.0 s, less the voice's own timing.
+- **TECH BYTES.** A re-staged guest's one line keeps the programme's 4 s floor: the shot holds 1.25 s past the words and
+  the pause back to the studio is 1.39 s (0.75).
+- **COSMOS.** The pauses into and out of the chats run 1.0-1.2 s against 0.75-0.96 s.
+- **Outside this stream's files** (requests below): WORLD NOW's glance at the partner in an OTS 1.5 s before the cut
+  (v2 `direction/behaviour.js`); the weather centre's own camera (`scenes/weather*`): the wall's flies move in 2 px steps
+  at uneven intervals and one view runs up to 107 s with no cut; a speech mark for a mid-sentence cut can fire a word
+  late (`audio.js #pollMarks`: the "October | 8." cut fired with the next sentence; the planner now avoids a sentence's
+  last word, the source is untouched).
+
+Requests:
+- `scenes/weather*` (weather centre): a zone fly at a steady whole-pixel cadence (one step every n frames, never 2 px
+  at once), and a change of view (the presenter closer, a zoom) at least every ~30 s.
+- v2 `direction/behaviour.js`: no glance at the partner in a single or OTS of one's own in the last 2 s before its cut.
+- `audio.js`: with recorded words, a mark fires at its word's onset (`charIndex` at the word's start), not with the
+  next word or sentence.
+- `tools/pace/camera.mjs` + the trace: weather-centre keys (zone, board) so its cuts and flies can be measured, and a
+  weather band.
+- PACE / owner: reconcile `cutsPerMinMax` with the median bands.
+- `linkplan.js` (`capHolds`) and `studio.js` (`picturePan`) were edited in this stream as camera code; their owners
+  should know.
+<!-- CAMERA-POLISH:END -->
+
 ## Fix round 1 (critics r1, 03:30-04:40): what changed, measured again
 
 The analyser is stricter now, so these tables show more red than the first round's: every shot is checked against BOTH
@@ -227,6 +432,9 @@ hold, intended).
 | --- | --- |
 | `tools/showcase/record-show.mjs --v2` | the full recording with sound (picture, server voices, jingles, beds) and its `-timeline.json` |
 | `tools/pace/trace.mjs` | the same timeline in a few minutes: the real channel page on Playwright's fake clock (showcase `page-init.js`), recorded voices ending at their true length, no audio render; a contact sheet every 12 s |
+| `tools/pace/trace.mjs --camera --fps 30` | the same run with one row per frame: the shot on air, its framing and move, the Stage's camera as drawn, each presenter's voice (speaking, sentence, word); `--item` airs a saved episode (the server's history airs the break and the next open after it), `--js-root` plays it with another checkout's scripts (a before / after on one server, same voices and pictures), `--frames a-b` keeps every frame of a window as PNG (filmstrips) |
+| `tools/pace/camera.mjs` | measures a `--camera` trace per programme as a director checks it frame by frame: visible shots, cut rate, cuts inside a word, a single on air while another voice speaks, jump cuts, flashes, eyelines, dead air, shots held over silence, the waits after the open and before the end card, stingers over speech, and every camera move (start against its cut, ease at both ends, frame-to-frame speed change, px per frame, rounded steps going back, presenters jumping a head pixel) |
+| `tools/pace/camera-compare.mjs` | before / after tables of two `camera.mjs --json` reports |
 | `tools/pace/analyse.mjs` | reads either timeline (+ the recorder's stems when kept) and measures every row below against the programme's profile; `--json` adds one-line summaries |
 | `tools/pace/compare.mjs` | before/after tables from two analyser JSONs (section 4) |
 | `tools/pace/strips.mjs` | writes the measured shot / speech / pause strips into the lab page |
@@ -273,6 +481,8 @@ keeps its own copy.
 | map / picture | 5-10 / 4-8 s | 5-9 / 4-8 | 4-8.5 / 6-10 | 4-7 / 4-8 | 4-8 / 4-8 | maps ≥ 5 s; cosmos.md (see below) |
 | figure card | 4-8 s | 4-8 | 4-9 | 4-8 | 4-7 | read twice, never a dead frame |
 | studio shot at most | 15 s | 12 | 15 | 12 | 12 | static holds; owner 18:52 |
+| a single splits past (`singleSoft`) | 11 s | 10 | 13 | — | — | COSMOS keeps its still singles (camera polish) |
+| full-screen picture pan (`pan`) | 3 px/s | 3 | 2 | 3 | 3 | one axis, eased from rest (`picturePan`); bibles ≤ 4 px/s |
 | map cuts in a row / map share / single share | 2 / 33 % / 60 % | 2 / 30 % / 55 % | 2 / 33 % / 60 % | 2 / 33 % / 60 % | 2 / 33 % / 60 % | critic r1: 40 s of maps |
 | stories in a row with one beat order | 2 | 2 | 2 | 2 | 2 | variety |
 | story → story | 1.0 s | 0.9 | 1.3 | 0.85 | 0.75 | world-now.md 0.7 + air; news-60.md 0.7 |
@@ -282,7 +492,7 @@ keeps its own copy.
 | before "And finally" | 1.2 | 1.0 | 1.3 | 1.2 | — | world-now.md 1.0, tech-bytes.md 0.8 + air |
 | sign-off hold on the wide | 1.5 | 1.0 | 1.5 | 0.6 | 1.0 | world-now.md, news-60.md |
 | open → first word | 0.5 | 0.5 | 0.7 | 0.5 | 0.3 | world-now.md, news-60.md |
-| camera moves | ≤ 5, 40 s apart | ≤ 2 | 0 | 0 | 0 | bibles: COSMOS/MONEY/N60 locked off |
+| camera moves | ≤ 5, 40 s apart | ≤ 2 | 0 | 0 | 0 | bibles: COSMOS/MONEY/N60 locked off; on the wide ≤ 2.2 % (camera.js `moveCap`: its 22 px heads keep their size) |
 | marked gestures / min of own speech | 2.5-5 | 3-6 | 1.8-3.5 | 1.5-3 | 1-2 | owner 22:50 (6) don't overuse; 20:40 not too few |
 | a gesture name again within / at segment start | last 3 / ≤ 60 % | same | same | same | same | owner 20:40: repetitive |
 | listener nods / min of listening | 1-6 | 1.5-7 | 0.6-4 | — | — | alive, never a nodding dog |
@@ -305,7 +515,7 @@ fast, see section 7), page ≥ 1.4 s, linger 0.6 s; programme tag 8 s within 15 
 "readable twice" hold 3 words/s; `TRANSITIONS` keeps only the transitions whose numbers reach the screen (stinger cut at
 half time, strap in/out/flip, ticker push).
 
-Helpers: `gapAfter(episode, i)` (the pause after a segment, seeded ± 8 %), `gapKind` (a block boundary only after a
+Helpers: `picturePan(dt, mx, my, dir, id)` (the full-screen picture's drift), `gapAfter(episode, i)` (the pause after a segment, seeded ± 8 %), `gapKind` (a block boundary only after a
 "Still to come" chat line or a flagged segment, never ordinary copy), `readTwice`, `tickerHold`, `factHold`, `shotMax`
 (the top of every shot window), `cutAllowed` / `cutWait` (cooldown), `isRepeat` (identical framing / same full-screen type
 limits), `gestureBudget(id, seconds, { grave })`, `listenerRules(id)`, `estimateAir(episode)`, `paceTrace(ev)`.
@@ -315,9 +525,10 @@ limits), `gestureBudget(id, seconds, { grave })`, `listenerRules(id)`, `estimate
 | consumer | what it takes from pace.js |
 | --- | --- |
 | `public/js/director.js` | pause after every segment (`gapAfter`, minus the voice start-up only when a voice plays), strap cleared in a block pause, sign-off hold (its cue under the hold), end card, breaking card, ident, promo, the voice-paced montage floor, the first line a breath after the open; default path: `cutWait` cooldown (the story's opening cut too), `isRepeat`, `shotMax`-style maxima per shot with a seeded relief, `mapRun`, And finally never on a map, strap entry 1 s after the real cut |
-| `v2 runtime/direction.js` | cut cooldown, stinger, the per-segment pause the plans are timed against, the intro's breath, the max-hold guard's maxima (`maxHold` = `shotMax`) |
+| `v2 runtime/direction.js` | cut cooldown, stinger, the per-segment pause the plans are timed against, the intro's breath (`director.openBreath`), the max-hold guard's maxima (`maxHold` = `shotMax`) |
+| `studio.js` | the full-screen picture's pan (`picturePan`, `shots.pan`) |
 | `v2 direction/context.js` | `gapAfter` may be a per-segment function (one per episode) |
-| `v2 direction/shots.js` | minimum shot, headline beat floor (the last frame too), per-programme studio max, single split, picture / map windows, `factHold`, `shotMax` (capMax: maps, pictures, cards never planned past their maximum), `mapRun` in round-ups, sign-off hold |
+| `v2 direction/shots.js` | minimum shot, headline beat floor (the last frame too), per-programme studio max, single split, picture / map windows, `factHold`, `shotMax` (capMax: maps, pictures, cards never planned past their maximum), `mapRun` in round-ups, sign-off hold, the median band (a story's shot budget), the cooldown (COSMOS's spaced cuts) |
 | `v2 runtime/stage.js` | trace lines only (cuts, fired gestures/looks) |
 | `graphics/strap.js, ticker.js, captions.js, index.js` | every in/out/dwell timing (`STRAP_TIMING`, `TICKER_TIMING`, `CAPTION_TIMING`, `PROGRAM_TAG` are pace values; a ticker item holds `tickerHold(words)`) |
 | `config/channel.json` | `targetSeconds` mirrors `length.target` (tested), read by the writer prompt and the mock |

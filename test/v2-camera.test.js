@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { framing, cameraAt, framingInfo, bezelClearance, moveScale, easeMove, singleCam, kAt, MOVE_CEILING } from '../public/js/v2/canvas25d/camera.js';
+import { framing, cameraAt, framingInfo, bezelClearance, moveScale, easeMove, singleCam, kAt, MOVE_CEILING, placeActor } from '../public/js/v2/canvas25d/camera.js';
 import { SET, sxOf, syOf } from '../public/js/v2/canvas25d/studio/geometry.js';
 import { lookFor, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
@@ -181,13 +181,21 @@ test('moves: eased, monotone, no overshoot; pull widens; ceiling 6 %', () => {
   assert.ok(Math.abs(moveScale(pull, 5) - 1 / 1.04) < 1e-9);
   assert.ok(moveScale({ type: 'push', amount: 0.5, delay: 0, dur: 1 }, 2) <= 1 + MOVE_CEILING + 1e-12);
   // the camera of a move is a dolly: x, y, hy and zoom stay
-  const spec = { framing: 'wide', cast: CASTS['world-now'], programId: 'world-now', move: push };
+  const spec = { framing: 'mcu-l', cast: CASTS['world-now'], focus: 'A', programId: 'world-now', move: push };
   const c0 = { ...cameraAt(spec, 0) };
   const c1 = cameraAt(spec, 5);
   assert.equal(c1.x, c0.x);
   assert.equal(c1.hy, c0.hy);
   assert.equal(c1.zoom, c0.zoom);
   assert.ok(Math.abs(kAt(c1, SET.presenterZ) / kAt(c0, SET.presenterZ) - 1.04) < 1e-9);
+  // on the wide (22 px heads) a move stops short of a head-pixel edge: the presenters never jump 4.5 % in one frame
+  for (const type of ['push', 'pull']) {
+    const wide = { framing: 'wide', cast: CASTS['world-now'], programId: 'world-now', move: { type, amount: 0.04, delay: 0, dur: 5 } };
+    const s0 = placeActor({ ...cameraAt(wide, 0) }, SET.seatX.A).s;
+    for (let t = 0; t <= 5.5; t += 1 / 60) assert.equal(placeActor({ ...cameraAt(wide, t) }, SET.seatX.A).s, s0, `${type} at ${t.toFixed(2)} s`);
+    const k5 = kAt({ ...cameraAt(wide, 5) }, SET.presenterZ);
+    assert.ok(Math.abs(k5 - 1) > 0.015, `${type}: still a move (${k5.toFixed(4)})`);
+  }
 });
 
 // a minimal 2D canvas for logo.js (the desk plate's logo texture) so the set renders in node

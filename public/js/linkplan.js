@@ -18,6 +18,8 @@
 //     current  the shot on air when the part starts, held = how long it has been on air (s)
 //     broll    pictures of the place can be shown (footage, the story's picture or its map)
 //     next     the shot the following part opens on ('twoway', 'studio'; null: none), nextAt its time (s)
+//     max      the programme's studio maximum: a correspondent full frame held longer gives way at a sentence start
+//              (capHolds: their pictures, else the two-way) and comes back for the end when there is room
 
 export const LINK_PLAN_SHOTS = new Set(['location', 'twoway', 'broll']);
 
@@ -89,7 +91,7 @@ function onAirAt(plan, i, current) {
   return current;
 }
 
-export function planLink({ part, starts, end, current = null, held = Infinity, min = 4, broll = true, next = null, nextAt = null }) {
+export function planLink({ part, starts, end, current = null, held = Infinity, min = 4, broll = true, next = null, nextAt = null, max = Infinity }) {
   const n = starts.length;
   const want = wantedShots(part, n, { current, broll });
   const empty = new Array(n).fill(null);
@@ -113,6 +115,7 @@ export function planLink({ part, starts, end, current = null, held = Infinity, m
     }
   };
   walk(0, 0);
+  if (Number.isFinite(max) && (part === 'piece' || part === 'answer')) capHolds(best, { starts, end, current, held, min, max, broll, next, nextAt });
   // a cut to the shot already on air is no cut
   let on = current;
   return best.map((x) => {
@@ -120,6 +123,52 @@ export function planLink({ part, starts, end, current = null, held = Infinity, m
     on = x;
     return x;
   });
+}
+
+/**
+ * The correspondent full frame (LOCATION) held past the programme's studio maximum gives way at a sentence start:
+ * to the place's pictures when there are any, else to the TWO-WAY (the presenter listening beside them), and comes
+ * back for the end when there is room; every part keeps the floor and the next part's cut (critic, polish round: an
+ * expert's answer held 24 s on one full frame in COSMOS, 13.4 s in MONEY MINUTE). Mutates `plan`.
+ */
+function capHolds(plan, { starts, end, current, held, min, max, broll, next, nextAt }) {
+  const n = plan.length;
+  const limit = next && Number.isFinite(nextAt) ? nextAt : end;
+  // the location runs of the plan: [from sentence, to sentence) with their times
+  let on = current, from = 0, since = -held;
+  const runs = [];
+  for (let i = 0; i <= n; i++) {
+    const to = i < n ? plan[i] : '__end';
+    if (i < n && (!to || to === on)) continue;
+    const t = i < n ? starts[i] : limit;
+    if (on === 'location') runs.push({ from, to: i, t0: Math.max(since, from < n ? starts[from] : since), t1: t });
+    if (i < n) [on, from, since] = [to, i, starts[i]];
+  }
+  const alt = broll ? 'broll' : 'twoway';
+  for (const r of runs) {
+    if (r.t1 - r.t0 <= max + 0.5) continue;
+    const ok = (i, a, b) => i > r.from && i < r.to && starts[i] - a >= min - EPS && b - starts[i] >= min - EPS;
+    // three parts (location, relief, location) when each holds the floor and the middle third gives room, else two
+    let best3 = null;
+    for (let i = r.from + 1; i < r.to; i++) {
+      for (let j = i + 1; j < r.to; j++) {
+        if (!ok(i, r.t0, starts[j]) || !ok(j, starts[i], r.t1)) continue;
+        const parts = [starts[i] - r.t0, starts[j] - starts[i], r.t1 - starts[j]];
+        if (Math.max(...parts) > max + 0.5) continue;
+        const score = Math.abs(parts[0] - parts[2]) + Math.abs(parts[1] - (r.t1 - r.t0) / 3);
+        if (!best3 || score < best3.score) best3 = { i, j, score };
+      }
+    }
+    if (best3) {
+      plan[best3.i] = alt;
+      plan[best3.j] = 'location';
+      continue;
+    }
+    const mid = (r.t0 + r.t1) / 2;
+    let best2 = null;
+    for (let i = r.from + 1; i < r.to; i++) if (ok(i, r.t0, r.t1) && (!best2 || Math.abs(starts[i] - mid) < Math.abs(starts[best2] - mid))) best2 = i;
+    if (best2 != null) plan[best2] = alt;
+  }
 }
 
 /** Seconds from a part's start to each sentence's first word: the recorded words (by character), else the characters. */
