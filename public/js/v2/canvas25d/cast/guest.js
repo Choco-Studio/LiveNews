@@ -39,6 +39,7 @@ import { nova, drawCoils, drawHaloBack, drawWarmHead } from './nova.js';
 import { rhea, vic, mika, drawWaveCrop, drawFringeBob } from './correspondents.js';
 import { EXPERTS } from './experts.js';
 import { kai, rosa } from './full-time.js';
+import { qm } from './pay-attention.js';
 import { drawReceding, drawPixie, drawHighTop, drawMop, drawWaves, drawWavesBack, drawBraids, drawBraidsBack } from './hair-experts.js';
 import { tier, hashInt } from './wardrobe-b.js';
 
@@ -187,8 +188,11 @@ const RECEDE_AT = 0.3;
 // reads of the look on air (full-time-looks.js): a pulled-back cut reads as the guests' sleek drawer (Rosa A's
 // ponytail, B's cornrows), a shaved head as a relative of their bald crown (Kai A), the rest by their own silhouette.
 const FT_DRAWER = { shaved: 'shaved', topknot: 'sleek', curtains: 'curtains', ponytail: 'sleek', cornrows: 'sleek', curls: 'mop' };
-const NAMED_DRAWER = { paco: 'shortHair', lola: 'bob', sam: 'crop', penny: 'sleek', max: 'textured', ada: 'straight', nova: 'coils', kai: FT_DRAWER[kai.hair.style] || 'crop', rosa: FT_DRAWER[rosa.hair.style] || 'sleek', rhea: 'sleek', vic: 'waveCrop', mika: 'fringeBob', omar: 'receding', clara: 'pixie', dev: 'highTop', tomas: 'ring', june: 'undercut', amara: 'braids', leo: 'mop', ines: 'waves' };
-const NAMED_LOOKS = { paco, lola, sam, penny, max, ada, nova, kai, rosa, rhea, vic, mika, ...EXPERTS };
+// PAY ATTENTION's host (pay-attention-looks.js) by what the eye reads of the look on air: the pompadour a short cut with
+// lift (the guests' textured drawer); no guest drawer draws two puffs or a hijab, so those keep keys of their own
+const QM_DRAWER = { puffs: 'puffs', pompadour: 'textured', hijab: 'hijab' };
+const NAMED_DRAWER = { paco: 'shortHair', lola: 'bob', sam: 'crop', penny: 'sleek', max: 'textured', ada: 'straight', nova: 'coils', kai: FT_DRAWER[kai.hair.style] || 'crop', rosa: FT_DRAWER[rosa.hair.style] || 'sleek', qm: QM_DRAWER[qm.hair.style] || 'sleek', rhea: 'sleek', vic: 'waveCrop', mika: 'fringeBob', omar: 'receding', clara: 'pixie', dev: 'highTop', tomas: 'ring', june: 'undercut', amara: 'braids', leo: 'mop', ines: 'waves' };
+const NAMED_LOOKS = { paco, lola, sam, penny, max, ada, nova, kai, rosa, qm, rhea, vic, mika, ...EXPERTS };
 export const NAMED_IDS = Object.keys(NAMED_DRAWER);
 
 /** A hair ramp's colour family: what the eye reads at 1x (dark, brown, red, light, grey). */

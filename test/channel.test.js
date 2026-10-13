@@ -592,7 +592,10 @@ describe('config/channel.json', () => {
     // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js),
     // an expert the analyses of the programmes that put stories to them (server/experts.js)
     const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || []), ...(p.experts || [])]));
-    for (const id of Object.keys(channel.presenters)) assert.ok(hosts.has(id), `${id} hosts nothing`);
+    // PAY ATTENTION's host (pay-attention.md §9 step 6) is cast before the quiz's programme entry lands: until a quiz
+    // programme (kind 'quiz', a draft or on air) exists qm may host nothing; once one does, qm must host it like anyone
+    const quiz = programs.some(([, p]) => p.kind === 'quiz');
+    for (const id of Object.keys(channel.presenters)) assert.ok(hosts.has(id) || (id === 'qm' && !quiz), `${id} hosts nothing`);
   });
 
   test('programme categories exist in config/feeds.json, and every feed category is used by some programme', () => {
