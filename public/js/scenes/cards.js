@@ -953,7 +953,7 @@ function ledgerLayout(rows, label, source) {
     const qual = r.qual ? ellipsis(r.qual, 80, 1) : '';
     const qualW = qual ? measureText(qual, 1, 'micro') + 4 : 0;
     const lab = ellipsis(r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
-    return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1, 'micro'), y: top + 12 + i * rowH };
+    return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1), y: top + 12 + i * rowH };
   });
   L = { label, source, top, items, fs, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: srcText(source, 300) };
   LEDGER_LAYOUTS.set(rows, L);
@@ -975,11 +975,12 @@ function drawLedger(ctx, dt, o, rows, acc) {
     for (let i = 0; i < n; i++) {
       const it = L.items[i];
       const at = 0.15 + i * 0.3;
-      // label in micro on the figure's baseline, a dotted slate leader, then the qualifier (micro)
-      // right before the figure
+      // label in silver body type on the figure's baseline (as the other boards' labels: micro fog on a
+      // dimmed picture was the faintest thing on the card), a dotted steel leader, then the qualifier
+      // (micro) right before the figure
       const fy = 7 * (L.fs - 2); // the row's baseline drops with a 3x figure
-      drawText(ctx, it.lab, X0, it.y + 9 + fy, S.microFog);
-      ctx.fillStyle = P.slate;
+      drawText(ctx, it.lab, X0, it.y + 7 + fy, S.silver);
+      ctx.fillStyle = P.steel;
       const lx = X0 + it.labW + 4;
       const rx = W - X0 - it.fw - 4 - it.qualW;
       for (let x = lx + ((lx & 1) ^ 1); x < rx; x += 2) ctx.fillRect(x, it.y + 13 + fy, 1, 1);
@@ -1313,10 +1314,15 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   return drawRuleCard(ctx, dt, opts, rows, acc, style.wipe || 0.3);
 }
 
-/** The fact cards' layouts as drawn (tests): the one-figure rule card and the stack of two or three figures. */
+/**
+ * The cards' layouts as drawn (tests): the one-figure rule card, the stack of two or three figures, TECH BYTES's
+ * ledger and the breaking card.
+ */
 export const cardLayouts = {
   rule: (fact, label = '', source = '') => ruleLayout(fact, label, source, rowsFor(fact, null)),
   stack: (numbers, label = '', source = '') => stackLayout(label, source, rowsFor('', numbers)),
+  ledger: (numbers, label = '', source = '') => ledgerLayout(rowsFor('', numbers), label, source),
+  breaking: (headline, source = '') => breakingLayout(String(headline ?? ''), source),
 };
 
 const QUOTE = { text: '', by: null, image: null, accent: null, programId: '' };
@@ -1419,11 +1425,21 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
 
 const breakingField = lazyBackdrop({ key: 'breaking', colors: [P.black, P.ink], cx: 192, cy: 108, reach: 520 });
 
+/**
+ * The band, the headline and the source as one block, centred a touch above the middle of the frame between the top
+ * row and the ticker (at a fixed y 52 the block filled the top half and left the bottom one empty).
+ */
+function breakingLayout(headline, source) {
+  const BH = 28;
+  const lay = layout(headline, W - 2 * X0, 3, 4);
+  const blockH = BH + 16 + lay.lines.length * lay.lh - (lay.lh - 7 * lay.scale) + (source ? 9 : 0);
+  return { BY: Math.max(40, Math.round(106 - blockH / 2)), BH, blockH, lay };
+}
+
 export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}) {
   ctx.drawImage(breakingField(), 0, 0);
+  const { BY, BH, lay } = breakingLayout(headline, source);
   // the red band wipes in from the left
-  const BY = 52;
-  const BH = 28;
   const bp = easeOutQuint(seg(dt, 0, 0.36));
   plate(ctx, 0, BY, W, BH, P.red, bp);
   plate(ctx, 0, BY + BH, W, 2, P.darkRed, bp);
@@ -1435,8 +1451,7 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
     ctx.restore();
   }
   // headline on the calm field below, balanced lines, all left-aligned on x 19
-  const lay = layout(headline, W - 2 * X0, 3, 4);
-  const top = BY + BH + 14;
+  const top = BY + BH + 16;
   for (let i = 0; i < lay.lines.length; i++) rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, 0.42 + i * 0.08, 0.34), lay.scale === 2 ? S.white2 : S.white);
   if (source) {
     // the breaking card runs under the 'bug' graphics (no captions or strap): room down to the ticker

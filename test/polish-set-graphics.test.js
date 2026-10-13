@@ -5,7 +5,10 @@
 //             soffit ticker, the planetarium's baked noise and the experts' rooms built ahead (the first cut's cost)
 //   graphics  NEWS IN 60's tag back after a breaking card, MONEY MINUTE's bottom line from the aired stories, two-line
 //             captions above the strap, name lists kept whole, the micro pound
-//   boards    the one-figure card's hero at 3x, the stack inside the card area with three qualified figures
+//   boards    the one-figure card's hero at 3x, the stack inside the card area with three qualified figures, the ledger's
+//             labels in body type, the breaking card centred
+//   round 2   the two-way's boxes clear of a two-line caption, TECH BYTES's idle chip with its traces, the weather's
+//             cloud texture built ahead in slices
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { C } from '../public/js/v2/canvas25d/pixbuf.js';
@@ -16,10 +19,14 @@ import { drawSpace, skyWarmTasks, SKY } from '../public/js/v2/canvas25d/studio/s
 import { drawExpertStudio, warmExpertStudio, EXPERT_STUDIOS } from '../public/js/v2/canvas25d/studio/experts.js';
 import { SET, kAt, sxOf, syOf } from '../public/js/v2/canvas25d/studio/geometry.js';
 import { P } from '../public/js/palette.js';
-import { textPixels } from '../public/js/font.js';
+import { textPixels, measureText } from '../public/js/font.js';
 import { layoutText } from '../public/js/graphics/breaks.js';
 import { paginate } from '../public/js/graphics/captions.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
+import { TWOWAY } from '../public/js/v2/canvas25d/studio/remote.js';
+import { CAPTION, STRAP, TOP, TICKER } from '../public/js/graphics/layout.js';
+import { drawLinkGraphics } from '../public/js/graphics/remote.js';
+import { cloudTexture, warmCloudTexture } from '../public/js/scenes/weather/sky.js';
 
 const W = 384;
 function shot(o, t = 10) {
@@ -259,5 +266,87 @@ describe('boards', () => {
     assert.ok(two.src, 'two figures keep their source line');
     // the first qualifier stands clear of the kicker (micro over micro read as one two-line kicker)
     assert.ok(L.ys[0] - 7 - (L.PY + 15) >= 4);
+  });
+});
+
+describe('round 2', () => {
+  test('the two-way\'s box labels and accent rule stay clear of a two-line caption over the strap', () => {
+    const capTop = STRAP.tagY - CAPTION.gap - 2 * CAPTION.pitch;
+    assert.ok(TWOWAY.y + TWOWAY.h + 3 < capTop, `the accent rule at ${TWOWAY.y + TWOWAY.h + 3}, the caption from ${capTop}`);
+    assert.ok(TWOWAY.y - 1 >= TOP.y + TOP.h + 8, 'the boxes keep their distance from the top row');
+    const fills = [];
+    const ctx = { fillStyle: '', fillRect(x, y, w, h) { fills.push({ c: this.fillStyle, x, y, w, h }); }, drawImage() {}, save() {}, restore() {} };
+    drawLinkGraphics(ctx, 10, { shot: 'twoway', remote: { kind: 'correspondent', place: 'YUCAT\u00c1N PENINSULA', desk: 'AMERICAS DESK' } }, P.red);
+    const plates = fills.filter((f) => f.c === P.black && f.h === 11);
+    assert.equal(plates.length, 2);
+    for (const p of plates) assert.ok(p.y + p.h <= capTop - 2, `label ${p.y}..${p.y + p.h} under the caption's top ${capTop}`);
+  });
+
+  test('TECH BYTES\'s idle chip carries the open\'s traces out across the wall (an emblem alone read as an empty panel)', () => {
+    for (const [framing, min] of [['mcu-l', 20], ['single-a', 20], ['wide', 6]]) {
+      const px = shot({ programme: 'tech-bytes', framing, wall: 'idle', presenters: true });
+      const r = wallRect(lab.cameraFor(framing, 'tech-bytes'));
+      const x0 = Math.max(0, r.x0), x1 = Math.min(W, r.x1), y0 = Math.max(0, r.y0), y1 = Math.min(216, r.y1);
+      let sx = 0, sy = 0, n = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          if (px[y * W + x] >>> 0 !== C.cyan >>> 0) continue;
+          sx += x;
+          sy += y;
+          n++;
+        }
+      }
+      assert.ok(n > 0, `${framing}: the chip`);
+      const cx = Math.round(sx / n), cy = Math.round(sy / n);
+      const body = framing === 'wide' ? 14 : 28; // the chip's half-width with its pins
+      let best = 0;
+      for (let y = cy - 16; y <= cy + 16; y++) {
+        let run = 0;
+        for (let x = x0; x < x1; x++) {
+          if (px[y * W + x] >>> 0 === C.slate >>> 0 && Math.abs(x - cx) > body) best = Math.max(best, ++run);
+          else run = 0;
+        }
+      }
+      assert.ok(best >= min, `${framing}: the longest trace beside the chip is ${best} px`);
+    }
+  });
+
+  test('the weather\'s cloud texture is built ahead in slices, the same texture as built at once', () => {
+    let calls = 0;
+    while (!warmCloudTexture(0)) calls++;
+    assert.ok(calls > 50, `${calls} slices (one step each at a zero budget)`);
+    const L = cloudTexture();
+    assert.deepEqual(L.map((l) => l.size), [256, 128, 64, 32]);
+    for (const l of L) {
+      const hist = new Uint32Array(256);
+      for (const v of l.data) hist[v]++;
+      assert.ok(hist.every((h) => h === l.data.length / 256), 'equalised: a flat histogram');
+      for (let i = 1; i < l.gauss.length; i += 97) assert.equal(Math.sign(l.gauss[i]), Math.sign(l.data[i] - 127.5), 'the same ranks as a normal');
+      assert.equal(l.corr.length, 32 * 32);
+      assert.ok(Math.abs(l.corr[0] - 1) < 0.01, 'unshifted, the texture matches itself');
+    }
+  });
+});
+
+describe('boards, round 2', () => {
+  let cards;
+  before(async () => {
+    globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ({}) }) };
+    cards = await import('../public/js/scenes/cards.js');
+  });
+
+  test('TECH BYTES\'s ledger labels are body type (micro fog on a dimmed picture was the faintest thing on the card)', () => {
+    const L = cards.cardLayouts.ledger([{ value: '30%', label: 'less energy' }], 'BY THE NUMBERS', 'Circuit Weekly');
+    assert.equal(L.fs, 3);
+    assert.equal(L.items[0].labW, measureText(L.items[0].lab, 1));
+  });
+
+  test('the breaking card\'s block sits in the middle of the frame, not in its top half', () => {
+    for (const [h, src] of [['Panama Canal reopens', 'Ledger Line'], ['Panama Canal reopens after a day-long closure', ''], ['Magnitude 7.1 earthquake strikes off the coast of northern Japan, tsunami warning issued for the region', 'Pixelburg Post']]) {
+      const B = cards.cardLayouts.breaking(h, src);
+      const above = B.BY - (TOP.y + TOP.h), below = TICKER.y - (B.BY + B.blockH);
+      assert.ok(above >= 18 && below >= above, `${h}: ${above} px above the block, ${below} below`);
+      assert.ok(below - above <= 24, `${h}: balanced (${above} above, ${below} below)`);
+    }
   });
 });
