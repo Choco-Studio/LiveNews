@@ -413,6 +413,37 @@ test('planner: a split long single alternates single ⇄ over-the-shoulder, neve
   for (let k = 1; k < shots.length; k++) assert.notEqual(`${shots[k].framing}`, `${shots[k - 1].framing}`, shots.map((e) => e.framing).join(' '));
 });
 
+test('planner: a story never opens on the single the previous story ended on (the same presenter reading on)', () => {
+  // SEVEN DAYS, 13 Oct: one presenter's stories 8-10; storySingle's alternation met a story that ended on a split
+  // (OTS) and one that ended on its returning single: an OTS held 17.0 s and an MCU-L 15.9 s across the story changes
+  const story = (id, text, extra = {}) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'world', hasImage: true, emotion: 'neutral', cues: [], text, ...extra });
+  const long = 'Ministers met for a third day of talks in the capital on Tuesday. The draft text covers energy, trade and the border. Officials said a deal was close but not yet agreed. A vote is expected in parliament next week, and the opposition says it will try to block it.';
+  const synthetic = {
+    id: 'sdRun', program: { id: 'seven-days', title: 'SEVEN DAYS', theme: 'week' }, cast: { A: 'paco', B: 'lola' }, rundown: [],
+    segments: [
+      { type: 'intro', anchor: 'A', text: 'This is SEVEN DAYS.', cues: [] },
+      story('s1', long, { hasImage: false }), // its reader only: the long single splits, MCU-L → OTS
+      story('s2', long),
+      story('s3', long, { location: { place: 'PARIS', lat: 48.9, lon: 2.35 } }),
+      story('s4', long),
+      { type: 'outro', anchor: 'A', text: 'That was SEVEN DAYS.', cues: [] },
+    ],
+  };
+  let pairs = 0;
+  for (const [name, ep] of [['seven-days run', synthetic], ...['world-now', 'world-now-long', 'tech-bytes', 'cosmos'].map((n) => [n, fixture(n)])]) {
+    const plans = ep.segments.map((s, i) => (s.type === 'story' ? shotsOf(ep, i) : null));
+    for (let i = 1; i < plans.length; i++) {
+      if (!plans[i] || !plans[i - 1] || ep.segments[i].anchor !== ep.segments[i - 1].anchor) continue;
+      const end = plans[i - 1].at(-1);
+      const open = plans[i][0];
+      if (end.shot !== 'close' || open.shot !== 'close') continue;
+      pairs++;
+      assert.ok(end.framing !== open.framing || end.focus !== open.focus, `${name} story ${i} opens on the ${open.framing} story ${i - 1} ended on`);
+    }
+  }
+  assert.ok(pairs >= 3, `same-presenter story changes on singles checked: ${pairs}`);
+});
+
 test('planner: NEWS IN 60 never opens an item on the framing the last one ended on (a short located item after the round-up is no map)', () => {
   const loc = (place, lat, lon) => ({ place, lat, lon });
   const story = (id, text, extra = {}) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'world', hasImage: true, emotion: 'neutral', cues: [], text, ...extra });
