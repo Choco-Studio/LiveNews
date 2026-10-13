@@ -26,7 +26,7 @@ import { matsOf } from './cast/base.js';
 import { drawOutfit } from './cast/outfit.js';
 import { headFrame, drawHead, drawEars } from './head.js';
 import { drawFace } from './face.js';
-import { drawArm, drawProps } from './hands.js';
+import { drawArm, drawProps, plantBegin, plantEnd, plantArm, newPlantedArm } from './hands.js';
 
 export { TILT } from './space.js';
 export { matsOf };
@@ -65,7 +65,8 @@ const now = () => performance.now();
  * @param buf  PartBuffer
  * @param L    look (cast/<id>.js)
  * @param sk   skeleton from rig.solve()
- * @param xf   { x, y, s, gb, clip } screen position of the neck base, px per unit, group base, clip torso at buf.clipY
+ * @param xf   { x, y, s, gb, clip, desk } screen position of the neck base, px per unit, group base, clip torso at
+ *             buf.clipY; desk: seated at a desk (the resting hands and the script keep their place on it)
  * @returns    the head frame (head.js headFrame), useful for framing and eyelines
  */
 export function drawCharacter(buf, L, sk, xf) {
@@ -132,11 +133,22 @@ export function drawCharacter(buf, L, sk, xf) {
   }
   if (P) t0 = lap('look', t0);
 
-  // ---- desk props (hands.js), then the arms: the one nearer the camera last
-  drawProps(buf, L, m, sk, toS, s, gb + G.extra, 16);
+  // ---- desk props (hands.js), then the arms: the one nearer the camera last. Seated at a desk, a resting
+  // hand and the script stay where they lie while the body breathes, sways, leans and nods (HANDS: weight;
+  // hands.js plantArm): the arms bend to them
+  let ska = sk;
+  if (xf.desk) {
+    const by0 = oy, bx0 = ox;
+    plantBegin(toS, (x, y, z = 0) => [bx0 + x * s, by0 + (y + z * TILT) * s]);
+    PLANTED.props = sk.props;
+    plantArm(L, sk.arms.L, PLANTED.arms.L);
+    plantArm(L, sk.arms.R, PLANTED.arms.R);
+    ska = PLANTED;
+  }
+  drawProps(buf, L, m, ska, toS, s, gb + G.extra, 16);
   const arms = [
-    ['L', sk.arms.L, gb + G.armA, gb + G.cuffA, gb + G.handA],
-    ['R', sk.arms.R, gb + G.armB, gb + G.cuffB, gb + G.handB],
+    ['L', ska.arms.L, gb + G.armA, gb + G.cuffA, gb + G.handA],
+    ['R', ska.arms.R, gb + G.armB, gb + G.cuffB, gb + G.handB],
   ];
   arms.sort((a, b) => a[1].wrist[2] + a[1].elbow[2] - (b[1].wrist[2] + b[1].elbow[2]));
   let z = 20;
@@ -144,12 +156,16 @@ export function drawCharacter(buf, L, sk, xf) {
     drawArm(buf, L, m, arm, side === 'L' ? -1 : 1, toS, s, ga, gc, gh, z);
     z += 4;
   }
+  if (xf.desk) plantEnd();
   if (P) {
     lap('arms', t0);
     CHAR_PROFILE.n++;
   }
   return head;
 }
+
+// the planted skeleton of the presenter being drawn (props read its arms; one shared scratch object)
+const PLANTED = { props: null, arms: { L: newPlantedArm(), R: newPlantedArm() } };
 
 function lap(key, t0) {
   const t1 = now();

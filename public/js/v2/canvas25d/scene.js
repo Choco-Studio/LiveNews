@@ -32,7 +32,8 @@ const HEADS = [];
 
 /**
  * Pose and draw actors into the shared PartBuffer, then resolve into the frame.
- * @param list [{ actor, x, y, s, clip }] x,y = screen position of the neck base, s = px per rig unit
+ * @param list [{ actor, x, y, s, clip, desk }] x,y = screen position of the neck base, s = px per rig unit;
+ *             desk false: not seated at a desk (the resting hands follow the body)
  * @param clipRows optional Int16Array(W) of desk rows that clip torsos
  * @returns the head frames in list order (a reused array: read it before the next call)
  */
@@ -43,7 +44,7 @@ export function drawActors(t, list, clipRows = null) {
   HEADS.length = 0;
   for (const it of list) {
     const sk = QUALITY.lag ? poseAt(it.actor, t) : poseNoLag(it.actor, t);
-    HEADS.push(drawCharacter(parts, it.actor.look, sk, { x: it.x, y: it.y, s: it.s, gb, clip: !!clipRows && it.clip !== false }));
+    HEADS.push(drawCharacter(parts, it.actor.look, sk, { x: it.x, y: it.y, s: it.s, gb, clip: !!clipRows && it.clip !== false, desk: it.desk !== false }));
     gb += GROUPS_PER_ACTOR;
   }
   parts.resolve(frame);

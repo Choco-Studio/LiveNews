@@ -45,7 +45,7 @@
 // { t0, t1, target, amt? }, gestures[] entries { name, t0, speed?, n?, variant?, amp? }).
 // FACES adds channels through expression.js FACE_REST (reset here every frame).
 import { REST, GESTURES, ARM_CHANNELS, defOf, rateOf } from './gestures/index.js';
-import { applyArmIdle } from './gestures/fidget.js';
+import { applyArmIdle, applyArmPlant } from './gestures/fidget.js';
 import { evalTrack, copy } from './tracks.js';
 import { applyEmotion, solveFace, FACE_REST } from './expression.js';
 import { applyLook, applyListen } from './behaviour.js';
@@ -53,7 +53,7 @@ import { applyIdle } from './idle.js';
 import { applySpeech } from './speech.js';
 import { glassesAnchor } from './glasses.js';
 import { handGeometry, newHandGeometry } from './hands.js';
-import { clamp, smooth, TILT } from './space.js';
+import { clamp, smooth, TILT, ik } from './space.js';
 
 export { evalTrack } from './tracks.js';
 export { EMOTIONS } from './expression.js';
@@ -286,6 +286,7 @@ export function evaluate(L, perf, t, c = newChannels()) {
   const seed = perf.seed ?? (L.id.length * 31 + 7);
   applyEmotion(c, perf, t, persona); // 2
   applyArmIdle(c, L, perf, t); // 2b: the hands' idle life on the desk (gestures/fidget.js), under the gestures
+  applyArmPlant(c, perf, t); // how much each hand rests on the desk (the gestures that own it lift it off)
   let gestLook = applyGestures(c, perf.gestures || [], t); // 3
   gestLook = applyLook(c, perf, t, gestLook); // 4
   applyIdle(c, persona, perf, t, seed, gestLook); // 5
@@ -327,34 +328,10 @@ export function evaluateLag(L, perf, t, c = newChannels()) {
 // ---------------------------------------------------------------------------
 // Solve: partner space → screen space, IK
 
-function ik(S, T, L1, L2, pole, E, Wt) {
-  let dx = T[0] - S[0], dy = T[1] - S[1], dz = T[2] - S[2];
-  let d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
-  const maxD = (L1 + L2) * 0.995, minD = Math.abs(L1 - L2) + 0.5;
-  const dc = clamp(d, minD, maxD);
-  dx /= d;
-  dy /= d;
-  dz /= d;
-  d = dc;
-  Wt[0] = S[0] + dx * d;
-  Wt[1] = S[1] + dy * d;
-  Wt[2] = S[2] + dz * d;
-  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
-  const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
-  // pole direction made perpendicular to the shoulder→wrist axis
-  const pd = pole[0] * dx + pole[1] * dy + pole[2] * dz;
-  let px = pole[0] - dx * pd, py = pole[1] - dy * pd, pz = pole[2] - dz * pd;
-  const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
-  px /= pl;
-  py /= pl;
-  pz /= pl;
-  E[0] = S[0] + dx * a + px * h;
-  E[1] = S[1] + dy * a + py * h;
-  E[2] = S[2] + dz * a + pz * h;
-}
-
 function newSkeleton() {
-  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 } });
+  // desk: the wrist's target on the desk without the shoulders' and the breath's lift; plant: how much the hand
+  // rests there (character.js keeps a resting hand on its place while the body moves, hands.js plantArm)
+  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 }, desk: [0, 0, 0], pole: [0, 0, 0], plant: 0 });
   return {
     body: { x: 0, y: 0, lean: 0, breathe: 0 },
     shoulder: { L: 0, R: 0 },
@@ -367,7 +344,6 @@ function newSkeleton() {
 }
 
 const TWN = [0, 0, 0], TWF = [0, 0, 0]; // wrist targets of the near and far arm
-const PW = [0, 0, 0];
 const ANCHOR = [0, 0];
 // a head frame in BODY space (head-local units → body units) for glasses.js glassesAnchor
 const BODY_HEAD = {
@@ -437,6 +413,10 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     TW[0] = arm.shoulder[0] + w[0] * m * armScale;
     TW[1] = arm.shoulder[1] + w[1] * armScale + lift * 0.6;
     TW[2] = w[2] * armScale;
+    arm.desk[0] = TW[0];
+    arm.desk[1] = T.shoulderJoint[1] + w[1] * armScale;
+    arm.desk[2] = TW[2];
+    arm.plant = clamp(pass === 0 ? c.plant : c.plantF, 0, 1);
     const d = pass === 0 ? c.dir : c.dirF;
     const dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
     arm.handDir[0] = (d[0] * m) / dl;
@@ -461,10 +441,10 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   for (let pass = 0; pass < 2; pass++) {
     const arm = sk.arms[pass === 0 ? near : far];
     const pole = pass === 0 ? c.pole : c.poleF;
-    PW[0] = pole[0] * m;
-    PW[1] = pole[1];
-    PW[2] = pole[2];
-    ik(arm.shoulder, pass === 0 ? TWN : TWF, A.upper, A.fore, PW, arm.elbow, arm.wrist);
+    arm.pole[0] = pole[0] * m;
+    arm.pole[1] = pole[1];
+    arm.pole[2] = pole[2];
+    ik(arm.shoulder, pass === 0 ? TWN : TWF, A.upper, A.fore, arm.pole, arm.elbow, arm.wrist);
   }
   return sk;
 }

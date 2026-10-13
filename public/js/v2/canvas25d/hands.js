@@ -48,7 +48,7 @@
 // No allocation per frame: scratch buffers are module level and sized for the
 // largest close-up; the hot loops use Math.sqrt (no Math.hypot) and no closures.
 import { P } from '../../palette.js';
-import { TILT, clamp } from './space.js';
+import { TILT, clamp, ik } from './space.js';
 import { material, toneN, MAT, LIGHT } from './pixbuf.js';
 import { matKey } from './cast/base.js';
 import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
@@ -520,9 +520,92 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
     sleeveRim(buf, ga, m.sleeve, hm.rim);
   }
 
-  // ---- the hand (snapped inputs: see snapArm)
-  handGeometry(L, snapArm(arm), side, HG);
-  rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z + 3);
+  // ---- the hand (snapped inputs: see snapArm); a hand resting on the desk is drawn in the desk's own frame
+  // (plantArm), so while the body breathes and sways around it its raster stays the same and is reused
+  if (arm.deskHand) {
+    DESK_ARM.wrist = arm.deskWrist;
+    DESK_ARM.handDir = arm.handDir;
+    DESK_ARM.hand = arm.hand;
+    handGeometry(L, snapArm(DESK_ARM), side, HG);
+    rasterHand(buf, L, hm, HG, snapBasis(PD), s, gh, z + 3);
+  } else {
+    handGeometry(L, snapArm(arm), side, HG);
+    rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z + 3);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hands resting on the desk keep their place (owner, LISTA 13 "mano relajada": weight). The rig's wrist targets
+// live in body space, which breathes, sways, leans and nods with the torso; a hand lying on the desk should not
+// (it slid up to 2 px with the body at s 3.4, and the script under it with it). character.js brackets the
+// drawing of a seated presenter with plantBegin / plantEnd; plantArm moves each resting arm's wrist to the
+// body-space point drawn where its desk target is (the target without the body's motion), weighted by
+// arm.plant, and solves the elbow again; a fully resting hand is drawn in the desk frame (constant raster).
+
+const PB = new Float64Array(8), PD = new Float64Array(8); // body and desk bases of the presenter being drawn
+let plantOn = false;
+const DESK_ARM = { wrist: null, handDir: null, hand: null };
+
+/** Start planting for one presenter: its body projection and the desk's (the same without the body's motion). */
+export function plantBegin(toS, toDesk) {
+  projBasis(toS, PB);
+  projBasis(toDesk, PD);
+  plantOn = true;
+}
+
+/** Stop planting (after the presenter's props and arms are drawn). */
+export function plantEnd() {
+  plantOn = false;
+}
+
+/** The body-space point drawn where desk-space point (x, y, z) is, at the same depth: into `out`. */
+export function plantPoint(x, y, z, out) {
+  if (!plantOn) {
+    out[0] = x;
+    out[1] = y;
+    out[2] = z;
+    return out;
+  }
+  const rx = px(PD, x, y, z) - PB[0] - z * PB[6], ry = py(PD, x, y, z) - PB[1] - z * PB[7];
+  const det = PB[2] * PB[5] - PB[4] * PB[3] || 1e-9;
+  out[0] = (rx * PB[5] - PB[4] * ry) / det;
+  out[1] = (PB[2] * ry - rx * PB[3]) / det;
+  out[2] = z;
+  return out;
+}
+
+/** A scratch arm (plantArm's output): the shape objects are shared with the solved arm, the joints its own. */
+export function newPlantedArm() {
+  return { shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: null, hand: null, desk: null, pole: null, plant: 0, deskHand: false, deskWrist: null };
+}
+
+const PT3 = [0, 0, 0], PT4 = [0, 0, 0];
+/**
+ * The solved arm with its resting hand kept on the desk, into `out` (newPlantedArm): the wrist goes to the
+ * body-space point of its desk target by arm.plant and the elbow is solved again; a hand fully at rest that
+ * lands exactly there is flagged `deskHand` (drawn in the desk frame). Outside plantBegin/End, a copy.
+ */
+export function plantArm(L, arm, out) {
+  out.handDir = arm.handDir;
+  out.hand = arm.hand;
+  out.desk = arm.desk;
+  out.pole = arm.pole;
+  out.plant = arm.plant;
+  out.deskWrist = arm.desk;
+  for (let i = 0; i < 3; i++) {
+    out.shoulder[i] = arm.shoulder[i];
+    out.elbow[i] = arm.elbow[i];
+    out.wrist[i] = arm.wrist[i];
+  }
+  out.deskHand = false;
+  const p = arm.plant;
+  if (!plantOn || !(p > 0.001) || !arm.desk) return out;
+  plantPoint(arm.desk[0], arm.desk[1], arm.desk[2], PT3);
+  for (let i = 0; i < 3; i++) PT4[i] = arm.wrist[i] + (PT3[i] - arm.wrist[i]) * p;
+  ik(out.shoulder, PT4, L.arm.upper, L.arm.fore, arm.pole, out.elbow, out.wrist);
+  const ex = out.wrist[0] - PT3[0], ey = out.wrist[1] - PT3[1], ez = out.wrist[2] - PT3[2];
+  out.deskHand = p >= 0.999 && ex * ex + ey * ey + ez * ez < 1e-4;
+  return out;
 }
 
 // the armhole seam runs from the shoulder top to the armpit, SEAM_DOWN sleeve radii below the shoulder joint
@@ -1226,10 +1309,51 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
   const y0 = Math.max(0, Math.floor(Math.min(ay, byy) - R) - by0), y1 = Math.min(bh, Math.ceil(Math.max(ay, byy) + R) + 1 - by0);
   const inv = len2 > 1e-9 ? 1 / len2 : 0;
   const invS = 1 / s;
+  // each row visits only its span of the bone's capsule (convex: the hull of the two end circles), not the whole
+  // bounding box (a diagonal finger's box is mostly empty): a superset of every pixel the tests below accept,
+  // so the raster is the same. A blunt tip reaches a little past its circle (the superellipse's corners).
+  const Rs = blunt ? R * 1.25 : R, R2 = Rs * Rs, RL = Rs * Math.sqrt(len2);
   for (let j = y0; j < y1; j++) {
     const cy = by0 + j + 0.5;
     const o = j * LW;
-    for (let i = x0; i < x1; i++) {
+    const ry = cy - ay, ryb = cy - byy;
+    let lo = Infinity, hi = -Infinity;
+    if (R2 >= ry * ry) {
+      const w = Math.sqrt(R2 - ry * ry);
+      lo = ax - w;
+      hi = ax + w;
+    }
+    if (R2 >= ryb * ryb) {
+      const w = Math.sqrt(R2 - ryb * ryb);
+      if (bxx - w < lo) lo = bxx - w;
+      if (bxx + w > hi) hi = bxx + w;
+    }
+    if (len2 > 1e-9) {
+      // the strip between the two ends: 0 ≤ (p − a)·d ≤ |d|², |(p − a) × d| ≤ Rs|d|, each linear in x on the row
+      let s0 = -Infinity, s1 = Infinity;
+      const dd = ry * dy, cr = ry * dx;
+      if (dx > 1e-12) {
+        s0 = ax - dd / dx;
+        s1 = ax + (len2 - dd) / dx;
+      } else if (dx < -1e-12) {
+        s0 = ax + (len2 - dd) / dx;
+        s1 = ax - dd / dx;
+      } else if (dd < 0 || dd > len2) s1 = -Infinity;
+      if (dy > 1e-12) {
+        s0 = Math.max(s0, ax + (cr - RL) / dy);
+        s1 = Math.min(s1, ax + (cr + RL) / dy);
+      } else if (dy < -1e-12) {
+        s0 = Math.max(s0, ax + (cr + RL) / dy);
+        s1 = Math.min(s1, ax + (cr - RL) / dy);
+      } else if (cr > RL || cr < -RL) s1 = -Infinity;
+      if (s0 <= s1) {
+        if (s0 < lo) lo = s0;
+        if (s1 > hi) hi = s1;
+      }
+    }
+    if (hi < lo) continue;
+    const i0 = Math.max(x0, Math.floor(lo - bx0) - 1), i1 = Math.min(x1, Math.ceil(hi - bx0) + 1);
+    for (let i = i0; i < i1; i++) {
       const cx = bx0 + i + 0.5;
       const uRaw = ((cx - ax) * dx + (cy - ay) * dy) * inv;
       const u = uRaw < 0 ? 0 : uRaw > 1 ? 1 : uRaw;

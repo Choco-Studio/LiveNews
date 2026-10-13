@@ -122,6 +122,18 @@ export function applyArmIdle(c, L, perf, t) {
   applyTap(c, perf, seed, T, t, wN);
 }
 
+/**
+ * How much each hand rests on the desk (c.plant near, c.plantF far, 0..1): 1 unless a planned gesture owns
+ * that arm (the same ownership curve the idle layer yields with: up over 0.25 s from the gesture's t0, back
+ * over 0.6 s after its end). character.js keeps a resting hand where it lies while the body breathes, sways
+ * and leans (hands.js plantArm). Runs whether or not the idle hands are on (perf.armIdle).
+ */
+export function applyArmPlant(c, perf, t) {
+  gestureOwn(perf, t, OWN);
+  c.plant = 1 - OWN[0];
+  c.plantF = 1 - OWN[1];
+}
+
 function addArm(w, a, b, e, lift, wt) {
   if (wt <= 0) return;
   const dist = Math.abs(b[0] - a[0]) + Math.abs(b[2] - a[2]);

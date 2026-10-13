@@ -97,6 +97,9 @@ export const REST = {
   touch: 0,
   tipGap: 0,
   tipSettle: 0,
+  // how much each hand rests on the desk (gestures/fidget.js applyArmPlant; never authored by a gesture)
+  plant: 1,
+  plantF: 1,
   yaw: 0, pitch: 0, roll: 0, hx: 0, hy: 0, lean: 0, bx: 0, by: 0, shN: 0, shF: 0,
   brow: 0, browIn: 0, smile: 0, squint: 0, lid: 0, lookX: 0, lookY: 0,
 };
