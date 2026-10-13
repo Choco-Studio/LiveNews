@@ -85,6 +85,9 @@ export const SHOT_STYLES = {
   // FULL TIME: WORLD NOW's grammar on its own pace profile (pace.js 'full-time': studio shots to 12 s, a single split past
   // 10, pictures 4-8 s). Without it the planner played WORLD NOW's windows and a 12.4 s story aired on one 13 s single
   'full-time': { ...fromPace('full-time'), moves: true },
+  // PAY ATTENTION: the director plans and makes every cut of the quiz (quizplay.js planQuizShots, quizdirector.js); the
+  // plan carries the shot it planned for each segment (seg.quizShot) so the gestures and glances know what is seen
+  'pay-attention': { ...fromPace('pay-attention') },
 };
 
 const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');
@@ -111,7 +114,8 @@ export function planShots(ctx) {
   // the whole segment (director.js playBoardSegment), so the plan says so (its neighbours plan around it)
   const own = PACE[ctx.programId]?.shots;
   const boardSeg = ctx.type === 'story' && ((ctx.seg?.feature === 'scores' && ctx.seg.scores?.length && own?.score) || (ctx.seg?.feature === 'fixtures' && ctx.seg.fixtures?.length >= 2 && own?.fixtures));
-  if (termCard) out = [ev(ctx, 0, 0, 'fact', null, ctx.speaker, 'term')];
+  if (ctx.type === 'quiz') out = quizShot(ctx);
+  else if (termCard) out = [ev(ctx, 0, 0, 'fact', null, ctx.speaker, 'term')];
   else if (teaseFrame) out = [ev(ctx, 0, 0, 'tease', null, ctx.speaker, 'still-to-come')];
   else if (boardSeg) out = [ev(ctx, 0, 0, ctx.seg.feature === 'scores' ? 'scores' : 'fact', null, ctx.speaker, ctx.seg.feature === 'scores' ? 'score-centre' : 'coming-up')];
   else switch (id) {
@@ -151,6 +155,28 @@ export function planShots(ctx) {
   // the sign-off's hold before the end card that this plan assumed (the bible's, unless ctx.gapAfter says otherwise)
   if (ctx.type === 'outro') out[out.length - 1].hold = round3(tl.gap);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// PAY ATTENTION
+
+// the quiz's question parts: a board (quizplay.js QUESTION_PARTS) and its cards
+const QUIZ_BOARD_PARTS = new Set(['frame', 'options', 'countdown', 'lock', 'buzz', 'stall', 'guess', 'pins', 'reveal', 'tally', 'round', 'tie', 'don', 'pick', 'result', 'table']);
+const QUIZ_FRAMING = { H: 'quiz-host', A: 'quiz-a', B: 'quiz-b' };
+
+/**
+ * A quiz segment's shot: the one the director planned (seg.quizShot: a board 'quiz', the quiz's wide, a single), else
+ * the same rule without the episode's timeline (a question part or a card on its board, the welcome, the scores and the
+ * sign-off on the wide, any other line on its speaker's single).
+ */
+function quizShot(ctx) {
+  const seg = ctx.seg || {};
+  const q = seg.quizShot;
+  if (q && q.shot) return [ev(ctx, 0, 0, q.shot, q.framing || null, q.focus || ctx.speaker, q.shot === 'quiz' ? `quiz-${q.board || 'board'}` : 'quiz')];
+  if (seg.part === 'open') return [ev(ctx, 0, 0, 'wide', 'quiz-wide', 'H', 'quiz')];
+  if (QUIZ_BOARD_PARTS.has(seg.part)) return [ev(ctx, 0, 0, 'quiz', null, ctx.speaker, 'quiz-board')];
+  if (seg.part === 'welcome' || seg.part === 'scores' || seg.part === 'signoff') return [ev(ctx, 0, 0, 'wide', 'quiz-wide', 'H', 'quiz')];
+  return [ev(ctx, 0, 0, 'close', QUIZ_FRAMING[ctx.speaker] || 'quiz-host', ctx.speaker, 'quiz')];
 }
 
 // ---------------------------------------------------------------------------

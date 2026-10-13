@@ -28,6 +28,9 @@
 //   'ots'        over-the-shoulder wall framing: the speaker in the near third,
 //                the whole video wall beside the head (replaces the inset box)
 //   'solo-wide' / 'solo-mcu'   the solo-desk versions (SET.seatX.solo)
+//   'quiz-wide' / 'quiz-host' / 'quiz-a' / 'quiz-b'   PAY ATTENTION's three seats (studio/quiz.js quizCamera: the
+//                quiz's wide, the host's single at the centre seat, each player's single on their side; a single is
+//                composed on the seated person's own look; the cast's H, A or B by the name, whatever the focus)
 // Every studio framing keeps the head inside the frame, below the bug and the
 // top graphics row (y 8-21), the chin above the caption band (y 136) in
 // singles, eye lines on the thirds, and no bezel edge within 4 px of a head
@@ -45,6 +48,7 @@ import { lookFor } from './cast/index.js';
 import { PartBuffer } from './pixbuf.js';
 import { drawCharacter, GROUPS } from './character.js';
 import { poseAt } from './rig.js';
+import { quizCamera } from './studio/quiz.js';
 
 export { kAt };
 
@@ -340,6 +344,7 @@ function level(map, key) {
  * @param opts  { cast: { A: id, B?: id }, focus: 'A'|'B', solo?: bool, side?: +1|-1, programId }
  */
 export function framing(name, opts = {}) {
+  if (QUIZ_SLOT[name] !== undefined) return quizFraming(name, opts.cast || DEFAULT_CAST);
   const cast = opts.cast || DEFAULT_CAST;
   const solo = opts.solo ?? !cast.B;
   const focus = opts.focus === 'B' && !solo ? 'B' : 'A';
@@ -410,7 +415,30 @@ function build(name, { cast, solo, focus, programId, side }) {
 }
 
 /** The framing names this module composes. */
-export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu'];
+export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu', 'quiz-wide', 'quiz-host', 'quiz-a', 'quiz-b'];
+
+// PAY ATTENTION's framings: studio/quiz.js quizCamera's names, and the cast slot each single is composed on
+const QUIZ_SLOT = Object.freeze({ 'quiz-wide': null, 'quiz-host': 'H', 'quiz-a': 'A', 'quiz-b': 'B' });
+const QUIZ_NAME = Object.freeze({ 'quiz-wide': 'wide', 'quiz-host': 'host', 'quiz-a': 'player-a', 'quiz-b': 'player-b' });
+const QUIZ_CACHE = new Map();
+/** A quiz framing as a camera (cached per name and the look it is composed on; read-only). */
+function quizFraming(name, cast) {
+  const slot = QUIZ_SLOT[name];
+  const id = slot ? cast?.[slot] ?? null : null;
+  const key = `${name}|${id ?? ''}`;
+  let cam = QUIZ_CACHE.get(key);
+  if (cam) return cam;
+  let M = null;
+  try {
+    if (id) M = lookMetrics(lookFor(id));
+  } catch {
+    M = null;
+  }
+  cam = makeCamera(quizCamera(QUIZ_NAME[name], M));
+  if (QUIZ_CACHE.size > 64) QUIZ_CACHE.clear();
+  QUIZ_CACHE.set(key, cam);
+  return cam;
+}
 
 // ---------------------------------------------------------------------------
 // Moves

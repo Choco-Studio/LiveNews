@@ -15,6 +15,7 @@ import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 import { recreationOf } from './graphics/recreation.js';
 import { clockIn } from './gfx/clock.js';
+import { prepareQuiz, playQuiz, quizMusic } from './quizdirector.js';
 
 // a headline frame is never shorter than this, so a short teaser line still cuts with its voice
 const MONTAGE_FLASH = 1.2;
@@ -142,7 +143,8 @@ export class Director {
     const restart = shot === 'ad' || shot === 'montage';
     // a full-screen card that gives way to another card (BY THE NUMBERS → the quote card IN THEIR WORDS) is a cut the
     // viewer sees: its clock restarts, so the cooldown and the maxima count from it (a 13 s "card" aired once, WORLD NOW)
-    const newCard = shot === 'fact' && s.shot === 'fact' && 'card' in extra && cardKey(extra.card) !== cardKey(s.card);
+    // (PAY ATTENTION: each board is a card of its own, a new question a new card: quizdirector.js)
+    const newCard = s.shot === shot && 'card' in extra && (shot === 'quiz' ? extra.card !== s.card : shot === 'fact' && cardKey(extra.card) !== cardKey(s.card));
     const reframed = !!this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null); // v2: a new framing (single → ots) is a cut
     const changed = restart || newCard || reframed || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
     Object.assign(s, extra);
@@ -229,7 +231,8 @@ export class Director {
     const segment = ++this.musicSeg;
     // a correspondent link is part of its story: the story's bed carries on under it, shot cues included
     this.musicInStory = seg.type === 'story' || seg.type === 'cross';
-    if (seg.type === 'intro') {
+    if (seg.type === 'quiz') quizMusic(this, seg, segment); // PAY ATTENTION's moments (quizdirector.js)
+    else if (seg.type === 'intro') {
       if (this.scene.program?.id === 'cosmos') m.cue('coldOpen', { segment });
       else {
         const lines = Math.min(3, teaserLines(seg, splitSentences(seg.text)));
@@ -256,7 +259,7 @@ export class Director {
   musicSegmentEnd(seg) {
     const m = this.music;
     if (seg.type === 'intro') m.cue('introEnd');
-    else if (seg.type === 'outro') m.cue('signoffEnd');
+    else if (seg.type === 'outro' || (seg.type === 'quiz' && seg.part === 'signoff')) m.cue('signoffEnd');
     else if (seg.type === 'story' && seg.feature === 'lighter') m.cue('featureEnd');
   }
 
@@ -762,7 +765,7 @@ export class Director {
   }
 
   async prepareImages(episode) {
-    const ids = episode.rundown.filter((r) => r.hasImage && !this.images.has(r.storyId)).map((r) => r.storyId);
+    const ids = (episode.rundown || []).filter((r) => r.hasImage && !this.images.has(r.storyId)).map((r) => r.storyId);
     // the headlines the intro teases first: the montage shows them a few seconds after the open (owner 22:50)
     const teased = new Set((episode.segments?.find((sg) => sg.type === 'intro')?.teases || []).filter(Boolean));
     ids.sort((a, b) => (teased.has(b) ? 1 : 0) - (teased.has(a) ? 1 : 0));
@@ -785,7 +788,7 @@ export class Director {
         console.warn('[director] image', id, err.message);
       }
     }
-    const keep = new Set(episode.rundown.map((r) => r.storyId));
+    const keep = new Set((episode.rundown || []).map((r) => r.storyId));
     if (this.images.size > 40) for (const id of this.images.keys()) if (!keep.has(id)) this.images.delete(id);
   }
 
@@ -845,7 +848,8 @@ export class Director {
     // v2: scene.segPlan (timed for the voice that plays) + its shot cues; the weather centre directs itself
     // (a correspondent link directs itself: playCross; the v2 planner knows the studio's presenters only; a caller
     // directing its own shots says so: extra.direct)
-    const v2 = seg.type === 'weather' || seg.type === 'cross' || extra?.direct ? null : this.v2?.begin(seg, recorded ?? null);
+    // (extra.planOnly: the plan goes on air for the gestures and glances, but the caller makes every cut: PAY ATTENTION)
+    const v2 = seg.type === 'weather' || seg.type === 'cross' || extra?.direct ? null : this.v2?.begin(seg, recorded ?? null, extra?.planOnly ? { cuts: false } : undefined);
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     const more = Array.isArray(extra?.marks) && typeof extra.onMark === 'function' ? extra.marks : []; // the caller's own marks
     const musicSentence = this.musicSegment(seg);
@@ -878,6 +882,8 @@ export class Director {
     this.musicInStory = false;
     this.music.cue('open');
     this.voices.episode(episode); // warm up the first recorded voices while the open plays
+    // PAY ATTENTION: the edition's plan (its shots on every segment, for the v2 planner too), its pictures loading
+    prepareQuiz(this, episode);
     const imagesReady = this.prepareImages(episode);
     this.prepareFootage(episode);
     // Each programme has its own opening titles and theme tune. The tune starts
@@ -904,6 +910,8 @@ export class Director {
     await sleep(open.duration * 1000 - STINGER_DURATION * 500);
     tune?.stop?.();
     s.programTagUntil = now() + CHANNEL.programTag.window;
+    // PAY ATTENTION plays its questions as board segments on the countdown's clock (quizdirector.js), to its end card
+    if (this.quiz) return playQuiz(this, episode);
 
     // NEWS IN 60's progress rule (graphics: the strap's top line fills as the minute goes, the show's one counter): each
     // segment's share of the spoken programme, its recorded length or its words', filled while it airs

@@ -38,6 +38,7 @@ import { paceTrace } from '../../../pace.js';
 import { drawBackdrop, REMOTE, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
 import { drawExpertStudio } from '../studio/experts.js';
 import { drawPressRoom, drawPressFront, PRESS } from '../studio/press.js';
+import { QUIZ_SEATS } from '../studio/quiz.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
@@ -62,7 +63,7 @@ const HEAD_HALF = 10; // px at scale 1: half a head plus its hair, from the seat
 // Every programme's set variant, baked ahead of air (warmSets): the owner's 21:05 blocker, never a
 // frame without the set. set.js bakes synchronously on first use anyway; warming moves that cost
 // (10-30 ms per programme) off the frame path.
-const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days', 'full-time']; // (FULL TIME: a draft, warmed ready for air)
+const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days', 'full-time', 'pay-attention']; // (FULL TIME and PAY ATTENTION: drafts, warmed ready for air)
 
 /**
  * Bake every programme's set ahead of air (StageHost calls it once at boot, in idle time). With SET's
@@ -107,9 +108,20 @@ export function warmSets(idle = null) {
   }
 }
 
-/** Seats for a cast: A left (+1: partner on screen-right), B right (-1), or one centred solo seat (0). */
+/**
+ * Seats for a cast: A left (+1: partner on screen-right), B right (-1), or one centred solo seat (0). PAY ATTENTION's
+ * cast { H, A, B } sits on studio/quiz.js QUIZ_SEATS: the host at the centre seat (0, facing the lens), A at the left
+ * desk facing right, B at the right desk facing left (the host drawn last, as the set's lab does).
+ */
 export function castSeats(cast) {
   const c = cast && typeof cast === 'object' ? cast : {};
+  if (c.H && c.A && c.B) {
+    return [
+      { slot: 'A', X: QUIZ_SEATS.A.X, side: QUIZ_SEATS.A.side },
+      { slot: 'B', X: QUIZ_SEATS.B.X, side: QUIZ_SEATS.B.side },
+      { slot: 'H', X: QUIZ_SEATS.host.X, side: QUIZ_SEATS.host.side },
+    ];
+  }
   if (c.A && c.B) {
     return [
       { slot: 'A', X: SET.seatX.A, side: 1 },
@@ -125,6 +137,12 @@ export function episodeKey(scene) {
   if (scene?.episode?.id) return String(scene.episode.id);
   const c = scene?.cast || {};
   return `${scene?.program?.id || ''}|${c.A || ''}|${c.B || ''}`;
+}
+
+/** PAY ATTENTION's framing for a legacy shot when the director sent none (camera.js composes the quiz's framings). */
+export function quizFraming(shot, focus) {
+  if (shot !== 'close') return 'quiz-wide';
+  return focus === 'A' ? 'quiz-a' : focus === 'B' ? 'quiz-b' : 'quiz-host';
 }
 
 /** Framing for a legacy shot when the director sent none. */
@@ -581,7 +599,7 @@ export class Stage {
       // idle wall's layout, actors at wide scale), never presented: the first frame after the open costs a few ms instead
       // of 135-145 ms (fix r2, measured on the real channel at load ~20). A scratch idle wall: the Stage's own wall latch
       // is untouched, and the real first frame's wall (a later `since`) is an instant switch in SET.
-      const framing = defaultFraming('wide', this.solo, false);
+      const framing = this.cast?.H ? quizFraming('wide') : defaultFraming('wide', this.solo, false);
       const cam = typeof CAM.framing === 'function' ? CAM.framing(framing, { framing, cast: this.cast, focus: this.actors[0]?.slot || 'A', solo: this.solo, side: undefined, programId: this.programId, move: null }) : null;
       if (cam) {
         WARM_WALL.solo = this.solo;
@@ -630,7 +648,7 @@ export class Stage {
     this.inset = scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
     // camera framing for this shot
     const spec = this.spec;
-    spec.framing = scene.framing || defaultFraming(scene.shot, this.solo, !!this.inset);
+    spec.framing = scene.framing || (this.cast?.H ? quizFraming(scene.shot, scene.focus) : defaultFraming(scene.shot, this.solo, !!this.inset));
     spec.cast = this.cast;
     spec.focus = scene.focus in this.cast ? scene.focus : this.actors[0]?.slot || 'A';
     spec.solo = this.solo;

@@ -749,8 +749,8 @@ function boundaryOk(ctx, prevSeg) {
 // first look of the next segment (critic r2: a moved glance 0.4 s from the notes look). A glance
 // that cannot fit there is not made (it would have been spent off screen); with no such cut it
 // stays (the cue clock holds a hidden turn glance for a real cut).
-const SHOW_LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores']);
-const SHOW_WIDE = new Set(['wide', 'two', 'solo-wide']);
+const SHOW_LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores', 'quiz']);
+const SHOW_WIDE = new Set(['wide', 'two', 'solo-wide', 'quiz-wide']);
 const MOVE = { window: 15, afterCut: 0.25, min: 0.8 };
 
 function shows(s, slot) {
