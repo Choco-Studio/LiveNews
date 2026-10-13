@@ -1559,6 +1559,20 @@ test('knuckles (close-ups): valleys and caps as clean clusters, never a lone pix
       assert.equal(lone, 0, `${name} at s ${s}: ${lone} lone detail pixels`);
     }
   }
+  // a nail needs a fingertip seen along its length: fingers pointing at the lens carry no nail dots (the light detail
+  // pixels left are the knuckles' caps and the thumb's nail)
+  for (const s of [3.4, 4.2]) {
+    const light = (dir) => {
+      const buf = new PartBuffer();
+      const arm = { wrist: [0, 0, 0], handDir: dir, hand: { curl: [...SHAPES.open.curl], spread: SHAPES.open.spread, facing: -1, sup: 0 } };
+      drawHand(buf, L, m, arm, 1, (x, y, z = 0) => [150 + x * s, 120 + (y + z * TILT) * s], s, 13, 23);
+      let n = 0;
+      for (let i = 0; i < buf.mat.length; i++) if (buf.mat[i] && buf.grp[i] === 13 && MAT.flags[buf.mat[i]] & 1 && buf.tone[i] === 0) n++;
+      return n;
+    };
+    const up = light([0.05, -1, 0.12]), lens = light([0.1, -0.3, 0.95]);
+    assert.ok(up >= 20 && lens * 4 <= up, `s ${s}: ${lens} light detail pixels on fingers pointing at the lens, ${up} on fingers up`);
+  }
 });
 
 test('relaxed hands live: irregular finger micro-shifts (never a loop), and the joined pose meets fingertip to fingertip', () => {

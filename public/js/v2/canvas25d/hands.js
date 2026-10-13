@@ -1701,9 +1701,19 @@ function contactShadow() {
   }
 }
 
+const NAIL = [true, true, true, true, true];
+const NAIL_LEN = 3; // px: the shortest last finger bone on screen that carries a nail
 /** Close-up finish: knuckles, nails, joint creases, wrist crease, thenar crease (or robot pins). */
 function details(g, B, s, lod, robot, back) {
   const J = g.J, R = g.R, curl = g.curl;
+  // a nail needs a fingertip seen along its length: on a finger pointing at the lens the last bone is a pixel or
+  // two long and its nail is a light dot (critic r3: a tent leaning to the lens drew a dotted column of them)
+  for (let q = 0; q < 5; q++) {
+    const a = q < 4 ? q * 4 + 2 : 18, b = a + 1;
+    const dx = px(B, J[b * 3], J[b * 3 + 1], J[b * 3 + 2]) - px(B, J[a * 3], J[a * 3 + 1], J[a * 3 + 2]);
+    const dy = py(B, J[b * 3], J[b * 3 + 1], J[b * 3 + 2]) - py(B, J[a * 3], J[a * 3 + 1], J[a * 3 + 2]);
+    NAIL[q] = dx * dx + dy * dy >= NAIL_LEN * NAIL_LEN;
+  }
   // ---- per-bone pixel details
   for (let j = 0; j < bh; j++) {
     const o = j * LW;
@@ -1717,9 +1727,9 @@ function details(g, B, s, lod, robot, back) {
         const c = curl[a - 1];
         // nails: on the back view, the end of an extended finger wide enough to carry a 2 px nail
         // (no PIP creases: at these sizes they were 1 px specks across every finger)
-        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62 && FW[a - 2] * TAPER[3] >= 2.6) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
+        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62 && FW[a - 2] * TAPER[3] >= 2.6 && NAIL[a - 2]) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
       } else if (a === 1) {
-        if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6) TN[k] = 8;
+        if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6 && NAIL[4]) TN[k] = 8;
       }
     }
   }
