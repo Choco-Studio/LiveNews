@@ -464,6 +464,23 @@ test('planner: a MONEY MINUTE story never opens on the WIDE the previous story s
   assert.equal(s3[0].framing, 'mcu-r', `the next story opens on the MCU-R: ${s3.map((e) => e.framing).join(' ')}`);
 });
 
+test('planner: the greeting wide\'s push is at rest 0.8 s before the planned cut (the real one may come a little early)', () => {
+  let pushes = 0;
+  const story = (id, text) => ({ type: 'story', anchor: 'A', storyId: id, headline: id, source: 'X', category: 'world', hasImage: true, emotion: 'neutral', cues: [], text });
+  const plain = { id: 'sdPush', program: { id: 'seven-days', title: 'SEVEN DAYS', theme: 'week' }, cast: { A: 'paco', B: 'lola' }, rundown: [], segments: [{ type: 'intro', anchor: 'A', emotion: 'neutral', text: 'Good evening, and welcome to the week in review on GLOBIT 24. This is SEVEN DAYS. I\'m Paco Pixel, with Lola Byte.', cues: [] }, story('s1', 'Storms crossed the north of the country on Monday. Rivers rose overnight.'), story('s2', 'A new bridge opened on Friday. It took six years to build.'), { type: 'outro', anchor: 'A', text: 'That was SEVEN DAYS.', cues: [] }] };
+  for (const name of ['world-now', 'world-now-long', 'plain']) {
+    const ep = name === 'plain' ? plain : fixture(name);
+    const plan = planSegment(ep, 0, { gapAfter: (j) => gapAfter(ep, j).gap });
+    const shots = plan.events.filter((e) => e.kind === 'shot');
+    const w = shots.at(-1);
+    if (!w.move) continue;
+    pushes++;
+    const end = plan.ctx.duration + gapAfter(ep, 0).gap;
+    assert.ok(w.move.delay + w.move.dur <= end - w.at - 0.8 + 1e-6, `${name}: the push ends ${(end - w.at - w.move.delay - w.move.dur).toFixed(2)} s before the cut`);
+  }
+  assert.ok(pushes > 0, 'a fixture intro pushes in');
+});
+
 test('planner: a cut inside a sentence never lands on its last word (one word before the boundary)', () => {
   let mids = 0;
   // (the live TECH BYTES story of 13 Oct: its picture was cut on "October | 8.", the speech mark fired only with the
