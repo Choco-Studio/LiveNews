@@ -193,7 +193,11 @@ Never a score: "6-4 shot" (odds), "1-4 Texans" and "0-7 in overtime" (records), 
 **Written in figures, spoken in words.** The result line's text keeps the score as the board shows it ("Coventry thrashed
 Newcastle 4-1"), so the captions read like any results service; the voice reads it as a results reader would: zero is
 "nil" in football and rugby, a draw is "all" ("one all", "nil-nil" for 0-0), and big scores are numbers ("thirty-seven
-thirty-four"). The voice knows the line is a result because the segment carries its scoreline.
+thirty-four"). The voice knows the line is a result because the segment carries its scoreline. Every other figure pair
+in a story is read by its sport too (step 7: the voice plan passes the story's sport to the speech planner): cricket's
+"102-4" is "one hundred and two for four", tennis's "6-4 6-3" is "six-four, six-three", an American team's record is "oh
+and seven", a series in football or rugby is "three nil", and a score past a hundred keeps its "to" ("one hundred and
+nineteen to sixty-six").
 
 **Who was at home** is shown only when the source says so: "at home", "home win/victory", "away win/victory", "their 4-1
 loss at Coventry", "hosts", "visitors". Then the board is the results services' horizontal one: HOME score – score AWAY.
@@ -221,7 +225,7 @@ are different programmes. A shape fixes the order; a segment without material is
 |---|---|---|---|
 | Headlines | Kai | Three stories' headlines over their pictures (the channel's montage) | 20 s |
 | Title | — | The open (§6) | 10 s |
-| Greeting | Kai, then Rosa | "Good evening, this is FULL TIME. I'm Kai Sprite." (morning, afternoon or evening by the channel's clock) / Rosa's hello (a bank of its own) | 8 s |
+| Greeting | Kai, then Rosa | "Good evening, and welcome to FULL TIME. I'm Kai Sprite, with Rosa Rally." (morning, afternoon or evening by the channel's clock; both named, as every two-hander on the channel: step 7) / Rosa's hello (a bank of its own) | 8 s |
 | **Lead** | Kai | 3–5 sentences, with its board: the scoreline card for a match (landing on the bed's crowd swell); otherwise WHO'S WHO, WHAT WE KNOW, IN PROPORTION or WHAT HAPPENS NEXT | 40 s |
 | **THE BREAKDOWN** | Kai asks, Rosa answers | Rosa's answer is context of one kind, 1–3 of the story's own sentences Kai has not read: **the record or the wait** ("first … since", "record", "unbeaten", "in 25 years"), **the table** ("top", "bottom", "relegation zone", "points clear"), **what's next** (a dated step ahead), or **what they said** (an attributed quote). Kai's question fits that kind ("How long has that been coming?", "Where does that leave them?", "What's next for them?", "What are they saying?"). No context of a kind, no BREAKDOWN: the story is simply told. After the lead, and after one more main story on long days | 30 s each |
 | **SCORE CENTRE** | Kai | 3–6 readable results (§3.5) from the last 24 h (on a Monday before 14:00, since Saturday 06:00), shown as **the stadium's scoreboard** filling the frame: the LED board on its gantry over the stand, a floodlight either side, one row flipping in on a tick as each is read. Grouped by sport ("In the Premier League…" only when the source names it, else "In football…", then "Elsewhere…"). Each line is built from the scoreline (§3.5), names and score marked in the voice plan, a short beat before the score. Title: LAST NIGHT'S RESULTS when every result's story says "last night" or was filed 17:00–02:00 the evening before an airing before 14:00; TODAY'S RESULTS when all were filed today; THE WEEKEND'S RESULTS on a Monday before 14:00 with Saturday and Sunday stories; otherwise THE LATEST RESULTS. A row from another day carries the day (SUN) | 35 s |
@@ -416,4 +420,11 @@ are different programmes. A shape fixes the order; a segment without material is
    *Looks built (§2): three candidates each, A on air in both renderers; critique in
    `docs/roadmap/critique/full-time-cast.md` (9.75). The owner's choice of face and the voices are still to come.*
 7. **On air**: record a matchday edition and a quiet-day edition with sound; critique the whole programme above 9.7
-   (`docs/roadmap/critique/full-time.md`).
+   (`docs/roadmap/critique/full-time.md`). *Passed at 9.8 in round 3: a matchday (the offline desk, Saturday 18:30,
+   4:49) and a quiet day (the 13 Oct snapshot, Tuesday 09:20, 6:01), recorded with Kokoro voices through
+   `tools/sport/onair.mjs` (the server under a chosen clock) and `tools/record.mjs --progressive`. What the recordings
+   changed: the montage follows the spoken headlines; THE NUMBER airs MIDWEEK only (§4), its story otherwise told with
+   its result; a short result keeps its card; one type size on the scoreline card too; FULL TIME's own shot windows in
+   the v2 planner; never two hand-overs by name in a row, none at the end of a story on a card; Rosa named in the
+   greeting; no odds, no strap cut in its aside, no verdict in a "with" phrase; figures read by sport. Still with the
+   owner: faces, voices, the sting, the AI writer, a real matchday (17–19 Oct) and leaving the drafts.*
