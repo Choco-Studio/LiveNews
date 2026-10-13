@@ -1095,6 +1095,26 @@ function rasterPasses(L, hm, g, B, s, hullN) {
   // ---- clean clusters (owner 17:50 "no noise"): no lone detail, line or highlight pixel survives, and a
   // separation broken into dashes is joined into one line
   if (lod >= 1) cleanClusters();
+  // lines stay lines: where separations and folds pile up into a dark clump (UNIT-8's curled fingers, every gap a
+  // joint line, read as holes), the pixels inside it go back to their form tone
+  if (lod >= 2) thinLines();
+}
+
+/** A line pixel with lines on all four sides is inside a clump. */
+function thinLines() {
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) {
+      const k = o + i;
+      if (TN[k] !== 4) continue;
+      const l = TN[k - 1] === 4 || TN[k - 1] === 5, u = TN[k - LW] === 4 || TN[k - LW] === 5;
+      if (l && u && TN[k + 1] === 4 && TN[k + LW] === 4) TN[k] = 5;
+    }
+  }
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) if (TN[o + i] === 5) TN[o + i] = BT[o + i] === 0 ? 1 : BT[o + i];
+  }
 }
 
 /** Write the finished local raster into the PartBuffer (outline and shadow against the face skin). */
@@ -1760,7 +1780,10 @@ function knuckles(g, B, s, lod) {
   for (let fi = 0; fi < 3; fi++) {
     if (!KR[fi] || !KR[fi + 1]) continue;
     const mx = (KX[fi] + KX[fi + 1]) * 0.5, my = (KY[fi] + KY[fi + 1]) * 0.5, rk = (KR[fi] + KR[fi + 1]) * 0.5;
-    const len = rk * (lod >= 3 ? 0.9 : 0.6);
+    // (between two folded fingers the knuckles are the edge of the fist: only a dimple there, never a stroke that
+    // joins the fold line into a glyph)
+    const folded = curl[fi + 1] >= 0.7 && curl[fi + 2] >= 0.7;
+    const len = rk * (folded ? 0.35 : lod >= 3 ? 0.9 : 0.6);
     let lx = -1, ly = -1;
     for (let q = 0; q <= 6; q++) {
       const u = rk * 0.35 - (len * q) / 6;

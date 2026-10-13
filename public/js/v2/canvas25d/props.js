@@ -194,12 +194,13 @@ function restArmL(L) {
 /** Pen centre and unit direction in body space for a hand geometry: [cx, cy, cz, dx, dy, dz]. */
 function penFrame(g, out) {
   const { W, f, t, n, H } = g;
-  // it crosses the hand through the thumb-index web, lying along the index and tilted out:
-  // a loose hand covers its middle, the nib shows past the knuckles and the cap behind the thumb
-  out[0] = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 + n[0] * H * 0.12;
-  out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
-  out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
-  const dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
+  // it crosses the hand through the thumb-index web, toward the thumb's side and back into the desk: a loose
+  // hand covers its middle, the nib shows past the knuckles and the cap below the wrist (the resting hands point
+  // toward the lens: lying along the index, the pen hid behind the fingers)
+  out[0] = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 - n[0] * H * 0.05;
+  out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 - n[1] * H * 0.05;
+  out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 - n[2] * H * 0.05;
+  const dx = f[0] * 0.3 + t[0] * 0.8 + n[0] * 0.2, dy = f[1] * 0.3 + t[1] * 0.8 + n[1] * 0.2, dz = f[2] * 0.3 + t[2] * 0.8 + n[2] * 0.2 - 0.7;
   const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   out[3] = dx / dl;
   out[4] = dy / dl;

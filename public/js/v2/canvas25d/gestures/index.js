@@ -56,13 +56,16 @@ import { evalTrack } from '../tracks.js';
 export const REST = {
   wrist: [-5.6, 19.3, 13.5],
   wristF: [5.6, 19.3, 13.5],
-  dir: [-0.8, 0.12, 0.58],
-  dirF: [0.8, 0.12, 0.58],
+  // the resting hands point in toward each other and out toward the lens, the fingers draped over the script (a
+  // hand turned across, thumb on top, read as a claw on it in the two-shot)
+  dir: [-0.55, 0.18, 0.82],
+  dirF: [0.55, 0.18, 0.82],
   // relaxed hands on the desk: fingers loosely bent, not fists, the index the most open and the little finger
-  // the most tucked (one even curl read as a paddle); the two hands are not twins (the far one a little more
-  // open in the middle, its fingers a touch further apart)
-  curl: [0.18, 0.3, 0.44, 0.56, 0.68],
-  curlF: [0.22, 0.36, 0.47, 0.54, 0.62],
+  // the most tucked (one even curl read as a paddle); the thumb lies along the index (an open thumb over the
+  // fingers read as a claw on the script); the two hands are not twins (the far one a little more open in the
+  // middle, its fingers a touch further apart)
+  curl: [0.42, 0.3, 0.44, 0.56, 0.68],
+  curlF: [0.38, 0.36, 0.47, 0.54, 0.62],
   spread: 0.15,
   spreadF: 0.2,
   facing: -1,
