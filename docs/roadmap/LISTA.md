@@ -29,6 +29,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 16. 🟡 **Programas más largos.** Hecho el dossier: el servidor lee el texto completo del artículo de cada noticia principal y el guionista escribe con él (con IA real llegará a 8-10 min; la demo sin conexión llega a ~4,6 min porque el texto de prueba es corto). Falta: duraciones por partes (decisión 1).
     - ✅ **Parrilla por horas** (10 oct): NEWS IN 60 a las :00 y las :30 (hora de Londres). La emisora planifica los programas de antes para que el boletín caiga en su hora: si sobra un poco, la pausa termina con un **reloj de cuenta atrás** (anillo de 60 puntos, "NEWS IN 60 · AT 10:00", hasta 90 s; no se alargan los anuncios). MONEY MINUTE solo de 06 a 22 entre semana. Medido en 24 h simuladas: con duraciones previstas, 42 de 48 boletines a menos de 90 s de su hora (la mayoría exactos); con duraciones ±25 % distintas, 40 de 48 a menos de 2 min. Se quita con `STATION_CLOCK=0`.
 17. 🟡 **Más tipos de diapositivas** (15 plantillas: cronologías, comparativas, cifras, citas…). (10 oct: dos nuevas, **DE → A** —una cifra que cambió, "de 4,5 % a 4,75 %", con flecha y SUBE/BAJA— y **HOW WE GOT HERE** —cronología de 2-3 pasos con fecha de la fuente—, en WORLD NOW, TECH BYTES, COSMOS y MONEY MINUTE. Ya había BY THE NUMBERS, WHAT WE KNOW, IN PLAIN ENGLISH, IN BRIEF, QUICK BYTES y la cita.)
+    - ✅ (13 oct) Tres tableros más en antena en WORLD NOW, TECH BYTES, COSMOS y MONEY MINUTE: **EN PROPORCIÓN** («uno de cada cuatro»), **QUÉ PASA AHORA** (la próxima fecha que da la noticia) y **QUIÉN ES QUIÉN** (dos o tres personas con su cargo). Si una noticia tiene más de un tablero, nunca se repite el tipo del tablero anterior.
 18. ✅ **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente. Hecho (9 oct):
     - Omar Ledger (economía), Clara Meridian (diplomacia), Dev Isobar (clima), Dr Tomas Albedo (espacio), June Kernel (tecnología), Dra. Amara Pulse (salud), Leo Sepia (cultura) e Ines Clause (justicia);
     - el presentador lee la noticia, presenta al experto y le pregunta; el experto la explica solo con datos de la fuente (nunca "estuve allí", nunca consejos financieros ni médicos), le hace una pregunta más y le da las gracias;
@@ -88,6 +89,14 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
     Falta: más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
+37. 🟡 **Nuevo programa FULL TIME (deportes, 6-7 min, Kai y Rosa).** Aún no está en la parrilla: se construye por pasos y cada paso tiene que pasar la autocrítica con más de 9,7.
+    - ✅ Paso 1, la mesa de deportes (13 oct): lee los medios de deportes, descarta rumores, apuestas, columnas de opinión y vídeos, y lee resultados y fechas solo cuando son seguros.
+    - 🟡 Paso 2, el guion: 9,0. Falta probarlo con noticias de un fin de semana (hay comprobaciones programadas para el 17, 18 y 19 de octubre) y con el redactor con IA (falta tu clave).
+    - ✅ Paso 3, los gráficos: 9,8. Marcador del partido, tablero de resultados del estadio, calendario «COMING UP», pizarra con la distancia del gol y 11 iconos de deporte.
+    - ✅ Paso 4, la dirección: 9,8. El tablero de resultados llena la pantalla y cada resultado aparece cuando se lee; el calendario hace lo mismo con cada fecha. Nunca sale el mismo tipo de tablero dos veces seguidas. Dura 6-7 minutos y ningún deporte que no sea el fútbol ocupa más de una cuarta parte del programa.
+    - En marcha: el plató junto al campo, la cabecera y su música, y las caras de Kai y Rosa (necesitan tu visto bueno, igual que sus voces: te he mandado tres voces para cada uno).
+    - Para verlo antes de que entre en la parrilla: modo de prueba `DRAFTS_ON_AIR=full-time@world-weather`.
+
 ## E. Plató, gráficos y cámara
 24. Plató:
     - cifras cortadas en la pantalla y paneles vacíos;
@@ -101,7 +110,10 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - gráficos propios de cada programa;
     - subtítulos que cambian demasiado.
 26. ✅ Cabeceras y cortinillas: segunda ronda hecha (10 oct: nebulosa de COSMOS sin parpadeo, TECH BYTES con fondo que se despeja, MONEY MINUTE con oficinas variadas y brillo, NEWS IN 60 con pulsos en el dial, WORLD WEATHER más amplio).
-27. Cámara: gramática de planos por programa y movimientos suaves.
+27. 🟡 Cámara: gramática de planos por programa y movimientos suaves.
+    - Ronda de pulido (13 oct): ningún corte cae a mitad de palabra ni en la última palabra de una frase; ningún plano dura más de su máximo (queda una excepción en MONEY MINUTE); los movimientos de cámara ya no saltan; la foto a pantalla completa se desliza en un solo eje.
+    - Los fallos marcados bajaron de 56 a 18, pero ningún programa llegó a 9,7: las notas van de 8,8 a 9,4.
+    - Falta tu decisión: varios programas pasan un poco de su límite de cortes por minuto, y ese límite choca con la duración media de plano que pediste (de 5 a 7 s). Hay que mover uno de los dos.
 
 ## F. Anuncios
 28. ✅ BitFizz: persona y vaso corregidos; aprobado por ti (12 oct: "el anuncio está perfecto").
