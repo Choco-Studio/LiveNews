@@ -334,15 +334,92 @@ export const realEntry = (e) => {
  * may show, its picture, its usable place and figure, every programme that aired it, its first and last airing and why
  * the others were left out (`out`, for the gate's report).
  */
+// Words that tell two stories apart: the long words of a headline, a story's keywords
+const COMMON_WORDS = new Set(['about', 'after', 'again', 'against', 'their', 'there', 'these', 'those', 'which', 'while', 'would', 'could', 'should', 'first', 'years', 'people', 'world', 'says', 'said', 'makes', 'still', 'other', 'under', 'between', 'being', 'where', 'every', 'never', 'today', 'report', 'reports', 'study']);
+const storyTokens = (e) => new Set([...(Array.isArray(e.kw) ? e.kw : []), ...String(`${e.title || ''} ${e.headline || ''}`).toLowerCase().split(/[^\p{L}\p{N}]+/u)].map((w) => String(w).toLowerCase()).filter((w) => w.length >= 5 && !COMMON_WORDS.has(w)));
+
+/**
+ * The window's airings grouped by event: by id, then joined by the news desk's `same` (sameStory) in one section. Only
+ * stories sharing a long word are compared, so a week of archive (thousands of airings) groups in a moment rather than
+ * the minutes a comparison of every pair would take. Returns [{ key, ids, entries }], entries oldest first.
+ */
+// the desk's verdicts on pairs of stories, by their ids, for each judge (a story's words do not change between the
+// station's asks)
+const PAIRS = new WeakMap();
+function sameCached(same, a, b) {
+  if (!PAIRS.has(same)) PAIRS.set(same, new Map());
+  const memo = PAIRS.get(same);
+  const k = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+  if (!memo.has(k)) {
+    if (memo.size > 200_000) memo.clear();
+    memo.set(k, !!same(a, b));
+  }
+  return memo.get(k);
+}
+
+export function groupEvents(entries, same = null) {
+  const byId = new Map();
+  for (const e of entries) {
+    if (!byId.has(e.id)) byId.set(e.id, []);
+    byId.get(e.id).push(e);
+  }
+  const ids = [...byId.keys()];
+  const parent = ids.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  if (same) {
+    const rep = ids.map((id) => byId.get(id).at(-1));
+    const index = new Map();
+    rep.forEach((e, i) => {
+      for (const t of storyTokens(e)) {
+        if (!index.has(t)) index.set(t, []);
+        index.get(t).push(i);
+      }
+    });
+    const tried = new Set();
+    for (const list of index.values()) {
+      if (list.length < 2 || list.length > 80) continue; // a word in every other headline joins nothing
+      for (let x = 0; x < list.length; x++) {
+        for (let y = x + 1; y < list.length; y++) {
+          const [a, b] = [list[x], list[y]];
+          const k = `${a}:${b}`;
+          if (tried.has(k)) continue;
+          tried.add(k);
+          if (find(a) === find(b) || rep[a].category !== rep[b].category) continue;
+          if (sameCached(same, rep[a], rep[b])) parent[find(a)] = find(b);
+        }
+      }
+    }
+  }
+  const groups = new Map();
+  ids.forEach((id, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, { key: id, ids: [], entries: [] });
+    const g = groups.get(r);
+    g.ids.push(id);
+    g.entries.push(...byId.get(id));
+  });
+  for (const g of groups.values()) g.entries.sort((x, y) => x.at - y.at);
+  return [...groups.values()];
+}
+
+// An airing never changes once archived: its verdict is kept (the station asks every few minutes; a week of airings
+// takes seconds to judge the first time and moments after)
+const VERDICTS = new WeakMap();
+const outOf = (e) => {
+  if (!VERDICTS.has(e)) VERDICTS.set(e, entryOut(e));
+  return VERDICTS.get(e);
+};
+
 export function quizEvents(archive, { now = Date.now(), days = 7, same = null, real = true } = {}) {
-  const groups = archive.week({ days, now, same });
+  const since = now - days * DAY;
+  const groups = groupEvents(archive.entries.filter((e) => e.at >= since && e.at <= now), same);
   const events = [];
   const out = {};
   const avoid = new Set(); // countries named in the stories left out (never a wrong pin)
   for (const g of groups) {
     const entries = real ? g.entries.filter(realEntry) : g.entries;
     if (!entries.length) continue;
-    const why = entries.map(entryOut).find(Boolean);
+    const why = entries.map(outOf).find(Boolean);
     if (why) {
       out[why] = (out[why] || 0) + 1;
       for (const e of entries) for (const c of countriesIn(`${e.title || ''}. ${e.headline || ''}. ${e.summary || ''}`)) avoid.add(c);
@@ -374,7 +451,7 @@ export function quizEvents(archive, { now = Date.now(), days = 7, same = null, r
       programmes: [...new Set(entries.map((e) => e.programId).filter(Boolean))],
       first: entries[0].at,
       last: latest.at,
-      category: latest.category || g.category || null,
+      category: latest.category || null,
       source: String(latest.source || '').split(' / ')[0] || null,
       latest,
     });

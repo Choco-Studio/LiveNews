@@ -102,7 +102,20 @@ export function validateChannel(ch) {
     if (!ch.programs[id]) throw new Error(`rotation references unknown programme "${id}"`);
   }
   for (const [id, p] of Object.entries(ch.programs)) {
-    if (p.kind !== undefined && !['weather', 'weekly', 'sport'].includes(p.kind)) throw new Error(`programme "${id}" has an unknown "kind" (only "weather", "weekly" or "sport")`);
+    if (p.kind !== undefined && !['weather', 'weekly', 'sport', 'quiz'].includes(p.kind)) throw new Error(`programme "${id}" has an unknown "kind" (only "weather", "weekly", "sport" or "quiz")`);
+    // the quiz (server/quiz/): its host presents; its contestants are presenters of other programmes, two an edition
+    if (p.kind === 'quiz') {
+      for (const key of ['title', 'tagline', 'style']) if (typeof p[key] !== 'string' || !p[key].trim()) throw new Error(`programme "${id}" needs a "${key}" text`);
+      if (!Array.isArray(p.presenters) || p.presenters.length !== 1 || !ch.presenters[p.presenters[0]]) throw new Error(`programme "${id}" needs one presenter, its host`);
+      if (p.contestants !== undefined) {
+        if (!Array.isArray(p.contestants) || p.contestants.length < 2) throw new Error(`programme "${id}" needs at least two "contestants"`);
+        for (const who of p.contestants) {
+          if (!ch.presenters[who]) throw new Error(`programme "${id}" references unknown contestant "${who}"`);
+          if (who === p.presenters[0]) throw new Error(`programme "${id}": the host cannot be a contestant`);
+        }
+      }
+      continue;
+    }
     // a weather programme is written from the weather data (server/weatherwriter.js): no stories, no sections;
     // the weekly (server/weeklywriter.js) from the archive: its sections, no story length (the aired words set it)
     const news = p.kind !== 'weather';

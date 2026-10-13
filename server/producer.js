@@ -9,7 +9,9 @@ import { isGrave } from './facts.js';
 import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
 import { restageCheck, bookGuest, provenanceLine } from './guests/restage.js';
+import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
+import { QuizDesk } from './quiz/edition.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 
@@ -102,6 +104,9 @@ export class Producer {
     // written from it
     this.archive = archive;
     this.lastWeeklyAt = 0;
+    // PAY ATTENTION (kind 'quiz'): the quiz desk plans each edition from the archive and keeps its history and weekly
+    // table in data/quiz (server/quiz/edition.js)
+    this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log }) : null;
     // FULL TIME (kind 'sport'): when it last aired, the stories it told then, and its leads lately (a lead that led in
     // the last three hours does not lead again; an edition airs at least 40 % new stories)
     this.lastSportAt = 0;
@@ -231,6 +236,7 @@ export class Producer {
     if (program.kind === 'weather') return !!this.weather?.enabled && this.weather.usable?.() !== false && this.newsSinceWeather >= (program.minBetween ?? 3);
     if (program.kind === 'weekly') return this.weeklyReady(program);
     if (program.kind === 'sport') return this.sportReady(program);
+    if (program.kind === 'quiz') return !!this.quiz?.ready(program, channel).air;
     return this.stock(program).length >= this.floorOf(program);
   }
 
@@ -240,6 +246,7 @@ export class Producer {
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
     if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
     if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
+    if (program.kind === 'quiz') return this.produceQuiz(channel, program);
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
     if (candidates.length < this.floorOf(program)) return null;
 
@@ -385,6 +392,41 @@ export class Producer {
       ...ctx.episode,
     };
     this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - t0) / 1000).toFixed(1)} s, ${body.weekly.stories} stories of the week`);
+    return episode;
+  }
+
+  /**
+   * PAY ATTENTION (server/quiz/): the edition the quiz desk plans from the archive, written by its writer (every fact
+   * the channel's own aired words); then the voices. The host speaks in slot H, the two contestants in A and B. Null
+   * when no edition fits (the station skips the slot).
+   */
+  async produceQuiz(channel, program) {
+    const t0 = Date.now();
+    const made = this.quiz?.make(program, channel, { recentLines: this.recentText() });
+    if (!made) return null;
+    const { episode: body, plan } = made;
+    const cast = body.cast.H === 'host' ? { ...body.cast, H: program.presenters[0] } : body.cast;
+    const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates: [], episode: { ...body, cast }, provider: 'quiz', pipeline: [{ stage: 'quiz', ms: Date.now() - t0, pair: plan.pair, types: plan.types, pool: plan.pool }], correspondents: [], experts: [], channelPresenters: channel.presenters };
+    for (const stage of this.stages) {
+      if (stage.name !== 'voice') continue;
+      if (stage.enabled && !stage.enabled(ctx)) continue;
+      const s0 = Date.now();
+      const note = await stage.run(ctx);
+      ctx.pipeline.push({ stage: stage.name, ms: Date.now() - s0, ...(note || {}) });
+    }
+    this.rememberLines(ctx.episode);
+    const episode = {
+      ...ctx.episode,
+      kind: 'episode',
+      id: `e${Date.now().toString(36)}${(this.seq++).toString(36)}`,
+      createdAt: new Date().toISOString(),
+      program: { id: program.id, title: program.title, tagline: program.tagline, theme: program.theme },
+      cast,
+      provider: 'quiz',
+      pipeline: ctx.pipeline,
+    };
+    this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - t0) / 1000).toFixed(1)} s: ${plan.pair.join(' v ')}, ${plan.types.join(' / ')}`);
     return episode;
   }
 
@@ -538,7 +580,7 @@ export class Producer {
     const max = this.config.recentLines ?? 1000;
     const window = (this.config.recentLinesHours ?? 6) * 3600_000;
     for (const seg of episode?.segments || []) {
-      if (seg.type !== 'chat') continue;
+      if (seg.type !== 'chat' && seg.type !== 'quiz') continue;
       for (const line of String(seg.text).split(/(?<=[.!?])\s+/)) if (line.trim()) this.recentLines.push({ line: line.trim(), at: now });
     }
     while (this.recentLines.length && (this.recentLines.length > max || now - this.recentLines[0].at > window)) this.recentLines.shift();
