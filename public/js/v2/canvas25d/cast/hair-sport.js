@@ -324,10 +324,26 @@ export function tubePath(ctrl, n = 48) {
     if (i) len += Math.hypot(p[i * 4] - p[i * 4 - 4], p[i * 4 + 1] - p[i * 4 - 3]);
     p[i * 4 + 3] = len;
   }
-  T = { p, n, len };
+  // chunks of segments with their bounding boxes and widest half-width: a pixel far from a chunk skips its segments
+  // (most of the tail's box is empty: per-pixel work on every segment doubled a close-up's cost)
+  const nc = Math.ceil((n - 1) / CHUNK);
+  const box = new Float32Array(nc * 5);
+  for (let c = 0; c < nc; c++) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, hw = 0;
+    for (let i = c * CHUNK; i <= Math.min(n - 1, (c + 1) * CHUNK); i++) {
+      x0 = Math.min(x0, p[i * 4]);
+      x1 = Math.max(x1, p[i * 4]);
+      y0 = Math.min(y0, p[i * 4 + 1]);
+      y1 = Math.max(y1, p[i * 4 + 1]);
+      hw = Math.max(hw, p[i * 4 + 2]);
+    }
+    box.set([x0, y0, x1, y1, hw], c * 5);
+  }
+  T = { p, n, len, box, nc };
   TUBES.set(ctrl, T);
   return T;
 }
+const CHUNK = 6;
 const TS = { d: 0, u: 0, v: 0, hw: 0, nx: 0, ny: 0 };
 
 /**
@@ -335,26 +351,32 @@ const TS = { d: 0, u: 0, v: 0, hw: 0, nx: 0, ny: 0 };
  * distance across (+ toward the tube's right/lower side), half-width there, and the normal's x.
  */
 export function tubeAt(T, x, y, lag, out = TS) {
-  const P = T.p, n = T.n, len = T.len || 1;
+  const P = T.p, n = T.n, len = T.len || 1, B = T.box;
+  const swing = (lag < 0 ? -lag : lag) * 1.4;
   let best = 1e9;
-  for (let i = 0; i < n - 1; i++) {
-    const k0 = i * 4, k1 = k0 + 4;
-    const ax = P[k0] - lag * (P[k0 + 3] / len) * 1.4, ay = P[k0 + 1];
-    const bx = P[k1] - lag * (P[k1 + 3] / len) * 1.4, by = P[k1 + 1];
-    const dx = bx - ax, dy = by - ay;
-    const l2 = dx * dx + dy * dy || 1e-6;
-    let u = ((x - ax) * dx + (y - ay) * dy) / l2;
-    u = u < 0 ? 0 : u > 1 ? 1 : u;
-    const ex = x - (ax + dx * u), ey = y - (ay + dy * u);
-    const d2 = ex * ex + ey * ey;
-    if (d2 < best) {
-      best = d2;
-      const l = Math.sqrt(l2);
-      out.u = P[k0 + 3] + (P[k1 + 3] - P[k0 + 3]) * u;
-      out.hw = P[k0 + 2] + (P[k1 + 2] - P[k0 + 2]) * u;
-      out.v = (ex * -dy + ey * dx) / l;
-      out.nx = -dy / l;
-      out.ny = dx / l;
+  for (let c = 0; c < T.nc; c++) {
+    const m = B[c * 5 + 4] + 0.05;
+    if (y < B[c * 5 + 1] - m || y > B[c * 5 + 3] + m || x < B[c * 5] - m - swing || x > B[c * 5 + 2] + m + swing) continue;
+    const iEnd = Math.min(n - 1, (c + 1) * CHUNK);
+    for (let i = c * CHUNK; i < iEnd; i++) {
+      const k0 = i * 4, k1 = k0 + 4;
+      const ax = P[k0] - lag * (P[k0 + 3] / len) * 1.4, ay = P[k0 + 1];
+      const bx = P[k1] - lag * (P[k1 + 3] / len) * 1.4, by = P[k1 + 1];
+      const dx = bx - ax, dy = by - ay;
+      const l2 = dx * dx + dy * dy || 1e-6;
+      let u = ((x - ax) * dx + (y - ay) * dy) / l2;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const ex = x - (ax + dx * u), ey = y - (ay + dy * u);
+      const d2 = ex * ex + ey * ey;
+      if (d2 < best) {
+        best = d2;
+        const l = Math.sqrt(l2);
+        out.u = P[k0 + 3] + (P[k1 + 3] - P[k0 + 3]) * u;
+        out.hw = P[k0 + 2] + (P[k1 + 2] - P[k0 + 2]) * u;
+        out.v = (ex * -dy + ey * dx) / l;
+        out.nx = -dy / l;
+        out.ny = dx / l;
+      }
     }
   }
   out.d = Math.sqrt(best);

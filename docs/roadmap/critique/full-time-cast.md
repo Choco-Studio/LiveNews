@@ -153,7 +153,9 @@ The panel's reading of the wired looks (A):
 - **Integration (9.8).** Mouths open and close with the visemes, the lips showing through the beard; blinks; the
   beard follows the open jaw and the head's turn; the tail swings after the head; six gestures with the stripes and
   the orange cuffs following the sleeves; nothing clipped in ten framings (wide, two-shot, singles, closes, MCUs,
-  OTS), the hook and the beard included (tested). The old renderer draws both, all six candidates.
+  OTS), the hook and the beard included (tested). The old renderer draws both, all six candidates. A close single
+  costs what the cast's do (pose, draw and resolve at s 4: Kai 2.9 ms, Rosa 3.3 ms; the cast 2.5–3.3 ms): the tail's
+  first version cost 6.4 ms, every pixel of its box tried every segment; its segments are now chunked by bounding box.
 - **Consistency (9.8).** The cast's rig, seated bodies, outline system, key light from camera-left, silver rim on the
   right shoulder and the hair light on the upper right, the LOD tiers, the kits' clump rules; signature colours of
   their own (Kai's orange rib on midnight navy, Rosa's orange stripes on charcoal), the programme's orange only as a
