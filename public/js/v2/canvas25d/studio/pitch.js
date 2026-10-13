@@ -65,7 +65,7 @@ export const GROUND = {
   // the towers: X, Z, head centre Y, lamp grid (cols x 4 banks), lamp pitch (units), halo radius (units), mast width
   far: { X: 925, Z: 6400, Y: -186, cols: 3, pitch: 6.4, gapless: true, gapx: true, halo: 50, mast: 6.4, far: true },
   // (the near pair close enough that their feet are behind the desk in the wide: never a mast standing on the pitch)
-  near: { X: 476, Z: 2800, Y: -122, cols: 5, pitch: 5.6, gapless: false, halo: 34, mast: 8.4 },
+  near: { X: 476, Z: 2800, Y: -111, cols: 5, pitch: 5.6, gapless: false, halo: 34, mast: 8.4 },
 };
 
 // --------------------------------------------------------------------------- the hour

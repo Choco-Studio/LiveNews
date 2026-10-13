@@ -94,6 +94,20 @@ describe('FULL TIME: the ground follows the hour', () => {
     assert.equal(ring(shot({ framing: 'wide', hour: 6.5 })), 0, 'no halo with the floodlights off');
   });
 
+  test('the graphics\' top row never sits on a light: no tower head or halo under the bug and its tags or the clock', () => {
+    // the top row's boxes (graphics/layout.js TOP: y 8-21; the bug, LIVE and the programme tag up to x ~150, the clock
+    // from x ~272)
+    const boxes = [{ x0: 13, y0: 8, x1: 150, y1: 22 }, { x0: 272, y0: 8, x1: 371, y1: 22 }];
+    for (const framing of ['wide', 'two', 'ots']) {
+      const cam = lab.cameraFor(framing, 'full-time');
+      for (const t of TOWER_LIST) {
+        const hd = towerHead(cam, t);
+        const r = { x0: Math.min(hd.x0, hd.cx - hd.R), x1: Math.max(hd.x0 + hd.w, hd.cx + hd.R), y0: Math.min(hd.y0, hd.cy - hd.R / 1.15), y1: Math.max(hd.y0 + hd.h, hd.cy + hd.R / 1.15) };
+        for (const b of boxes) assert.ok(r.x1 <= b.x0 || r.x0 >= b.x1 || r.y1 <= b.y0 || r.y0 >= b.y1, `${framing} ${t.kind} ${t.X}: a light under the top row [${r.x0.toFixed(0)},${r.y0.toFixed(0)}]-[${r.x1.toFixed(0)},${r.y1.toFixed(0)}]`);
+      }
+    }
+  });
+
   test('each phase is its own ground: the sky, the stand and the pitch change with the hour', () => {
     const wides = Object.values(HOURS).map((h) => shot({ framing: 'wide', hour: h }));
     for (let a = 0; a < wides.length; a++) for (let b = a + 1; b < wides.length; b++) {
