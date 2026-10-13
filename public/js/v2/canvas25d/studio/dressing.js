@@ -36,6 +36,7 @@ import { drawSpace, SKY } from './space.js';
 import { moneyWall } from './money.js';
 import { flashWall, CLOCK } from './flash.js';
 import { glowH, glowV, RAMPS, bokeh } from './light.js';
+import { drawGround, GROUND } from './pitch.js';
 
 const W = 384, H = 216;
 const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
@@ -885,16 +886,102 @@ function sevenDays(fr, cam, style, soft) {
 // what moves is the flagship's: a plane crossing the sky, cars on the avenues (city.js)
 LIVE_DRAW['seven-days'] = LIVE_DRAW['world-now'];
 
+// --------------------------------------------------------------------------- FULL TIME: the pitchside platform
+// No glass, no room (full-time.md §6): the ground behind the platform is pitch.js's (sky, floodlight towers, the stand
+// and its still crowd, the scoreboard and its pennant, the boards, the striped pitch, by the hour). Here the platform's
+// own pieces on the set plane: the hero screen hung from the canopy on two hangers (the centre stays clear for the
+// stand's scoreboard over it), the platform's back edge, the canopy's fascia with its orange cove and the studio lights
+// on its underside.
+// the studio lights under the canopy (wall X, either side of the screen, over the presenters: the graphics' top row
+// keeps the corners), a fresnel each seen from behind: housing, yoke, its barn doors catching the light
+const LAMPS = [-104, -80, 80, 104];
+//   k black, i ink, s slate, t steel, f fog
+const FRESNEL = ['..k..', '.kik.', 'kitsk', 'kitsk', 'kissk', '.kkk.', 'f...f'];
+function studioLamps(fr, cam, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.4));
+  const yTop = Math.round(syOf(cam, k, GROUND.canopyY)) + 1;
+  for (const X of LAMPS) {
+    const cx = sxOf(cam, k, X);
+    const x0 = Math.round(cx - 2.5 * s);
+    // the drop pipe from the canopy, then the lamp
+    const y0 = yTop + 2 * s;
+    fr.span(Math.round(cx - s / 2), yTop, Math.round(cx - s / 2) + s, y0, C.black);
+    for (let j = 0; j < FRESNEL.length; j++) for (let i = 0; i < 5; i++) {
+      const ch = FRESNEL[j][i];
+      if (ch === '.') continue;
+      const c = soft ? (ch === 'k' || ch === 'i' ? C.black : C.ink) : { k: C.black, i: C.ink, s: C.slate, t: C.steel, f: C.fog }[ch];
+      fr.span(x0 + i * s, y0 + j * s, x0 + (i + 1) * s, y0 + (j + 1) * s, c);
+    }
+  }
+}
+
+function fullTime(fr, cam, style, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const S = SET.screen, m = 3;
+  const kf = kAt(cam, SET.flatsZ);
+  // where a sign on the ground may stand whole: inside the frame, clear of the slim columns, the hero screen and its
+  // mount, the canopy, and the graphics' top row (the bug on the left, the clock on the right: y < 24)
+  const colL = Math.round(sxOf(cam, kf, -FT_COL.X)), colR = Math.round(sxOf(cam, kf, FT_COL.X));
+  const scr = {
+    x0: Math.round(sxOf(cam, k, S.x0 - m)) - 1, x1: Math.round(sxOf(cam, k, S.x1 + m)) + 1,
+    y0: Math.round(syOf(cam, k, S.y0 - m)) - 1, y1: Math.round(syOf(cam, k, S.y1 + m)) + 1,
+  };
+  const yCanopy = Math.round(syOf(cam, k, GROUND.canopyY)) + 2;
+  const guard = (r) => r.x0 >= Math.max(1, colL + 2) && r.x1 <= Math.min(W - 1, colR - 2) && r.y0 >= Math.max(1, yCanopy) && r.y1 <= 136
+    && !(r.x0 < scr.x1 && scr.x0 < r.x1 && r.y0 < scr.y1 && scr.y0 < r.y1) && !(r.y0 < 24 && (r.x0 < 112 || r.x1 > 272));
+  const yDeck = Math.round(syOf(cam, k, SET.floorY));
+  drawGround(fr, cam, { x0: 0, y0: 0, x1: W, y1: yDeck }, soft, guard);
+  // the platform's back edge: its nosing catching the light, a row above the deck
+  if (yDeck - 1 >= 0 && yDeck - 1 < H) fr.span(0, yDeck - 1, W, yDeck, soft ? C.ink : C.slate);
+  // the hero screen: a slim black mount, hung from the canopy on two hangers clear of the scoreboard
+  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
+  for (const X of [S.x0 + 8, S.x1 - 8]) rectW(fr, cam, X - 0.7, GROUND.canopyY, X + 0.7, S.y0 - m, C.black);
+  // the canopy over the platform: its fascia from column to column, the orange cove under it glowing down (flat rows),
+  // the studio lights on its underside
+  rectW(fr, cam, -2000, -400, 2000, GROUND.canopyY, C.black);
+  const yc = Math.round(syOf(cam, k, GROUND.canopyY));
+  if (yc >= 1 && yc < H) {
+    const xa = Math.max(0, colL), xb = Math.min(W, colR);
+    if (soft) glowH(fr, xa, xb, yc, RAMPS.orange, { glow: 'both', reach: 1, solid: true });
+    else {
+      fr.span(xa, yc - 1, xb, yc, C.ink);
+      glowH(fr, xa, xb, yc, RAMPS.orange, { glow: 'down', reach: 1, solid: true });
+    }
+  }
+  studioLamps(fr, cam, soft);
+}
+
+// the canopy's slim columns (the set's flats): a black steel column each side, its inner face lit, an orange inlay
+const FT_COL = { X: 218, inlay: 222 };
+function canopyColumns(fr, cam, soft) {
+  const kf = kAt(cam, SET.flatsZ);
+  for (const sx of [-1, 1]) {
+    const xi = Math.round(sxOf(cam, kf, sx * FT_COL.X));
+    const xo = sx > 0 ? W : 0;
+    if ((sx < 0 && xi <= 0) || (sx > 0 && xi >= W)) continue;
+    fr.span(Math.min(xi, xo), 0, Math.max(xi, xo), H, C.black);
+    const ew = Math.max(1, Math.round(1.2 * kf));
+    if (sx > 0) fr.span(xi, 0, xi + ew, H, soft ? C.ink : C.slate);
+    else fr.span(xi - ew, 0, xi, H, C.ink);
+    const xl = Math.round(sxOf(cam, kf, sx * FT_COL.inlay));
+    if (soft) fr.span(xl, 0, xl + 1, H, C.rust);
+    else glowV(fr, xl, 0, H, RAMPS.orange, { reach: 0 });
+  }
+}
+
 // --------------------------------------------------------------------------- entry points
 /** The dressing switch (tests of the bare architecture; labs): set.js setDressing() also clears its caches. */
 export const DRESSING = { on: true };
 
-const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60, 'seven-days': sevenDays };
+const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60, 'seven-days': sevenDays, 'full-time': fullTime };
 // the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
 DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
 DESK_SWEEP['tech-bytes'] = { line: C.cyan, hot: C.white, warm: C.silver, every: 18, cross: 2.2 };
 DESK_SWEEP.cosmos = { line: C.magenta, hot: C.pink, every: 30, cross: 3.2 };
 DESK_SWEEP['seven-days'] = { line: C.pink, hot: C.cream, warm: C.skin, every: 28, cross: 3.4 }; // unhurried
+// (FULL TIME's desk line holds still: its only motions are the scoreboard's minute and the pennant, full-time.md §6)
 
 /** A programme's own set flats (pillars), drawn instead of the network's black flats (set.js drawFlats). */
 export const FLATS = {
@@ -904,6 +991,7 @@ export const FLATS = {
   'money-minute': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.warm), // walnut columns, a brass inlay
   'news-60': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.amber),
   'seven-days': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.coral),
+  'full-time': (fr, cam, style, soft) => canopyColumns(fr, cam, soft), // the canopy's slim columns, an orange inlay
 };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
@@ -933,4 +1021,7 @@ export const DESK_FRONTS = {
   // the flagship's black glass desk at the weekend: coral slits in its seams, the coral line's light on its front, a
   // coral light at its foot
   'seven-days': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'pink', glow: 'coral', sheen: true, base: 'coral', zone: 'black', slab: 2.4 },
+  // FULL TIME: curved black under a slab with one orange edge light (the LED line and its light on the front), nothing
+  // else on it (full-time.md §6: "the desk is curved black with an orange edge light")
+  'full-time': { hi: 'black', lo: 'black', glow: 'orange', sheen: true, zone: 'black', slab: 2.4 },
 };

@@ -62,7 +62,7 @@ const HEAD_HALF = 10; // px at scale 1: half a head plus its hair, from the seat
 // Every programme's set variant, baked ahead of air (warmSets): the owner's 21:05 blocker, never a
 // frame without the set. set.js bakes synchronously on first use anyway; warming moves that cost
 // (10-30 ms per programme) off the frame path.
-const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days'];
+const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days', 'full-time']; // (FULL TIME: a draft, warmed ready for air)
 
 /**
  * Bake every programme's set ahead of air (StageHost calls it once at boot, in idle time). With SET's
