@@ -3,13 +3,15 @@
 // or if it fails to load (payattentiontitles.js picks one or the other for each play, never both in one). The same grid
 // and the same events as the studio's sequence (payattentionstudio.js):
 //
-//   DARK      beats 0-2     the quiz studio with its lights out: the question board's frame, the three desks and the
-//                           two shape lamps only just made out (slate rims on black), the lamps unlit
+//   DARK      beats 0-2     the quiz studio with its lights out, black but for its lights glimmering: the board's
+//                           marquee bulbs dimmed, the stage's diodes and their sheen on the deck; the desks black
+//                           silhouettes, their lids' edges and the lamps' housings catching a little
 //   LAMPS     2-6           the lamps light in turn, one a beat: the circle (seat A, left), the square (seat B, right),
 //                           the circle, the square, each flashing on its beat; the first light on each desk brings its
 //                           front up, purple with its fog rim
-//   LIGHTS    6             both lamps lit and the room's white light on the downbeat: the board's purple frame, the
-//                           washes behind the desks, the moving heads' beams, the stage's white nosing
+//   LIGHTS    6             both lamps lit and the room's white light on the downbeat: the board's purple frame and its
+//                           marquee, the stage's white nosing, the moving heads' beams (each runs out of the frame,
+//                           behind a desk or down to the floor: never ending in the air)
 //   FLIP      6.5-7.5       the question board turns over on its axis, edge-on at the half beat, to PAY ATTENTION
 //   CLOSE     8-10          a cut closer: the board and its two words (a still framing: never a zoom)
 //   (then the emblem and the package's plate: payattentiontitles.js)
@@ -41,8 +43,10 @@ const LAMP = { A: { u: 110, v: 131, r: 6.5 }, B: { u: 274, v: 131, h: 6 } };
 const SCORE = { A: { u0: 48, u1: 66 }, B: { u0: 318, u1: 336 } };
 const NOSING = 186;
 const HEADS = [{ u: 24, v: 30, side: -1 }, { u: 360, v: 30, side: 1 }];
-const WASHES = [{ u: 72, v: 52, ru: 40, rv: 66 }, { u: 312, v: 52, ru: 40, rv: 66 }];
-const WASH_TOP = 4; // the washes' flat top (under the ceiling, as the set's pools)
+const SKIRTING = 150; // the wall's foot: the floor from here
+const MARQUEE = 6; // the board's bulbs: one every 6 units along the frame's middle
+// the deck's sheen behind the nosing in the dark: each row back from it, the share of its pixels in ink (of 16)
+const SHEEN = [9, 8, 7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1];
 
 /**
  * The framings: the wide, creeping in on the dark stage by 5 % over the lamps' beats (from the cut to the room's light,
@@ -102,40 +106,40 @@ function rimmed(u0, v0, u1, v1, c, rimC) {
   fill(x0, y0, x1, y1, rimC);
   fill(x0 + 1, y0 + 1, x1 - 1, y1 - 1, c);
 }
-
-/**
- * A wash of light on the back wall, as the set's pools: an ink oval from above, flat-topped under the ceiling line (a
- * three-unit Bayer band there), its sides and foot a short Bayer band (the screen's fixed matrix).
- */
-function wash(w) {
-  const x0 = sx(w.u - w.ru), x1 = sx(w.u + w.ru), y0 = Math.max(sy(WASH_TOP - 3), sy(w.v - w.rv)), y1 = sy(w.v + w.rv);
-  const cx = (sx(w.u - w.ru) + x1) / 2, cy = (sy(w.v - w.rv) + y1) / 2, rx = (x1 - x0) / 2, ry = (y1 - sy(w.v - w.rv)) / 2;
-  for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
-    const v = FR.cy + (y + 0.5 - 108) / FR.k;
-    const top = (v - (WASH_TOP - 3)) / 3; // the falloff under the ceiling
-    for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
-      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
-      const r = Math.sqrt(dx * dx + dy * dy);
-      if (r >= 1) continue;
-      const f = Math.min((1 - r) / 0.22, top); // the band in the outer 22 %
-      if (f > 0 && (f >= 1 || ditherAt(x, y) < f * 16)) L.d[y * W + x] = C.ink;
-    }
+/** The board's marquee: a bulb (a pixel in the wide, 2 x 2 in the close) every MARQUEE units round the frame's middle. */
+function marquee(c) {
+  const f = BOARD.frame / 2, n = Math.max(1, Math.round(FR.k * 0.9));
+  const u0 = BOARD.u0 + f, u1 = BOARD.u1 - f, v0 = BOARD.v0 + f, v1 = BOARD.v1 - f;
+  const at = (u, v) => fill(sx(u) - (n >> 1), sy(v) - (n >> 1), sx(u) - (n >> 1) + n, sy(v) - (n >> 1) + n, c);
+  const nu = Math.round((u1 - u0) / MARQUEE), nv = Math.round((v1 - v0) / MARQUEE);
+  for (let i = 0; i <= nu; i++) {
+    at(u0 + ((u1 - u0) * i) / nu, v0);
+    at(u0 + ((u1 - u0) * i) / nu, v1);
+  }
+  for (let i = 1; i < nv; i++) {
+    at(u0, v0 + ((v1 - v0) * i) / nv);
+    at(u1, v0 + ((v1 - v0) * i) / nv);
   }
 }
 
-/** A moving head and its beam (the room's light on): the barrel, its lens along the beam, the cone in the haze. */
-function movingHead(h, b) {
-  // the beams sweep slowly with the band, mirrored (inward positive)
+/** A moving head's lens and beam direction at beat b (the beams sweep slowly with the band, mirrored, inward positive). */
+export function flatBeam(h, b) {
   const a = (-12 + 12 * Math.sin(((b - Q.both) / 8) * Math.PI)) * (Math.PI / 180);
   const dx = -h.side * Math.sin(a), dy = Math.cos(a);
   const k = FR.k;
   const r = 3.4 * k;
   const lx = 192 + (h.u - FR.cx) * k + dx * (r - 0.6), ly = 108 + (h.v - FR.cy) * k + dy * (r - 0.6);
+  // thrown long: each beam runs out of the frame, behind a desk (drawn over it) or down to the wall's foot
+  return { lx, ly, dx, dy, r, len: 175 * k, floor: sy(SKIRTING) };
+}
+/** A moving head's beam in the haze (drawn before the desks, which stand in front of it; stopped at the wall's foot). */
+function headBeam(h, b) {
+  const { lx, ly, dx, dy, len, floor } = flatBeam(h, b);
+  const tan = Math.tan(14 * (Math.PI / 180));
   // the cone: steel at the lens, slate, ink, out into the black (flat steps, a short band between them)
-  const len = 46 * k, tan = Math.tan(14 * (Math.PI / 180));
   const ramp = [0, C.ink, C.slate, C.steel];
   const xa = Math.max(0, Math.floor(lx - len)), xb = Math.min(W, Math.ceil(lx + len));
-  const ya = Math.max(0, Math.floor(ly)), yb = Math.min(H, Math.ceil(ly + len + 2));
+  const ya = Math.max(0, Math.floor(ly)), yb = Math.min(H, floor, Math.ceil(ly + len + 2));
   for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) {
     const rx = x + 0.5 - lx, ry = y + 0.5 - ly;
     const d = rx * dx + ry * dy;
@@ -152,7 +156,10 @@ function movingHead(h, b) {
       if (L.d[o] === C.black || (step >= 2 && L.d[o] === C.ink) || (step >= 3 && L.d[o] === C.slate)) L.d[o] = ramp[Math.min(3, step)];
     }
   }
-  // the barrel and its lens
+}
+/** A moving head's barrel and its lens turned along the beam. */
+function headBarrel(h, b) {
+  const { lx, ly, dx, dy, r } = flatBeam(h, b);
   const hx = lx - dx * (r - 0.6), hy = ly - dy * (r - 0.6);
   for (let y = Math.floor(hy - r - 1); y <= Math.ceil(hy + r + 1); y++) for (let x = Math.floor(hx - r - 1); x <= Math.ceil(hx + r + 1); x++) {
     if (x < 0 || x >= W || y < 0 || y >= H) continue;
@@ -184,7 +191,7 @@ function lamp(which, state, dark) {
     if (d > 1) continue;
     let c;
     if (d > 0) c = C.black;
-    else if (!state) c = d > -1 ? (dark ? C.slate : C.fog) : C.ink;
+    else if (!state) c = d > -1 ? (dark ? C.slate : C.fog) : dark ? C.black : C.ink;
     else {
       // the highlight: a small block up and to the left (a disc that small prints as a plus sign), grown on the flash
       const hu = x + 0.5 - cx + rr * 0.34, hv = y + 0.5 - cy + rr * 0.34, hs = rr * (state === 2 ? 0.42 : 0.24);
@@ -241,34 +248,49 @@ export function paintFlat(b) {
   L.begin(C.black);
   const lit = roomLight(b);
   const dark = !lit;
-  // the back wall's washes (the room's light) and the floor's skirting (no ceiling line: with the creep it would hug
-  // the frame's top edge; the washes' flat tops say where the ceiling is)
-  if (lit) for (const w of WASHES) wash(w);
-  rect(-400, 150, 800, 151, dark ? C.black : C.ink);
-  // the question board: its frame purple with a fog rim once the light is up, a slate rim on black in the dark
-  rimmed(BOARD.u0, BOARD.v0, BOARD.u1, BOARD.v1, lit ? C.purple : C.black, lit ? C.fog : C.slate);
+  // the floor's skirting (no ceiling line: with the creep it would hug the frame's top edge)
+  rect(-400, SKIRTING, 800, SKIRTING + 1, dark ? C.black : C.ink);
+  // the moving heads' beams, behind everything on the stage (the room's light on)
+  if (lit) for (const h of HEADS) headBeam(h, b);
+  // the question board: its frame purple with a fog rim and its marquee lit once the light is up; in the dark a black
+  // shape, only its marquee's bulbs glimmering (dimmed to slate: a dimmed warm white is a grey, never amber)
+  if (lit) rimmed(BOARD.u0, BOARD.v0, BOARD.u1, BOARD.v1, C.purple, C.fog);
   rect(BOARD.u0 + BOARD.frame - 1, BOARD.v0 + BOARD.frame - 1, BOARD.u1 - BOARD.frame + 1, BOARD.v1 - BOARD.frame + 1, C.black);
+  marquee(lit ? C.cream : C.slate);
   face(flipAt(b), lit);
+  // the stage's nosing in the dark: its diodes dimmed by turns, their sheen on the deck behind them (the desks' bases
+  // stand black against it)
+  if (dark) {
+    const y = sy(NOSING);
+    for (let x = 0; x < W; x++) {
+      for (let i = 1; i <= SHEEN.length; i++) if (y - i >= 0 && ditherAt(x, y - i) < SHEEN[i - 1]) L.d[(y - i) * W + x] = C.ink;
+      fill(x, y, x + 1, y + 1, x & 1 ? C.ink : C.slate);
+    }
+  }
   // the screen's bezel lips: its top and left edges catch the light (the key from the left), as every set's screen
   if (lit) {
     const f = BOARD.frame;
     rect(BOARD.u0 + f, BOARD.v0 + f, BOARD.u1 - f, BOARD.v0 + f + 1, C.ink);
     rect(BOARD.u0 + f, BOARD.v0 + f, BOARD.u0 + f + 1, BOARD.v1 - f, C.ink);
   }
-  // the desks: their fronts ink once lit (desk A and B by their lamps, the podium by the room), black in the dark; the
-  // top's front edge silver when lit, slate in the dark; the purple band with its rim, the score window, the lamp
+  // the desks: lit (desk A and B from their lamps' first light, the podium with the room), an ink front, the top's front
+  // edge silver, the purple band with its fog rim, the score window, the lamp; unlit, a black silhouette, only its lid's
+  // edge (ink) and its lamp's housing (slate) catching a little
   for (const id of ['A', 'B', 'host']) {
     const D = DESKS[id];
     const up = id === 'host' ? lit : deskUp(id, b);
     rect(D.u0, D.v0, D.u1, D.v1, up ? C.ink : C.black);
-    rect(D.u0, D.v0, D.u1, D.v0 + 1, up ? C.silver : C.slate);
+    rect(D.u0, D.v0, D.u1, D.v0 + 1, up ? C.silver : C.ink);
     rect(D.u0, D.v0 + 1, D.u1, D.v0 + 2, C.black);
     rect(D.u0, D.v1 - 6, D.u1, D.v1, C.black);
-    if (id === 'host') continue;
+    if (id === 'host' || !up) {
+      if (id !== 'host') lamp(id, lampAt(id, b), true);
+      continue;
+    }
     const fv0 = D.v0 + FASCIA.dv0, fv1 = D.v0 + FASCIA.dv1;
-    rimmed(D.u0 + FASCIA.inset, fv0, D.u1 - FASCIA.inset, fv1, up ? C.purple : C.black, up ? C.fog : C.slate);
+    rimmed(D.u0 + FASCIA.inset, fv0, D.u1 - FASCIA.inset, fv1, C.purple, C.fog);
     rect(SCORE[id].u0, fv0 + 3, SCORE[id].u1, fv1 - 3, C.black);
-    lamp(id, lampAt(id, b), !up);
+    lamp(id, lampAt(id, b), false);
   }
   // the stage's white nosing (the room's light), broken under the desks' ends
   if (lit) {
@@ -280,11 +302,34 @@ export function paintFlat(b) {
       fill(x, y + 1, x + 1, y + 2, C.slate);
     }
   }
-  if (lit) for (const h of HEADS) movingHead(h, b);
+  if (lit) for (const h of HEADS) headBarrel(h, b);
   return L.d;
 }
 /** The flat stage's layer (the sequence draws it). */
 export const flatLayer = () => L;
 export { BOARD as FLAT_BOARD, DESKS as FLAT_DESKS };
+
+// the last step of a beam's light along its axis (2.7 * (1 - 0.92 u^1.5) falls under one step there)
+const BEAM_FADE = ((1 - 1 / 2.7) / 0.92) ** (2 / 3);
+/**
+ * Where each moving head's beam stops at beat b in the room's light (none before): 'edge' (it runs out of the frame),
+ * 'desk' (behind one), 'floor' (down to the wall's foot), or 'air' (its light fades out in the open air: never, by the
+ * tests).
+ */
+export function flatBeamEnds(b) {
+  if (!roomLight(b) || b >= Q.emblem) return [];
+  FR = framingOf(b);
+  return HEADS.map((h) => {
+    const { lx, ly, dx, dy, len, floor } = flatBeam(h, b);
+    const fade = BEAM_FADE * len;
+    for (let d = 1; d <= fade; d += 0.5) {
+      const x = lx + dx * d, y = ly + dy * d;
+      if (x < 0 || x >= W || y < 0) return { side: h.side, how: 'edge', at: d, fade };
+      if (y >= floor || y >= H) return { side: h.side, how: 'floor', at: d, fade };
+      for (const D of Object.values(DESKS)) if (x >= sx(D.u0) && x < sx(D.u1) && y >= sy(D.v0)) return { side: h.side, how: 'desk', at: d, fade };
+    }
+    return { side: h.side, how: 'air', at: fade, fade };
+  });
+}
 
 

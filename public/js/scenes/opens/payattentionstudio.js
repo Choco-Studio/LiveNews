@@ -4,26 +4,31 @@
 // (the default page, ?v2=0, never reaches the v2 modules), and draws its flat open (payattentionflat.js) until it has
 // arrived or if it fails to load.
 //
-//   DARK      beats 0-2     the studio with its lights out, seen from high at the back of the room: black, its lights
-//                           only glimmering (the board's marquee, the players' shapes in bulbs, the light strips, the
-//                           stage's ring, the lamps' housings), the desks black against the cove's last glow; the two
-//                           moving heads search the dark; the camera starts its move, slowly: a crane down from the
-//                           rig's height and a push down the room
+//   DARK      beats 0-2     the studio with its lights out, seen from high at the back of the room: black, only its
+//                           lights glimmering (the board's marquee, the players' shapes in bulbs, the light strips, the
+//                           cove, the stage's ring, the lamps' housings), the desks black silhouettes; no beams; the
+//                           camera starts its move from rest: a crane down and a push down the room
 //   LAMPS     2-6           the lamps strike in turn, one a beat: the circle (seat A, left), the square (seat B, right),
-//                           the circle, the square; each strike lights its lamp and its player's shape in gold and lifts
-//                           the room's lights a step for a moment; each striker's head swings onto its desk and stops
-//                           dead on the strike (a follow spot); the camera keeps moving in
+//                           the circle, the square; each strike lights its lamp and its player's shape in gold, lifts
+//                           the room's lights a step for a moment, and snaps its follow spot on: from the rig over the
+//                           stage (above the frame: the beam comes in at its top edge), a cone widening down through the
+//                           haze onto the desk, the desk lit, a pool on the floor at its foot; the spot holds until the
+//                           other side strikes, then dims (its cone gone, a fainter pool, the desk a silhouette again);
+//                           the camera keeps moving in
 //   LIGHTS    6             the camera lands on the quiz's wide on the downbeat as the room's white light comes on;
-//                           the moving heads fire inward and sweep out, stopping dead on the next beat; the band comes in
+//                           the moving heads fire inward and sweep out, stopping dead on the next beat, their beams
+//                           thrown long (each runs out of the frame, behind a desk or down to the wall's foot: no beam
+//                           ends in the air); the band comes in
 //   FLIP      6.5-7.5       the board's letters flip in one by one, left to right, tile by tile, to PAY ATTENTION
 //                           under the emblem's two lamps (a mallet run up the scale)
 //   CLOSE     8-10          a cut to the board, twice the wide: the emblem and the name at 2x
 //   (then the emblem and the package's plate: payattentiontitles.js)
 //
 // From the room's light on, everything is the set's own pixels (palette only, no shimmer: the set's lights are fixed
-// world points). In the dark the frame is built from black up: only the room's light sources, dimmed a step or two
-// along the neutral ramp (never amber), and the desks as silhouettes against the cove. No people: the players arrive
-// with the programme.
+// world points) but for the players' backlights: the soft pools on the wall behind the contestants come up with the
+// cast, so the empty studio's wall is black behind the desks. In the dark the frame is built from black up: only the
+// room's light sources, dimmed a step or two along the neutral ramp (never amber), the desks as silhouettes, and the
+// spots. No people: the players arrive with the programme.
 import { P } from '../../palette.js';
 import { textPixels } from '../../font.js';
 import { u32 } from '../../gfx/index.js';
@@ -35,8 +40,8 @@ import { Frame } from '../../v2/canvas25d/pixbuf.js';
 import { drawBackground, drawDesk, wallRect, setLive, warmSet } from '../../v2/canvas25d/studio/set.js';
 import { LIVE } from '../../v2/canvas25d/studio/live.js';
 import { styleFor } from '../../v2/canvas25d/studio/styles.js';
-import { QUIZ, quizCamera, drawQuizLive, shapeBulbs, marqueeBulbs, stageEdgeRows, deskRect, lampRect } from '../../v2/canvas25d/studio/quiz.js';
-import { SET, kAt, sxOf, syOf } from '../../v2/canvas25d/studio/geometry.js';
+import { QUIZ, quizCamera, drawQuizLive, shapeBulbs, marqueeBulbs, stageEdgeRows, deskRect, lampRect, rasterQuizDesks, beamOf } from '../../v2/canvas25d/studio/quiz.js';
+import { SET, F, kAt, sxOf, syOf } from '../../v2/canvas25d/studio/geometry.js';
 
 const ID = 'pay-attention';
 const Q = CUES[ID];
@@ -99,40 +104,6 @@ export function darkAt(b) {
 }
 
 const DEG = Math.PI / 180;
-/**
- * The moving heads at beat b: { angle: [left, right] (radians from straight down, inward positive), sides: [on, on],
- * reach } (reach: the beam's throw, longer in the dark, where it is the room's main light).
- *   - in the dark (beats 0-2) both search the room, swinging in from outside together;
- *   - as each lamp strikes (beats 2-5) its side's head swings onto its desk in the last third of a beat and stops dead on
- *     the strike, the other head dark: a follow spot on the player who buzzed;
- *   - on the downbeat both fire inward and sweep out, stopping at rest on the next beat (the room's light is up).
- */
-export function beamsAt(b) {
-  if (b < Q.lamps[0]) {
-    const u = clamp01(b / Q.lamps[0]);
-    const a = (-48 + 58 * (u * u * (3 - 2 * u))) * DEG;
-    return { angle: [a, a], sides: [true, true], reach: 2 };
-  }
-  if (b < Q.both) {
-    const i = Math.min(Q.lamps.length - 1, Math.floor(b - Q.lamps[0]));
-    const next = Q.lamps[i + 1] ?? Q.both;
-    const own = i % 2 === 0 ? 0 : 1; // A's head is the left one
-    const SPOT = 16 * DEG, OUT = -40 * DEG;
-    const angle = [OUT, OUT], sides = [false, false];
-    angle[own] = SPOT;
-    sides[own] = true;
-    // the next striker's head swings in over the last third of the beat, landing on its strike
-    const lead = next - b;
-    if (lead < 1 / 3 && next < Q.both) {
-      const other = 1 - own, u = 1 - lead * 3;
-      angle[other] = OUT + (SPOT - OUT) * (1 - (1 - u) ** 3);
-      sides[other] = true;
-    }
-    return { angle, sides, reach: 2 };
-  }
-  const a = beamAt(b);
-  return { angle: [a, a], sides: [true, true], reach: 1 };
-}
 /**
  * The moving heads' angle at beat b once the room's light is up (radians from straight down, inward positive): they
  * fire inward on the downbeat and sweep out, stopping dead at their resting angle on the next beat; null before.
@@ -300,16 +271,173 @@ function paintDark(d, cam, n) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The follow spots: on each lamp's strike a spot snaps on to that desk from the rig over the front of the stage (above
+// the frame, so its beam comes in at the frame's top edge), its cone widening down through the haze onto the desk, a
+// pool on the floor round the desk's foot; it holds until the other side strikes, then dims
+
+/** The spots' rig and aim (world units): the source above the frame, in front of the desks and a little outside each;
+ * the aim on the desk's front, near its top; the beam's radius there (the desk and the floor round its foot). */
+const SPOT = Object.freeze({ Y: -330, Z: 876, out: 10, aimY: 0, aimZ: 892, r: 40, r0: 1.5 });
+
+/** Desk A's or B's spot at beat b: 2 on (from its lamp's strike), 1 dimmed (once the other side has struck), 0 off. */
+export function spotAt(id, b) {
+  if (b >= Q.both || b < Q.lamps[0]) return 0;
+  const mine = (i) => (i % 2 === 0) === (id === 'A');
+  let last = -1;
+  for (let i = 0; i < Q.lamps.length; i++) if (b >= Q.lamps[i]) last = i;
+  if (mine(last)) return 2;
+  for (let i = 0; i < last; i++) if (mine(i)) return 1;
+  return 0;
+}
+
+/** A spot's cone (world units): its apex, its unit axis, its radius r0 + tan * h at h along the axis. */
+function spotCone(id) {
+  const D = QUIZ.desks[id];
+  const A = [D.X + (id === 'A' ? -1 : 1) * SPOT.out, SPOT.Y, SPOT.Z];
+  const v = [D.X - A[0], SPOT.aimY - A[1], SPOT.aimZ - A[2]];
+  const len = Math.hypot(v[0], v[1], v[2]);
+  return Object.freeze({ A, u: [v[0] / len, v[1] / len, v[2] / len], tan: (SPOT.r - SPOT.r0) / len, r0: SPOT.r0 });
+}
+export const SPOT_CONES = Object.freeze({ A: spotCone('A'), B: spotCone('B') });
+
+/** Where a spot's axis meets the floor (world X, Z) and its radius there. */
+export function spotFloor(id) {
+  const c = SPOT_CONES[id];
+  const h = (SET.floorY - c.A[1]) / c.u[1];
+  return { X: c.A[0] + c.u[0] * h, Z: c.A[2] + c.u[2] * h, r: c.r0 + c.tan * h };
+}
+
+// the neutral ramp's order: a light lifts a pixel to its colour, never darkens it
+const RANK = new Map([C.black, C.ink, C.slate, C.steel, C.fog, C.silver, C.white].map((c, i) => [c, i]));
+const lift = (d, o, c) => {
+  const r = RANK.get(d[o]);
+  if (r !== undefined && r < RANK.get(c)) d[o] = c;
+};
+const FR2 = new Frame();
+const CLIP2 = new Int16Array(W);
+const SENTINEL = 0; // not a palette colour: the pixels the desks' raster leaves alone
+const ROW0 = new Int16Array(H), ROW1 = new Int16Array(H);
+const HAZE = 11; // the haze's ink share through the cone's middle (of 16)
+
+/** Each row's columns a cone can touch on screen (its cross-sections from the source to the floor, boxed). */
+function coneRows(cam, c) {
+  ROW0.fill(W);
+  ROW1.fill(-1);
+  const hF = (SET.floorY - c.A[1]) / c.u[1];
+  for (let i = 0; i <= 96; i++) {
+    const h = (hF * 1.15 * i) / 96;
+    const X = c.A[0] + c.u[0] * h, Y = c.A[1] + c.u[1] * h, Z = c.A[2] + c.u[2] * h;
+    if (Z - cam.z < 1) continue;
+    const k = kAt(cam, Z), r = (c.r0 + c.tan * h) * k + 2;
+    const x = sxOf(cam, k, X), y = syOf(cam, k, Y);
+    const xa = Math.max(0, Math.floor(x - r)), xb = Math.min(W - 1, Math.ceil(x + r));
+    for (let yy = Math.max(0, Math.floor(y - r)); yy <= Math.min(H - 1, Math.ceil(y + r)); yy++) {
+      if (xa < ROW0[yy]) ROW0[yy] = xa;
+      if (xb > ROW1[yy]) ROW1[yy] = xb;
+    }
+  }
+}
+
+/**
+ * The spots at beat b into d (the dark frame). A spot on: the haze in its cone (ink, densest through its middle) from
+ * the frame's top edge down to where it lands, the pool on the floor round the desk's foot (slate at its heart, ink to
+ * its edge) and the desk itself as the room's light shows it (the set's own desk raster). A dimmed spot: no cone, a
+ * fainter pool (ink), and the desk back to its silhouette, standing black against it.
+ */
+function paintSpots(d, cam, b) {
+  const on = { A: spotAt('A', b), B: spotAt('B', b) };
+  if (!on.A && !on.B) return;
+  // the desks as the room's light shows them (into a scratch frame: the spotted desk's pixels, and every desk's mask)
+  FR2.px.fill(SENTINEL);
+  rasterQuizDesks(FR2, cam, CLIP2, STYLE(), null);
+  const desk = FR2.px;
+  const f = F * cam.zoom;
+  const edge = stageEdgeRows(cam);
+  const sWall = SET.wallZ - cam.z;
+  const yw = Math.round(syOf(cam, kAt(cam, SET.wallZ), SET.floorY));
+  for (const id of ['A', 'B']) {
+    const lv = on[id];
+    if (!lv) continue;
+    const c = SPOT_CONES[id];
+    const ax = c.A[0], ay = c.A[1], az = c.A[2], ux = c.u[0], uy = c.u[1], uz = c.u[2];
+    const D = QUIZ.desks[id];
+    // the desk's own columns (its front and the side face the lens sees)
+    const kf = kAt(cam, D.Z), kb = kAt(cam, D.Z + D.depth);
+    const dx0 = Math.floor(Math.min(sxOf(cam, kf, D.X - D.hw), sxOf(cam, kb, D.X - D.hw))) - 1;
+    const dx1 = Math.ceil(Math.max(sxOf(cam, kf, D.X + D.hw), sxOf(cam, kb, D.X + D.hw))) + 1;
+    if (lv === 2) {
+      // the light from above falls on the top and the cabinet; the plinth, set back under the cabinet's overhang, stays
+      // in its shadow (black, as its silhouette)
+      const yC = Math.round(syOf(cam, kf, QUIZ.cabinet));
+      for (let y = 0; y < Math.min(H, yC); y++) for (let x = Math.max(0, dx0); x < Math.min(W, dx1); x++) {
+        const o = y * W + x;
+        if (desk[o] !== SENTINEL) d[o] = desk[o];
+      }
+    }
+    coneRows(cam, c);
+    for (let y = 0; y < H; y++) {
+      if (ROW1[y] < ROW0[y]) continue;
+      const dy = (y + 0.5 - cam.hy) / f;
+      const sFloor = dy > 0 ? (SET.floorY - cam.y) / dy : Infinity;
+      const sSurf = Math.min(sFloor, sWall);
+      const floor = sFloor < sWall && y >= yw;
+      for (let x = ROW0[y]; x <= ROW1[y]; x++) {
+        const o = y * W + x;
+        if (desk[o] !== SENTINEL) continue; // a desk: the spotted one is shown above, the others keep their silhouettes
+        const dx = (x + 0.5 - 192) / f;
+        const t = BAYER[y & 3][x & 3];
+        // the pool: where the ray meets the stage's deck inside the cone (above the ring of light)
+        if (floor && edge[x] >= 0 && y < edge[x]) {
+          const wx = cam.x + dx * sFloor - ax, wy = SET.floorY - ay, wz = cam.z + sFloor - az;
+          const h = wx * ux + wy * uy + wz * uz;
+          const ex = wx - h * ux, ey = wy - h * uy, ez = wz - h * uz;
+          const v = Math.sqrt(ex * ex + ey * ey + ez * ez) / (c.r0 + c.tan * h);
+          if (v < 1) {
+            if (lv === 2) {
+              if (v < 0.45 || (v < 0.7 && t < ((0.7 - v) / 0.25) * 16)) lift(d, o, C.slate);
+              else if (t < ((1 - v) / 0.3) * 16) lift(d, o, C.ink);
+            } else if (v < 0.5 || t < ((0.9 - v) / 0.4) * 12) lift(d, o, C.ink);
+          }
+        }
+        // the haze: the ray's path through the cone before it lands (on the floor or the wall; the desks are masked)
+        if (lv !== 2) continue;
+        const wx = cam.x - ax, wy = cam.y - ay, wz = cam.z - az;
+        const h0 = wx * ux + wy * uy + wz * uz, hd = dx * ux + dy * uy + uz;
+        const rr = c.r0 + c.tan * h0, t2 = c.tan * c.tan, dd = dx * dx + dy * dy + 1;
+        const qa = dd - hd * hd * (1 + t2);
+        const qb = 2 * (wx * dx + wy * dy + wz - h0 * hd - c.tan * hd * rr);
+        const qc = wx * wx + wy * wy + wz * wz - h0 * h0 - rr * rr;
+        const disc = qb * qb - 4 * qa * qc;
+        if (!(qa > 0) || disc <= 0) continue;
+        const sq = Math.sqrt(disc);
+        const s0 = Math.max(0, (-qb - sq) / (2 * qa)), s1 = Math.min(sSurf, (-qb + sq) / (2 * qa));
+        if (s1 <= s0) continue;
+        const hm = h0 + hd * ((s0 + s1) / 2);
+        if (hm <= 0) continue;
+        const rho = ((s1 - s0) * Math.sqrt(dd)) / (2 * (c.r0 + c.tan * hm));
+        if (t < Math.min(1, rho) * HAZE) lift(d, o, C.ink);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // The studio at beat b
 
 const FR = new Frame();
 const CLIP = new Int16Array(W);
+const CLIP_LIT = new Int16Array(W);
 const STYLE = () => styleFor(ID);
-const OPTS = { style: null, wall: { mode: 'rest', solo: true }, shotSince: 0, lod: 0 };
+// the open's room: the set's own light, but for the players' backlights (the soft pools on the wall behind the
+// contestants' heads come up with the cast; the empty studio's wall is black behind the desks)
+const OPEN_STYLE = Object.freeze({ ...styleFor(ID), pools: Object.freeze([]), bakeKey: 'pay-attention-open' });
+const OPTS = { style: OPEN_STYLE, wall: { mode: 'rest', solo: true }, shotSince: 0, lod: 0 };
 const T0 = 1000; // the set's clock at the cut (its live layer is a pure function of time)
 const ST = { question: true, lamps: { A: false, B: false }, scores: { A: null, B: null } };
-const BEAMS = { beams: true, heads: false, desks: false, sides: [true, true], reach: 1 };
 const DESKS_ONLY = { beams: false, heads: false, desks: true };
+// the moving heads in the room's light: their beams thrown long, so each one runs out of the frame, behind a desk or
+// down to the floor at the wall's foot (never ending in the air)
+const LIT = { beams: true, heads: true, desks: true, reach: 4 };
 
 /** Paint the studio at beat b (returns its pixels: a 384 x 216 frame, the open's layer copies it). */
 export function paintStage(b) {
@@ -317,19 +445,16 @@ export function paintStage(b) {
   const t = T0 + b * BEAT;
   const px = FR.px;
   const n = darkAt(b);
-  const bs = beamsAt(b);
   ST.lamps.A = lampAt('A', b) > 0;
   ST.lamps.B = lampAt('B', b) > 0;
   if (n > 0) {
-    // the dark: black up, the light sources dimmed, then the heads' beams (the room's main light) and the lamps
+    // the dark: black up, the light sources dimmed, the desks' silhouettes; on each strike its follow spot; the lamps
     paintDark(px, cam, n);
-    BEAMS.sides = bs.sides;
-    BEAMS.reach = bs.reach;
-    drawQuizLive(FR, cam, t, null, false, ST, bs.angle, BEAMS);
-    drawQuizLive(FR, cam, t, CLIP_NONE, false, ST, bs.angle, DESKS_ONLY);
+    paintSpots(px, cam, b);
+    drawQuizLive(FR, cam, t, CLIP_NONE, false, ST, 0, DESKS_ONLY);
   } else {
-    // the room lit: the set as it airs, the open's own board face, the heads firing and sweeping
-    OPTS.style = STYLE();
+    // the room lit: the set as it airs (without the players' backlights), the open's own board face, the heads firing
+    // and sweeping
     OPTS.shotSince = b >= Q.close ? 2 : 1;
     drawBackground(FR, cam, t, OPTS);
     // the desks without the set's own live layer (the open drives the lamps and the heads itself)
@@ -341,7 +466,8 @@ export function paintStage(b) {
       setLive(live);
     }
     paintBoard(px, wallRect(cam), b >= Q.close ? 2 : 1, b);
-    drawQuizLive(FR, cam, t, CLIP, false, ST, bs.angle);
+    litClip(cam, CLIP);
+    drawQuizLive(FR, cam, t, CLIP_LIT, false, ST, beamAt(b), LIT);
   }
   // the lamps' players' shapes on the wall, gold while their lamp is lit
   for (const id of ['A', 'B']) {
@@ -352,8 +478,53 @@ export function paintStage(b) {
 }
 const CLIP_NONE = new Int16Array(W).fill(H);
 
+/** The beams' clip in the room's light: each column's desk top, and the wall's foot (a beam on the wall's plane lands on
+ * the floor there). */
+function litClip(cam, clip) {
+  const yw = Math.round(syOf(cam, kAt(cam, SET.wallZ), SET.floorY));
+  for (let x = 0; x < W; x++) CLIP_LIT[x] = Math.min(clip[x], yw);
+  return CLIP_LIT;
+}
+// the last step of a beam's light along its axis (drawBeam: peak 2.7 * (1 - 0.92 u^1.5) falls under one step there)
+const BEAM_FADE = ((1 - 1 / 2.7) / 0.92) ** (2 / 3);
+
+/**
+ * Where each moving head's beam stops at beat b (the room's light; none before): for the left and the right head,
+ * 'off' (the head out of the frame), 'edge' (it runs out of the frame), 'desk' or 'floor' (it lands), or 'air' (its
+ * light fades out in the open air: never, by the tests).
+ */
+export function beamEndsAt(b) {
+  if (b < Q.both || b >= Q.emblem) return [];
+  const cam = cameraAt(b);
+  FR2.px.fill(SENTINEL);
+  rasterQuizDesks(FR2, cam, CLIP2, STYLE(), null);
+  const clip = litClip(cam, CLIP2);
+  const out = [];
+  for (const side of [-1, 1]) {
+    const bm = beamOf(cam, side, T0 + b * BEAT, beamAt(b));
+    if (bm.lx < -20 || bm.lx > W + 20) {
+      out.push({ side, how: 'off' });
+      continue;
+    }
+    const len = bm.len * LIT.reach, fade = BEAM_FADE * len;
+    let how = 'air', at = fade;
+    for (let dd = 1; dd <= fade; dd += 0.5) {
+      const x = bm.lx + bm.dx * dd, y = bm.ly + bm.dy * dd;
+      if (x < 0 || x >= W || y < 0 || y >= H) {
+        how = 'edge';
+      } else if (y >= clip[Math.floor(x)]) {
+        how = CLIP2[Math.floor(x)] <= y ? 'desk' : 'floor';
+      } else continue;
+      at = dd;
+      break;
+    }
+    out.push({ side, how, at, fade });
+  }
+  return out;
+}
+
 /** Bake the studio's wall light ahead of the open's first lit frame (an idle slice after this module loads). */
 export function warm() {
-  warmSet(ID);
+  warmSet(OPEN_STYLE);
 }
 export { CLOSE as QUIZ_CLOSE, WIDE as QUIZ_WIDE };
