@@ -392,17 +392,32 @@ Measured on the development archive, with a model of the planner that counts sto
    - *Open for step 7: every timing was measured on a stub voice. Boards are about three quarters of the air, and a run
      of boards can last up to 85 s (TODAY's six headlines).*
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
-   *Built; the three critiques passed at 9.8 in round 3 (`docs/roadmap/critique/pay-attention-set.md`,
-   `pay-attention-open.md`, `pay-attention-sound.md`):*
+   *Built. The sound passed at 9.8 in round 3; the set and the open, reopened by the reviewer (round 4: bare beside
+   the network's sets, the plainest open), were rebuilt and passed at 9.8 in round 6
+   (`docs/roadmap/critique/pay-attention-set.md`, `pay-attention-open.md`, `pay-attention-sound.md`):*
    - *The set: `public/js/v2/canvas25d/studio/quiz.js` (style `'pay-attention'`, theme `quiz`; `THEMES.quiz` in
-     `public/js/set.js`), lab `public/lab/pay-attention-set.html`. Seats (`QUIZ_SEATS`, neck at the network's depth
+     `public/js/set.js`), lab `public/lab/pay-attention-set.html`. A game-show studio in a dark room: a white soffit and
+     cove, two truss towers carrying the moving heads, each player's shape in bulbs on the wall (gold while their lamp is
+     lit), the board on an ink backing panel between two white light strips, a marquee of bulbs in its purple frame, its
+     idle the emblem and the name with a lamp test every 8 s (still during a question); lit podium cabinets over slatted
+     plinths; the stage's lit edge curving round the host. Seats (`QUIZ_SEATS`, neck at the network's depth
      Z 1000): the host at X 0 (the solo seat), A at X −118 facing right, B at X 118 facing left. Framings
      (`quizCamera`): `wide` (the solo wide pulled back 5 % and lowered 11 px, clear of the top row), `host`, `player-a`,
      `player-b`. The director's hook: `setQuizState({ question, lamps: { A, B }, scores: { A, B } }, t)` from
      `studio/set.js`; the moving heads ease to a stop over 0.8 s when `question` turns on and pick up again when it
-     turns off. Player B's single is not cut to while the programme's tag shows (its frame stands under the tag).*
-   - *The open: `public/js/scenes/opens/payattentiontitles.js` and `payattention.js` (the emblem: the two lamps), cue
-     sheet `'pay-attention'` (8.3 s, the hit at 7.5 s).*
+     turns off; the board's lamp test stops with them.*
+   - *The open: `public/js/scenes/opens/payattentiontitles.js` (the sequence) and `payattentionstudio.js` (shot in the
+     studio itself, with the set's renderer: a crane down and a push in through the dark studio, black but for its
+     lights and the desks' silhouettes, no beams in the dark; on each lamp's strike its follow spot snaps on from the
+     rig above the frame onto that desk, lighting it and a pool at its foot, and dims when the other side strikes; the
+     lights up on the downbeat as the camera lands on the wide, the heads firing and stopping on the next beat, their
+     beams thrown long so that none ends in the air; the wall behind the desks without the seat pools, which come up
+     with the cast; the board's letters flipping in, a cut to the board) and `payattention.js` (the emblem: the two
+     lamps), cue sheet `'pay-attention'` (8.3 s, the hit at 7.5 s). The studio comes in with a dynamic `import()` when
+     the v2 studio is on (`warmStudioOpens`, called by `studio.js`), so the default page's static graph stays free of
+     the v2 renderer; without it (`?v2=0`, a failed load, or before it arrives) the flat open airs
+     (`payattentionflat.js`: the same rule in the dark, silhouettes and light sources only; the lamps on the beat, the
+     board's flip, the plate), and a play never changes picture halfway.*
    - *The sound: the theme `payAttentionTitles` and the sign-off tail (`audio/themes.js`); the bed `'pay-attention'`
      (moments welcome, question, scores, chat, double, result, signoff); the cue sheet's `QUIZ` moments: `question`
      (`{ double: true }` for DOUBLE OR NOTHING), `right`, `wrong`, `double` (the drumroll, 4.3 s, the bed stopped);

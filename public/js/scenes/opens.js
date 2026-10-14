@@ -28,11 +28,19 @@ import { GENERIC, drawGeneric } from './opens/generic.js';
 import { WEATHER_TITLES, drawWeatherTitles } from './opens/weathertitles.js';
 import { WEEK_TITLES, drawWeekTitles } from './opens/weektitles.js';
 import { FULLTIME_TITLES, drawFullTimeTitles } from './opens/fulltimetitles.js';
-import { PAYATTENTION_TITLES, drawPayAttentionTitles } from './opens/payattentiontitles.js';
+import { PAYATTENTION_TITLES, drawPayAttentionTitles, loadPayAttentionStudio } from './opens/payattentiontitles.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
 const open = (fn, prog, tune, duration = DURATION, still = TL.still) => ({ duration, still, tune, draw: wrap(fn), accent: prog.accent, prog });
+
+/**
+ * Load the opens that are shot in a v2 studio (PAY ATTENTION's) with a dynamic import, when the v2 studio is on: the
+ * renderer calls it as it starts. Without it (?v2=0) those opens air their flat pictures and no v2 code runs.
+ */
+export function warmStudioOpens() {
+  return loadPayAttentionStudio();
+}
 
 export const OPENS = {
   'world-now': open(drawWorldNowTitles, WORLD_TITLES, TUNES['world-now'], WN_DURATION, WN_HIT),

@@ -117,7 +117,9 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - 🟡 Paso 1, la mesa de preguntas: hecha. Elige solo noticias ya emitidas y monta cada edición entera. La nota final llega el 16 oct, tras revisar a mano tres días reales de preguntas.
     - 🟡 Paso 2, el guion: hecho (9,7, hace falta más de 9,7). Lo que falta (la ronda "¿hoy o no hoy?" con titulares reales y partidas de Max y Ada) también depende de esos tres días. Las partidas están igualadas: el favorito claro pierde un 28 % de las veces y hay remontadas.
     - Ya conectado al canal como programa de tipo concurso; aún no está en la parrilla.
-    - En marcha: 3 los gráficos · 5 el plató, la cabecera y la música · 6 la cara del presentador. Después: 4 la dirección · 7 dos ediciones grabadas.
+    - ✅ Paso 3, los gráficos (9,75). ✅ Paso 6, los tres candidatos a presentador (9,75): falta que elijas uno.
+    - ✅ Paso 5: el plató (9,75), la cabecera (9,75, a la octava ronda: cada lámpara se enciende con su foco cayendo sobre la mesa del jugador) y la música y los efectos.
+    - En marcha: 4 la dirección. Después: 7 dos ediciones grabadas.
 
 ## E. Plató, gráficos y cámara
 24. Plató:
