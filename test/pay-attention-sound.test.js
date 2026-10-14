@@ -608,6 +608,13 @@ describe('PAY ATTENTION: the stings', () => {
       levels[name] = lv[0];
     }
     assert.ok(levels.quizWrong < levels.quizRight * 0.5, JSON.stringify(levels));
+    // the drumroll ducks under a voice like the others (on air, 13 Oct: its landing's bells left the reveal's first
+    // words 13 dB over the music, every other line 17.6 dB or more)
+    const roll = [];
+    const node = () => new Proxy(function () {}, { get: (t, k) => (k === 'value' ? 0 : node()), apply: () => node(), set: () => true });
+    STINGS.quizDrumroll({ ctx: node(), stingBus: node(), rig: new Proxy({}, { get: () => () => {} }), registerSting() {}, duckedSting: (a, u) => { roll.push([a, u]); return node(); } }, 0);
+    assert.equal(roll.length, 1, 'the roll on a ducked sting bus');
+    assert.ok(roll[0][1] <= roll[0][0] * 0.5, `ducked at least 6 dB under a voice: ${roll[0]}`);
   });
 
   test('DOUBLE OR NOTHING: a drumroll of two bars at the quiz\'s tempo, rising, landing on the next downbeat on the key (no crash)', () => {

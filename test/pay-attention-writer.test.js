@@ -68,6 +68,17 @@ describe('the players (§4.2)', () => {
     }
     const qual = { figure: { value: '150', label: 'DAYS', exact: false } };
     for (let i = 0; i < 200; i++) for (const pl of Object.values(playHowMany(qual, ['ada', 'unit8'], seeded(`q${i}`)))) assert.ok(pl.points <= 2);
+    // two guesses equally close, either side ($150 and $250 against $200, on air 13 Oct): both the closest, two points each
+    let level = 0;
+    const q200 = { figure: { value: '$200', label: 'PER MONTH', exact: true } };
+    for (let i = 0; i < 400; i++) {
+      const p = playHowMany(q200, ['paco', 'penny'], seeded(`e${i}`));
+      if (p.paco.off !== p.penny.off || p.paco.points === 3 || p.penny.points === 3) continue;
+      level++;
+      assert.equal(p.paco.points, 2);
+      assert.equal(p.penny.points, 2);
+    }
+    assert.ok(level > 0, 'some guesses fall equally close');
   });
   test('every player is strong on a desk outside their own programme', () => {
     const own = { paco: 'world', lola: 'world', max: 'tech', ada: 'tech', nova: 'science', unit8: 'science', penny: 'business', sam: 'world' };
@@ -114,7 +125,7 @@ describe('the episode (§4, §5)', () => {
   });
   test('every reveal carries where and when the story aired, for the screen; the host says it now and then', () => {
     const reveals = segs.filter((x) => x.part === 'reveal' && x.quiz?.round !== 'today');
-    for (const s of reveals) assert.match(s.quiz.credit, /(?:From .+?, )?(?:on|It aired on) .+?(?:this (?:morning|afternoon|evening)|yesterday's|'s )/, s.text);
+    for (const s of reveals) assert.match(s.quiz.credit, /(?:From .+?, )?(?:on|It aired on) .+?(?:this (?:morning|afternoon|evening)|overnight|yesterday's|'s )/, s.text);
     const spoken = reveals.filter((s) => s.text.includes(s.quiz.credit)).length;
     assert.ok(spoken >= 1 && spoken < reveals.length, `${spoken} of ${reveals.length} said aloud`);
   });
@@ -154,6 +165,72 @@ describe('the words', () => {
     for (const line of Object.values(PLAYERS.unit8).flat()) assert.ok(!/\bha\b|laughing/i.test(line));
     assert.ok(HOST.welcome.length >= 10 && HOST.result.length >= 10 && HOST.signoff.length >= 10);
     for (const line of ANSWERS.place.concat(ANSWERS.number, ANSWERS.lock)) assert.ok(/\{x\}/.test(line));
+  });
+});
+
+describe('heard on air (step 7, the editions of 12–13 Oct with the real voices)', () => {
+  const seeds = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'ep', 'w', 'sum', 'det', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6'];
+  const eds = seeds.map((s) => edition(s));
+  // (and UNIT-8 at a desk: the pairing given)
+  const archive = week(NOW);
+  const { events, avoid } = quizEvents(archive, { now: NOW, days: 7 });
+  const u8 = planEdition({ events, entries: archive.entries, now: NOW, contestants: contestantsFrom(channel, ['unit8', 'penny']), history: [], avoid, seed: 'u8' });
+  eds.push({ plan: u8, ...writeEpisode(u8, { channel, now: NOW }) });
+  test('the host and the players speak as people do (contractions); UNIT-8 says the shared answers in full', () => {
+    const stiff = /\b(?:Let us|I will|I am|That is|It is|There is|Here is|We are|You are|do not|is not)\b/;
+    for (const line of [...Object.values(HOST).flatMap((v) => (Array.isArray(v) ? v : Object.values(v).flat())), ...Object.values(ANSWERS).flat()]) assert.ok(!stiff.test(line), line);
+    for (const id of ['lola', 'max', 'nova', 'penny', 'sam']) for (const line of Object.values(PLAYERS[id]).flat()) assert.ok(!stiff.test(line), `${id}: ${line}`);
+    let unit8 = 0;
+    for (const { episode } of eds) {
+      for (const s of episode.segments) {
+        if (episode.cast[s.anchor] !== 'unit8' || !['lock', 'guess', 'stall', 'pick'].includes(s.part)) continue;
+        unit8++;
+        assert.ok(!/\b(?:I'll|I'm|I'd|Let's)\b/.test(s.text), `UNIT-8: ${s.text}`);
+      }
+    }
+    assert.ok(unit8 >= 4, `${unit8} UNIT-8 answers`);
+    // and the writer's own lines (the standing, DOUBLE OR NOTHING's "We're level"), in every edition
+    for (const { episode } of eds) {
+      for (const s of episode.segments.filter((x) => x.anchor === 'H' && ['welcome', 'introduce', 'standing', 'round', 'scores', 'don', 'tie', 'result', 'table', 'signoff', 'recap', 'countdown'].includes(x.part))) assert.ok(!stiff.test(s.text), s.text);
+    }
+  });
+  test('DOUBLE OR NOTHING when the scores are level: the player who picks is never called behind', () => {
+    const { HOST: H } = { HOST };
+    const level = H.don.filter((l) => !/\b(?:behind|trail\w*)\b/i.test(l));
+    assert.ok(level.length >= 4, 'lines enough for a level game');
+    for (const { episode, game } of eds) {
+      const don = episode.segments.find((s) => s.part === 'don');
+      if (game.don.level) assert.ok(!/\b(?:behind|trail\w*)\b/i.test(don.text), don.text);
+    }
+  });
+  test('no line is said twice in an edition: eight lock-ins and six guesses each find their own', () => {
+    for (const { episode } of eds) {
+      const said = episode.segments.filter((s) => s.anchor !== 'H' && ['lock', 'guess', 'react', 'stall', 'pick'].includes(s.part)).map((s) => s.text);
+      assert.equal(new Set(said).size, said.length, said.join(' | '));
+    }
+    assert.ok(ANSWERS.lock.length >= 12 && ANSWERS.place.length >= 12 && ANSWERS.number.length >= 12);
+  });
+  test('the seats: player A sits on screen left, the host\'s right', () => {
+    for (const line of HOST.introduce) assert.ok(!/On my left, \{a\}|On my right, \{b\}/.test(line), line);
+  });
+  test('a score said after a name that ends in a number keeps them apart', async () => {
+    const { scoreSafe } = await import('../server/quiz/writer.js');
+    assert.equal(scoreSafe('Halfway: UNIT-8 9 points, Penny 8.'), 'Halfway: UNIT-8, 9 points, Penny 8.');
+    assert.equal(scoreSafe('Two rounds gone. Penny 8, UNIT-8 9.'), 'Two rounds gone. Penny 8, UNIT-8, 9.');
+    assert.equal(scoreSafe('Score check. UNIT-8: 9. Penny: 8.'), 'Score check. UNIT-8: 9. Penny: 8.');
+  });
+  test('WHERE\'s reveal says the place and the verdict once; the headline is not read again', () => {
+    for (const { episode } of eds) {
+      for (const s of episode.segments.filter((x) => x.part === 'reveal' && x.quiz?.round === 'where')) {
+        assert.ok(!s.text.includes(s.quiz.question.words), s.text);
+        assert.match(s.text, /^It's /);
+      }
+    }
+  });
+  test('a story aired in the small hours aired overnight, not this morning', () => {
+    const night = Date.parse('2026-10-15T23:40:00Z'); // 00:40 London on the 16th
+    assert.equal(airedWhen('WORLD NOW', night, night + 21 * H), 'on WORLD NOW overnight');
+    assert.equal(airedWhen('WORLD NOW', night + 7 * H, night + 21 * H), 'on WORLD NOW this morning');
   });
 });
 

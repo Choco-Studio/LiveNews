@@ -16,6 +16,7 @@ export const SPEECH_CPS = 15; // the voices' characters a second
 export const BEATS = Object.freeze({ picture: 7.5, letters: 10, where: 6.4, today: 3.2, howmany: 4.3, reveal: 1.2 });
 
 const ORDINAL = ['one', 'two', 'three'];
+const BEHIND = /\b(?:behind|trail\w*)\b/i; // DOUBLE OR NOTHING's lines for the player behind (never said when level)
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 function hash(s) {
@@ -36,7 +37,8 @@ export function airedWhen(programmeTitle, at, now) {
   const a = london(at);
   const n = london(now);
   const yesterday = london(now - 86400_000).date;
-  if (a.date === n.date) return `on ${programmeTitle} ${a.hour < 12 ? 'this morning' : a.hour < 17 ? 'this afternoon' : 'this evening'}`;
+  // (a story aired at 00:40 is not "this morning" to a viewer at 22:45: the small hours are overnight)
+  if (a.date === n.date) return `on ${programmeTitle} ${a.hour < 5 ? 'overnight' : a.hour < 12 ? 'this morning' : a.hour < 17 ? 'this afternoon' : 'this evening'}`;
   if (a.date === yesterday) return `on yesterday's ${programmeTitle}`;
   return `on ${a.weekday}'s ${programmeTitle}`;
 }
@@ -57,6 +59,12 @@ export function spokenTime(t, now) {
 }
 
 const fill = (line, vars) => line.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m));
+// a score said straight after a name that ends in a number is one number to the ear ("UNIT-8 9 points" heard as "unit
+// eighty-nine"): a comma between them
+export const scoreSafe = (line) => String(line).replace(/(\b\p{L}+-\d+)\s+(?=\d)/gu, '$1, ');
+// UNIT-8 says the shared answers in full, literal as its bible has it ("Let us say C"); everyone else speaks as people do
+const LITERAL = [[/\bI'll\b/g, 'I will'], [/\bI'm\b/g, 'I am'], [/\bI'd\b/g, 'I would'], [/\bLet's\b/g, 'Let us'], [/\blet's\b/g, 'let us'], [/\bThat's\b/g, 'That is'], [/\bIt's\b/g, 'It is'], [/\bisn't\b/g, 'is not'], [/\bdon't\b/g, 'do not'], [/\bDon't\b/g, 'Do not']];
+export const literal = (line) => LITERAL.reduce((t, [re, w]) => t.replace(re, w), String(line));
 // a hidden name or figure is read as "blank"; a sentence keeps its full stop
 const spoken = (words) => String(words).replace(/▮+/g, 'blank');
 const stop = (text) => (/[.!?…]['’"”]?$/.test(String(text).trim()) ? String(text).trim() : `${String(text).trim()}.`);
@@ -115,7 +123,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   const segs = [];
   const say = (anchor, part, text, extra = {}) => segs.push({ type: 'quiz', part, anchor, emotion: extra.emotion || 'neutral', text, ...extra });
   const host = (part, text, extra) => say('H', part, text, extra);
-  const player = (id, part, text, extra) => say(anchorOf[id], part, text, extra);
+  const player = (id, part, text, extra) => say(anchorOf[id], part, id === 'unit8' && part !== 'buzz' ? literal(text) : text, extra);
   const react = (id, kind, key) => {
     const line = pick(PLAYERS[id]?.[kind] || [], `${key}:${id}:${kind}`, {}, { unique: true });
     if (line) player(id, 'react', line, { emotion: kind === 'right' || kind === 'win' || kind === 'ahead' ? 'happy' : 'neutral' });
@@ -137,11 +145,16 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     const when = london(met.at).date === london(now - 86400_000).date ? 'yesterday' : `on ${london(met.at).weekday}`;
     host('standing', met.winner ? `They last met ${when}, and ${first(met.winner)} won it, ${met.scores[met.winner]} to ${met.scores[met.pair.find((x) => x !== met.winner)]}.` : `They last met ${when}, and it was drawn.`);
   } else {
-    host('standing', pick(['Their first meeting on PAY ATTENTION.', 'They have never played each other before.', 'A first meeting, this.'], 'standing'));
+    host('standing', pick(['Their first meeting on PAY ATTENTION.', "They've never played each other before.", 'A first meeting, this.'], 'standing'));
   }
   react(a, 'intro', 'intro');
   react(b, 'intro', 'intro');
 
+  // the locks recapped on the clock (the host fills the wait with what the desks show: who chose what)
+  const recap = (xa, xb, key, data) => {
+    const line = xa === xb ? pick(HOST.recap.same, `${key}:rc`, { x: xa }) : pick(HOST.recap.split, `${key}:rc`, { a: first(a), b: first(b), x: xa, y: xb });
+    host('recap', line.replace(/^the/, 'The'), { quiz: { ...data, recap: true } });
+  };
   // one question: the frame, the play, the reveal, a reaction
   const playOut = (q, played, key, { double = null, firstOfRound = false } = {}) => {
     const data = { round: q.type, question: q };
@@ -153,6 +166,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
       for (const id of [...plan.pair].sort((x, y) => played.plays[x].step - played.plays[y].step)) {
         player(id, 'lock', pick(ANSWERS.lock, `${key}:${id}:l`, { x: played.plays[id].answer }), { quiz: { ...data, lock: played.plays[id] } });
       }
+      recap(played.plays[a].answer, played.plays[b].answer, key, data);
       const right = plan.pair.filter((id) => played.plays[id].right);
       const answer = q.options.find((o) => o.letter === q.answer);
       host('reveal', `It's ${q.answer}. ${who(right, key)}${sayCredit(q)}`, { quiz: { ...data, reveal: true, credit: q.aired ? credit(q) : null, answerWords: answer.words, points: Object.fromEntries(plan.pair.map((id) => [id, played.plays[id].points])) } });
@@ -170,18 +184,21 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
       const said = (o) => placeSaid(o.country);
       host('pins', fill(pick(HOST.frame.pins, `${key}:p`), { A: said(q.options[0]), B: said(q.options[1]), C: said(q.options[2]) }).replace(/^the/, 'The'), { quiz: data, countdown: BEATS.where });
       for (const id of plan.pair) player(id, 'lock', pick(ANSWERS.place, `${key}:${id}:l`, { x: said(q.options.find((o) => o.letter === played.plays[id].answer)) }).replace(/^the/, 'The'), { quiz: { ...data, lock: played.plays[id] } });
+      recap(said(q.options.find((o) => o.letter === played.plays[a].answer)), said(q.options.find((o) => o.letter === played.plays[b].answer)), key, data);
       const right = plan.pair.filter((id) => played.plays[id].right);
       const answer = q.options.find((o) => o.letter === q.answer);
-      host('reveal', `It's ${placeSaid(answer.country)}. ${who(right, key)}${q.masked ? ` ${stop(q.words)}` : ''}${sayCredit(q)}`, { quiz: { ...data, reveal: true, credit: q.aired ? credit(q) : null, points: Object.fromEntries(plan.pair.map((id) => [id, played.plays[id].points])) } });
+      // (the headline stands whole on the board with its place gold: read once in the frame, not again here)
+      host('reveal', `It's ${placeSaid(answer.country)}. ${who(right, key)}${sayCredit(q)}`, { quiz: { ...data, reveal: true, credit: q.aired ? credit(q) : null, points: Object.fromEntries(plan.pair.map((id) => [id, played.plays[id].points])) } });
     } else if (q.type === 'howmany') {
       const ask = parseFigure(q.figure.value)?.cur ? 'How much' : 'How many';
       host('frame', fill(pick(HOST.frame.howmany, `${key}:f`), { masked: stop(spoken(q.masked)), ask }), { quiz: data, countdown: BEATS.howmany });
       for (const id of plan.pair) player(id, 'guess', pick(ANSWERS.number, `${key}:${id}:g`, { x: played.plays[id].said }), { quiz: { ...data, guess: played.plays[id] } });
       const winners = plan.pair.filter((id) => played.plays[id].points > 0);
       const figure = `${q.figure.qualifier && !new RegExp(`${q.figure.qualifier}\\s*▮`, 'i').test(q.masked) ? `${q.figure.qualifier.toLowerCase()} ` : ''}${figureSaid(q)}`;
-      const close = Math.abs(played.plays[a].off - played.plays[b].off) / Math.max(1, Math.max(played.plays[a].off, played.plays[b].off)) < 0.15 ? ` ${pick(HOST.close, `${key}:cl`, { n: '' }).replace(/\s+\./, '.')}` : '';
       const exact = winners.find((id) => played.plays[id].points === 3);
-      const verdict = exact ? pick(HOST.exact, `${key}:x`, { name: first(exact) }) : winners.length ? pick(HOST.closest, `${key}:c`, { name: first(winners[0]) }) : pick(HOST.nobody, `${key}:n`);
+      const level = !exact && winners.length === 2; // equally close: two points each
+      const close = !level && Math.abs(played.plays[a].off - played.plays[b].off) / Math.max(1, Math.max(played.plays[a].off, played.plays[b].off)) < 0.15 ? ` ${pick(HOST.close, `${key}:cl`, { n: '' }).replace(/\s+\./, '.')}` : '';
+      const verdict = exact ? pick(HOST.exact, `${key}:x`, { name: first(exact) }) : level ? pick(HOST.equallyClose, `${key}:e`) : winners.length ? pick(HOST.closest, `${key}:c`, { name: first(winners[0]) }) : pick(HOST.nobody, `${key}:n`);
       host('reveal', `The answer: ${figure}, as reported ${airedWhen(titleOf(q.aired.programme), q.aired.at, now)}${q.aired.source ? `, from ${q.aired.source}` : ''}.${close} ${verdict}`, { quiz: { ...data, reveal: true, credit: q.aired ? credit(q) : null, points: Object.fromEntries(plan.pair.map((id) => [id, played.plays[id].points])) } });
     } else if (q.type === 'today') {
       // quickfire: the players answer on their lamps, the reveal says which and who
@@ -197,7 +214,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
       });
       if (played.items.length > 3) {
         const tally = (id) => played.items.filter((x) => x.plays[id].right).length;
-        host('tally', pick(HOST.frame.todayTally, `${key}:t`, { a: first(a), b: first(b), sa: tally(a), sb: tally(b) }), { quiz: { ...data, tally: { [a]: tally(a), [b]: tally(b) } } });
+        host('tally', scoreSafe(pick(HOST.frame.todayTally, `${key}:t`, { a: first(a), b: first(b), sa: tally(a), sb: tally(b) })), { quiz: { ...data, tally: { [a]: tally(a), [b]: tally(b) } } });
       }
     }
     // one reaction: the player the question mattered to (right alone, or wrong alone), else none
@@ -217,7 +234,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     host('round', pick(HOST.roundIntro[r.type], `round:${r.type}`, { k: ORDINAL[i] }), { quiz: { round: r.type, title: ROUND_TITLES[r.type], k: i + 1 } });
     r.played.forEach((p, j) => playOut(p.q, p, `r${i}q${j}`, { firstOfRound: j === 0 }));
     if (i === 1) {
-      host('scores', pick(HOST.scores, 'scores', { a: first(a), b: first(b), sa: game.half[a], sb: game.half[b] }), { quiz: { scores: game.half } });
+      host('scores', scoreSafe(pick(HOST.scores, 'scores', { a: first(a), b: first(b), sa: game.half[a], sb: game.half[b] })), { quiz: { scores: game.half } });
       const lead = game.half[a] === game.half[b] ? null : game.half[a] > game.half[b] ? a : b;
       if (lead) {
         react(lead, 'ahead', 'half');
@@ -230,10 +247,11 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   const d = game.don;
   const desks = d.offered.map((x) => (DESKS[x] || x).toLowerCase());
   if (d.offered.length > 1) {
-    host('don', `${d.level ? `We are level, so ${first(d.trailing)} picks. ` : ''}${pick(HOST.don, 'don', { name: first(d.trailing), desks: `${desks[0]} or ${desks[1]}` })}`, { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
+    // (level: never a line that calls the player behind)
+    host('don', `${d.level ? `We're level, so ${first(d.trailing)} picks. ` : ''}${pick(d.level ? HOST.don.filter((l) => !BEHIND.test(l)) : HOST.don, 'don', { name: first(d.trailing), desks: `${desks[0]} or ${desks[1]}` })}`, { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
     player(d.trailing, 'pick', pick(PLAYERS[d.trailing]?.pick || ['{desk}.'], 'pick', { desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() }).replace(/^./, (c) => c.toUpperCase()), { quiz: { desk: d.offer.desk } });
   } else {
-    host('don', pick(HOST.donOne, 'don', { name: first(d.trailing), desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() }), { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
+    host('don', `${d.level ? `We're level, so ${first(d.trailing)} plays for double. ` : ''}${pick(d.level ? HOST.donOne.filter((l) => !BEHIND.test(l)) : HOST.donOne, 'don', { name: first(d.trailing), desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() })}`, { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
   }
   playOut(d.played.q, d.played, 'don', { double: { [d.trailing]: 2, [d.leader]: 1 }, firstOfRound: true });
 
@@ -250,7 +268,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     react(winner, 'win', 'end');
     react(loser, 'lose', 'end');
   } else if (winner) {
-    host('result', pick(HOST.result, 'result', { winner: first(winner), loser: first(loser), sw: scores[winner], sl: scores[loser] }), { quiz: { scores, winner } });
+    host('result', scoreSafe(pick(HOST.result, 'result', { winner: first(winner), loser: first(loser), sw: scores[winner], sl: scores[loser] })), { quiz: { scores, winner } });
     react(winner, 'win', 'end');
     react(loser, 'lose', 'end');
   } else {
@@ -273,7 +291,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   let countdown = 0;
   for (const s of segs) {
     const talk = s.text.length / SPEECH_CPS + 0.4;
-    if (s.part === 'lock') {
+    if (s.part === 'lock' || s.part === 'recap') {
       const inside = Math.min(countdown, talk);
       countdown -= inside;
       estSeconds += talk - inside;

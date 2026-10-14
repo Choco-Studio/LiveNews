@@ -25,6 +25,7 @@ import { QuizDesk, editionStories } from '../server/quiz/edition.js';
 import { Graphics, quizAvoided } from '../public/js/graphics/index.js';
 import { quizAvoidOf } from '../public/js/quizplay.js';
 import { quizEvents } from '../server/quiz/desk.js';
+import { Station } from '../server/station.js';
 import { HOST } from '../server/quiz/banks.js';
 import { quizEdition, quizWeek, NOW, H } from './fixtures/quiz-week.js';
 
@@ -208,6 +209,11 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
           const last = answerSchedule(u, episode.segments, episode.cast).filter((a) => a.kind === 'lock').at(-1);
           return assert.equal(p.shot, last.i === i ? 'wide' : 'quiz', `${seed} ${i} lock`);
         }
+        // the host's recap of the locks on the same wide as the last lock-in (step 7: the wait filled, who chose what)
+        if (s.part === 'recap') {
+          const last = answerSchedule(u, episode.segments, episode.cast).filter((a) => a.kind === 'lock').at(-1);
+          return assert.ok(p.shot === 'wide' && shots[last.i].shot === 'wide', `${seed} ${i} recap on ${p.shot}`);
+        }
         // TODAY's verdicts on the wide but the last before the round's tally (its tally's wide follows)
         if (s.part === 'reveal' && u.type === 'today') {
           const reveals = u.items.map((it) => it.reveal).filter((x) => x !== null);
@@ -253,8 +259,13 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
       for (const u of quizUnits(episode.segments).filter((x) => x.kind === 'question' && x.type !== 'today')) {
         const sched = answerSchedule(u, episode.segments, episode.cast);
         for (let k = 1; k < sched.length; k++) assert.ok(sched[k].at >= sched[k - 1].at + sched[k - 1].dur, `${seed}: answers overlap`);
+        // (the host's recap, when there is one, follows the last lock-in on the same clock)
+        const recap = sched.filter((a) => a.kind === 'recap');
+        if (u.type === 'picture' || u.type === 'where') assert.ok(recap.length === 1 && sched.at(-1) === recap[0], `${seed}: the recap last`);
+        else assert.equal(recap.length, 0);
         for (const a of sched) {
           const seg = episode.segments[a.i];
+          if (a.kind === 'recap') continue;
           if (u.type === 'picture') assert.ok(a.at >= { 2: 0, 3: 2, 4: 4 }[seg.quiz.lock.step] * HALF_NOTE, `${seed}: lock-in before its step`);
           if (u.type === 'letters') assert.ok(a.at >= LETTER_STAGES[a.stage - 1] * HALF_NOTE, `${seed}: buzz before its stage`);
         }
@@ -265,6 +276,53 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
 
 describe('PAY ATTENTION on air (the director, the fake clock)', () => {
   const all = Object.values(SEEDS);
+
+  test('heard on air (step 7): the prompt and the pins end as the first tick sounds; the clock runs under the faces to the reveal; the board back for the picture\'s last step; the recap inside the clock', async () => {
+    let prompts = 0;
+    let backs = 0;
+    let recaps = 0;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      const said = saysOf(log, episode);
+      const segs = episode.segments;
+      for (const u of quizUnits(segs).filter((x) => x.kind === 'question' && ['picture', 'where', 'howmany'].includes(x.type))) {
+        const frame = said.get(u.from);
+        if (!frame) continue;
+        const cd = log.trace.find((x) => x.k === 'countdown' && x.t >= frame.on - 0.01);
+        const rv = log.trace.find((x) => x.k === 'reveal' && x.t >= cd.T0);
+        // the line that asks for the clock ends a beat before its first tick, never a dead beat after it (on air: up to 0.9 s)
+        const asking = (u.parts.countdown || u.parts.pins || [])[0];
+        if (asking !== undefined) {
+          const line = said.get(asking);
+          assert.ok(line.off <= cd.T0 + 1e-6 && cd.T0 - line.off <= 0.3, `${seed} ${u.type}: "${segs[asking].text}" ends ${(cd.T0 - line.off).toFixed(2)} s before the first tick`);
+          prompts++;
+        }
+        // the reveal on the clock's last beat: the countdown long enough for the faces (never a stopped clock before it)
+        assert.ok(Math.abs(rv.t - cd.end) < 0.05, `${seed} ${u.type}: the reveal ${(rv.t - cd.end).toFixed(2)} s from the clock's end`);
+        // the faces hold to 0.4 s before the reveal; when PICTURE THIS's picture still has a step to take after they came
+        // in, the board is back once they have held the minimum and said their lines, and the step is seen
+        const away = log.trace.find((x) => x.k === 'away' && x.t >= cd.T0 - 0.01 && x.t < rv.t);
+        const back = log.trace.find((x) => x.k === 'back' && x.t >= cd.T0 && x.t < rv.t + 0.01);
+        if (away && back) {
+          const lines = [...(u.parts.lock || []), ...(u.parts.guess || []), ...(u.parts.recap || [])].map((i) => said.get(i)).filter(Boolean);
+          const spoken = Math.max(...lines.map((l) => l.off));
+          const step = u.type === 'picture' && away.t < cd.T0 + 4 * cd.half;
+          const due = Math.max(away.t + 4, step ? Math.min(rv.t - 0.4, spoken + 0.35) : rv.t - 0.4);
+          assert.ok(Math.abs(back.t - due) <= 0.08, `${seed} ${u.type}: the board back ${(back.t - due).toFixed(2)} s from its time`);
+          if (step) assert.ok(back.t <= cd.T0 + 4 * cd.half + 4 + 0.1, `${seed}: the picture's last step on the board`);
+          backs++;
+        }
+        // the host's recap said inside the clock, after the last lock-in
+        for (const i of u.parts.recap || []) {
+          const line = said.get(i);
+          assert.ok(line && line.off <= cd.end + 0.05, `${seed}: the recap inside the clock`);
+          recaps++;
+        }
+      }
+    }
+    assert.ok(prompts >= 6 && backs >= 6 && recaps >= 6, `${prompts} prompts, ${backs} returns, ${recaps} recaps`);
+  });
 
   test('every edition plays to its end card in 280-360 s, every cut held at least the minimum but the open\'s and the last', async () => {
     for (const seed of all) {
@@ -467,7 +525,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const line = said.get(i);
         if (!line) return;
         const mid = (line.on + line.off) / 2;
-        const inQuestion = ['frame', 'options', 'countdown', 'lock', 'buzz', 'stall', 'guess', 'pins', 'reveal'].includes(seg.part);
+        const inQuestion = ['frame', 'options', 'countdown', 'lock', 'recap', 'buzz', 'stall', 'guess', 'pins', 'reveal'].includes(seg.part);
         assert.equal(stateAt(mid)?.question, inQuestion, `${seed} ${i} ${seg.part}: question ${stateAt(mid)?.question}`);
         if (['lock', 'buzz', 'guess'].includes(seg.part)) assert.equal(stateAt(mid).lamps[seg.anchor], true, `${seed}: ${seg.anchor}'s lamp on its ${seg.part}`);
       });
@@ -859,6 +917,23 @@ describe('PAY ATTENTION and the LATEST ticker: never a story the edition uses', 
       assert.ok(!g.ticker.cur || g.ticker.cur.text !== words, 'never the answer');
     }
     assert.equal(g.tickerList.length, 0);
+  });
+
+  test('no tragedy scrolls under the game: the station marks grave items, the band leaves them out only while the edition airs', async () => {
+    // (step 7 on air, 12–13 Oct: an execution, a murder, a fatal ride, a war and a named person's cancer scrolled under the quiz)
+    const grave = ['Watch: Emergency calls from botched Christa Pike execution released', 'Tupac Shakur killer sentenced to 40 years in prison', 'Horrified witnesses recount fatal rollercoaster incident at Six Flags', 'Funeral for Egyptian flight attendant killed in Houthi attack on Riyadh', 'Pope Leo diagnosed with lung cancer as growth removed during surgery', 'Hurricane Simon and Tropical Storm Rachel kill five people on Mexico’s Pacific coast'];
+    const light = ['Bank of Canada holds interest rates at 3.5 percent', 'Lisbon opens a new riverside tram line', 'England beat Greece in World Cup play-off'];
+    const news = { stories: new Map([...grave, ...light].map((title, i) => [`g${i}`, { id: `g${i}`, source: 'BBC News', title, summary: '', published: 1000 - i, category: 'world' }])) };
+    const station = new Station({ config: { queueSize: 1 }, newsDesk: news, producer: {}, chain: {}, channel: () => loadChannel() });
+    const items = station.ticker();
+    for (const t of grave) assert.equal(items.find((x) => x.text === t)?.grave, true, `marked: ${t}`);
+    for (const t of light) assert.ok(!items.find((x) => x.text === t)?.grave, `not marked: ${t}`);
+    const log = await played(SEEDS.lettersDon);
+    const during = shown({ ticker: items, quizAvoid: log.avoidDuring });
+    for (const t of grave) assert.ok(!during.includes(t.toUpperCase()) && !during.includes(t), `not under the game: ${t}`);
+    assert.ok(during.includes('Bank of Canada') || during.includes('BANK OF CANADA'), 'the light news still runs');
+    const after = shown({ ticker: items, quizAvoid: log.avoidAfter });
+    assert.ok(grave.some((t) => after.includes(t) || after.includes(t.toUpperCase())), 'the channel carries them again after the game');
   });
 });
 

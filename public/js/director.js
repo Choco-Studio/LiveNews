@@ -59,6 +59,8 @@ function quoteIn(line, quote) {
 // for the next word's first sound (or the silence after it), polled this often (s), at most WORD_WAIT s
 const WORD_POLL = 0.012;
 const WORD_WAIT = 0.8;
+// a recorded voice's own loudness envelope (0..1 over the clip's top 40 dB) under this is the silence between words
+const VOICE_QUIET = 0.2;
 
 /** Cancel a cut scheduled with Director.cutWhenClear (or a plain timer). */
 function stopCut(h) {
@@ -187,6 +189,27 @@ export class Director {
     };
     const at = () => {
       if (h.cancelled) return;
+      // a recorded voice: from the recording itself, never the mouth's timeline, which runs at its own pace between the
+      // word anchors (PAY ATTENTION's cuts landed 0.2-0.3 s into "TECH", "right", "reported" and "BBC", 12-13 Oct): at
+      // once in its silence, else on the next word's first sound, or after the last word as the voice falls silent
+      const rec = this.audio?.recordedVoiceAt?.(performance.now());
+      if (rec) {
+        if (rec.level < VOICE_QUIET) return fire();
+        const p = performance.now();
+        const limit = p + WORD_WAIT * 1000;
+        if (rec.next !== null && rec.next <= limit) {
+          h.timer = setTimeout(fire, Math.max(0, rec.next - p));
+          return;
+        }
+        const quiet = () => {
+          if (h.cancelled) return;
+          const r = this.audio.recordedVoiceAt(performance.now());
+          if (!r || r.level < VOICE_QUIET || (r.next !== null && r.next <= performance.now() + 1) || performance.now() >= limit) return fire();
+          h.timer = setTimeout(quiet, WORD_POLL * 1000);
+        };
+        h.timer = setTimeout(quiet, WORD_POLL * 1000);
+        return;
+      }
       const first = word();
       if (!first) return fire();
       const until = now() + WORD_WAIT;

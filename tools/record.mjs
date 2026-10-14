@@ -38,6 +38,7 @@
 // --wav      keep the rendered sound as this WAV file
 // --item     a saved episode/break JSON served for the page's first /api/next (re-record
 //            the same item; nothing advances the channel for it)
+// --trace    the director's timeline in the report: every music cue and countdown, the pace trace and the quiz trace
 // --progressive  render the sound while the frames are taken, two seconds at a time and always a second
 //            behind the page's clock (OfflineAudioContext suspend/resume), instead of all at the end: a busy
 //            music bed over several minutes renders in minutes, not an hour; the same sound
@@ -84,6 +85,8 @@ function pageInit(CFG) {
   'use strict';
   const REC = { inflight: 0, events: [], contexts: [], decoded: new WeakSet(), stats: { valueSets: 0, disconnects: 0, starts: 0 } };
   window.__rec = REC;
+  // --trace: the pace analyser's timeline (pace.js paceTrace writes to window.__sc.log when it exists)
+  if (CFG.trace) window.__sc = { log: [] };
   const now = () => performance.now();
   const ev = (e) => {
     e.t = now();
@@ -594,6 +597,28 @@ function pageInit(CFG) {
           return r;
         };
       }
+      if (CFG.trace && director) {
+        // --trace: the quiz director's own trace (quizdirector.js pushes to d.quizTrace when it exists), and every music
+        // cue and countdown the director asks for, with what the bed answered (the ticks' times, in s from the ask)
+        director.quizTrace = [];
+        const music = director.music;
+        if (music && typeof music.cue === 'function') {
+          const cue = music.cue.bind(music);
+          music.cue = (moment, o = {}) => {
+            const r = cue(moment, o);
+            ev({ type: 'music', moment, played: r !== false, double: !!o?.double, endsAt: Number.isFinite(o?.endsAt) ? o.endsAt * 1000 : null });
+            return r;
+          };
+        }
+        if (music && typeof music.countdown === 'function') {
+          const countdown = music.countdown.bind(music);
+          music.countdown = (halves, lead) => {
+            const r = countdown(halves, lead);
+            ev({ type: 'countdown', halves, lead, start: r?.start, ticks: r?.ticks, end: r?.end, half: r?.half });
+            return r;
+          };
+        }
+      }
       REC.director = director;
       REC.audio = audio;
       REC.hooked = true;
@@ -615,7 +640,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const seed = opts.seed === 'off' ? null : Number(opts.seed) || 1;
 const maxSeconds = 2 + opts.skip + opts.seconds + 8;
 if (!opts.step) {
-  await page.addInitScript(pageInit, { audio: withAudio, sampleRate: opts.rate, maxSeconds, seed, progressive: !!opts.progressive, chunk: 2, margin: 1 });
+  await page.addInitScript(pageInit, { audio: withAudio, sampleRate: opts.rate, maxSeconds, seed, progressive: !!opts.progressive, chunk: 2, margin: 1, trace: !!opts.trace });
   // Hand the channel's AudioEngine and Director to the instrumentation (recorder only;
   // the product code is untouched). main.js keeps them as top-level `audio` and `player`.
   await page.route(/\/js\/main\.js(\?.*)?$/, async (route) => {
@@ -719,6 +744,7 @@ say(`${total} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s${held ? ` (${
 let wavFile = null;
 let audioInfo = null;
 let events = [];
+let traces = null; // --trace: { pace, quiz }
 let samples = null; // mono mix for the report
 if (withAudio) {
   // Frame i shows the page at fake time perfs[i]; it is displayed from i/fps on.
@@ -748,6 +774,16 @@ if (withAudio) {
   for (let i = 0; i < n; i++) samples[i] = (L[i] + R[i]) / 2;
   for (const e of events) e.v = (e.t - from) / 1000; // video time of each event
   for (const e of events) if (e.type === 'clip' || e.type === 'sfx') e.va = ((e.type === 'clip' ? e.at : e.startAt) - from) / 1000;
+  for (const e of events) if (e.type === 'music' && e.endsAt !== null) e.endsAtV = (e.endsAt - from) / 1000;
+  if (opts.trace) {
+    // --trace: the pace trace (ms) and the quiz director's trace (s, its T0 / end / planned likewise) in video time
+    const raw = await page.evaluate(() => ({ pace: window.__sc?.log || [], quiz: window.__rec?.director?.quizTrace || [] })).catch(() => ({ pace: [], quiz: [] }));
+    const secs = new Set(['t', 'T0', 'end', 'planned']);
+    traces = {
+      pace: raw.pace.map((e) => ({ ...e, v: (e.t - from) / 1000 })),
+      quiz: raw.quiz.map((e) => Object.fromEntries(Object.entries(e).map(([k, x]) => [secs.has(k) && Number.isFinite(x) ? `${k}V` : k, secs.has(k) && Number.isFinite(x) ? x - from / 1000 : x]))),
+    };
+  }
 }
 await browser.close();
 
@@ -892,5 +928,6 @@ function buildReport() {
     speech: { recorded: sentences.filter((e) => e.recorded).length, browser: sentences.filter((e) => !e.recorded).length, clips },
     events: events.map(({ t, ...e }) => e),
     sync,
+    ...(traces ? { trace: traces } : {}),
   };
 }

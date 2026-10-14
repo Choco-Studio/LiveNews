@@ -38,6 +38,16 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(out('Enter the Zachbot: Trump’s new press secretary malfunctions on podium debut'), 'politics');
     assert.equal(out('BBC FM radio transmissions suspended in Afghanistan'), 'conflict');
     assert.equal(out('Iconic Iguazu Falls walkway dismantled amid record water levels'), 'disaster');
+    // found on air (step 7, the editions of 12–13 Oct): an execution asked as LETTER BY LETTER, a state's fee policy,
+    // a firm's falling revenue in HOW MANY?'s own sentence, a luxury group's missed forecasts
+    assert.equal(out('Emergency calls from botched Christa Pike execution released', 'A series of calls, obtained by the Associated Press, reveal emergency services were delayed in reaching Pike.'), 'crime');
+    assert.ok(out('Inmate on death row granted a new hearing')); // (grave by text first)
+    assert.equal(excludedKind('Inmate granted a new hearing before execution date'), 'crime');
+    assert.equal(out('India delays digital payments fee rollout', 'India has delayed digital payments fee rollout, TechCrunch reports.'), 'politics');
+    assert.equal(entryOut(entry({ title: 'India delays digital payments fee rollout amid retailer pushback', headline: 'India delays digital payments fee rollout', text: 'The NPCI said it was postponing the rollout.' })), 'politics');
+    assert.equal(out('France to tax private jet flights'), 'politics');
+    assert.equal(entryOut(entry({ title: 'Bumble agrees to a $1.3B acquisition deal as online dating faces a reset', headline: 'Bumble agrees to a $1.3B acquisition deal', summary: 'After years of declining subscriber numbers and falling revenue, Bumble just agreed to a $1.3 billion acquisition.', text: 'Our number of the day: $1.3 billion. After years of declining subscriber numbers and falling revenue, Bumble just agreed to a $1.3 billion acquisition.' })), 'hardship');
+    assert.equal(out('LVMH sales miss growth forecasts as China luxury demand slows'), 'hardship');
   });
   test('senses that only look excluded', () => {
     assert.equal(out('Roman fort found in Wales could prove myth of emperor’s camp is real', 'The Roman emperor led his troops against the Picts and set up a military camp, folklore says.'), null);
@@ -46,6 +56,10 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(out('Electric car sales overtake diesel in Europe'), null); // "diesel" is not "dies"
     assert.equal(out('Late goal earns City a draw at the Bowl'), null);
     assert.equal(out('Carmaker bets on nostalgia with its electric classic'), null);
+    // a country that launches or builds is news, not a government's policy; sales that grow are no hardship
+    assert.equal(out('Japan launches a probe to the Moon’s far side'), null);
+    assert.equal(out('Electric car sales surge across Europe'), null);
+    assert.equal(out('Citroën’s iconic 2CV returns as all-electric model', 'The iconic 2CV returns at the Paris Motor Show as a fully electric city car.'), null);
     // a passing mention after the opening does not make a tunnel story politics
     assert.equal(entryOut(entry({ title: 'Norway opens a 27 kilometre road tunnel', summary: 'A 27 kilometre road tunnel under a fjord has opened on the west coast of Norway. The government says it cuts the journey by 40 minutes.', text: 'Now to Western Norway. A 27 kilometre road tunnel under a fjord has opened on the west coast of Norway.' })), null);
     assert.equal(excludedKind('A space probe reaches the asteroid'), null);

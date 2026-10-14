@@ -11,7 +11,7 @@
 //   prepareQuiz(d, episode)   → d.quiz (null for any other programme)
 //   playQuiz(d, episode)      the edition after the open, to its end card
 //   quizMusic(d, seg)         the bed's moment for a quiz segment that starts speaking (director.js musicSegment)
-import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES } from './quizplay.js';
+import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
 
@@ -557,7 +557,10 @@ async function playQuestion(d, u, k) {
   // still starts on it and the picture lands between two words once the face has held, or as the frame ends, rather
   // than leave the face standing silent; its options are read on the board all the same)
   const prelink = pre > 0 && studio && segs[u.from]?.anchor === 'H' && (age + preAt >= minShot + 0.4 || (u.type === 'picture' && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
-  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark: pre });
+  // (PICTURE THIS's mark moves to the first word the face will have held to: the picture lands on a word's first sound,
+  // never inside one after the cooldown, 0.3-0.8 s past "picture")
+  const mark = prelink && u.type === 'picture' && age + preAt < minShot + 0.1 ? wordFrom(segs[u.from], pre, minShot - age + 0.25) : pre;
+  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark });
   q.faced = link || prelink; // (its frame on a face: else owed, until an answer, the verdict or a reaction is on one)
   if (!link && !prelink) await b.cut();
   const latency = d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
@@ -566,7 +569,7 @@ async function playQuestion(d, u, k) {
   const plan = revealPlan(u, segs, cast, { double: u.double ? q.double : null });
   // the frame (the board's question), and what the host reads before the countdown
   if (prelink) {
-    await say(d, u.from, null, { marks: [pre], onMark: () => b.since === null && b.cut() });
+    await say(d, u.from, null, { marks: [mark], onMark: () => b.since === null && b.cut() });
     if (b.since === null) await b.cut(); // (a voice without marks: the board after the frame)
   } else await say(d, u.from);
   if (link) await b.cut();
@@ -596,7 +599,7 @@ async function playQuestion(d, u, k) {
     return trigger && a === trigger ? cutFor(cd, a) : null;
   };
   let away = null;
-  const back = async (t) => {
+  const back = async (t, spoken = now(), cd = null) => {
     if (!away) return t;
     if (!Number.isFinite(away.since)) {
       // (never on air: a cut still held back at the reveal is dropped, the board keeps the question)
@@ -605,8 +608,12 @@ async function playQuestion(d, u, k) {
       away = null;
       return t;
     }
-    // (the faces hold to the reveal's BACK_BEAT: the countdown's last ticks on the players, not on the board)
-    await sleepUntil(Math.max(away.since + min + 0.02, held(t) - BACK_BEAT));
+    // the faces hold to the reveal's BACK_BEAT (the countdown's last ticks on the players, the host's recap with them),
+    // but PICTURE THIS's picture still has a step to take after they came in: then the board is back once they have held
+    // the network's minimum and said their lines, and the step is seen (on air, 12 Oct: a wide after a step-2 lock-in held
+    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air)
+    const step = u.type === 'picture' && cd && away.since < cd.T0 + PICTURE_STEPS[4] * cd.half;
+    await sleepUntil(Math.max(away.since + min + 0.02, step ? Math.min(held(t) - BACK_BEAT, spoken + 0.35) : held(t) - BACK_BEAT));
     cutTo(d, spec, { card });
     d.quizTrace?.push({ k: 'back', t: now(), board: card.board });
     away = null;
@@ -646,8 +653,9 @@ async function playQuestion(d, u, k) {
       const at = b.at() + latency;
       if (a.kind === 'lock') o.locks = [...o.locks, { seat: a.seat, answer: seg.quiz?.lock?.answer, at }];
       else if (a.kind === 'guess') o.guesses = [...o.guesses, { seat: a.seat, said: seg.quiz?.guess?.said || '', at, points: seg.quiz?.guess?.points || 0 }];
-      else o.buzzes = [...o.buzzes, { seat: a.seat, at, stall: a.kind === 'stall' }];
-      lampOn(d, a.seat);
+      else if (a.kind !== 'recap') o.buzzes = [...o.buzzes, { seat: a.seat, at, stall: a.kind === 'stall' }];
+      // (the host's recap of the locks lights nothing: the desks already show them)
+      if (a.kind !== 'recap') lampOn(d, a.seat);
       d.quizTrace?.push({ k: a.kind, t: now() + latency, seat: a.seat, i: a.i, planned: cd.T0 + a.at });
       await say(d, a.i);
       lastEnd = now();
@@ -663,6 +671,29 @@ async function playQuestion(d, u, k) {
   let drum = null;
   // (the reveal never comes before DOUBLE OR NOTHING's drumroll has landed)
   const held = (t) => Math.max(t, drum ? drum.end : 0);
+  /**
+   * Half notes enough for the clock to run on under the players' faces to the board's return and the reveal (the face
+   * the plan takes: its cut, the network's minimum, the beat back), when the countdown asks for its first tick `lead` s
+   * from now: the ticks stay under the faces and the reveal lands on the clock's last beat, never 1.6 s of a stopped
+   * clock (12 Oct), and DOUBLE OR NOTHING's drumroll starts and ends on the bed's beat.
+   */
+  const coverHalves = (halves, lead) => {
+    const face = faces[0];
+    if (!face) return halves;
+    const t0 = now() + lead; // (the first tick at the earliest)
+    const cut = Math.max(face.at - latency, b.since === null ? 0 : b.since + min + 0.05 - t0);
+    return Math.max(halves, Math.ceil((cut + min + 0.02 + BACK_BEAT) / HALF_NOTE - 1e-6));
+  };
+  /**
+   * A line that asks for the countdown (PICTURE THIS's "Lock it in.", WHERE's pins) said so that it ends as the first
+   * tick sounds: the countdown is asked for first, on the bed's next half note after the line's length, and the line
+   * waits for it (on air the prompt ended up to 0.9 s before the first tick, a dead beat on the clock, 12 Oct).
+   */
+  const sayOnTick = async (i, cd) => {
+    if (i === undefined) return;
+    await sleepUntil(cd.T0 - speechOf(segs[i]) - latency - 0.15);
+    await say(d, i);
+  };
   if (u.type === 'picture') {
     await sleep(pause(d, u.from) * 1000);
     const oi = part('options');
@@ -673,14 +704,15 @@ async function playQuestion(d, u, k) {
     }
     await b.ready();
     const ci = part('countdown');
-    const halves = countdownHalves('picture', scheduleNeed(sched));
-    // the prompt ("Lock it in.") is said as the countdown asks for its first tick: the ticks start as it ends
+    // the prompt ("Lock it in.") ends as the first tick sounds
     const promptLen = ci !== undefined ? speechOf(segs[ci]) : 0;
-    const cd = countdown(d, b, halves, promptLen + 0.05);
+    const lead = promptLen + latency + 0.2;
+    const halves = coverHalves(countdownHalves('picture', scheduleNeed(sched)), lead);
+    const cd = countdown(d, b, halves, lead);
     if (u.double) drum = drumroll(d, plannedReveal(cd));
-    if (ci !== undefined) await say(d, ci);
+    await sayOnTick(ci, cd);
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd, cd));
   } else if (u.type === 'letters') {
     await b.ready();
     const win = sched.find((a) => a.kind === 'buzz');
@@ -699,24 +731,27 @@ async function playQuestion(d, u, k) {
   } else if (u.type === 'where') {
     await sleep(pause(d, u.from) * 1000);
     const pi = part('pins');
+    await b.ready();
+    // the pins are read so that the last ends as the first tick sounds
+    const lead = (pi !== undefined ? speechOf(segs[pi]) + latency + 0.2 : 0.3);
+    const halves = coverHalves(countdownHalves('where', scheduleNeed(sched)), lead);
+    const cd = countdown(d, b, halves, lead);
+    if (u.double) drum = drumroll(d, plannedReveal(cd));
     if (pi !== undefined) {
+      await sleepUntil(cd.T0 - speechOf(segs[pi]) - latency - 0.15);
       o.pinsAt = b.at();
       await say(d, pi);
     }
-    await b.ready();
-    const halves = countdownHalves('where', scheduleNeed(sched));
-    const cd = countdown(d, b, halves, 0.3);
-    if (u.double) drum = drumroll(d, plannedReveal(cd));
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd));
   } else {
     // HOW MANY?
     await b.ready();
-    const halves = countdownHalves('howmany', scheduleNeed(sched));
+    const halves = coverHalves(countdownHalves('howmany', scheduleNeed(sched)), 0.3);
     const cd = countdown(d, b, halves, 0.3);
     if (u.double) drum = drumroll(d, plannedReveal(cd));
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd));
   }
   await sleepUntil(revealT);
   reveal(d, b, plan, wrongSeats(u, segs, plan));
@@ -753,6 +788,24 @@ function revealWait(d) {
 function revealHold(u, seg) {
   const said = !!seg?.quiz?.credit && String(seg.text || '').includes(seg.quiz.credit);
   return Math.max(said ? BOARD_MIN_SAID : BOARD_MIN, u.type === 'where' ? WHERE_SETTLE : 0);
+}
+
+/**
+ * The first word of a line at or after char `from` whose first sound comes `t` s or more into the line (a char offset;
+ * the line's end when none): from the recording's word marks, else at the line's average pace.
+ */
+export function wordFrom(seg, from, t) {
+  const text = String(seg?.text || '');
+  const words = Array.isArray(seg?.audio?.words) && seg.audio.words.length ? seg.audio.words : null;
+  if (words) {
+    for (const w of words) if (w.char >= from && w.t >= t) return w.char;
+    return text.length;
+  }
+  const len = speechOf(seg);
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(text))) if (m.index >= from && (m.index / Math.max(1, text.length)) * len >= t) return m.index;
+  return text.length;
 }
 
 /**

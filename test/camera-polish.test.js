@@ -108,6 +108,45 @@ test('director: a cut held back by the cooldown never lands inside a word (next 
   }
 });
 
+test("director: a recorded voice's cut lands on the recording's next word, not where the mouth's timeline changes word", async () => {
+  // (PAY ATTENTION on air, 12 Oct: the timeline changed word 0.2 s into "TECH" and 0.29 s into "right"; the cuts landed there)
+  const clock = fakeClock();
+  try {
+    const t0 = clock.now();
+    const marks = [0, 0.3, 0.75, 1.4]; // the recording's word starts (s): a long word from 0.75 to 1.4
+    const audio = {
+      // the mouth's timeline runs at its own pace: its word 2 ends at 0.95, long before the recording's word 3
+      speechFrame(nowMs, slot, out = {}) {
+        const t = nowMs / 1000 - t0;
+        out.speaking = t >= 0 && t < 2;
+        out.sentenceIndex = 0;
+        out.wordIndex = out.speaking ? [0, 0.3, 0.75, 0.95].filter((x) => x <= t + 1e-9).length - 1 : -1;
+        return out;
+      },
+      // the recording: words at `marks`, sounding but in a pause 1.05-1.25 s (the long word's end and its comma)
+      recordedVoiceAt(nowMs) {
+        const t = nowMs / 1000 - t0;
+        if (t < 0 || t >= 2) return null;
+        const next = marks.map((m) => (t0 + m) * 1000).find((x) => x > nowMs + 1) ?? null;
+        return { next, level: t >= 1.05 && t < 1.25 ? 0.05 : 0.8 };
+      },
+    };
+    const d = director(audio);
+    let at = null;
+    d.cutWhenClear(0.8, () => (at = clock.now() - t0)); // inside the long word (the timeline already in its pause)
+    let quiet = null;
+    d.cutWhenClear(1.1, () => (quiet = clock.now() - t0)); // in the recording's own silence
+    let last = null;
+    d.cutWhenClear(1.5, () => (last = clock.now() - t0)); // inside the last word: as the voice falls silent (WORD_WAIT)
+    await clock.run(new Promise((r) => setTimeout(r, 2500)));
+    assert.ok(Math.abs(at - 1.4) < 0.02, `on the recording's next word: ${at}`);
+    assert.ok(Math.abs(quiet - 1.1) < 0.02, `at once in the recording's silence: ${quiet}`);
+    assert.ok(Math.abs(last - 2.0) < 0.03, `as the last word ends: ${last}`);
+  } finally {
+    clock.restore();
+  }
+});
+
 test('director: a new card is a cut; the cooldown counts from the last cut the viewer saw (a re-set wide is none)', async () => {
   const clock = fakeClock();
   try {

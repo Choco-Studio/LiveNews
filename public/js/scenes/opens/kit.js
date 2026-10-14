@@ -195,6 +195,20 @@ function titleCanvas(text, ink, scale = 2) {
   });
 }
 
+/**
+ * The plate's cast line in `room` px: the full names, or when they do not fit (three people, as PAY ATTENTION's host and
+ * players: "QUINN QUERY, UNIT-8 & PENNY STERLI…" on 13 Oct) every name by its first word, whole ("QUINN, UNIT-8 &
+ * PENNY"); an ellipsis only when even those do not fit. Null without presenters.
+ */
+export function creditNames(presenters, room) {
+  const full = nameList(presenters);
+  if (!full) return null;
+  if (measureText(full) <= room) return { label: 'WITH', names: full };
+  const first = (n) => String(n ?? '').trim().replace(/^(?:Dr|Prof)\.?\s+/i, '').split(/\s+/)[0];
+  const short = nameList((presenters || []).map(first));
+  return { label: 'WITH', names: measureText(short) <= room ? short : ellipsis(short, room) };
+}
+
 /** Lock-up geometry for a title/tagline/credits set (cached). The column is the same for every show. */
 export function lockupLayout(info, style) {
   const lk = style.front ? `${style.ink}F` : style.ink;
@@ -227,8 +241,7 @@ export function lockupLayout(info, style) {
     const plateW = titleX - plateX + titleW + 12;
     const textW = W - 19 - titleX;
     const tagline = info.tagline ? ellipsis(info.tagline, textW) : '';
-    const names = nameList(info.presenters);
-    const credits = names ? { label: 'WITH', names: ellipsis(names, textW - measureText('WITH ') - 2) } : null;
+    const credits = creditNames(info.presenters, textW - measureText('WITH ') - 2);
     const tagY = plateY + plateH + 9;
     const out = {
       titles, titleX, titleW, plateX, plateY, plateW, plateH, scale, pitch,
