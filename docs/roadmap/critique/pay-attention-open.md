@@ -418,3 +418,152 @@ What keeps each category from 10, in one line each:
 - **Clarity of the plate**: the placeholder credit until step 6.
 - **Distinctness**: the first second has less incident without the rig.
 - **The promise of a game**: spots that suggest the players rather than find them; an empty studio waiting for its cast.
+
+## Reviewer, after round 7
+
+Round 7 reopened by the reviewer at 9.6: picture craft 9.6, the dark beams float without a source and end in mid-air;
+the flat fallback's outlines.
+
+- **The dark beams.** From beat 0 to beat 6 two blue cones hang at the frame's sides. Each starts from a sharp apex in
+  mid-air, with no fixture, and ends in a dithered blob on the wall well above the desks. After the lamps they are the
+  brightest large shapes in the dark beats, and nobody can say what they are. A beam must come from a source and land
+  somewhere: either a follow spot that finds the player, or no beams in the dark. No beam may end in mid-air in any
+  frame, and that includes the lit phase's pools on the back wall (the grey "shields" behind the desks).
+- **The flat fallback.** At `?v2=0` the lit desk is solid, but the unlit desk and the board are line outlines.
+
+| Category | Round 7 (panel) | Reviewer |
+|---|---|---|
+| Picture craft | 9.75 | 9.6 |
+
+**Reopened at 9.6.** Meanwhile f699df2 was merged, which banks the set and the default-path fix.
+
+---
+
+## Round 8 — follow spots that find the player, and no beam in the air
+
+### What changed
+
+1. **No beams in the dark.** Beats 0–2 show only the light sources and the silhouettes. The moving heads stay dark
+   until the room's light comes on.
+2. **A follow spot on each strike** (the reviewer's way (a)). On each lamp's strike, that desk's spot snaps on.
+   - Its source is the rig over the front of the stage, just above the frame (world Y −330, Z 876), so in every frame
+     of the strikes its beam comes in at the top edge.
+   - The cone widens down through the haze. It is ink, densest through its middle, and computed per pixel as each
+     camera ray's path through the cone, so it stops where it lands.
+   - It lands on the desk and on the floor at the desk's foot, aimed between the stage's edge and the desk's front.
+   - The desk's top and cabinet show as the room's light shows them: the purple band with its fog rim, the silver edge
+     and the gold lamp. The plinth, set back under the overhang, stays in shadow.
+   - The pool on the deck at the desk's foot is slate at its heart and ink to its edge.
+   - The spot holds until the other side strikes, then dims: the cone goes, the pool turns fainter (ink), and the desk
+     is a silhouette again, standing black on its pool.
+3. **The lit phase.** No beam ends in the air in any frame:
+   - The heads' beams are thrown four times longer. Each one now runs out of the frame, goes behind a desk, or comes
+     down to the floor at the wall's foot, where it is clipped: a beam in the wall's plane lands there.
+   - On the downbeat they fire onto the desks, then sweep out past the frame's sides.
+   - The seat pools (the "shields") are gone from the open. They are the players' backlights and come up with the
+     cast, so the empty studio's wall is black behind the desks. The open renders the set's own style without its
+     pools, as its own baked wall (`pay-attention-open`).
+   - The aired set is unchanged.
+4. **The flat fallback keeps the studio's rule:**
+   - an unlit desk is a black silhouette, with only its lid's edge (ink) and its lamp's housing (slate) catching a
+     little, and no rim round its band;
+   - the board is black in the dark, with only its new marquee's bulbs glimmering (slate). When lit they are cream on
+     the purple frame;
+   - the stage's diodes and their sheen on the deck light the dark, and the desks' bases cut it;
+   - its washes are gone;
+   - its heads' beams are drawn behind the desks, thrown long and clipped at the wall's foot.
+
+### Faults found while building it, fixed before the panel looked (not scored)
+
+1. The first source, in front of the desks (Z 600, Y −480), made the cone a column 65 px wide at the top edge. It now
+   sits over the stage's front, a little outside each desk, and the cone is tighter (radius 40 at the aim).
+2. Aimed at the desk's top, the pool lay behind the desk, out of sight. It is now aimed at the floor in front of the
+   desk, so the pool shows at the desk's foot.
+3. A dimmed desk taken a step down its ramps read as rims on black: the wireframe again. A dimmed spot now leaves the
+   desk a silhouette on its fainter pool.
+4. The lit desk's plinth slats slid about a pixel a frame under the moving camera. That added some 7,700 A→B→A flips
+   in seconds 2 and 3 (14,136 against 6,440). The plinth now stays in the cabinet's shadow, which is also where a spot from above leaves it.
+5. A spot frame cost 13–20 ms in a first draft. Each row is now limited to the columns the cone can touch, and the
+   inner loop does no allocation.
+
+### The panel (the same five, from scratch)
+
+How it was looked at:
+- 4x stills of beats 0, 1, 2, 2.5, 3.5, 4.5, 5.5, 6, 6.2, 7.6 and 9;
+- the flat open (`?v2=0`) at beats 0, 2.5, 3.5, 6, 7.6 and 9;
+- 30 fps frames (250) and a 6 fps contact sheet;
+- A→B→A counts with a map of where they fall;
+- frame times in Chromium;
+- the open recorded with its theme (`pay-attention-open-r8.mp4`).
+
+At 1x the dark now reads as a dark studio: black, with its lights glimmering. Then each strike throws a spot onto the
+player who buzzed: a lamp lights, a desk comes out of the dark into a pool of light, and the beam comes down from
+above. As the other side strikes, the spot dims and the focus crosses the stage. This is the lamp test's promise of a
+game, staged. On the downbeat the heads fire onto the desks and sweep out of the frame, and the room is lit with
+nothing floating on its wall.
+
+Evidence:
+- **Strobe** (A→B→A, 30 fps):
+
+  | | Seconds 1, 2, 3 | Whole open |
+  |---|---|---|
+  | Round 6 | 42,400, 11,899, 5,150 | 62,642 |
+  | Round 7 | 178, 4,031, 5,820 | 13,193 |
+  | Round 8 | 153, 2,207, 4,233 | 10,628 |
+
+  - Round 8 per second: 153, 2,207, 4,233, 1,115, 19, 4, 2,495, 402, 0.
+  - The fourth second is up on round 7 (1,115 against 244): the long beams sweep out after the downbeat over a wider
+    stretch of the wall.
+  - By the map, what is left in seconds 2 and 3 is thin lights moving under the camera (the strips, the lids, the
+    band's rims) and the spots' cone edges. No pixel flips more than 8 times in a second.
+- **Frame times** (Chromium, the lab, the studio loaded): median 0.5 ms, 95th percentile 1.7 ms, the slowest 15.2 ms.
+- **Tests** (`test/pay-attention-sound.test.js`, 29):
+  - new: the spots' states, beat by beat (on from its strike, dimmed from the other side's, off in the dark and in the
+    room's light);
+  - new: nothing reaches the frame's top rows before the first strike; on a strike the haze comes in at the top edge,
+    in that desk's half of the frame;
+  - new: the source is above the frame in every frame of the strikes;
+  - new: the axis lands between the stage's edge and the desk, the pool wider than the desk; the spotted desk shows its
+    purple band, the other none, and the pool lies at the spotted desk's foot;
+  - new: in every frame of the room's light, each beam runs out of the frame, goes behind a desk or reaches the floor
+    (both "edge" and "desk" occur), and the wall behind desk A is black. Its pools would put 1,255 lit pixels in that
+    region;
+  - new: the flat open in the dark has no rim round desk B's band and no rim round the board; none of its beams ends in
+    the air; it has no wash behind desk A;
+  - the dark is still the neutral ramp only, except for a lit lamp's gold and the spotted desk's purple band, each
+    inside its own box;
+  - `test/v2-integ.test.js`'s default-path tests pass, unchanged.
+
+Still open (the panel, round 8):
+1. **The spot is more shaft than cone.** With the camera high and the rig just above the frame, its beam comes in at
+   the top edge 40–60 px wide and only widens by about two-thirds down to the desk (pixel artist).
+2. **The spotted desk is the room-lit desk.** Its cabinet front is lit as the key lights it, although the spot falls
+   from above. Only the plinth's shadow says where the light comes from (pixel artist).
+3. **The first beat and a half is the emptiest**: black, glimmers and a slow drift before the first strike (director).
+4. **The spot dims on a cut**, on the other side's strike, rather than fading (director).
+5. **A lit beam that reaches the wall's foot lands without a pool**: it is clipped at the floor line (pixel artist).
+6. **The close is a cut**, not a move (director).
+7. **"WITH THE HOST"** stays a placeholder until step 6 names the host (quiz producer).
+8. **The letters flip at 1x in the wide**; the close gives the name at 2x (pixel artist).
+9. **8.3 s against "≈8 s"**, as every open holds its lock-up (quiz producer).
+10. **The flat fallback is still round 3's stage.** It now keeps the silhouette rule and has a marquee, but its lit
+    desks are flat ink blocks. It airs only when the studio is not there (pixel artist).
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Picture craft | 9.75 | 1, 2, 5, 8, 10 |
+| Timing to the music | 9.9 | — (each spot snaps on with its ping and its lamp, on the beat; the heads fire on the downbeat and stop on the next) |
+| Clarity of the PAY ATTENTION plate | 9.8 | 7 |
+| Distinctness | 9.8 | 3 (the only open shot in its own studio; follow spots on a lamp test are a known game-show figure, made the channel's by the shapes) |
+| The promise of a game | 9.8 | 4, 6 (the spots now find the players; the studio is still waiting for its cast) |
+
+**Round score: 9.75. Passed** (the gate is above 9.7). Picture craft is scored 9.75, not 9.8: the spot reads as a shaft
+from above more than a cone, and the fallback is plain.
+
+What keeps each category from 10, in one line each:
+- **Picture craft**: a shaft more than a cone; the spotted desk lit as by the key; no pool where a lit beam meets the
+  floor; the flip at 1x; the plain fallback.
+- **Timing to the music**: nothing the panel would move.
+- **Clarity of the plate**: the placeholder credit until step 6.
+- **Distinctness**: an empty first beat and a half.
+- **The promise of a game**: the dim is a cut; an empty studio waiting for its cast.

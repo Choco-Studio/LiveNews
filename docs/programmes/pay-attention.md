@@ -377,13 +377,16 @@ Measured on the development archive, with a model of the planner that counts sto
      turns off; the board's lamp test stops with them.*
    - *The open: `public/js/scenes/opens/payattentiontitles.js` (the sequence) and `payattentionstudio.js` (shot in the
      studio itself, with the set's renderer: a crane down and a push in through the dark studio, black but for its
-     lights and the desks' silhouettes, the lamps striking under follow spots, the lights up on the downbeat as the
-     camera lands on the wide, the heads firing and stopping on the next beat, the board's letters flipping in, a cut to
-     the board) and `payattention.js` (the emblem: the two lamps), cue sheet `'pay-attention'` (8.3 s, the hit at
-     7.5 s). The studio comes in with a dynamic `import()` when the v2 studio is on (`warmStudioOpens`, called by
-     `studio.js`), so the default page's static graph stays free of the v2 renderer; without it (`?v2=0`, a failed load,
-     or before it arrives) the flat open airs (`payattentionflat.js`: the dark field, the lamps on the beat, the board's
-     flip, the plate), and a play never changes picture halfway.*
+     lights and the desks' silhouettes, no beams in the dark; on each lamp's strike its follow spot snaps on from the
+     rig above the frame onto that desk, lighting it and a pool at its foot, and dims when the other side strikes; the
+     lights up on the downbeat as the camera lands on the wide, the heads firing and stopping on the next beat, their
+     beams thrown long so that none ends in the air; the wall behind the desks without the seat pools, which come up
+     with the cast; the board's letters flipping in, a cut to the board) and `payattention.js` (the emblem: the two
+     lamps), cue sheet `'pay-attention'` (8.3 s, the hit at 7.5 s). The studio comes in with a dynamic `import()` when
+     the v2 studio is on (`warmStudioOpens`, called by `studio.js`), so the default page's static graph stays free of
+     the v2 renderer; without it (`?v2=0`, a failed load, or before it arrives) the flat open airs
+     (`payattentionflat.js`: the same rule in the dark, silhouettes and light sources only; the lamps on the beat, the
+     board's flip, the plate), and a play never changes picture halfway.*
    - *The sound: the theme `payAttentionTitles` and the sign-off tail (`audio/themes.js`); the bed `'pay-attention'`
      (moments welcome, question, scores, chat, double, result, signoff); the cue sheet's `QUIZ` moments: `question`
      (`{ double: true }` for DOUBLE OR NOTHING), `right`, `wrong`, `double` (the drumroll, 4.3 s, the bed stopped);
