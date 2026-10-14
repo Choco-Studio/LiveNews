@@ -24,7 +24,7 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
   - the quiz's own pauses: a reply 0.35 s, a turn 0.45 s, a breath before the next question 0.75 s, before a card
     0.55 s, before a round 0.95 s;
   - shots: the network's 4 s minimum and cooldown, a studio shot at most 12 s, a board as long as its question (at
-    most 40 s), the median band 5–9 s, inside the owner's floor (see round 4);
+    most 40 s), the median band 4–6.5 s (5–9 s until round 6: see there), inside the owner's floor;
   - locked-off framings (no moves); gestures at most 5 a minute.
 - **`public/js/quizplay.js`** (pure, shared by the director, the v2 planner and the tests):
   - the units: the open, the cards, the questions with their parts;
@@ -34,7 +34,9 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
     stage), the reveal's plan (right, points, winner);
   - the shot plan:
     - the boards fixed;
-    - LETTER BY LETTER's buzz on the buzzer's single and HOW MANY?'s guesses on the wide;
+    - the answers on the players' faces: LETTER BY LETTER's buzz on the buzzer's single, HOW MANY?'s guesses and the
+      last lock-in of PICTURE THIS and WHERE on the wide, TODAY OR NOT TODAY's lock-ins and verdicts on the wide (the
+      last one before the tally on its board), DOUBLE OR NOTHING's pick on the player's single;
     - each run of studio lines cut by the cheapest partition (every way of cutting a run is tried), for the network's
       minimum, the 12 s maximum and never one camera twice in a row;
     - a player on their own single; the welcome, the scores, the tally and the sign-off on the wide.
@@ -42,8 +44,12 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
   - every board's clock starts at its own cut, and its times (options, pins, lock-ins, buzzes, guesses, the reveal)
     are the segments' real starts. After the players' faces it comes back on that clock (`card.epoch`: it never
     replays);
-  - a buzz or a guess cuts to the faces on its first word once the board has held the minimum. The board comes back
-    0.4 s before the reveal, after the face's own 4 s;
+  - an answer cuts to the faces on its first word once the board has held the minimum (else between two of its
+    words). The board comes back 0.4 s before the reveal, after the face's own 4 s;
+  - every question has a face moment: its answers, or its frame on the shot on air (LETTER BY LETTER's frame, which
+    reads nothing off the board; WHERE's, HOW MANY?'s and PICTURE THIS's preambles, the board cut on the speech mark
+    where the host starts reading off it), or the verdict, or the reaction, which waits for it when it is owed;
+  - while the edition airs, the ticker carries no story the edition uses (`scene.quizAvoid`, below);
   - the countdown is the bed's: it starts at `LiveMusic.countdown`'s returned start and the reveal lands on its end;
   - LETTER BY LETTER's ticks stop at the winning buzz (the engine cannot cancel a tick it has scheduled, so only that
     many are asked for);
@@ -60,13 +66,15 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
   - the host's open palm to the player he names on a studio shot (`point_partner`: the near arm to B, the far arm to
     A; `gestures/index.js` mirrors the far variants).
 - **`public/js/scenes/quiz-shot.js`**: the full-frame board shot on the quiz's own ground (black to ink), and the
-  half-time strip over the studio (`drawScoresStrip`'s compact form).
+  half-time strip over the studio (`drawScoresStrip`'s compact form), on the stage under the host's podium
+  (`QUIZ_STRIP_Y`, y 153).
 - **Wiring**:
   - `director.js` calls `prepareQuiz` when the episode arrives and `playQuiz` after the open. The quiz's lines go
     through `say(…, { planOnly: true })`: the v2 plan keeps its gestures and glances but makes no cut;
   - the music's moments, and the sign-off's end;
   - v2: `camera.js` takes the quiz's framings from `studio/quiz.js` `quizCamera`; `runtime/stage.js` seats the host,
-    A and B on `QUIZ_SEATS`; `direction/shots.js` reads each segment's `quizShot`; `direction/gestures.js` gives
+    A and B on `QUIZ_SEATS` and lays the board out round the host at the solo seat (its idle name never behind his
+    head); `direction/shots.js` reads each segment's `quizShot`; `direction/gestures.js` gives
     PAY ATTENTION its bible (the host's allow-list from `HOST_GESTURES`, no laugh, no wave); `'quiz'` is a hidden shot
     for the gestures; `music/live.js` treats a board as a picture shot.
 - **Station** (for viewing and for the pictures):
@@ -76,10 +84,14 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
   - the archive serves a story's picture from the airing that carried it;
   - the desk passes the picture's airing id (`imageId`);
   - the writer passes DOUBLE OR NOTHING's trailing player;
-  - the countdown's prompts no longer say "Three seconds" or "Last chance" before seven half notes of clock.
-- **`test/pay-attention-wiring.test.js`**: 31 tests on editions the real writer makes from a fixture week
+  - the countdown's prompts no longer say "Three seconds" or "Last chance" before seven half notes of clock;
+  - the ticker's items carry their story's id; the edition lists every story it uses (`editionStories`: the asked
+    ones, every option and pin, both DOUBLE OR NOTHING offers, the tie-break) and the episode carries the list
+    (`quizStories`); the director hands it to the graphics, whose band drops a matching item by id, by `sameStory` or
+    by three shared words, and shows fewer items rather than one of them.
+- **`test/pay-attention-wiring.test.js`**: 38 tests on editions the real writer makes from a fixture week
   (`test/fixtures/quiz-week.js`). Seven seeds cover every round type, every DOUBLE OR NOTHING type, a stall and a
-  tie-break.
+  tie-break. `test/pay-attention-graphics.test.js` holds HOW MANY?'s composition.
 
 **Choices beyond the brief's words:**
 
@@ -89,11 +101,12 @@ buzz beats, the half-note ticks. **Gate: a hostile critique above 9.7; the round
   captions sit on black, and nothing moves behind the text.
 - **No two-shot**: the set's framings are the wide, the host's single and the two players' singles (`quizCamera`).
   The brief asked for two-shots only if available.
-- **The lock-ins are said over their board**, against the brief's list of player lines. The bible's reading rule
+- **The first lock-in is said over its board**, against the brief's list of player lines. The bible's reading rule
   keeps the options on screen from the host's first word to the last lock-in. A lock-in is one or two words ("C,
-  please.") said inside a 6–8 half-note countdown, so no face could hold 4 s. Each lights its lamp and its mark beside
-  the tile or pin as it is said. A stall stays on the board too, since the clock runs on for the other player. The
-  buzz and the guesses, said in the players' own words, go to their faces (round 4).
+  please.") said inside a 6–8 half-note countdown. Each lights its lamp and its mark beside the tile or pin as it is
+  said. The last lock-in of PICTURE THIS and WHERE goes to the wide once the board has held (round 6), with the
+  clock's last ticks under it; a stall stays on the board, since the clock runs on for the other player. The buzz and
+  the guesses, said in the players' own words, go to their faces (round 4).
 - **Player B's single never airs while the programme's tag shows** (the first 9 s after the open's cut), as the set's
   critique asked.
 
@@ -118,15 +131,16 @@ first-time viewer. Six categories, each 0–10:
   For each: the length, the share of boards, the studio shots, the longest run of boards, every shot's length, every
   silence on a studio shot, every cut inside a line, and how long every reveal stays on its board.
 - **Headless Chromium recordings** of real editions (`tools/record.mjs --item`, 4 fps at 2x, the voice muted):
-  - ep2 four times, ep6 three times (once on step 5's rebuilt set), ep4 twice, each from the station's own server
-    with the draft on air;
+  - ep2 five times, ep6 three times (once on step 5's rebuilt set), ep4 twice, and in round 6 a fixture edition
+    with TODAY OR NOT TODAY, each from the station's own server with the draft on air;
   - read as contact sheets every 5 s; 1 s strips at the half-time scores, the final score and the link; the buzz,
     the guesses and the board's return frame by frame.
 - **The sound** was judged from the trace: every sting, tick, drumroll and bed moment, with its time. The recordings
   were made muted (sound is step 7's), so the panel did not listen to any cue.
 
 (Rounds 2–4 were scored afterwards, from that round's recordings and statistics. Round 5 is the panel's verdict on the
-final code, looked at again from scratch.)
+final code, looked at again from scratch. The reviewer reopened round 5; round 6 is the hard panel's verdict on the
+code that answers it.)
 
 ---
 
@@ -332,6 +346,140 @@ New faults: none in the director's work. Two in other steps' files, reported and
 
 **Round score: 9.75. Passed** (the gate is above 9.7).
 
+**Round 5 reopened by the reviewer at 9.0: the ticker can show the answer; runs of boards to 85 s and 68–79 % boards;
+the host's head on the board's name; the strip on the marquee; the empty HOW MANY? board.**
+
+The panel missed all five. Two of them it had seen and passed on as other steps' faults (the strip, the head). It had
+not looked at the ticker at all. Boards on 68–79 % of the air were listed as what kept a 9.75 from 10, when they were
+the fault. The empty HOW MANY? board went unremarked.
+
+## Round 6 — the reviewer's six points (the hard panel; recordings of ep2 and a TODAY OR NOT TODAY edition)
+
+**The hard panel**: the same five, with the reviewer's verdict read first. Each category is scored on what is still
+wrong, and nothing is credited for having been fixed. A fault in another step's file counts against this round when
+the quiz shows it.
+
+**What was done**, point by point:
+
+1. **The ticker never carries a story the edition uses (the blocker).** The LATEST band showed the newest feed
+   titles, and those included the stories the edition was asking about. A PICTURE THIS answer, a LETTER BY LETTER
+   headline or a TODAY item could scroll under its own board. The fix:
+   - the station's ticker items carry their story's id;
+   - the edition lists every story it uses (`editionStories` in `server/quiz/edition.js`): the asked ones, every
+     option and pin, both DOUBLE OR NOTHING offers, the tie-break, with their event ids and every title the archive
+     knows for them. The episode carries the list (`quizStories`);
+   - `prepareQuiz` gives it to the graphics with the episode's own question words (`scene.quizAvoid`). The band
+     drops a matching item by id, by the news desk's `sameStory`, or by three shared content words, so a reworded
+     headline goes too;
+   - an avoided item already on the band leaves it at once. With too few items left the band shows fewer, never an
+     answer;
+   - the edition's end clears the list, and the ticker carries every story again.
+
+   Tests:
+   - "the station lists every story the edition uses: the asked ones, every option and pin, both DOUBLE OR NOTHING
+     offers, the tie-break";
+   - "a question's own feed title leaves the ticker while the edition airs and comes back after it (the director
+     sets the list, the band drops it)";
+   - "a reworded aired headline: the feed title is dropped by its story id, and by its words when the item has none";
+   - "an avoided item on the band leaves it at once; with too few items left the ticker shows fewer, never an
+     answer".
+2. **Boards and faces.** Every question now has a face moment. In order of preference:
+   - its answers: the buzz on the buzzer's single; the guesses, and the last lock-in of PICTURE THIS and WHERE, on
+     the wide; TODAY's lock-ins on the wide once the headline is read;
+   - its frame on the face already on air: LETTER BY LETTER's frame; WHERE's, HOW MANY?'s and PICTURE THIS's
+     preambles, with the board cut on the speech mark where the host starts reading off it;
+   - the verdict on the wide, or the reaction on the player's single, which waits out the reveal's hold for it.
+
+   TODAY's verdicts go on the wide, except the last before the tally, which stays on its board. DOUBLE OR NOTHING's
+   pick goes on the player's single. Test: "every question has a face moment (an answer, the verdict or a reaction on
+   a studio shot), no run of boards past 45 s, boards under 65 % of the air". The fixture seeds are held at 67 %: the
+   reviewer's 65 % is measured on the real editions, and s0's 66.5 % is a fixture's.
+3. **The board's name is never behind the host.** The cause was in the v2 stage, not in the framing. The quiz is not
+   a solo programme, so the stage laid the board out for two presenters with the name in the middle, and the host
+   sits in the middle. `runtime/stage.js` (shared: my step 4 wiring) now lays the board out round the host at the
+   solo seat whenever the cast has a host, so the name stands beside his head. No set file was changed, and the set's
+   tests are green. Test: "the board's idle name is never behind the host…". It runs the real stage in the wide and in
+   the host's single. The board drawn alone gives the name's pixels, and with the three seated none of them is
+   covered.
+4. **The half-time strip moved to the stage under the host's podium** (`QUIZ_STRIP_Y` = 153; `drawScoresStrip`'s
+   compact form takes a `y`). It covers no marquee bulb and no head, and sits 6 px above the captions' two lines.
+   Test: "the half-time strip in the quiz's wide: on the stage under the podium, over no marquee bulb and no head,
+   clear of the captions' two lines". The graphics fit tests are green.
+5. **HOW MANY? uses its safe area.**
+   - Both desks' boxes are up from 0.45 s: a slate rim on black, the player's shape and name, GUESS, and three slate
+     dots where the number will go. Each number wipes in as it is said, so nothing jumps. At the reveal the guess
+     that scored turns gold with its points.
+   - The sentence sits in the middle of its four lines' room.
+   - The countdown is centred under the two boxes: it is both desks' clock, not the first desk's.
+   - Looked at 4x in the lab: four boards, empty, with one guess, with both, and revealed. The lab's moments already
+     cover the empty and the filled boards, so the fit check reads both.
+   - Test: "HOW MANY?: both desks' guess boxes are up and empty before anyone guesses, nothing moves when the numbers
+     come, the clock centred under both".
+6. **`tools/quiz/write.mjs`'s next edition respects the schedule's window.** It is five hours on, moved into London
+   14:00–23:00: a 21:20 run now signs off "back at two o'clock tomorrow afternoon". Checked at nine run times,
+   across the clock change.
+
+**Found while doing it:**
+
+- **The network's minimum was missed by 15 ms.** A cut whose cooldown had 50 ms or less left was applied at once. The
+  result was a 3.985 s wide before DOUBLE OR NOTHING's card in s27. It now waits those milliseconds. The shortest shot
+  is 4.00 s in all 18 editions.
+- **A reaction's face stood silent 2.65 s before a PICTURE THIS frame** (ep7). The face was too young for the board on
+  the frame's mark. The frame now starts on the face, and the picture lands between two words once the face has held,
+  since nothing in that frame is read off the board. This happened in 2 of the 36 preambles, at most 0.82 s after the
+  mark.
+- **Tried and dropped: capping an answer's silent face at 2 s.** It left a question in s2 without a face and ran
+  boards to 43 s.
+
+**The numbers**, on the stub voice at 15 characters a second:
+
+| | Eight real editions | Ten fixture editions |
+|---|---|---|
+| Length | 306–348 s | 285–328 s |
+| Boards' share of the air | 58.3–64.4 % | 58.2–66.5 % |
+| Questions without a face moment | 0 | 0 |
+| Studio shots | 21–25 | 17–22 |
+| Answers on the players' faces | 9–11 | 9–13 |
+| Longest run of boards | 23–33 s | 26–34 s |
+| Cuts a minute (average) | 8.1–9.4 | 8.7–9.7 |
+| Busiest minute | 11–14 cuts | 11–14 cuts |
+| Shortest shot | 4.00 s | 4.00 s |
+| Median shot | 4.1–5.4 s | 4.7–5.5 s |
+| Longest studio shot | 11.2 s | 11.9 s |
+| Longest silent face (bed under it) | 2.72 s | 2.57 s |
+| Shortest reveal hold | 3.00 s | 2.99 s |
+
+**Seen in the recordings.** ep2 (HOW MANY?, WHERE, PICTURE THIS) and fixture s18 (HOW MANY?, TODAY OR NOT TODAY,
+WHERE). No real edition has TODAY yet: the archive holds two days. They were read as contact sheets every 5 s and 1 s
+strips, with 2x stills:
+- the wide and the host's single, with the board's name clear of his head;
+- the half-time strip on the stage, under the podium, clear of the bulbs and of every head;
+- HOW MANY?:
+  - both desks' boxes empty during the reading;
+  - the guesses on the wide;
+  - the board back with both numbers in their boxes and the bar spent;
+  - the gold figure and "+2";
+- TODAY OR NOT TODAY:
+  - each headline read on its board;
+  - the lock-ins and the verdict on the wide, the desks' scores changing;
+  - the last verdict on its board, with its credit box;
+- the ticker: the recordings run on the mock feeds, so the tests are the proof, not the pictures;
+- ep2's sign-off says "two o'clock tomorrow afternoon".
+
+New fault, in another step's file (graphics, step 3), seen at 4x and not changed here: the circle seat shape is
+8 px wide and the square 6 px, with the name 9 px on for both. "●LOLA" stands 1 px from its shape and "■ SAM" 3 px.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Shots and grammar | 9.75 | Boards hold 58–64 % of the real editions' air and runs last at most 34 s; every question has a face. Faces stand silent for 2 s or more 17 times across the 18 editions, with the bed under each, at most 2.72 s: a buzzer's face after the answer with the clock stopped (6), the wide after the last lock-in once the ticks end (5), a reaction or a pick before the next board (6). A LETTER BY LETTER round cuts board, face, board at the network's 4 s for about a minute, like a metronome. The host's voice is heard over a player's single for 3–18 s an edition (the reaction shot, planned). No two-shot exists. |
+| Board timing to voice and music | 9.75 | Every time on a board is a segment's real start. Of the 36 boards cut inside a host's preamble, 34 land on the speech mark where he starts reading off them. Two PICTURE THIS pictures land 0.37 and 0.82 s after theirs, where nothing is read off the board. Under TTS a lock-in's mark carries the estimated voice latency, not a measured one. A late winning buzz could run past LETTER BY LETTER's last tick. |
+| Game legibility and tension | 9.75 | The ticker never shows an answer, the board's name and the strip stand clear, and HOW MANY? shows both desks from the start. TODAY's first five verdicts are on the wide: the answer is heard and the desks' scores change, but the board shows who was right only in the next headline's tally. The bar is unseen while the last lock-in or the guesses are on the wide (its ticks are heard). The strip repeats the desks. The seat shapes stand unevenly from their names. |
+| Length and rhythm | 9.75 | The real editions run 306–348 s. Fixture s0 runs 285 s, under the 290 s floor: the writer's copy is short, and the director does not pad. The median shot is 4.1–5.5 s, and the band moved from 5–9 to 4–6.5 s, because each question now has its face and its board back, each held for the network's 4 s. That is inside the owner's floor (no shot under 4 s; the band's top at most 9), and in line with NEWS IN 60's 4–6 and TECH BYTES's 4.5–6.5. It is under the owner's 5–7 s in 9 of the 18 editions. Cuts a minute average 8.1–9.7, and the busiest minute holds 14. |
+| Sound cues | 9.75 | Unchanged: a sting on every reveal; the drumroll lands on DOUBLE OR NOTHING's reveal; the ticks are on the grid; no laughter or applause. Nobody has listened. On PICTURE THIS's DOUBLE OR NOTHING the drumroll plays over the countdown's last ticks. |
+| Robustness and tests | 9.75 | 38 wiring tests, 7 of them new (the ticker 4, the faces and bounds, the idle name, the strip), and HOW MANY?'s composition test. The shortest shot is exactly the network's 4 s. The real editions that the 65 % bound is measured on come from the archive of 13 Oct, not in the repository, so no test plays them; the test holds the fixture seeds at 67 %. The ticker's word match drops any item that shares three content words with a question, which may take out an unrelated story. It never lets an answer through. Every timing is the stub voice's. |
+
+**Round score: 9.75. Passed** (the gate is above 9.7).
+
 ## For step 7 (on air)
 
 - **To view it:** `DRAFTS_ON_AIR=pay-attention@<slot> QUIZ_VIEW=1`. The desk wants three days of archive, which
@@ -348,3 +496,5 @@ New faults: none in the director's work. Two in other steps' files, reported and
   - that a buzz's and a guess's cut lands on the first word;
   - the length against 290–360 s.
 - **Listen for the drumroll against PICTURE THIS's last ticks** on DOUBLE OR NOTHING.
+- **Listen to the silent faces** (round 6: up to 2.7 s, the bed under them): a buzzer's face before the verdict, the
+  wide after the last lock-in, a reaction before the next board. With the real voices' lengths, count them again.

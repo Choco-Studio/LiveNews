@@ -261,6 +261,25 @@ const MARGIN = 0.4;
 /** s a board's first line may wait for the board's cut (quizdirector.js BOARD_WAIT): a run before a board may end short. */
 export const BOARD_WAIT = 2.5;
 
+/**
+ * The stories an edition uses, to keep off the LATEST ticker while it airs (graphics quizAvoided): the station's list
+ * (episode.quizStories: every asked story, option, pin, DOUBLE OR NOTHING offer and the tie-break, by story id and
+ * headline), and the episode's own words besides (the questions' headlines, options and items, for an episode made
+ * without the list). { ids: Set, titles: [] }.
+ */
+export function quizAvoidOf(episode) {
+  const ids = new Set((episode?.quizStories?.ids || []).filter((x) => x != null));
+  const titles = new Set((episode?.quizStories?.titles || []).filter(Boolean));
+  for (const seg of episode?.segments || []) {
+    const q = seg?.quiz?.question;
+    if (q?.words) titles.add(String(q.words).replace(/\u25ae+/g, ' '));
+    for (const o of q?.options || []) if (o?.words) titles.add(o.words);
+    for (const it of q?.items || []) if (it?.words) titles.add(it.words);
+    if (seg?.quiz?.item?.words) titles.add(seg.quiz.item.words);
+  }
+  return { ids, titles: [...titles] };
+}
+
 /** A board shot for a unit. */
 const boardShot = (unit, k, anchor) => ({ shot: BOARD, framing: null, focus: anchor || 'H', board: unit.kind === 'question' ? unit.type : unit.board, unit: k });
 /** A studio shot: the quiz's wide (focus H: one camera whoever speaks) or a single. */
@@ -304,12 +323,37 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     // (TODAY OR NOT TODAY's tally is the host's line to the studio after the sixth stamp: the wide, the lamps and scores)
     else if (u.kind === 'question' || u.kind === 'card') for (let i = u.from; i <= u.to; i++) if (segs[i]?.part !== 'tally') shots[i] = boardShot(u, k, segs[u.from]?.anchor);
   });
-  // the answers said in the players' own words, on their faces: LETTER BY LETTER's buzz on the buzzer's single (the wide
-  // while player B's single would stand under the tag), HOW MANY?'s guesses on the wide (both desks lighting). The
-  // lock-ins stay on their board (the reading rule: the options on screen to the last lock-in), and a stall too (the
-  // clock runs on for the other player). The director keeps any of them on the board that has not yet held the minimum.
+  // the answers on the players' faces: LETTER BY LETTER's buzz on the buzzer's single (the wide while player B's single
+  // would stand under the tag), HOW MANY?'s guesses on the wide (both desks lighting), the last lock-in of PICTURE THIS
+  // and WHERE on the wide, TODAY's lock-ins and verdict on the wide. The other lock-ins stay on their board (the reading
+  // rule: the options on screen to the last lock-in), and a stall too (the clock runs on for the other player).
   U.forEach((u) => {
+    // DOUBLE OR NOTHING's pick, in the player's own words, on their single (the director keeps it on the card when the
+    // single could not hold without standing silent)
+    if (u.kind === 'card' && u.board === 'double') {
+      for (let j = u.from; j <= u.to; j++) {
+        if (segs[j]?.part !== 'pick') continue;
+        const seat = segs[j].anchor;
+        shots[j] = { ...studioShot(seat === 'B' && start[j] < tagUntil ? QUIZ_FRAMING.wide : QUIZ_FRAMING[seat] || QUIZ_FRAMING.wide), answer: true };
+      }
+    }
     if (u.kind !== 'question') return;
+    // PICTURE THIS and WHERE: the last lock-in on the wide (both lamps lit: the reading rule has kept the options on
+    // screen to it), the board back for the reveal
+    if (u.type === 'picture' || u.type === 'where') {
+      const last = answerSchedule(u, segs, episode.cast).filter((a) => a.kind === 'lock').at(-1);
+      if (last) shots[last.i] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+    }
+    // TODAY OR NOT TODAY: its options are two and known, so once the headline is read on its board the lock-ins
+    // light the desks on the wide, and the verdict stays there (the last headline's on its board when the round's tally
+    // follows: the tally's wide takes the verdict's last words, and the studio run after it starts fresh)
+    if (u.type === 'today') {
+      const items = (u.items || []).filter((it) => it.reveal !== null && it.reveal !== undefined);
+      const tally = (u.parts.tally || []).length > 0;
+      items.forEach((it, k) => {
+        if (!(tally && k === items.length - 1)) shots[it.reveal] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+      });
+    }
     if (u.type === 'letters') {
       for (const j of u.parts.buzz || []) {
         const seat = segs[j]?.anchor;
@@ -327,8 +371,11 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     }
     const run = [];
     while (i < segs.length && !shots[i]) run.push(i++);
-    // (a run the next board follows may end on a short shot: the board's first line waits for its cut, up to BOARD_WAIT)
-    planRun(run, shots[i]?.shot === BOARD ? BOARD_WAIT : 0);
+    // (a run the next board follows may end on a short shot: the board's first line waits for its cut, up to BOARD_WAIT;
+    // a run after an answer's studio shot, TODAY's last verdict on the wide, carries that shot on: its time counts)
+    const before = shots[run[0] - 1];
+    const carry = before && before.answer && before.shot !== BOARD ? { framing: before.framing, len: dur(run[0] - 1) + COUNTDOWN_HALVES.today * HALF_NOTE } : null;
+    planRun(run, shots[i]?.shot === BOARD ? BOARD_WAIT : 0, carry);
   }
   function prefer(j) {
     const s = segs[j];
@@ -349,7 +396,7 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     const own = one === 'A' || one === 'B' ? -1.5 : 0; // a player's own single
     return single ? [[single, own], [QUIZ_FRAMING.wide, 1]] : [[QUIZ_FRAMING.wide, 1]];
   }
-  function planRun(run, allow) {
+  function planRun(run, allow, carry = null) {
     const n = run.length;
     let best = null;
     const limit = n > 12 ? 0 : 1 << (n - 1); // (a run longer than twelve lines, never written, stays one shot)
@@ -365,7 +412,8 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
       });
       let cost = 0;
       groups.forEach((x, k) => {
-        // the cheapest camera that is not the one before (a cut to the same picture is none)
+        // the cheapest camera that is not the one before (a cut to the same picture is none; the shot carried on into
+        // the run's first group adds its time)
         const opts = options(x).filter(([f]) => !k || f !== groups[k - 1].framing);
         if (!opts.length) {
           cost += 1000;
@@ -376,11 +424,12 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
           cost += opts[0][1];
         }
         const last = k === groups.length - 1;
-        const len = last ? x.len + allow : x.len;
+        const carried = !k && carry && x.framing === carry.framing ? carry.len : 0;
+        const len = (last ? x.len + allow : x.len) + carried;
         if (len < min + MARGIN) cost += 100 * (min + MARGIN - len);
         if (last && allow && x.len < min) cost += 2 * (min - x.len); // (the silence the board's wait costs)
         const cap = x.segs.some((j) => segs[j]?.part === 'signoff') ? studioMax - MARGIN : studioMax; // (the stinger's transition after the hold)
-        if (x.len > cap) cost += 50 * (x.len - cap);
+        if (x.len + carried > cap) cost += 50 * (x.len + carried - cap);
         cost += 0.5;
       });
       if (!best || cost < best.cost - 1e-9) best = { cost, groups };

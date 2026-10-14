@@ -34,8 +34,14 @@ export function drawQuizShot(ctx, t, dt, card) {
   if (draw) draw(ctx, Number.isFinite(card?.epoch) ? Math.max(0, t - card.epoch) : dt, card.o || {});
 }
 
+/**
+ * Where the strip stands in the quiz's wide: on the stage under the host's podium (its plate ends at y 148), clear of
+ * the board's marquee and of every head, 6 px over the captions' two lines (they start at y 172).
+ */
+export const QUIZ_STRIP_Y = 153;
+
 /** The scores as a one-line strip over the studio (the half-time scores, the banter after them). */
 export function drawQuizStrip(ctx, t, strip) {
   if (!strip?.players) return;
-  drawScoresStrip(ctx, Math.max(0, t - (strip.since || 0)), { players: strip.players, scores: strip.scores || {}, compact: true });
+  drawScoresStrip(ctx, Math.max(0, t - (strip.since || 0)), { players: strip.players, scores: strip.scores || {}, compact: true, y: QUIZ_STRIP_Y });
 }

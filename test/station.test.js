@@ -837,11 +837,11 @@ describe('Station ticker and news refresh', () => {
   });
   const makeStories = (n) => Array.from({ length: n }, (_, k) => makeStory(k + 1));
 
-  test('ticker() lists the 18 newest stories as {source, text}, newest first', () => {
+  test('ticker() lists the 18 newest stories as {id, source, text}, newest first', () => {
     const { station } = makeStation({ stories: makeStories(25) });
     const ticker = station.ticker();
     assert.equal(ticker.length, 18);
-    assert.deepEqual(ticker[0], { source: 'Outlet 2', text: 'Story number 1 of the day' });
+    assert.deepEqual(ticker[0], { id: 's1', source: 'Outlet 2', text: 'Story number 1 of the day' });
     assert.equal(ticker[17].text, 'Story number 18 of the day');
   });
 

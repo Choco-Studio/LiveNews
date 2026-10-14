@@ -14,6 +14,46 @@ import { writeEpisode } from './writer.js';
 import { QuizTable } from './table.js';
 
 const DAY = 86400_000;
+
+/**
+ * Every story an edition uses: the asked ones, every option and pin, DOUBLE OR NOTHING's offers (both, though one
+ * airs) and the tie-break. Returns { ids, titles }: the events' story ids and their headlines (the aired words and the
+ * archive's feed titles). The director keeps them all off the LATEST ticker while the edition airs: a headline the
+ * game asks the viewer to name must never scroll under it.
+ */
+export function editionStories(plan, events, archive = null) {
+  const keys = new Set();
+  const add = (q) => {
+    if (!q) return;
+    if (q.key) keys.add(q.key);
+    for (const o of q.options || []) if (o?.key) keys.add(o.key);
+    for (const it of q.items || []) if (it?.key) keys.add(it.key);
+  };
+  for (const r of plan?.rounds || []) for (const q of r.questions || []) add(q);
+  for (const o of plan?.don?.offers || []) add(o.question);
+  add(plan?.tieBreak);
+  const byKey = new Map((events || []).map((e) => [e.key, e]));
+  const ids = new Set();
+  const titles = new Set();
+  const title = (t) => {
+    const x = String(t || '').trim();
+    if (x) titles.add(x);
+  };
+  for (const k of keys) {
+    const ev = byKey.get(k);
+    if (!ev) continue;
+    title(ev.words);
+    title(ev.latest?.title);
+    title(ev.latest?.headline);
+    for (const id of ev.ids || []) {
+      ids.add(id);
+      const e = archive?.byId?.get?.(id);
+      title(e?.title);
+      title(e?.headline);
+    }
+  }
+  return { ids: [...ids], titles: [...titles] };
+}
 export const DEFAULT_CONTESTANTS = Object.freeze(['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']);
 
 export class QuizDesk {
@@ -51,7 +91,9 @@ export class QuizDesk {
     const entries = this.archive.entries.filter((e) => e.at <= now && realEntry(e));
     const { events, avoid } = quizEvents(this.archive, { now, days: 7, same: this.same });
     const view = this.view && Array.isArray(channel?.draftsOnAir) && channel.draftsOnAir.includes(program.id);
-    return planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid, ...(view ? { minArchiveDays: 0, checkHour: false } : {}) });
+    const plan = planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid, ...(view ? { minArchiveDays: 0, checkHour: false } : {}) });
+    if (plan?.air) plan.stories = editionStories(plan, events, this.archive);
+    return plan;
   }
 
   /**
@@ -89,7 +131,7 @@ export class QuizDesk {
     if (!plan?.air) return null;
     const { episode, game } = writeEpisode(plan, { channel, now, table: this.table, recentLines, nextAt });
     this.record(plan);
-    return { episode, plan, game };
+    return { episode: { ...episode, quizStories: plan.stories || null }, plan, game };
   }
 
   record(plan) {

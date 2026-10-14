@@ -4,6 +4,7 @@
 import { Archive } from '../../server/archive.js';
 import { quizEvents } from '../../server/quiz/desk.js';
 import { planEdition, contestantsFrom } from '../../server/quiz/planner.js';
+import { editionStories } from '../../server/quiz/edition.js';
 import { writeEpisode } from '../../server/quiz/writer.js';
 
 export const H = 3600_000;
@@ -43,5 +44,5 @@ export function quizEdition(channel, seed = 'w', now = NOW) {
   if (!plan.air) return { plan, episode: null, game: null };
   const { episode, game } = writeEpisode(plan, { channel, now, nextAt: now + 4.5 * H });
   const program = channel.programs['pay-attention'] || channel.drafts?.['pay-attention'] || {};
-  return { plan, game, episode: { ...episode, id: `quiz-${seed}`, cast: { ...episode.cast, H: program.presenters?.[0] || 'qm' }, program: { id: 'pay-attention', title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", theme: 'quiz' } } };
+  return { plan, game, episode: { ...episode, quizStories: editionStories(plan, events, archive), id: `quiz-${seed}`, cast: { ...episode.cast, H: program.presenters?.[0] || 'qm' }, program: { id: 'pay-attention', title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", theme: 'quiz' } } };
 }
