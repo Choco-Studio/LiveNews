@@ -277,6 +277,44 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
 describe('PAY ATTENTION on air (the director, the fake clock)', () => {
   const all = Object.values(SEEDS);
 
+  test('a reveal\'s cut to a face lands on a phrase\'s first word whenever one is within reach (on air: "Euronews | Business", "both of | you.")', async () => {
+    const { phraseStarts } = await import('../public/js/quizdirector.js');
+    const seg = { text: 'It\'s C. Points for both of you. From The Verge, on TECH BYTES this evening.', audio: { duration: 5, words: [{ char: 0, t: 0 }, { char: 5, t: 0.3 }, { char: 8, t: 0.7 }, { char: 15, t: 1.0 }, { char: 19, t: 1.2 }, { char: 24, t: 1.4 }, { char: 27, t: 1.6 }, { char: 32, t: 2.1 }, { char: 37, t: 2.3 }, { char: 41, t: 2.5 }, { char: 48, t: 3.0 }, { char: 51, t: 3.2 }, { char: 56, t: 3.5 }, { char: 62, t: 3.9 }, { char: 67, t: 4.1 }] } };
+    assert.deepEqual(phraseStarts(seg).map((w) => seg.text.slice(w.char).split(' ')[0]), ['Points', 'From', 'on']);
+    let cuts = 0;
+    let onPhrase = 0;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      for (const c of log.trace.filter((x) => (x.k === 'tail' || x.k === 'verdict') && x.lo !== undefined)) {
+        cuts++;
+        const starts = phraseStarts(episode.segments[c.i]).map((w) => c.t0 + w.t - 0.05);
+        const reach = starts.filter((t) => t >= c.lo - 1e-3 && t <= c.hi + 1e-3);
+        if (c.phrase) {
+          onPhrase++;
+          assert.ok(reach.some((t) => Math.abs(t - c.t) < 0.03), `${seed}: the cut at ${c.t.toFixed(2)} on no phrase start`);
+        } else assert.equal(reach.length, 0, `${seed}: a phrase start within reach of the cut at ${c.t.toFixed(2)}`);
+      }
+    }
+    assert.ok(cuts >= 10 && onPhrase >= cuts / 2, `${onPhrase} of ${cuts} reveal cuts on a phrase's first word`);
+  });
+
+  test('the winner\'s reply to the final score is on a face, never kept on the score card (on air, 13 Oct: the card kept it, the loser\'s came on the wide)', async () => {
+    let replies = 0;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      const said = saysOf(log, episode);
+      const r = episode.segments.findIndex((s) => s.part === 'result');
+      const reply = episode.segments[r + 1];
+      if (!reply || reply.part !== 'react') continue;
+      replies++;
+      const on = shotAt(log, said.get(r + 1).on + 0.01);
+      assert.ok(on.shot === 'wide' || on.shot === 'close', `${seed}: the reply "${reply.text}" on ${on.shot}`);
+    }
+    assert.ok(replies >= 5, `${replies} replies`);
+  });
+
   test('a face too young for the board carries the next frame after a beat, rather than standing silent to its minimum and the board then cut for the frame', async () => {
     let beats = 0;
     const min = paceFor('pay-attention').shots.min;
@@ -453,10 +491,16 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         assert.equal(answers.length, (parts || []).length, `${seed} ${u.type}: every answer on the board`);
         (parts || []).forEach((i) => {
           // (a buzz held for the cut to the buzzer's single: the lamp and the board's clock on the buzz, `at`, its answer
-          // heard from the cut, `heard`, a second at most later)
+          // heard from the cut, `heard`, 1.2 s at most later)
           const a = answers.find((x) => x.seat === episode.segments[i].anchor && Math.abs((x.heard ?? x.at) - rel(i)) < 0.02);
           assert.ok(a, `${seed} ${u.type}: the answer of ${episode.segments[i].anchor} at its line's start`);
-          if (a.heard !== undefined) assert.ok(a.heard > a.at && a.heard - a.at <= 1.0 + 0.02 && episode.segments[i].part === 'buzz', `${seed}: a buzz held ${(a.heard - a.at).toFixed(2)} s`);
+          if (a.heard !== undefined) {
+            assert.ok(a.heard > a.at && a.heard - a.at <= 1.2 + 0.02 && episode.segments[i].part === 'buzz', `${seed}: a buzz held ${(a.heard - a.at).toFixed(2)} s`);
+            // (the answer inside the buzz's stage: no more letters show before it than the points were scored for)
+            const stage = episode.segments[i].quiz.buzz.stage || 3;
+            const next = stage < 3 ? o.stageTimes[stage] : o.countdown.at + o.countdown.dur;
+            assert.ok(a.heard < next, `${seed}: a held buzz answered after its stage (${a.heard.toFixed(2)} vs ${next.toFixed(2)})`);
+          }
           if (u.type !== 'letters' && u.type !== 'howmany') assert.equal(a.answer, episode.segments[i].quiz.lock.answer);
           if (u.type === 'howmany') assert.equal(a.said, episode.segments[i].quiz.guess.said);
         });
@@ -673,13 +717,13 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const line = said.get(w.i);
         const onWord = Math.abs(line.on - w.t) < 1e-3;
         assert.ok(onWord || (w.t > line.on && w.t <= line.off + 0.6 && cut.t - prev.t < min + 0.35), `${seed}: the cut on the answer (${(w.t - line.on).toFixed(2)} s in)`);
-        // (step 7, on air: a buzz's cut on its first word, the buzz held for it a second at most when the board was young)
+        // (step 7, on air: a buzz's cut on its first word, the buzz held for it 1.2 s at most when the board was young)
         if (seg.part === 'buzz') {
           assert.ok(onWord, `${seed}: the buzzer's single ${(w.t - line.on).toFixed(2)} s into the answer`);
           const press = log.trace.find((x) => x.k === 'press' && x.i === w.i);
           if (press) {
             held++;
-            assert.ok(w.t - press.t > 0 && w.t - press.t <= 1.0 + 0.02, `${seed}: a buzz held ${(w.t - press.t).toFixed(2)} s`);
+            assert.ok(w.t - press.t > 0 && w.t - press.t <= 1.2 + 0.02, `${seed}: a buzz held ${(w.t - press.t).toFixed(2)} s`);
             assert.ok(cut.t - prev.t < min + 0.1, `${seed}: held past the board's minimum`);
           }
         }
@@ -1031,6 +1075,11 @@ describe('PAY ATTENTION at the station: the pictures and the view switch', () =>
     const ep = await producer.produce(ch, 'pay-attention');
     assert.ok(ep);
     for (const [id, urls] of asked) assert.ok(/^e\d+$/.test(id) && urls.length === 1, 'fetched under the airing that carried it');
+    // and kept as fetched, for /api/img to serve at air whether or not the story is still on the news desk (on air, 13
+    // Oct: the desk no longer held them, and PICTURE THIS aired with an empty frame)
+    if (asksPictures) assert.ok(asked.length >= 1, 'the pictures fetched');
+    for (const [id] of asked) assert.equal(producer.quizPicture(id)?.type, 'image/jpeg', `${id} kept`);
+    assert.equal(producer.quizPicture('s0000000000'), null);
   });
 
   test('the archive serves a story\'s picture from the airing that carried it, when a retelling had none', () => {

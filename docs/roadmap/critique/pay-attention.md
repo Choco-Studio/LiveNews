@@ -353,3 +353,189 @@ Faults:
 2. **PICTURE THIS's whole frame rides the round's single** (`roundFace`), as LETTER BY LETTER's does. The picture lands
    on a word the single has reached, or as the frame ends. After a reaction, its frame rides the wide with the reaction
    when it reads nothing off the board before a word (`playLine`).
+
+## Round 5 — after round 4's fixes
+
+**Recordings.** `r5/e0.mp4` (programme 307.5 s) and `r5/e1.mp4` (328.1 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 78 of 78 heard, 0 browser sentences | 71 of 71, 0 |
+| Shots | 44 (20 studio); 8.6 a minute; busiest 11; median 4.77 s; longest studio 8.67 s | 45 (21); 8.2; 11; 5.37 s; 7.70 s |
+| Boards' share; longest run | **67.7 %**; 35.9 s | **65.7 %**; 29.5 s |
+| What the boards carry (share of the air) | the host reading the board's text 44.8 %; the clock under the picture's steps, the tiles and the pins 10.7 %; the players' lines 5.1 %; the host's other lines 1.5 %; nothing said 5.6 % | 44.7 %; 12.7 %; 2.9 %; 1.0 %; 4.3 % |
+| The round's card giving way to the host | 1 of 3 (PICTURE THIS) | 0 of 3 |
+| The cut to a buzz, a guess, a last lock-in | 132 ms before the first word, all nine; one buzz stays on its 3 s old board | all eight; one buzz on its 1.5 s old board |
+| Cuts inside a word | 0 | 0 |
+| Silent studio shots (≥ 1.5 s) | 6; longest 2.09 s (a verdict's wide before the next board) | 3; 1.98 s (the wide after a recap, the clock ticking) |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | 0…+33 ms | 0…+33 ms |
+| Loudness | −15.7 LUFS, LRA 4.7 LU, −4.9 dBTP; open −18.0 | −15.6, 5.0, −4.8; −18.0 |
+| Voice over the music (median; lowest) | 23.1 dB; 18.3 dB | 23.3 dB; 21.0 dB |
+| Music between voices | −36.6 dBFS (10–90 % −39.6 to −33.4) | −36.2 (−38.4 to −35.2) |
+| The ticker under the game | 3 items; none an edition story, none grave | 8; none |
+
+Faults:
+
+1. **PICTURE THIS without its picture.** In E1, all three questions aired with an empty frame. The viewer was asked
+   "Which story did this picture come with?", the options were read, the clock ran and the reveal came, and the slate
+   box stayed dark throughout. `/api/img` served a picture only for a story still on the news desk. The producer had
+   fetched each picture when it made the edition, but E1's stories had left the desk by air. On the real channel that
+   happens to any question about a story aired hours or days before. Every round from 2 on had it: a still of every
+   PICTURE THIS reveal in rounds 1–5 shows E0's pictures and none of E1's since round 2. The panel missed it in rounds
+   2–4, where the dark box read as a dark picture on the 1x sheets, so those rounds' game and picture scores were too
+   high. Pixel artist, first-time viewer ("there is no picture"), quiz producer.
+2. **A verdict's wide stood 2.1 s silent before the next board** (E0, WHERE): the wide was too young for the board when
+   the next frame came, so the frame waited for the board's cut at the wide's minimum, and the wide stood silent until
+   then. Director.
+3. **"The answer: $149 HomePod mini"** (E1, HOW MANY?): the figure was said with the product it bought, as if that were
+   its unit. Standards, first-time viewer.
+4. **The rule and the frame presented the same sentence**: "HOW MANY? for round one. Here's the sentence as it aired,
+   with the number covered up." and then "The sentence, with the figure hidden: …". Quiz producer.
+5. **"Overpriced answer."** from Penny after a LETTER BY LETTER that nobody buzzed: she had given no answer. Quiz
+   producer, first-time viewer.
+6. **Boards 67.7 % and 65.7 %**, above the step-4 reviewer's 65 %. That figure was measured on the stub voice
+   (58–64 %). Split by what is heard under the boards, 45 % of the air is the host reading the board's own text (the
+   bible's reading rule: the options stay up from their reading to the last lock-in). Another 11–13 % is the clock
+   running under the picture's steps, the tiles and the pins. Only 4–6 % is a board with nothing said. E0 is the
+   archive's fallback edition: DOUBLE OR NOTHING could fill no type not played that night, so it is a fourth PICTURE
+   THIS. The desk would not make that edition without `QUIZ_VIEW`, because the archive is under its three days.
+   Director.
+
+| Category | Score | Worst fault |
+|---|---|---|
+| Editorial accuracy and standards | 9.5 | 3 |
+| Entertainment and repertoire | 9.5 | 4, 5 |
+| Game legibility and tension | 6.5 | 1 (a round no viewer could play) |
+| Format clarity and rhythm | 9.5 | 2, 4 |
+| Picture | 6.5 | 1, 6 |
+| Sound | 9.7 | — |
+| Data robustness | 6.5 | 1 (no test served a picture whose story had left the desk) |
+
+**Round score: 6.5.**
+
+### Fixes
+
+1. **The station keeps PAY ATTENTION's pictures as it fetched them** (`server/producer.js` `quizPictures`,
+   `quizPicture`; `server/index.js` `serveImage`). The producer keeps each picture it fetched for an edition (the last
+   16), and `/api/img` serves those before the news desk's. A story days old airs with its picture, from the bytes that
+   were checked when the edition was made. Test: the pictures-or-no-edition test now also requires every fetched
+   picture to be kept for `/api/img`.
+2. **A beat, then the frame on the face** (`quizdirector.js` `playQuestion`). When the face on air is too young for the
+   board, the frame waits the beat that lets the face carry it to its end (LETTER BY LETTER, PICTURE THIS) or to its
+   mark (WHERE, HOW MANY?), and the board comes on the mark. The silence is shorter by the frame's words on the face,
+   and there are no extra cuts. Test: "a face too young for the board carries the next frame after a beat…".
+3. **A sum of money takes only its rate** (`writer.js` `figureSaid`): "$200 per month", "$149", "$1.3 billion".
+4. **HOW MANY?'s rule** is "Guess the number we covered up."; no round's rule says "Here's" (test).
+5. **A miss is regretted only by a player who answered** (`writer.js`): no reaction when nobody buzzed (test).
+6. The boards' share: no change beyond 2. The panel keeps it as what holds the picture from 10.
+
+## Round 6 — after round 5's fixes
+
+**Recordings.** `r6/e0.mp4` (programme 311.0 s) and `r6/e1.mp4` (320.0 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 78 of 78 heard, 0 browser sentences | 71 of 71, 0 |
+| PICTURE THIS pictures on screen | 4 of 4 | **3 of 3** (none in rounds 2–5) |
+| Shots | 43 (19 studio); 8.3 a minute; busiest 11; median 4.75 s; longest studio 10.05 s | 46 (21); 8.6; 12; 5.03 s; 8.45 s |
+| Boards' share; longest run | **68.2 %**; 32.7 s | 63.9 %; 30.4 s |
+| What the boards carry (share of the air) | the host reading the board's text 44.7 %; the clock 10.5 %; the players' lines 5.5 %; the host's other lines 1.5 %; nothing said 6.0 % | 44.2 %; 11.6 %; 2.9 %; 1.0 %; 4.2 % |
+| Buzzes on the buzzer's single | 1 of 3, on its first word; 2 kept on their boards | 2 of 3 (one held 0.5 s for the board's minimum), on their first words; 1 kept |
+| The cut to a guess or a last lock-in | 132 ms before the first word, all seven | all seven |
+| Cuts inside a word | 0 | 0 |
+| Silent studio shots (≥ 1.5 s) | 3; longest 2.19 s (the wide under DOUBLE OR NOTHING's last ticks) | 3; 2.26 s (the wide after the final score) |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | +1…+33 ms | 0…+33 ms |
+| Loudness | −15.7 LUFS, LRA 4.5 LU, −4.9 dBTP; open −18.1 | −15.6, 5.1, −4.9; −18.0 |
+| Voice over the music (median; lowest) | 23.4 dB; 17.9 dB (a lock-in on WHERE's clock) | 23.0 dB; 20.1 dB |
+| Music between voices | −36.5 dBFS (10–90 % −38.9 to −32.0) | −36.7 (−39.1 to −33.9) |
+| The ticker under the game | 4 items; none an edition story, none grave | 8; none |
+
+Checked fixed on air: every picture on its board, 1x and 2x (the Facebook settings screen, the Shopify phone, Niobia's
+battery); "The answer: $149, as reported…"; "HOW MANY? for round one. Guess the number we covered up." then "Here it
+is: …"; no reaction after a headline nobody buzzed.
+
+Faults:
+
+1. **A round's card stood 2.2 s silent** (E0, PICTURE THIS). The last LETTER BY LETTER question had no face: its buzz
+   came 3.05 s into its board, 0.07 s past the second the director would hold an answer for the buzzer's single. So
+   the wide was owed after its reveal. The wide's minimum then held back the round's card, which came in on "picture."
+   inside the rule and held its own 4 s after the words. Director.
+2. **The winner's reply stayed on the final score card** (E1): "That's a strong close." on the card, the loser's "Back to
+   reading the news, then." on the wide, then the wide stood 2.3 s silent. The card's minimum was 1.64 s away when the
+   reply was due, 0.04 s past the 1.6 s a reply waits for its cut. Director, quiz producer ("the winner is the shot").
+3. **E0's boards 68.2 %**, the fallback edition (round 5, fault 6). Director.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.7 | the ticker carries hard politics under the game (Pakistan's emergency rule, a White House briefing): allowed, as no tragedy is, but a lighter band would sit better beside a game |
+| Entertainment and repertoire | 9.7 | a bank of eight recaps a kind; a round of three both-right answers in E0's WHERE has no tension (the players' model) |
+| Game legibility and tension | 9.6 | 1 (a buzz with no face) |
+| Format clarity and rhythm | 9.6 | 1, 2 |
+| Picture | 9.6 | 3, 1 |
+| Sound | 9.7 | a reply's beat on a card |
+| Data robustness | 9.6 | 1, 2 (each a cliff of a few hundredths of a second, which the stub voice's fixtures never reached) |
+
+**Round score: 9.6.**
+
+### Fixes
+
+1. **A buzz is held up to 1.2 s for the buzzer's single** (`BUZZ_HOLD`, was 1.0 s). That is still inside the buzz's
+   stage, since the next is three half notes (3.2 s) on. Test: a held buzz is answered before its stage ends.
+2. **A reply after a card waits up to 1.8 s for its cut** (`CARD_WAIT`, was 1.6 s): a beat on the final score, then the
+   winner on a face. Test: "the winner's reply to the final score is on a face…".
+
+## Round 7 — after round 6's fixes
+
+**Recordings.** `r7/e0.mp4` (programme 335.7 s: level at 19–19, a sudden-death LETTER BY LETTER, Lola on the
+tie-break) and `r7/e1.mp4` (323.1 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 83 of 83 heard, 0 browser sentences | 71 of 71, 0 |
+| PICTURE THIS pictures on screen | 4 of 4 | 3 of 3 |
+| Shots | 52 (23 studio); 9.3 a minute; busiest 13; median 4.34 s; longest studio 8.47 s | 49 (23); 9.1; 14; 4.72 s; 9.08 s |
+| Boards' share; longest run | 65.5 %; 26.5 s | 62.3 %; 29.0 s |
+| What the boards carry (share of the air) | the host reading the board's text 42.0 %; the clock 12.8 %; the players' lines 2.8 %; the host's other lines 2.2 %; nothing said 5.9 % | 43.4 %; 10.7 %; 2.1 %; 1.0 %; 5.2 % |
+| The round's card giving way to the host | PICTURE THIS | PICTURE THIS |
+| Buzzes on the buzzer's single | 4 of 4 (the tie-break's too), two held 0.5–0.6 s for the board's minimum, all on their first words | 3 of 3, two held |
+| The cut to a guess or a last lock-in | 132 ms before the first word, all seven | all seven |
+| Cuts inside a word | 0 | 0 |
+| Silent studio shots (≥ 1.5 s) | 2; 1.61 s (the final reactions' wide; the sign-off's hold) | 3; 2.11 s (the wide after a short recap, the clock ticking) |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | +1…+33 ms | 0…+33 ms |
+| Loudness | −15.7 LUFS, LRA 4.9 LU, −4.7 dBTP; open −18.0 | −15.6, 5.1, −5.1; −18.1 |
+| Voice over the music (median; lowest) | 23.4 dB; 18.7 dB | 24.2 dB; 19.7 dB |
+| Music between voices | −36.5 dBFS (10–90 % −38.3 to −32.8) | −36.5 (−38.9 to −33.8) |
+| The ticker under the game | 4 items; none an edition story, none grave | 7; none |
+
+Fault:
+
+1. **A reveal's cut to a face fell inside a phrase**: "From Euronews | Business, on MONEY MINUTE", "It's C. Points for both
+   of | you.", "This evening, from | TechCrunch.". The cut was word-safe but went to the first gap between words after
+   its planned moment, without regard to the sense. Director.
+
+E0's boards (65.5 %) carry a tie-break's two boards; E1's are 62.3 %.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.7 | the ticker's hard politics under the game (allowed) |
+| Entertainment and repertoire | 9.7 | the recap bank; a round where both are right three times |
+| Game legibility and tension | 9.7 | the wide after a short recap stands 2 s with only the clock |
+| Format clarity and rhythm | 9.7 | 1 |
+| Picture | 9.6 | 1; E0's boards at 65.5 % |
+| Sound | 9.7 | — |
+| Data robustness | 9.7 | no afternoon edition, no TODAY OR NOT TODAY on the real archive yet |
+
+**Round score: 9.6.**
+
+### Fixes
+
+1. **A reveal's cut lands on a phrase's first word when one is within reach** (`quizdirector.js` `phraseStarts`,
+   `sayReveal`). That means up to 0.6 s before or 0.8 s after the planned moment, inside the cut's own window: never
+   before the board has shown the reveal, never too late for the face it opens. The phrase starts come from the
+   recording's word marks. Test: "a reveal's cut to a face lands on a phrase's first word whenever one is within reach".

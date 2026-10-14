@@ -22,6 +22,8 @@ const ownCredit = (credit, outlet) => !credit || fold(credit) === fold(outlet) |
 // The source plate on the strap and on the headline montage card holds about 36 characters: the stop-gap credit
 // ("Outlet / Photo: Credit") must fit it whole, never cut mid-word with an ellipsis.
 export const SOURCE_MAX = 36;
+// PAY ATTENTION's pictures kept as fetched for its editions (two editions' worth, DOUBLE OR NOTHING's offers with them)
+const QUIZ_PICTURES_KEPT = 16;
 // The credit line graphics may draw as is ("PHOTO: PIXEL WIRE AGENCY"), in the micro font under a picture.
 export const CREDIT_LINE_MAX = 28;
 /** The credit's first part: "Getty Images/AFP via Getty Images" -> "Getty Images"; "Jane Doe, Reuters" -> "Jane Doe". */
@@ -104,6 +106,10 @@ export class Producer {
     // written from it
     this.archive = archive;
     this.lastWeeklyAt = 0;
+    // PAY ATTENTION's pictures as fetched for its editions (id -> { type, body }), served by /api/img: a story days old
+    // is no longer on the news desk, which /api/img otherwise serves from (on air, 13 Oct: every PICTURE THIS of an
+    // edition aired with an empty frame)
+    this.quizPictures = new Map();
     // PAY ATTENTION (kind 'quiz'): the quiz desk plans each edition from the archive and keeps its history and weekly
     // table in data/quiz (server/quiz/edition.js)
     this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log, view: !!config?.quizView }) : null;
@@ -453,11 +459,19 @@ export class Producer {
       try {
         const entry = await this.images.get(id, [q.image].filter(Boolean));
         if (!entry || entry.error) return id;
+        this.quizPictures.delete(id);
+        this.quizPictures.set(id, entry);
+        while (this.quizPictures.size > QUIZ_PICTURES_KEPT) this.quizPictures.delete(this.quizPictures.keys().next().value);
       } catch {
         return id;
       }
     }
     return null;
+  }
+
+  /** A PAY ATTENTION picture as fetched for an edition ({ type, body }), or null: /api/img serves it before the desk's. */
+  quizPicture(id) {
+    return this.quizPictures.get(id) || null;
   }
 
   /**

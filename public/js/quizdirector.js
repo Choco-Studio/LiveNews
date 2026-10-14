@@ -23,13 +23,16 @@ const PICTURE_WAIT = 3.0; // s a PICTURE THIS question waits for its picture bef
 const STUDIO_WAIT = 1.2; // s a studio line waits for its cut likewise (a longer hold: the cut lands between two words)
 const BACK_BEAT = 0.4; // s the board is back on air before its reveal (after a buzz or the guesses on the players' faces)
 const OWED_BEAT = 2.6; // ... when it is the question's only face moment (the players are the show: every question has one)
-const BUZZ_HOLD = 1.0; // s at most between a buzz (its lamp, the clock stopped) and its answer, said on the buzzer's single
+const BUZZ_HOLD = 1.2; // s at most between a buzz (its lamp, the clock stopped) and its answer, said on the buzzer's single (inside its stage: the next is three half notes on)
 const REACT_BEAT = 2.0; // s a reaction's face may hold after its words before the next board (the players are the show)
 const LINK_SLACK = 0.6; // s of silence at most on the wide before LETTER BY LETTER's tiles (a link: playLine)
-const CARD_WAIT = 1.6; // ... the first line after a board (the final score's 2 s line leaves its card 1.3 s short of the minimum)
+const CARD_WAIT = 1.8; // ... the first line after a board (the final score's 2 s line leaves its card 1.3-1.7 s short of the minimum: on air, 13 Oct, a winner's reply 0.04 s past 1.6 s stayed on the card)
 const BOARD_MIN = 3.0; // s a reveal stays on the board before a studio shot may take over (the gold, the credit up for 2.75 s)
 const BOARD_MIN_SAID = 2.0; // ... when the host says the credit in the reveal (heard, it need not be read on the board)
 const VERDICT_MIN = 2.0; // s of the reveal's words (and the pause after) the verdict's wide must have left to be worth a cut
+const PHRASE_EARLY = 0.6; // s a reveal's cut may come before its planned moment to land on a phrase's first word
+const PHRASE_LATE = 0.8; // ... and after it
+const PHRASE_LEAD = 0.05; // s before that word's first sound (the cut in the pause before it)
 
 /** The players' first names as the writer says them ("Dr Nova Reyes" is Nova, unit8 is UNIT-8). */
 function firstName(channel, id) {
@@ -886,6 +889,18 @@ export function wordFrom(seg, from, t) {
 }
 
 /**
+ * A line's phrase starts: each word after a comma, a full stop, a colon, a semicolon, a question or an exclamation mark,
+ * with its first sound in s into the line ({ char, t }): from the recording's word marks, else at the line's pace.
+ */
+export function phraseStarts(seg) {
+  const text = String(seg?.text || '');
+  const words = Array.isArray(seg?.audio?.words) && seg.audio.words.length ? seg.audio.words : null;
+  const len = speechOf(seg);
+  const list = words ? words.map((w) => ({ char: w.char, t: w.t })) : [...text.matchAll(/\S+/g)].map((m) => ({ char: m.index, t: (m.index / Math.max(1, text.length)) * len }));
+  return list.filter((w) => w.char > 0 && /[,.;:!?]["'’”)]?\s*$/.test(text.slice(0, w.char)));
+}
+
+/**
  * Where a frame starts reading the board (a char offset in its text): WHERE's headline, HOW MANY?'s sentence, PICTURE
  * THIS's picture; 0 when the frame reads it from its first words (or is a LETTER BY LETTER or TODAY frame). Its preamble
  * ("Here is the headline:", "How much? Here is the sentence as it aired:", "Which story is this") may be said on the
@@ -966,7 +981,7 @@ function revealCut(d, u, ri, b, nx) {
     // (a tail held back past its time would leave the reaction's face silent more than a beat: then the board keeps it)
     const at = Math.max(earliest, end - need);
     if (at > end - need + REACT_BEAT) return null;
-    return { k: 'tail', spec: plannedSpec(q, nx), at, end, slack: 0.3 };
+    return { k: 'tail', spec: plannedSpec(q, nx), at, min: earliest, end, slack: 0.3 };
   }
   if (next?.shot === 'quiz' && u.kind === 'question' && u.type !== 'today') {
     // LETTER BY LETTER next: the verdict's wide carries its frame too (the desk, which reads nothing off the board), and
@@ -974,9 +989,9 @@ function revealCut(d, u, ri, b, nx) {
     const nu = q.units.find((x) => x.kind === 'question' && x.from === nx);
     if (nu?.type === 'letters' && segs[nx]?.anchor === 'H') {
       const slack = Math.max(0.1, paceFor(d.scene.program?.id).shots.min - LINK_SLACK - pause(d, ri) - speechOf(segs[nx])); // (the cut inside the reveal's words)
-      if (earliest <= end - slack) return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H', link: true }, at: earliest, end, slack };
+      if (earliest <= end - slack) return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H', link: true }, at: earliest, min: earliest, end, slack };
     }
-    return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H' }, at: earliest, end, slack: VERDICT_MIN - pause(d, ri) };
+    return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H' }, at: earliest, min: earliest, end, slack: VERDICT_MIN - pause(d, ri) };
   }
   return null;
 }
@@ -989,12 +1004,24 @@ async function sayReveal(d, u, ri, b, nx) {
   d.quiz.lastReveal = { card: b.card, at: now() - b.at() + b.card.o.revealAt, hold: revealHold(u, d.quiz.episode.segments[ri]) };
   const plan = revealCut(d, u, ri, b, nx);
   let timer = null;
+  const t0 = now() + (d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0); // (the reveal's first sound)
   const arm = () => {
     if (!plan || timer) return;
-    const at = Math.max(plan.at, now());
+    let at = Math.max(plan.at, now());
     if (at > plan.end - plan.slack) return;
+    // on a phrase's first word when one is near (PHRASE_EARLY before, PHRASE_LATE after, inside the cut's own window):
+    // "From Euronews Business, | on MONEY MINUTE", "Points for both of you. | From The Verge", never "Euronews |
+    // Business" or "both of | you." (on air, 12-13 Oct)
+    const lo = Math.max(plan.min ?? plan.at, now(), at - PHRASE_EARLY);
+    const hi = Math.min(plan.end - plan.slack, at + PHRASE_LATE);
+    const near = phraseStarts(d.quiz.episode.segments[ri])
+      .map((w) => t0 + w.t - PHRASE_LEAD)
+      .filter((t) => t >= lo && t <= hi)
+      .sort((x, y) => Math.abs(x - at) - Math.abs(y - at))[0];
+    const planned = at;
+    if (near !== undefined) at = near;
     timer = setTimeout(() => {
-      d.quizTrace?.push({ k: plan.k, t: now() });
+      d.quizTrace?.push({ k: plan.k, t: now(), at: planned, lo, hi, t0, i: ri, phrase: near !== undefined });
       cutTo(d, plan.spec, { wordSafe: true, onCut: () => (d.quiz.faced = true) });
     }, (at - now()) * 1000);
   };
