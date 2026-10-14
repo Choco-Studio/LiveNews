@@ -32,7 +32,7 @@ const BOARD_MIN_SAID = 2.0; // ... when the host says the credit in the reveal (
 const VERDICT_MIN = 2.0; // s of the reveal's words (and the pause after) the verdict's wide must have left to be worth a cut
 const PHRASE_EARLY = 0.6; // s a reveal's cut may come before its planned moment to land on a phrase's first word
 const PHRASE_LATE = 0.8; // ... and after it
-const PHRASE_LEAD = 0.05; // s before that word's first sound (the cut in the pause before it)
+const PHRASE_LEAD = 0.12; // s before that word's first sound as planned (the recording starts up to 0.05 s sooner than the channel's latency allows: the cut in the pause before the word, else on its first sound)
 
 /** The players' first names as the writer says them ("Dr Nova Reyes" is Nova, unit8 is UNIT-8). */
 function firstName(channel, id) {
@@ -1021,7 +1021,9 @@ async function sayReveal(d, u, ri, b, nx) {
     const planned = at;
     if (near !== undefined) at = near;
     timer = setTimeout(() => {
-      d.quizTrace?.push({ k: plan.k, t: now(), at: planned, lo, hi, t0, i: ri, phrase: near !== undefined });
+      // (the window and the line's start as offsets from the cut, so a recording's report can place them)
+      const t = now();
+      d.quizTrace?.push({ k: plan.k, t, i: ri, phrase: near !== undefined, dAt: planned - t, dLo: lo - t, dHi: hi - t, dT0: t0 - t });
       cutTo(d, plan.spec, { wordSafe: true, onCut: () => (d.quiz.faced = true) });
     }, (at - now()) * 1000);
   };

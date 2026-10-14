@@ -286,10 +286,10 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
     for (const seed of all) {
       const { episode } = edition(seed);
       const log = await played(seed);
-      for (const c of log.trace.filter((x) => (x.k === 'tail' || x.k === 'verdict') && x.lo !== undefined)) {
+      for (const c of log.trace.filter((x) => (x.k === 'tail' || x.k === 'verdict') && x.dLo !== undefined)) {
         cuts++;
-        const starts = phraseStarts(episode.segments[c.i]).map((w) => c.t0 + w.t - 0.05);
-        const reach = starts.filter((t) => t >= c.lo - 1e-3 && t <= c.hi + 1e-3);
+        const starts = phraseStarts(episode.segments[c.i]).map((w) => c.t + c.dT0 + w.t - 0.12);
+        const reach = starts.filter((t) => t >= c.t + c.dLo - 1e-3 && t <= c.t + c.dHi + 1e-3);
         if (c.phrase) {
           onPhrase++;
           assert.ok(reach.some((t) => Math.abs(t - c.t) < 0.03), `${seed}: the cut at ${c.t.toFixed(2)} on no phrase start`);

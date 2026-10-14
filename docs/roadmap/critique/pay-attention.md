@@ -539,3 +539,116 @@ E0's boards (65.5 %) carry a tie-break's two boards; E1's are 62.3 %.
    `sayReveal`). That means up to 0.6 s before or 0.8 s after the planned moment, inside the cut's own window: never
    before the board has shown the reveal, never too late for the face it opens. The phrase starts come from the
    recording's word marks. Test: "a reveal's cut to a face lands on a phrase's first word whenever one is within reach".
+
+## Round 8 — after round 7's fix
+
+**Recordings.** `r8/e0.mp4` (programme 318.4 s) and `r8/e1.mp4` (320.1 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 79 of 79 heard, 0 browser sentences | 71 of 71, 0 |
+| PICTURE THIS pictures on screen | 4 of 4 | 3 of 3 |
+| Shots | 45 (21 studio); 8.5 a minute; busiest 12; median 4.86 s; longest studio 9.85 s | 47 (22); 8.8; 12; 4.91 s; 7.86 s |
+| Boards' share; longest run | 65.4 %; 26.9 s | 64.2 %; 26.4 s |
+| What the boards carry (share of the air) | the host reading the board's text 43.8 %; the clock 10.5 %; the players' lines 4.2 %; the host's other lines 1.6 %; nothing said 5.5 % | 45.3 %; 10.0 %; 2.6 %; 1.2 %; 5.2 % |
+| Buzzes on the buzzer's single | 1 of 3, on its first word (2 on boards under 3 s old) | 2 of 3 |
+| The cut to a guess or a last lock-in | 132 ms before the first word, all seven | all seven |
+| A reveal's cut to a face on a phrase's first word | aimed at one for 2 of 4 cuts; both landed a word later | 3 of 6; all a word later |
+| Silent studio shots (≥ 1.5 s) | 3; 2.39 s (Sam's single after his pick, before "Watch it sharpen", which needs its board from the first word) | 3; 1.93 s |
+| Loudness | −15.7 LUFS, LRA 4.7 LU, −4.8 dBTP; open −18.0 | −15.6, 4.6, −5.1; −18.1 |
+| Voice over the music (median; lowest) | 22.6 dB; 18.5 dB | 22.5 dB; 19.5 dB |
+| Music between voices | −36.6 dBFS (10–90 % −39.4 to −32.6) | −36.4 (−39.3 to −34.7) |
+| The ticker under the game | 4 items; none an edition story, none grave | 7; none |
+
+The prompts (+0.21 s), the drumroll, the captions (0…+33 ms) and the length bound held as in round 7.
+
+Fault:
+
+1. **The phrase cut came on the phrase word's own first sound, then moved one word on**: "Spot | on, Paco: three
+   points.", "From The Verge, on | TECH BYTES". The director timed the cut 0.05 s before the word's first sound,
+   counting the channel's voice latency (0.18 s). The recording starts 0.132 s after the line is asked for, so the cut
+   came on the word itself. The word-safe cut then found the voice loud and waited for the next word. Director. The
+   trace kept the cut's window in the director's clock, which the recorder's report could not place.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.7 | the ticker's hard politics under the game (allowed) |
+| Entertainment and repertoire | 9.7 | the recap bank |
+| Game legibility and tension | 9.7 | a pick's single 2.4 s silent before a board |
+| Format clarity and rhythm | 9.7 | 1 |
+| Picture | 9.6 | 1 |
+| Sound | 9.7 | — |
+| Data robustness | 9.6 | 1 (the fixtures' stub voice has no latency error) |
+
+**Round score: 9.6.**
+
+### Fixes
+
+1. **The phrase cut leads the word by 0.12 s** (`PHRASE_LEAD`), which allows for the recording starting up to 0.05 s
+   sooner than planned. The cut lands in the pause before the word, or on its first sound when there is no pause. The
+   trace keeps the window as offsets from the cut, so the report places it.
+
+## Round 9 — after round 8's fix
+
+**Recordings.** `r9/e0.mp4` (programme 315.3 s; Sam 19, Lola 8) and `r9/e1.mp4` (334.0 s; two LETTER BY LETTER
+headlines nobody named).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 79 of 79 heard, 0 browser sentences | 69 of 69, 0 |
+| Facts said or shown, against the plan and the archive | 35 checked (every question, option, buzz, reveal and credit), 0 wrong | 30, 0 |
+| PICTURE THIS pictures on screen | 4 of 4 | 3 of 3 |
+| Shots | 44 (19 studio); 8.4 a minute; busiest 12; median 4.72 s; longest studio 7.85 s | 46 (22); 8.3; 11; 4.85 s; 8.96 s |
+| Boards' share; longest run | **69.1 %**; 31.6 s | **65.1 %**; 31.9 s |
+| What the boards carry (share of the air) | the host reading the board's text 44.8 %; the clock 11.9 %; the players' lines 4.3 %; the host's other lines 1.3 %; nothing said 6.6 % | 43.2 %; 14.1 % (two clocks run out); 2.2 %; 1.0 %; 4.5 % |
+| A reveal's cut to a face on a phrase's first word | 2 of 4 ("From The Verge, \| on", "From Euronews Business, \| on"); the other two had none within reach (one by 0.01 s) | 3 of 5 ("\| Spot on, Paco", "\| Nearest guess", "\| From BBC Science"); two had none within reach |
+| Buzzes on the buzzer's single; guesses and last lock-ins | 2 of 3, and all seven, on their first words | 1 of 1, and all seven |
+| Cuts inside a word | 0 | 0 |
+| Silent studio shots (≥ 1.5 s) | 3; 2.23 s (the wide after a short recap, the clock ticking) | 3; 1.89 s |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | 0…+32 ms | −1…+33 ms |
+| Loudness | −15.7 LUFS, LRA 5.2 LU, −4.7 dBTP; open −18.0 | −15.6, 5.7, −4.8; −18.0 |
+| Voice over the music (median; lowest) | 22.5 dB; 19.3 dB | 23.4 dB; 20.0 dB |
+| Music between voices | −36.1 dBFS (10–90 % −38.6 to −33.0) | −36.2 (−38.1 to −35.3) |
+| The ticker under the game | 4 items; none an edition story, none grave | 6; none |
+
+No new fault was found in this round. The panel took the boards' share up again, now that six rounds of the same two
+editions are measured with the recorded voices:
+
+| Round | E0 (the fallback: four PICTURE THIS) | E1 |
+|---|---|---|
+| 4 | 67.2 % | 63.8 % |
+| 5 | 67.7 % | 65.7 % |
+| 6 | 68.2 % | 63.9 % |
+| 7 | 65.5 % (a tie-break) | 62.3 % |
+| 8 | 65.4 % | 64.2 % |
+| 9 | 69.1 % (a one-sided game: fewer reactions) | 65.1 % (two clocks run out) |
+
+**What the boards carry.** In every round:
+
+- the host reading the board's own text is 42–45 % of the air: the options, the headlines, the sentences, the pins and
+  the rules. This is the bible's reading rule (§4: the options stay up from their reading to the last lock-in) at the
+  recorded voices' pace;
+- the game's clock running under the picture's steps, the tiles and the pins is 10–14 %;
+- the players' lines on a board are 2–5 %;
+- a board with nothing said is 4–7 % (the pauses before the options and the pins, and a reveal's hold).
+
+The director takes every face the rules allow. Every question has one, the runs of boards stay under 36 s, and the
+boards are where the game is. The step-4 reviewer's 65 % was measured on the stub voice, which read faster than the
+recorded voices. The panel no longer counts the share as a fault. It stays as what keeps the picture from 10, and it is
+put to the owner at the end. If 65 % is to hold on air, the levers are the reading rule or the host's pace, not the
+director.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.8 | the ticker's hard politics under the game (allowed by the bible, no tragedy) |
+| Entertainment and repertoire | 9.7 | an afternoon edition and TODAY OR NOT TODAY not yet heard |
+| Game legibility and tension | 9.8 | a clock that runs out with nobody buzzing is 9.6 s of tiles and ticks |
+| Format clarity and rhythm | 9.8 | the boards' share |
+| Picture | 9.8 | the boards' share; a reveal's cut lands between words when no phrase start is within reach |
+| Sound | 9.8 | the wide under a clock's last ticks after a short recap |
+| Data robustness | 9.7 | no afternoon edition and no TODAY OR NOT TODAY on the real archive yet |
+
+**Round score: 9.7**, not above it. Every edition so far is an evening, and the bible's step 7 asks for an afternoon and
+an evening. The archive allowed no afternoon until 14 Oct's afternoon had aired.
