@@ -118,7 +118,8 @@ first-time viewer. Six categories, each 0–10:
   For each: the length, the share of boards, the studio shots, the longest run of boards, every shot's length, every
   silence on a studio shot, every cut inside a line, and how long every reveal stays on its board.
 - **Headless Chromium recordings** of real editions (`tools/record.mjs --item`, 4 fps at 2x, the voice muted):
-  - ep2 four times, ep6 twice, ep4 twice, each from the station's own server with the draft on air;
+  - ep2 four times, ep6 three times (once on step 5's rebuilt set), ep4 twice, each from the station's own server
+    with the draft on air;
   - read as contact sheets every 5 s; 1 s strips at the half-time scores, the final score and the link; the buzz,
     the guesses and the board's return frame by frame.
 - **The sound** was judged from the trace: every sting, tick, drumroll and bed moment, with its time. The recordings
@@ -288,7 +289,8 @@ Fixes:
   the countdown's last ticks under them.
 - **Every reveal stays on its board at least 2.03 s** with the credit said, 2.43 s for WHERE, and 3 s otherwise.
 
-**Seen in the recordings** (ep2 and ep6 on the final code, with ep2 and ep4 from round 4):
+**Seen in the recordings** (ep2 and ep6 on the final code, with ep2 and ep4 from round 4; ep6 again after merging
+step 5's rebuilt studio and open, with the same playout):
 
 - the open; the welcome on the wide, with the three seated and the desks at 0 to 0;
 - the host's single on the introductions; Penny's single only after the tag (the host's palm to the player he names
@@ -312,12 +314,12 @@ Fixes:
 
 New faults: none in the director's work. Two in other steps' files, reported and not changed here:
 
-1. **The compact strip sits on the wall monitor's top rail in the quiz's wide** (pixel artist). It runs y 28–40 and the
-   monitor's frame starts at y 27, so its edges fall a pixel or two inside the frame's, an accidental near-alignment
-   whose width changes with the names. Its position is `drawScoresStrip`'s (graphics, step 3). The wall is the set's,
-   which is still being enriched.
-2. **The host's head stands in front of the wall's PAY ATTENTION title** in his single ("PAY A[head]TION"). The
-   framing is `quizCamera`'s, and the set's own critique counts it.
+1. **The compact strip sits on the wall monitor's top rail in the quiz's wide** (pixel artist). It runs y 28–40 and
+   covers the rail; on the rebuilt set it covers the top row of the marquee lights. Its edges fall a pixel or two
+   inside the frame's, an accidental near-alignment whose width changes with the names. Its position is
+   `drawScoresStrip`'s (graphics, step 3), and the wall is the set's.
+2. **The host's head stands in front of the wall's PAY ATTENTION title** in his single, and on the rebuilt set in the
+   wide too. The framing is `quizCamera`'s, and the set's own critique counts it.
 
 | Category | Score | What keeps it from 10 |
 |---|---|---|
