@@ -602,8 +602,8 @@ export class Stage {
       const framing = this.cast?.H ? quizFraming('wide') : defaultFraming('wide', this.solo, false);
       const cam = typeof CAM.framing === 'function' ? CAM.framing(framing, { framing, cast: this.cast, focus: this.actors[0]?.slot || 'A', solo: this.solo, side: undefined, programId: this.programId, move: null }) : null;
       if (cam) {
-        WARM_WALL.solo = this.solo;
-        WARM_WALL.focus = this.solo ? 'solo' : 'A';
+        WARM_WALL.solo = this.solo || !!this.cast?.H; // (PAY ATTENTION's board round its host at the solo seat)
+        WARM_WALL.focus = WARM_WALL.solo ? 'solo' : 'A';
         const o = WARM_OPTS;
         o.wall = WARM_WALL;
         o.shotSince = -1;
@@ -643,8 +643,11 @@ export class Stage {
       const w = SETM.wallFromScene(scene, this.style || this.programId);
       Object.assign(wall, w);
     } else wallOf(scene, plan, wall);
-    wall.focus = this.solo ? 'solo' : scene.focus === 'B' ? 'B' : 'A';
-    wall.solo = this.solo;
+    // (PAY ATTENTION: the host sits at the solo seat in front of the board, the players beside it at their desks, so
+    // the board is laid out round the host's head as a solo programme's: its idle name never behind it)
+    const soloWall = this.solo || !!this.cast?.H;
+    wall.focus = soloWall ? 'solo' : scene.focus === 'B' ? 'B' : 'A';
+    wall.solo = soloWall;
     this.inset = scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
     // camera framing for this shot
     const spec = this.spec;

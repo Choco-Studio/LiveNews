@@ -389,6 +389,33 @@ describe('PAY ATTENTION graphics', () => {
     assert.equal(G.countdownCells({ at: 0, dur: 4 * HN }, 0).n, 4);
   });
 
+  test("HOW MANY?: both desks' guess boxes are up and empty before anyone guesses, nothing moves when the numbers come, the clock centred under both", () => {
+    const o = { question: HM, players: [LOLA, SAM], countdown: { at: 6, dur: 4 * HN }, guesses: [{ seat: 'A', said: '$1.2 billion', at: 7, points: 2 }, { seat: 'B', said: '$900 million', at: 8.5, points: 0 }], revealAt: 11, now: NOW };
+    const B = G.GUESS_BOX;
+    const rims = (ctx) => ctx.fills.filter((f) => f.c === P.slate && f.y === B.y && f.h === B.h);
+    const inBox = (ctx) => ctx.images.filter((im) => isText(im) && im.y >= B.y - 4 && im.y < B.y + B.h).map((im) => `${im.x},${im.y},${im.w}`);
+    const early = board(G.drawHowManyBoard, 2.5, o); // the sentence read, no guess yet
+    const later = board(G.drawHowManyBoard, 9.5, o); // both guesses in, before the reveal
+    const r0 = rims(early);
+    assert.equal(r0.length, 2, 'two boxes before the first guess');
+    assert.deepEqual(rims(later).map((f) => [f.x, f.w]), r0.map((f) => [f.x, f.w]), 'the same two boxes once the guesses are in');
+    assert.equal(r0[0].w, r0[1].w, 'the desks get the same room');
+    // each empty box: the shape and name, GUESS, three slate dots where the number will go
+    const dots = early.fills.filter((f) => f.c === P.slate && f.w === 1 && f.h === 1 && f.y > B.y && f.y < B.y + B.h);
+    assert.equal(dots.length, 6, 'three dots in each empty box');
+    const before = inBox(early);
+    assert.ok(before.length >= 4, 'both names and both GUESS labels drawn from the start');
+    const after = new Set(inBox(later));
+    for (const t of before) assert.ok(after.has(t), `the text at ${t} stays put when the guesses arrive`);
+    assert.ok(after.size > before.length, 'the numbers are added beside them');
+    // the countdown is both desks': its cells centred under the two boxes (within a pixel), on neither box alone
+    const cd = board(G.drawHowManyBoard, 6.6, o).fills.filter((f) => f.h === 3 && (f.c === P.white || f.c === P.slate) && f.y > B.y + B.h);
+    assert.ok(cd.length >= 4, 'the countdown cells drawn');
+    const mid = (r0[0].x + r0[1].x + r0[1].w) / 2;
+    const cx = (Math.min(...cd.map((f) => f.x)) + Math.max(...cd.map((f) => f.x + f.w))) / 2;
+    assert.ok(Math.abs(cx - mid) <= 1, `the countdown's middle ${cx} under the boxes' middle ${mid}`);
+  });
+
   test('palette colours only, on every board and in every text', () => {
     const palette = new Set(Object.values(P));
     FILLS.length = 0;

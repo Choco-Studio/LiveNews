@@ -114,6 +114,26 @@ export function sameStory(a, b) {
   return shared >= 2 && shared >= 0.5 * Math.min(new Set(wa).size, wb.size);
 }
 
+/**
+ * PAY ATTENTION (quizdirector.js): is this LATEST item a story the edition on air uses (asked, offered, its answer)?
+ * `avoid` = { ids: Set, titles: [] } (scene.quizAvoid): by story id where the item has one, else by its words (the aired
+ * headline is often reworded from the feed title: the same story, or three content words in common).
+ */
+export function quizAvoided(item, avoid) {
+  if (!avoid || !item) return false;
+  if (item.id != null && avoid.ids?.has?.(item.id)) return true;
+  const text = String(item.text || '');
+  if (!text) return false;
+  const mine = new Set(contentWords(text));
+  for (const t of avoid.titles || []) {
+    if (sameStory(text, t)) return true;
+    let shared = 0;
+    for (const w of new Set(contentWords(t))) if (mine.has(w)) shared++;
+    if (shared >= 3) return true;
+  }
+  return false;
+}
+
 /** Country (last part) of a place name: "Venice, Italy" -> "ITALY". */
 const countryOf = (place) => {
   const parts = String(place || '').split(',');
@@ -406,7 +426,10 @@ export class Graphics {
     const ref = tmode === 'next' ? null : this.onAirHeadline(scene);
     const figures = tmode === 'figures' ? this.airedFigures(scene) : null;
     const k = this.tickerIn;
-    if (items === k.items && b === k.b && next === k.next && tmode === k.mode && ref === k.ref && figures === k.figures) return;
+    // (PAY ATTENTION on air: never a story its edition uses, which could show the viewer an answer)
+    const avoid = scene.quizAvoid || null;
+    if (items === k.items && b === k.b && next === k.next && tmode === k.mode && ref === k.ref && figures === k.figures && avoid === k.avoid) return;
+    k.avoid = avoid;
     k.items = items;
     k.b = b;
     k.next = next;
@@ -414,17 +437,22 @@ export class Graphics {
     k.ref = ref;
     k.figures = figures;
     const list = [];
+    const dropped = new Set();
     if (tmode === 'next') {
       // NEWS IN 60: one static plate for the whole episode, nothing flips (the strap carries breaking news)
       const e = next?.title ? makeNextEntry(next.title) : null;
       if (e) list.push(e);
     } else {
-      if (b) list.push(...makeEntries({ label: 'BREAKING', plate: P.red, source: b.source, text: b.text, breaking: true }));
+      if (b && !quizAvoided(b, avoid)) list.push(...makeEntries({ label: 'BREAKING', plate: P.red, source: b.source, text: b.text, breaking: true }));
       const figs = figures && figures.length >= 2 ? figures.map((n) => makeFigureEntry(n, n)).filter(Boolean) : null;
       if (figs && figs.length >= 2) list.push(...figs);
       else if (items) {
         for (const it of items) {
           if (!it || !it.text || (ref && sameStory(it.text, ref))) continue; // never the story on air
+          if (quizAvoided(it, avoid)) {
+            for (const e of makeEntries({ source: it.source, text: it.text, short: it.short })) dropped.add(e.base);
+            continue;
+          }
           list.push(...makeEntries({ source: it.source, text: it.text, short: it.short }));
         }
       }
@@ -435,6 +463,8 @@ export class Graphics {
     }
     this.tickerList = list;
     this.tickerKey++;
+    // an item the quiz now avoids leaves the band at once, not when its hold runs out
+    if (this.ticker.cur && dropped.has(this.ticker.cur.base)) this.ticker.cur = null;
   }
 
   /** The band shows while the ticker has something to say; it slides in and out. */

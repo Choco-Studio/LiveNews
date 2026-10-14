@@ -242,7 +242,8 @@ describe('server/index.js: HTTP API of a running channel', () => {
       });
     assert.deepEqual(events.map((e) => e.name), ['ticker', 'status', 'schedule']);
     assert.ok(events[0].data.length > 0 && events[0].data.length <= 18);
-    assert.deepEqual(Object.keys(events[0].data[0]).sort(), ['source', 'text']);
+    // (each item names its story: PAY ATTENTION keeps the stories its edition uses off the band while it airs)
+    assert.deepEqual(Object.keys(events[0].data[0]).sort(), ['id', 'source', 'text']);
     assert.equal(events[1].data.queue.length, 2);
     assert.equal(events[2].data.upcoming.length, 4);
   });

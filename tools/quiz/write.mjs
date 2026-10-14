@@ -11,7 +11,8 @@ import path from 'node:path';
 import { Archive } from '../../server/archive.js';
 import { NewsDesk } from '../../server/news.js';
 import { quizEvents, realEntry } from '../../server/quiz/desk.js';
-import { planEdition, contestantsFrom, historyOf } from '../../server/quiz/planner.js';
+import { planEdition, contestantsFrom, historyOf, AIR_FROM, AIR_TO } from '../../server/quiz/planner.js';
+import { londonDayStart } from '../../server/quiz/rounds.js';
 import { writeEpisode } from '../../server/quiz/writer.js';
 import { QuizTable } from '../../server/quiz/table.js';
 
@@ -33,6 +34,19 @@ archive.entries = archive.entries.filter((e) => e.at <= now);
 const entries = archive.entries.filter(realEntry);
 const { events, avoid } = quizEvents(archive, { now, days: 7, same });
 const table = new QuizTable({ now: () => now });
+// the next edition, as the sign-off says it: five hours on, inside the schedule's window (London 14:00–23:00); a time
+// past the window's end or before its start is the next window's first hour ("two o'clock tomorrow afternoon"), never
+// the small hours
+const HOUR = 3600_000;
+const londonHourOf = (t) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date(t))) % 24;
+function nextAirAt(t) {
+  const h = londonHourOf(t);
+  if (h >= AIR_FROM && h < AIR_TO) return t;
+  // (before the window: today's start; after it: tomorrow's, found from a moment in tomorrow's small hours)
+  const day = h >= AIR_TO ? londonDayStart(t + (24 - h + 1) * HOUR) : londonDayStart(t);
+  return day + AIR_FROM * HOUR;
+}
+const nextAt = nextAirAt(now + 5 * HOUR);
 const names = { H: 'HOST' };
 const lines = [];
 const history = [];
@@ -48,7 +62,7 @@ for (let i = 0; i < Number(opts.editions) * 4 && written < Number(opts.editions)
   // the station's six hours of recent lines: the edition before this one
   // (each edition its own moment, as on air: the banks are picked by the edition's time)
   plan.at = now - (20 - written) * 4.5 * 3600_000;
-  const { episode, game } = writeEpisode(plan, { channel, now, table, nextAt: now + 5 * 3600_000, recentLines: lastLines });
+  const { episode, game } = writeEpisode(plan, { channel, now, table, nextAt, recentLines: lastLines });
   lastLines = episode.segments.map((x) => x.text).filter(Boolean);
   written++;
   // (with --reuse the editions before sit four days back: the pairing rules let pairs meet again, the rotation still turns)

@@ -360,11 +360,15 @@ Measured on the development archive, with a model of the planner that counts sto
      - a lamp beside a wrong answer goes out at the reveal, so gold only ever means right.
 4. **Director and pace**: the shots, the countdowns timed to the reading rule, the lock-in and buzz beats, the half-note
    ticks.
-   *Built; the critique passed at 9.75 in round 5 (`docs/roadmap/critique/pay-attention-director.md`):*
+   *Built; the critique passed at 9.75 in round 5, was reopened by the reviewer at 9.0 (the ticker could show the
+   answer; boards on 68–79 % of the air in runs to 85 s; the host's head on the board's name; the strip on the
+   marquee; the empty HOW MANY? board) and passed at 9.75 in round 6
+   (`docs/roadmap/critique/pay-attention-director.md`):*
    - *The profile `'pay-attention'` (`public/js/pace.js`):*
      - *290–360 s;*
      - *the quiz's own pauses: a reply 0.35 s, a turn 0.45 s, the next question 0.75 s, a card 0.55 s, a round 0.95 s;*
-     - *the network's 4 s minimum shot; a studio shot at most 12 s; a board as long as its question; the median 5–9 s.*
+     - *the network's 4 s minimum shot; a studio shot at most 12 s; a board as long as its question; the median
+       4–6.5 s (measured 4.1–5.5 s: a face and a board back on every question).*
    - *The playout: `public/js/quizplay.js` (pure: the units, the countdowns in half notes, the answers' schedule, the shot
      plan) and `public/js/quizdirector.js` (`prepareQuiz`, `playQuiz`):*
      - *a board's clock starts at its own cut, and its times are the segments' real starts;*
@@ -377,20 +381,26 @@ Measured on the development archive, with a model of the planner that counts sto
    - *The shots:*
      - *every question part and card on its board, full frame on the quiz's ground (`scenes/quiz-shot.js`);*
      - *the players' answers in their own words on their faces: LETTER BY LETTER's buzz on the buzzer's single, HOW
-       MANY?'s guesses on the wide, the board back 0.4 s before the reveal on its own clock;*
-     - *the lock-ins on the board, by the reading rule (§4: the options on screen to the last lock-in);*
+       MANY?'s guesses and the last lock-in of PICTURE THIS and WHERE on the wide, TODAY's lock-ins and verdicts on
+       the wide; the board back 0.4 s before the reveal on its own clock;*
+     - *every question has a face moment (its answers, its frame on the face on air with the board cut on the speech
+       mark, the verdict or the reaction); boards hold 58–64 % of the real editions' air, in runs of at most 33 s;*
+     - *the first lock-ins on the board, by the reading rule (§4: the options on screen to the last lock-in);*
      - *the welcome, the scores, the tally and the sign-off on the wide;*
      - *a player's line on their single or the wide, the host's on his single or the wide;*
      - *a short reaction on the reveal's board, or, before LETTER BY LETTER, on the wide with the next frame;*
      - *player B's single never under the tag;*
-     - *the half-time strip with the scores line;*
+     - *the half-time strip with the scores line, on the stage under the podium;*
+     - *the board laid out round the host at the solo seat: its name never behind his head;*
      - *no two-shot exists in `quizCamera`.*
    - *The station:*
      - *`QUIZ_VIEW=1` lifts the desk's three-day minimum, only for a draft on air by `DRAFTS_ON_AIR`;*
      - *no edition is made whose PICTURE THIS picture the station cannot fetch, and the director preloads each through
-       `/api/img`.*
-   - *Open for step 7: every timing was measured on a stub voice. Boards are about three quarters of the air, and a run
-     of boards can last up to 85 s (TODAY's six headlines).*
+       `/api/img`;*
+     - *while the edition airs the ticker carries no story it uses (asked, options, pins, DOUBLE OR NOTHING's offers,
+       the tie-break): matched by id, by `sameStory` or by its words, fewer items rather than an answer.*
+   - *Open for step 7: every timing was measured on a stub voice. A face can stand silent up to 2.7 s with the bed
+     under it.*
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
    *Built. The sound passed at 9.8 in round 3; the set and the open, reopened by the reviewer (round 4: bare beside
    the network's sets, the plainest open), were rebuilt and passed at 9.8 in round 6

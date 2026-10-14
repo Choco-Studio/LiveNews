@@ -1005,13 +1005,17 @@ export function drawWhereBoard(ctx, dt, o = {}) {
 
 // ---------------------------------------------------------------- HOW MANY?
 
-const GUESS_Y = 105; // the guesses' row, under the longest sentence (four lines end at y 95)
+// the two desks' guess boxes, side by side under the longest sentence (four lines end at y 95), up from the board's first
+// moments, empty (three slate dots) until each player says their number: nothing jumps in when the guesses come, and
+// the board's lower half is the game's (the sentence above it centred in its four lines' room)
+export const GUESS_BOX = Object.freeze({ y: 99, h: 17, gap: 6 });
+const GUESS_Y = GUESS_BOX.y + 5; // the guesses' row of text
 
 /**
  * HOW MANY?: o = { question: { masked, sentence, figure: { value, label, qualifier, exact }, aired }, kicker, players,
  *   countdown { at, dur }, guesses: [{ seat, said, at, points }], revealAt, credit }.
- * Each guess is labelled GUESS beside the player's shape and name; at the reveal the figure is lit in the sentence as it
- * aired and the guess that scored is lit with its points.
+ * Each desk has its box from the start: the player's shape and name, GUESS, and their number as they say it; at the
+ * reveal the figure is lit in the sentence as it aired and the guess that scored is lit with its points.
  */
 export function drawHowManyBoard(ctx, dt, o = {}) {
   const q = o.question;
@@ -1024,52 +1028,75 @@ export function drawHowManyBoard(ctx, dt, o = {}) {
     rise(ctx, o.kicker || kickerOf({ type: 'howmany' }), CX, KICKER_Y, seg(dt, 0.2, 0.35), S.microFog);
     rise(ctx, o.frame || frameOf('howmany'), CX, FRAME_Y, seg(dt, 0.25, 0.35), S.white2);
     const L = revealed ? layoutText(q.masked, CW, SENT.lines, q.sentence) : layoutText(q.masked, CW, SENT.lines);
-    drawLines(ctx, L, CX, SENT.y, P.white, dt, revealed ? revealAt : 0.35);
-    // the guesses, side by side, each at its moment: shape and name, GUESS, the number as the player said it
-    const gy = GUESS_Y;
-    (o.guesses || []).slice(0, 2).forEach((g, i) => {
-      const p = ease(dt, g.at ?? 0, 0.25);
-      if (p <= 0) return;
-      const x = CX + i * (CW >> 1);
+    // (a shorter sentence sits in the middle of the four lines' room, never above its top)
+    const sy = SENT.y + Math.max(0, Math.round((SENT.lines * 10 - 3 - L.h) / 2));
+    drawLines(ctx, L, CX, sy, P.white, dt, revealed ? revealAt : 0.35);
+    const half = (CW - GUESS_BOX.gap) >> 1;
+    ['A', 'B'].forEach((seat, i) => {
+      const bp = ease(dt, 0.45 + 0.1 * i, 0.3);
+      if (bp <= 0) return;
+      const bx = CX + i * (half + GUESS_BOX.gap);
+      const by = GUESS_BOX.y;
+      const g = (o.guesses || []).find((x) => x.seat === seat) || null;
       ctx.save();
       try {
-        clipRect(ctx, x - 1, gy - 3, Math.round((CW >> 1) * p), 14);
-        const name = nameOf(o.players, g.seat);
-        const mw = drawMark(ctx, g.seat, name, x, gy, 'id');
+        clipRect(ctx, bx, by, Math.round(half * bp), GUESS_BOX.h);
+        // the box: a slate rim on black
+        ctx.fillStyle = P.slate;
+        ctx.fillRect(bx, by, half, GUESS_BOX.h);
+        ctx.fillStyle = P.black;
+        ctx.fillRect(bx + 1, by + 1, half - 2, GUESS_BOX.h - 2);
+        const gy = GUESS_Y;
+        const x = bx + 5;
+        const mw = drawMark(ctx, seat, nameOf(o.players, seat), x, gy, 'id');
         // the GUESS label: a slate plate, its word in the micro face
         const lx = x + mw + 5;
         const lw = measureText('GUESS', 1, 'micro') + 4;
         ctx.fillStyle = P.slate;
         ctx.fillRect(lx, gy - 1, lw, 9);
         drawText(ctx, 'GUESS', lx + 2, gy + 1, S.microSilver);
-        const said = up(g.said);
         const vx = lx + lw + 4;
-        const scored = revealed && (g.points || 0) > 0;
-        if (scored) {
-          const gp = ease(dt, revealAt + 0.45, 0.2);
-          const pw = textW(said, 1) + 4;
-          const gw = Math.round(pw * gp);
-          ctx.fillStyle = P.yellow;
-          if (gw >= 1) ctx.fillRect(vx - 2, gy - 2, gw, 11);
-          // (the number black where the plate has reached it, white beyond: never white type on gold)
-          for (const [x0, w0, st] of [[vx - 2, gw, S.black], [vx - 2 + gw, pw - gw + 2, S.white]]) {
-            if (w0 < 1) continue;
-            ctx.save();
-            try {
-              clipRect(ctx, x0, gy - 3, w0, 12);
-              drawText(ctx, said, vx, gy, st);
-            } finally {
-              ctx.restore();
+        const p = g ? ease(dt, g.at ?? 0, 0.25) : 0;
+        if (p <= 0) {
+          // (empty until the player says it: three slate dots)
+          ctx.fillStyle = P.slate;
+          for (let k = 0; k < 3; k++) ctx.fillRect(vx + 3 * k, gy + 6, 1, 1);
+          return;
+        }
+        const said = up(g.said);
+        ctx.save();
+        try {
+          clipRect(ctx, vx - 2, gy - 3, Math.round((bx + half - vx) * p), 14);
+          const scored = revealed && (g.points || 0) > 0;
+          if (scored) {
+            const gp = ease(dt, revealAt + 0.45, 0.2);
+            const pw = textW(said, 1) + 4;
+            const gw = Math.round(pw * gp);
+            ctx.fillStyle = P.yellow;
+            if (gw >= 1) ctx.fillRect(vx - 2, gy - 2, gw, 11);
+            // (the number black where the plate has reached it, white beyond: never white type on gold)
+            for (const [x0, w0, st] of [[vx - 2, gw, S.black], [vx - 2 + gw, pw - gw + 2, S.white]]) {
+              if (w0 < 1) continue;
+              ctx.save();
+              try {
+                clipRect(ctx, x0, gy - 3, w0, 12);
+                drawText(ctx, said, vx, gy, st);
+              } finally {
+                ctx.restore();
+              }
             }
-          }
-          if (gp >= 1) drawText(ctx, `+${g.points}`, vx + textW(said, 1) + 6, gy, S.white);
-        } else drawText(ctx, said, vx, gy, revealed ? S.silver : S.white);
+            if (gp >= 1) drawText(ctx, `+${g.points}`, vx + textW(said, 1) + 6, gy, S.white);
+          } else drawText(ctx, said, vx, gy, revealed ? S.silver : S.white);
+        } finally {
+          ctx.restore();
+        }
       } finally {
         ctx.restore();
       }
     });
     const footY = SAFE.bottom - 9;
-    if (!revealed) drawCountdown(ctx, dt, CX, footY + 1, 128, o.countdown || null);
+    // (the clock is both desks': centred under the two boxes, on neither; the credit takes the foot at the reveal)
+    if (!revealed) drawCountdown(ctx, dt, CX + ((CW - 128) >> 1), footY + 1, 128, o.countdown || null);
     else drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), CW, 1, 'REPORTED'), CX, footY, dt, revealAt + 0.3);
   } finally {
     ctx.restore();
@@ -1214,20 +1241,22 @@ export function drawScoresStrip(ctx, dt, o = {}) {
   ctx.save();
   try {
     if (o.compact) {
-      // ● LOLA 12 │ ■ SAM 8, on a black strip at y 28..40
+      // ● LOLA 12 │ ■ SAM 8, on a black strip at y 28..40 (or at o.y: the quiz's wide puts it on the stage under the
+      // host's podium, clear of the board's marquee and every head: scenes/quiz-shot.js)
       const parts = players.map((pl) => ({ pl, s: String(sc[pl.seat] ?? 0) }));
       const w = parts.reduce((t, x) => t + markWidth(x.pl.name) + 6 + textW(x.s, 1), 0) + 21 + 12;
       const x0 = Math.round(192 - w / 2);
-      if (!panel(ctx, dt, x0, PY, w, 13)) return;
+      const y0 = Number.isFinite(o.y) ? Math.round(o.y) : PY;
+      if (!panel(ctx, dt, x0, y0, w, 13)) return;
       let x = x0 + 6;
       parts.forEach((x2, i) => {
         if (i) {
           ctx.fillStyle = P.slate;
-          ctx.fillRect(x + 7, PY + 3, 1, 7);
+          ctx.fillRect(x + 7, y0 + 3, 1, 7);
           x += 15;
         }
-        x += drawMark(ctx, x2.pl.seat, x2.pl.name, x, PY + 3, 'id') + 6;
-        drawText(ctx, x2.s, x, PY + 3, o.winner === x2.pl.seat ? styleOf(P.yellow) : S.white);
+        x += drawMark(ctx, x2.pl.seat, x2.pl.name, x, y0 + 3, 'id') + 6;
+        drawText(ctx, x2.s, x, y0 + 3, o.winner === x2.pl.seat ? styleOf(P.yellow) : S.white);
         x += textW(x2.s, 1);
       });
       return;

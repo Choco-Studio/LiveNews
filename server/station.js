@@ -274,7 +274,8 @@ export class Station {
       .filter((s) => !notNews(s))
       .sort((a, b) => b.published - a.published)
       .slice(0, 18)
-      .map((s) => ({ source: s.source, text: s.title }));
+      // (the story's id: PAY ATTENTION's director keeps every story its edition uses off the ticker while it airs)
+      .map((s) => ({ id: s.id, source: s.source, text: s.title }));
   }
 
   async refreshNews() {
