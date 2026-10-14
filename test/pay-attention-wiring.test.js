@@ -363,7 +363,8 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         assert.ok(log.trace.some((x) => (x.k === 'link' || x.k === 'prelink') && x.i === b.i), `${seed}: the frame ${b.i} on the face after its beat`);
         const line = said.get(b.i);
         const face = shotAt(log, line.on + 0.01);
-        assert.ok(face.shot === 'wide' || face.shot === 'close', `${seed}: the frame ${b.i} said on ${face.shot}`);
+        // (a face, or a round's card still short of its minimum)
+        assert.ok(face.shot === 'wide' || face.shot === 'close' || face.card?.board === 'round', `${seed}: the frame ${b.i} said on ${face.shot}`);
         assert.ok(b.beat > 0 && b.beat < min, `${seed}: a beat of ${b.beat.toFixed(2)} s`);
         const board = log.shots.find((x) => x.t > line.on && x.shot === 'quiz');
         assert.ok(board.t - face.t >= min - 0.01, `${seed}: the face held ${(board.t - face.t).toFixed(2)} s`);
@@ -482,7 +483,9 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
           // silence), before the clock
           assert.equal(u.type, 'letters');
           const face = shotAt(log, first.on + 0.01);
-          assert.ok(face.shot === 'wide' || face.shot === 'close', `${seed}: the link on a face (${face.shot})`);
+          // (or on a round's card still short of its minimum: no face, the question's owed one comes later)
+          const onCard = log.trace.find((x) => x.k === 'link' && x.i === u.from)?.card;
+          assert.ok(face.shot === 'wide' || face.shot === 'close' || (onCard && face.card?.board === 'round'), `${seed}: the link on a face (${face.shot})`);
           const board = log.shots.find((x) => x.t > face.t && x.shot === 'quiz');
           assert.ok(board && board.t >= first.off - 0.01 && board.t - first.off < 0.7, `${seed}: the tiles as the link ends (${(board.t - first.off).toFixed(2)} s after)`);
           const cd = log.trace.find((x) => x.k === 'countdown' && x.t >= board.t - 0.01);

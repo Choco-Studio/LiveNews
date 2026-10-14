@@ -25,6 +25,26 @@ function hash(s) {
   return h >>> 0;
 }
 
+// an afternoon edition (before 17:00 London) says the afternoon's words: the banks were written for the evening, and on
+// air, 14 Oct, 15:20, the host said "Tonight it is Ada Volt…", UNIT-8 "Good evening" and the result "It's Ada's night".
+// Applied to a bank's line before its words are filled in, never to an aired headline
+const AFTERNOON = [
+  [/\bGood evening\b/g, 'Good afternoon'],
+  [/\bgood evening\b/g, 'good afternoon'],
+  [/\bEvening\./g, 'Afternoon.'],
+  [/\btonight's\b/g, "today's"],
+  [/\bTonight\b/g, 'Today'],
+  [/\btonight\b/g, 'today'],
+  [/\b([Gg])ood night's\b/g, "$1ood afternoon's"],
+  [/'s night\b/g, "'s afternoon"],
+  [/\bgood night\b/g, 'goodbye'],
+  [/\bon the night\b/g, 'on the day'],
+  [/\bmy night\b/g, 'my day'],
+  [/\bBest night\b/g, 'Best afternoon'],
+  [/\bevening\b/g, 'afternoon'],
+];
+export const afternoonWords = (line) => AFTERNOON.reduce((t, [re, w]) => t.replace(re, w), String(line));
+
 /** A London clock for `t`: { hour, minute, day } (day: 0 Sunday) and its date key. */
 function london(t) {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(t));
@@ -112,17 +132,19 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   const used = new Set();
   // a line from a bank: by hash of the edition and the moment, never one aired in the station's recent hours, never
   // twice in an edition (`unique`: rather nothing than a line said again, for the players' reactions)
+  const afternoon = london(now).hour < 17;
+  const timed = (line) => (afternoon ? afternoonWords(line) : line);
   const pick = (list, key, vars = {}, { unique = false } = {}) => {
     const n = list.length;
     const start = hash(`${plan.at}:${plan.pair.join('+')}:${key}`) % n;
     for (let i = 0; i < n; i++) {
       const line = list[(start + i) % n];
-      const out = fill(line, vars);
+      const out = fill(timed(line), vars);
       if (recent.has(norm(out)) || used.has(line)) continue;
       used.add(line);
       return out;
     }
-    return unique ? null : fill(list[start], vars);
+    return unique ? null : fill(timed(list[start]), vars);
   };
   const segs = [];
   const say = (anchor, part, text, extra = {}) => segs.push({ type: 'quiz', part, anchor, emotion: extra.emotion || 'neutral', text, ...extra });
@@ -280,7 +302,7 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     react(winner, 'win', 'end');
     react(loser, 'lose', 'end');
   } else {
-    host('result', `Nobody named it, so tonight's game is drawn, ${scores[a]} all.`, { quiz: { scores, winner: null } });
+    host('result', timed(`Nobody named it, so tonight's game is drawn, ${scores[a]} all.`), { quiz: { scores, winner: null } });
   }
   table?.record({ at: plan.at, pair: plan.pair, scores, winner });
   const standings = table?.standings(now) || [];

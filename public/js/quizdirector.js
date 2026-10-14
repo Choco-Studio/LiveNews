@@ -421,6 +421,16 @@ async function playCard(d, u, k) {
     }
   }
   if (pick !== null && tail === null) segs[pick].quizShot = { shot: 'quiz', framing: null, focus: null, board: card.board }; // (kept on the card)
+  // the final score lands a beat before a short result line when the winner's reply would otherwise wait past CARD_WAIT
+  // for the card's minimum and stay on the card (the winner is the shot: playLine)
+  if (u.board === 'final' && since !== null && segs[u.to + 1]?.part === 'react') {
+    const wait = since + paceFor(d.scene.program?.id).shots.min - (now() + speechOf(seg) + pause(d, u.to));
+    const beat = Math.min(1.2, wait - (CARD_WAIT - 0.1));
+    if (beat > 0) {
+      d.quizTrace?.push({ k: 'scorebeat', t: now(), beat });
+      await sleep(beat * 1000);
+    }
+  }
   await say(d, u.from);
   if (u.to > u.from) {
     await sleep(pause(d, u.from) * 1000);
@@ -512,7 +522,9 @@ function onBoard(d, spec, card) {
     b.since ??= d.scene.shotSince;
     card.epoch = b.since;
   };
-  b.cut = () => cutOnWord(d, spec, { card, onCut: first }, BOARD_WAIT);
+  // (the words that read off the board wait for it as long as the shot on air holds its minimum: never a headline begun
+  // over the card before it, as on air, 14 Oct, "'Jellyfish' effect lights | up blank sky" over DOUBLE OR NOTHING's card)
+  b.cut = () => cutOnWord(d, spec, { card, onCut: first }, Math.max(BOARD_WAIT, paceFor(d.scene.program?.id).shots.min + 0.05));
   // the countdown starts only with the board on air (a cut the cooldown held back comes first)
   b.ready = async () => {
     for (let n = 0; b.since === null && n < 400; n++) await sleep(20);
@@ -592,12 +604,19 @@ async function playQuestion(d, u, k) {
   const minShot = paceFor(d.scene.program?.id).shots.min;
   let age = typeof d.onAir === 'function' ? d.onAir() : now() - (d.scene.shotSince || 0);
   const studio = q.onAir && (q.onAir.shot === 'wide' || q.onAir.shot === 'close');
+  // (a round's card, or DOUBLE OR NOTHING's, a second or more short of its minimum, one that came in inside its words,
+  // carries the frame as a face would, its preamble or its desk said over the card: on air, 12-14 Oct, a question with no
+  // face took the wide after its reveal, the next card then came in inside its words and stood mute 2.2 s before the next
+  // board. It is no face for the question that follows. A card that held its whole line, a short one, gives way to the
+  // board as before: the board's own age lets a quick buzz go to the buzzer's single)
+  const youngCard = q.onAir?.shot === 'quiz' && (q.onAir?.card?.board === 'round' || q.onAir?.card?.board === 'double') && age < minShot - 1.0;
+  const carrier = studio || youngCard;
   // the face on air still too young for the board: the frame waits the beat that lets the face carry it (LETTER BY
   // LETTER's or PICTURE THIS's whole frame, WHERE's or HOW MANY?'s preamble to its mark), rather than the face standing
   // silent to its minimum and the board then cut for the frame (on air, 12 Oct: a verdict's wide 2.1 s silent before
   // WHERE's "Here's one for the map: …" on its board). Never a longer silence than that: the beat is shorter by the
   // frame's words on the face, and no more cuts.
-  if (studio && segs[u.from]?.anchor === 'H' && age < minShot) {
+  if (carrier && segs[u.from]?.anchor === 'H' && age < minShot) {
     const at0 = boardTextStart(u, segs[u.from]);
     const whole = u.type === 'letters' || (u.type === 'picture' && at0 > 0);
     // (the face holds its minimum to the frame's end, or to the mark with playQuestion's 0.4 s to spare: the silence is
@@ -610,10 +629,10 @@ async function playQuestion(d, u, k) {
       age += beat;
     }
   }
-  const link = u.type === 'letters' && segs[u.from]?.anchor === 'H' && (!!q.onAir?.link || (studio && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
+  const link = u.type === 'letters' && segs[u.from]?.anchor === 'H' && (!!q.onAir?.link || (carrier && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
   if (link) {
-    d.quizTrace?.push({ k: 'link', t: now(), i: u.from });
-    segs[u.from].quizShot = { shot: q.onAir.shot, framing: q.onAir.framing ?? null, focus: q.onAir.focus ?? 'H', board: null };
+    d.quizTrace?.push({ k: 'link', t: now(), i: u.from, card: youngCard || undefined });
+    segs[u.from].quizShot = { shot: q.onAir.shot, framing: q.onAir.framing ?? null, focus: q.onAir.focus ?? 'H', board: youngCard ? 'round' : null };
   }
   // WHERE's and HOW MANY?'s preamble on the studio shot on air when it has held its minimum by then, the board cut as
   // the host starts reading the headline or the sentence (a speech mark): the board is there for every word read off it
@@ -622,12 +641,12 @@ async function playQuestion(d, u, k) {
   // (PICTURE THIS's frame reads nothing off its board: when the face is too young for the board on its mark, the frame
   // still starts on it and the picture lands between two words once the face has held, or as the frame ends, rather
   // than leave the face standing silent; its options are read on the board all the same)
-  const prelink = pre > 0 && studio && segs[u.from]?.anchor === 'H' && (age + preAt >= minShot + 0.4 || (u.type === 'picture' && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
+  const prelink = pre > 0 && carrier && segs[u.from]?.anchor === 'H' && (age + preAt >= minShot + 0.4 || (u.type === 'picture' && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
   // (PICTURE THIS's mark moves to the first word the face will have held to: the picture lands on a word's first sound,
   // never inside one after the cooldown, 0.3-0.8 s past "picture")
   const mark = prelink && u.type === 'picture' && age + preAt < minShot + 0.1 ? wordFrom(segs[u.from], pre, minShot - age + 0.25) : pre;
-  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark });
-  q.faced = link || prelink; // (its frame on a face: else owed, until an answer, the verdict or a reaction is on one)
+  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark, card: youngCard || undefined });
+  q.faced = (link || prelink) && !youngCard; // (its frame on a face: else owed, until an answer, the verdict or a reaction is on one)
   if (!link && !prelink) await b.cut();
   const latency = d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
   const part = (name) => (u.parts[name] || [])[0];

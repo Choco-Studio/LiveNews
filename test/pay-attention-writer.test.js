@@ -271,6 +271,27 @@ describe('heard on air (step 7, the editions of 12–13 Oct with the real voices
     }
     assert.ok(silent >= 1, `${silent} LETTER BY LETTER questions nobody buzzed`);
   });
+  test('an afternoon edition says the afternoon\'s words: never "tonight", "good evening" or "night" outside an aired headline', async () => {
+    // (on air, 14 Oct, 15:20 London: "Tonight it is Ada Volt…", "Good evening. My memory is large.", "It's Ada's night")
+    const { afternoonWords } = await import('../server/quiz/writer.js');
+    assert.equal(afternoonWords('Tonight it is {a}, from {progA}.'), 'Today it is {a}, from {progA}.');
+    assert.equal(afternoonWords("It's {winner}'s night: {sw} to {sl}."), "It's {winner}'s afternoon: {sw} to {sl}.");
+    assert.equal(afternoonWords("A good night's work."), "A good afternoon's work.");
+    assert.equal(afternoonWords('Good evening. Straight in.'), 'Good afternoon. Straight in.');
+    const at = Date.parse('2026-10-15T14:20:00Z'); // 15:20 London
+    let lines = 0;
+    for (const s of ['w', 'l1', 'l2', 'a1', 'a2', 'a3']) {
+      const { episode } = edition(s, at);
+      for (const seg of episode.segments) {
+        if (['frame', 'options', 'pins', 'buzz', 'reveal'].includes(seg.part)) continue; // (an aired headline may say it)
+        lines++;
+        // (the next edition's time is said as it is: "Back at ten to eight tonight")
+        const text = seg.text.replace(spokenTime(at + 4.5 * H, at), '').replace(/\bSam Night\b/g, 'Sam');
+        assert.ok(!/\b(?:tonight|evening|night)\b/i.test(text), `${s}: ${seg.text}`);
+      }
+    }
+    assert.ok(lines >= 60, `${lines} lines`);
+  });
   test('a story aired in the small hours aired overnight, not this morning', () => {
     const night = Date.parse('2026-10-15T23:40:00Z'); // 00:40 London on the 16th
     assert.equal(airedWhen('WORLD NOW', night, night + 21 * H), 'on WORLD NOW overnight');

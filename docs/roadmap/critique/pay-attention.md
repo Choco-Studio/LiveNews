@@ -28,14 +28,20 @@ faults of the build; they are listed at the end.
   same server serves the clips, the pictures and the live ticker.
 - **The moments.** The real archive allows few. Its first day (12 Oct) starts at 14:25 London; on 13 Oct the only real
   airings before 20:00 are the offline fixture's (the desk's `realEntry` leaves them out), and 14 Oct's afternoon had not
-  happened yet. So no afternoon edition was possible on a real archive, and no TODAY OR NOT TODAY: its EARLIER needs a
-  story last aired two days before, and on 13 Oct the archive is a day and a half old. The editions:
+  happened yet. So until 14 Oct's afternoon no afternoon edition was possible on a real archive, and no TODAY OR NOT
+  TODAY: its EARLIER needs a story last aired two days before, and on 13 Oct the archive is a day and a half old. The
+  editions:
   - **E0, Monday 12 Oct, 22:00 London**, the week's first edition (history empty): Lola Byte v Sam Night, LETTER BY
     LETTER / PICTURE THIS / WHERE IN THE WORLD?, DOUBLE OR NOTHING on PICTURE THIS (technology or science);
   - **E1, Tuesday 13 Oct, 22:40 London**, made after E0 with E0 as its history (so its pairing and its round types follow
     the planner's rules from a real week): UNIT-8 v Penny Sterling in round 1 (WHERE / LETTER BY LETTER / HOW MANY?,
     DOUBLE OR NOTHING on PICTURE THIS); Paco Pixel v Penny Sterling from round 2, once the desk's new exclusions changed
-    its pool (HOW MANY? / PICTURE THIS / LETTER BY LETTER, DOUBLE OR NOTHING on WHERE, a sudden-death tie-break).
+    its pool (HOW MANY? / PICTURE THIS / LETTER BY LETTER, DOUBLE OR NOTHING on WHERE, a sudden-death tie-break);
+  - **E2, Wednesday 14 Oct, 15:20 London** (the final round only), the afternoon edition, made from the archive copied
+    afresh at 15:42 London with E0 and E1 as its history: Ada Volt v UNIT-8, LETTER BY LETTER / PICTURE THIS / WHERE IN
+    THE WORLD?, DOUBLE OR NOTHING on TODAY OR NOT TODAY (three headlines: two from that day, one from Monday). At
+    14:00 London, from the archive as it stood then, the planner filled no TODAY OR NOT TODAY for that pairing (its DOUBLE
+    OR NOTHING was HOW MANY?); at 15:20 the afternoon's airings were enough.
 
   Every PICTURE THIS picture the plans asked for was fetchable when the edition was made (The Verge, TechCrunch, Ars
   Technica, BBC, ScienceDaily, The Guardian), so no moment had to be dropped for a picture. E1's pictures still did not
@@ -751,3 +757,178 @@ round's card stood silent. E1's boards are under the reviewer's 65 % and E0's ar
 | Data robustness | 9.7 | no afternoon edition, no TODAY OR NOT TODAY yet |
 
 **Round score: 9.6.**
+
+## Round 12 — after round 10's beat, with the archive copied afresh (14 Oct, 14:02 London)
+
+**Recordings.** `r12/e0.mp4` (325.5 s) and `r12/e1.mp4` (325.5 s), made from the archive as it stood at 14:02 London on
+14 Oct. E0 and E1 read only what had aired by their own clocks, so they are the same editions.
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Facts against the plan and the archive | 34, 0 wrong | 32, 0 wrong |
+| Boards' share; longest run | **67.5 %**; 26.7 s | 61.4 %; 23.1 s |
+| Silent studio shots (≥ 1.5 s) | 6; 2.39 s (Sam's pick single before "Watch it sharpen") | 2; 1.85 s |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| Cuts to answers; cuts inside a word | 132 ms before the first word; 0 | the same |
+| Loudness | −15.7 LUFS, LRA 5.4 LU, −5.1 dBTP | −15.6, 4.9, −4.9 |
+
+Fault:
+
+1. **A round's card stood 2.2 s silent, a third time** (E0, PICTURE THIS). The last LETTER BY LETTER headline was one
+   nobody named. Its reaction-led frame missed the wide's minimum by 0.03 s even with round 10's 0.4 s allowance, and
+   the owed wide after its reveal pushed the round's card into the rule. Each allowance moves the cliff without
+   removing it. Director.
+
+A first version of the fix let any card short of its minimum carry the frame. In the fixtures' tie-break edition (s18)
+that sent a quick buzz to its board. The owed reaction single then held the final score's card back, and the winner's
+reply stayed on the card. Hence the second's margin in fix 1. Fix 2 covers the same reply after a short result line.
+
+### Fixes
+
+1. **A round's card that came in inside its rule carries the next frame as a face would** (`playQuestion`, `youngCard`).
+   When the card is a second or more short of its minimum at the next frame, the frame's preamble or its desk is said
+   over the round's name and the board comes on the mark or as the frame ends. The card stands no longer than the rule
+   needs, and it is no face for the question that follows. A card that held its whole rule gives way to the board as
+   before: the board's age then lets a quick buzz go to the buzzer's single. Test: "a round's card never stands silent
+   past its rule by more than 1.5 s"; the link test admits the card.
+2. **The final score lands a beat before a short result line** (`playCard`). When the winner's reply would otherwise
+   wait more than `CARD_WAIT` for the card's minimum, the result line waits up to 1.2 s, so the reply goes to a face.
+   Test: "the winner's reply to the final score is on a face…".
+
+## Round 13 — after round 12's fixes
+
+**Recordings.** `r13/e0.mp4` (322.0 s) and `r13/e1.mp4` (334.3 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Facts against the plan and the archive | 35, 0 wrong | 31, 0 wrong |
+| Boards' share; longest run | **66.4 %**; 34.6 s | 61.0 %; 23.1 s |
+| Silent studio shots (≥ 1.5 s) | 4; 2.26 s | 2; 1.60 s |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| Cuts to answers; cuts inside a word | 132 ms before the first word; 0 | the same |
+
+No round's card stood silent: E0's round 1 opened on the host, its later questions rode the faces. One new fault
+came on DOUBLE OR NOTHING's card:
+
+1. **A headline begun over the wrong card** (E1): "Here's the headline: 'Jellyfish' effect lights | up blank sky." The
+   last LETTER BY LETTER headline had no face, so its owed wide pushed DOUBLE OR NOTHING's card into its line. WHERE's
+   board was then held back 2.8 s by the card's minimum. That is longer than the 2.5 s a board's cut waits before the
+   line starts without it. The host read half the headline over DOUBLE OR NOTHING's card, and WHERE's board came in on
+   "up". It broke the reading rule (§9 step 4: the board is there for every word read off it). Director.
+
+### Fixes
+
+1. **A board's words wait for it as long as the shot on air holds its minimum** (`onBoard`: the cut waits up to the
+   network's 4 s, not 2.5 s). The case is rare, and the beat and the young card take most of the wait.
+2. **DOUBLE OR NOTHING's card, like a round's, carries the next frame** when it came in inside its words
+   (`youngCard`). Its preamble ("Here's the headline:") is said over the card, after the beat that lets the board come
+   on the headline's first word.
+
+## Round 14 — the final round: two evenings and the afternoon
+
+**Recordings.** `r14/e0.mp4` (12 Oct, 22:00, 312.8 s) and `r14/e1.mp4` (13 Oct, 22:40, 328.6 s), with round 13's fixes.
+The afternoon edition came in two takes. `r14/e2.mp4` is 14 Oct 15:20, 359.8 s, made from the archive copied at 15:42
+London. After fault 1 below it was made again as `r15/e2.mp4` (378.6 s, a sudden-death tie-break). Same moment, same
+questions, fresh lines and play.
+
+| Measure | E0 (evening) | E1 (evening) | E2 (afternoon, `r15`) |
+|---|---|---|---|
+| Rounds | LETTER BY LETTER / PICTURE THIS / WHERE; DOUBLE OR NOTHING on PICTURE THIS | HOW MANY? / PICTURE THIS / LETTER BY LETTER; DOUBLE OR NOTHING on WHERE | LETTER BY LETTER / PICTURE THIS / WHERE; DOUBLE OR NOTHING on **TODAY OR NOT TODAY**; a tie-break |
+| Pair | Lola Byte v Sam Night | Paco Pixel v Penny Sterling | Ada Volt v UNIT-8 |
+| Voices | 78 of 78 heard, 0 browser sentences | 71 of 71, 0 | 80 of 80, 0 |
+| Facts against the plan and the archive | 35, 0 wrong | 31, 0 wrong | 36, 0 wrong |
+| Excluded kinds asked; edition stories or grave items on the ticker | 0; 0 of 5 items | 0; 0 of 6 | 0; 0 of 9 |
+| PICTURE THIS pictures on screen | 4 of 4 | 3 of 3 | 3 of 3 |
+| Length (bound 290–360 s) | 312.8 s | 328.6 s | **378.6 s** (take 1, no tie-break: 359.8 s) |
+| Shots | 43 (19 studio); 8.3 a minute; busiest 11; median 4.79 s; longest studio 7.42 s | 46 (22); 8.4; 11; 5.12 s; 7.81 s | 56 (27); 8.9; 13; 4.73 s; 7.38 s |
+| Boards' share; longest run | **68.2 %**; 32.7 s | 64.5 %; 34.8 s | 63.8 %; 39.2 s |
+| What the boards carry | the host reading 44.4 %; the clock 11.7 %; the players 5.3 %; the host's other lines 1.2 %; nothing said 5.5 % | 44.9 %; 12.0 %; 2.2 %; 1.0 %; 4.4 % | 42.2 %; 11.4 %; 3.2 %; 1.7 %; 5.3 % |
+| Cuts to a buzz, a guess, a last lock-in | 132 ms before the first word, all | all | all (one buzz held for its single) |
+| Cuts inside a word | 0 | 0 | 0 |
+| Silent studio shots (≥ 1.5 s) | 4; 2.47 s (a verdict's wide before "Watch it sharpen") | 3; 1.96 s | 8; **3.12 s** (TODAY OR NOT TODAY's wide under the drumroll) |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four | all six |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same | TODAY's last headline, the same |
+| Captions | 0…+33 ms | −1…+32 ms | 0…+33 ms |
+| Ticks with an onset (≥ 3 dB, high band, −40…+80 ms) | 47 of 64, median +9 ms | 46 of 62, +9 ms | 53 of 68, +10 ms |
+| Loudness | −15.7 LUFS, LRA 5.3 LU, −4.9 dBTP; open −18.1 | −15.6, 5.2, −4.9; −18.1 | −15.6, 5.4, −4.9; −18.1 |
+| Voice over the music (median; lowest) | 22.6 dB; 18.1 dB | 23.4 dB; 20.3 dB | 23.8 dB; 19.2 dB |
+| Music between voices | −36.4 dBFS (10–90 % −38.9 to −34.0) | −36.6 (−38.7 to −35.7) | −36.3 (−38.6 to −33.9) |
+
+The step-7 checks with the real voices, across all three editions:
+
+- every lock-in's line comes 0.25–1.0 s after its tick (the players' model reacts to the step);
+- every prompt and the pins end 0.21 s before the first tick;
+- every cut to a buzz or a guess lands 132 ms before its first word;
+- every verdict's wide comes after the host's read-back;
+- the drumroll covers the last four ticks and ends on the reveal;
+- no laughter or applause anywhere;
+- no sign-off time stated, so none can be false.
+
+Faults:
+
+1. **The afternoon spoke as the evening** (E2, take 1): "Tonight it is Ada Volt, from TECH BYTES…", UNIT-8's "Good
+   evening. My memory is large.", "It's Ada's night: 14 to 9." The banks were written for the evening. Quiz producer,
+   first-time viewer. Fixed and re-made (below). Take 2 says "Good afternoon. I have questions about the questions." and
+   "this afternoon" in every credit.
+2. **The afternoon edition runs long**: 359.8 s without a tie-break and 378.6 s with one, against the bible's 360 s. The
+   writer estimated 335 s and 362 s (on the evenings its estimate is within 3 s). TODAY OR NOT TODAY is what it
+   underrates. Each headline on air took about 16 s: the board, the headline, a 3-half-note clock, the lamps on the
+   wide, the verdict, and on DOUBLE OR NOTHING's last headline the clock stretched for the drumroll. The bible's table
+   gives about 9 s. The writer even let an edition estimated over 360 s go to air. Not fixed in this run. Quiz producer,
+   director.
+3. **TODAY OR NOT TODAY's wide stands without a voice for 2.1–3.1 s per headline**: the lamps are silent, so the clock
+   (and on the last headline the drumroll) runs on the players' wide until the verdict. The step-4 design puts TODAY's
+   lock-ins and verdict on the wide, so the board's stamp of the day is heard and not seen. Sound runs under it, but
+   3.1 s is past the 2.7 s the director critique accepted for a silent face. Not fixed in this run. Director.
+4. **The boards' share** is 68.2 % on E0 (the fallback edition), 64.5 % on E1 and 63.8 % on E2, against the step-4
+   reviewer's 65 %. Reported, not argued (owner's choices, 3). Director.
+
+### Fix
+
+1. **An afternoon edition says the afternoon's words** (`writer.js` `afternoonWords`). Before 17:00 London a bank's line
+   says "Good afternoon" for "Good evening", "today" for "tonight", "Ada's afternoon" for "Ada's night", and so on. The
+   change is made to the line before its words are filled in, so an aired headline is never altered. Test: "an
+   afternoon edition says the afternoon's words…".
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.8 | every fact checked against the plan and the archive (102, 0 wrong), no excluded kind, no edition story or grave item on the band; the ticker's hard politics under the game is allowed |
+| Entertainment and repertoire | 9.6 | 2 (an afternoon of 378.6 s outstays the format), 1 found on the air |
+| Game legibility and tension | 9.6 | 3 (TODAY's stamp heard, not seen; its wide waits silently on the lamps) |
+| Format clarity and rhythm | 9.5 | 2 (over the 360 s bound) |
+| Picture | 9.6 | 4 (E0 68.2 %), 3 |
+| Sound | 9.7 | 3: 3.1 s of drumroll and ticks under a wordless wide |
+| Data robustness | 9.6 | 2 (the writer's TODAY estimate and its 360 s guard), 1 (no test wrote an afternoon edition) |
+
+**Round score: 9.5. Not passed.** The evening editions are close: on E0 and E1 alone the panel's lowest is the
+boards' share. The afternoon edition is not ready. It overruns the bound, and TODAY OR NOT TODAY's wides wait silent.
+Next, in order:
+
+- the writer's estimate for TODAY OR NOT TODAY, calibrated to the director's 16 s a headline, and a hard 360 s guard;
+- TODAY's verdict on its board, or a host line under the lamps;
+- the boards' share, as the reviewer decides.
+
+## The owner's pending choices
+
+These are not faults of the build:
+
+1. **The host.** Every recording uses the provisional candidate A: the name Quinn Query, face A, voice A. The owner
+   chooses:
+   - the name: Quinn Query (A), Theo Tally (B) or Layla Level (C), in `config/channel.json`;
+   - the face: `HOST_LOOK` in `public/js/pay-attention-looks.js`;
+   - the voice, by ear: `qm.candidates[letter]` into `qm` in `server/voice/casting.json`, with its gender, lang, pitch
+     and rate in `presenters.qm.voice`. Look B takes voice B; looks A and C take voice A or C.
+2. **Leaving the drafts.** PAY ATTENTION is still a draft (`"drafts"` in `config/channel.json`), aired here by
+   `DRAFTS_ON_AIR=pay-attention@cosmos` and `QUIZ_VIEW=1`. Once step 7 passes and the host is chosen, the owner moves it
+   to `programs` and into the rotation after COSMOS. The desk then wants its three days of archive, which the station's
+   archive will have from 15 Oct, 14:25 London.
+3. **The boards' share against the step-4 reviewer's 65 %.** With the recorded voices the boards run 61–69 % of the
+   air: E0, the fallback edition with four PICTURE THIS questions, 65.4–69.1 % over eleven rounds; E1 61.0–65.7 %; E2,
+   the afternoon edition, as measured in round 14. The reading rule (§4) and the host's pace drive it: the host reads the
+   board's own text for 42–45 % of the air. The share is reported here, not argued. Holding 65 % on air is the
+   reviewer's and the owner's decision, and its levers are the reading rule or the pace.
+4. **The ticker under the game** carries hard politics (emergency rule in Pakistan, a White House briefing, the midterm
+   elections). The bible keeps only tragedy and grave stories off the band while the quiz airs, so this is allowed. A
+   lighter band beside a game is the owner's choice.
+5. **The sign-off names no next edition.** The rotation does not know its next slot. The writer says the time when the
+   station passes one (`nextAt`); the producer does not yet.
