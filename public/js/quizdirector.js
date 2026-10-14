@@ -28,6 +28,7 @@ const REACT_BEAT = 2.0; // s a reaction's face may hold after its words before t
 const LINK_SLACK = 0.6; // s of silence at most on the wide before LETTER BY LETTER's tiles (a link: playLine)
 const KEEP_BEAT = 0.4; // s a reaction and LETTER BY LETTER's (or PICTURE THIS's) frame may fall short of the wide's minimum and still ride it, the frame waiting that beat (playLine, playQuestion)
 const TICK_GAP = 0.2; // s at least between the options or the headline and the line said on the first tick (the prompt, the pins)
+const FACE_QUIET = 1.8; // s at most the players' faces stand with nothing said once their lines are done, the clock ticking under them, before the board is back (on air, 14 Oct, round 15: PICTURE THIS's wide 2.1-2.2 s on the ticks after the recap)
 const TODAY_WIDE = 1.6; // s at most TODAY OR NOT TODAY's wide stands before its verdict is heard (the lamps lit on the board first: on air, 14 Oct, the wide waited 2.1-3.1 s silent on the lamps and the clock)
 const CARD_WAIT = 1.8; // ... the first line after a board (the final score's 2 s line leaves its card 1.3-1.7 s short of the minimum: on air, 13 Oct, a winner's reply 0.04 s past 1.6 s stayed on the card)
 const BOARD_MIN = 3.0; // s a reveal stays on the board before a studio shot may take over (the gold, the credit up for 2.75 s)
@@ -699,9 +700,10 @@ async function playQuestion(d, u, k) {
     // the faces hold to the reveal's BACK_BEAT (the countdown's last ticks on the players, the host's recap with them),
     // but PICTURE THIS's picture still has a step to take after they came in: then the board is back once they have held
     // the network's minimum and said their lines, and the step is seen (on air, 12 Oct: a wide after a step-2 lock-in held
-    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air)
+    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air); and never more than FACE_QUIET s of ticks on the
+    // faces with nothing said: the board is back with its clock
     const step = u.type === 'picture' && cd && away.since < cd.T0 + PICTURE_STEPS[4] * cd.half;
-    await sleepUntil(Math.max(away.since + min + 0.02, step ? Math.min(held(t) - BACK_BEAT, spoken + 0.35) : held(t) - BACK_BEAT));
+    await sleepUntil(Math.max(away.since + min + 0.02, Math.min(held(t) - BACK_BEAT, spoken + (step ? 0.35 : FACE_QUIET))));
     cutTo(d, spec, { card });
     d.quizTrace?.push({ k: 'back', t: now(), board: card.board });
     away = null;

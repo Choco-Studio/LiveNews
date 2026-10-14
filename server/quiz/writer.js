@@ -27,10 +27,12 @@ export const TODAY_HEADLINE = 16;
 export const PICTURE_EXTRA = 4.5;
 export const WHERE_EXTRA = 1.2;
 const VOICE_RATE = Object.freeze({ host: 14.2, unit8: 10.1, ada: 12.5, paco: 12.8, penny: 12.6, sam: 14.3, lola: 16.1 });
-/** Seconds the LETTER BY LETTER clock from frame `i` runs on air: to the winning buzz's stage, else the whole clock. */
+/**
+ * Seconds the LETTER BY LETTER clock from frame `i` runs on air: to the winning buzz's stage (a stall before it lets the
+ * clock run on to it), else the whole clock.
+ */
 function lettersClock(segs, i, clock) {
   for (let j = i + 1; j < segs.length && segs[j].part !== 'reveal' && segs[j].part !== 'frame'; j++) {
-    if (segs[j].part === 'stall') return clock;
     const b = segs[j].quiz?.buzz;
     if (segs[j].part === 'buzz' && b?.right) return Math.min(clock, ((b.stage || 3) - 1) * (clock / 3) + 1);
   }

@@ -428,15 +428,16 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         }
         // the reveal on the clock's last beat: the countdown long enough for the faces (never a stopped clock before it)
         assert.ok(Math.abs(rv.t - cd.end) < 0.05, `${seed} ${u.type}: the reveal ${(rv.t - cd.end).toFixed(2)} s from the clock's end`);
-        // the faces hold to 0.4 s before the reveal; when PICTURE THIS's picture still has a step to take after they came
-        // in, the board is back once they have held the minimum and said their lines, and the step is seen
+        // the faces hold to 0.4 s before the reveal, but never more than 1.8 s of ticks with nothing said once they have held
+        // the minimum (round 15); when PICTURE THIS's picture still has a step to take after they came in, the board is back
+        // once they have held the minimum and said their lines, and the step is seen
         const away = log.trace.find((x) => x.k === 'away' && x.t >= cd.T0 - 0.01 && x.t < rv.t);
         const back = log.trace.find((x) => x.k === 'back' && x.t >= cd.T0 && x.t < rv.t + 0.01);
         if (away && back) {
           const lines = [...(u.parts.lock || []), ...(u.parts.guess || []), ...(u.parts.recap || [])].map((i) => said.get(i)).filter(Boolean);
           const spoken = Math.max(...lines.map((l) => l.off));
           const step = u.type === 'picture' && away.t < cd.T0 + 4 * cd.half;
-          const due = Math.max(away.t + 4, step ? Math.min(rv.t - 0.4, spoken + 0.35) : rv.t - 0.4);
+          const due = Math.max(away.t + 4, Math.min(rv.t - 0.4, spoken + (step ? 0.35 : 1.8)));
           assert.ok(Math.abs(back.t - due) <= 0.08, `${seed} ${u.type}: the board back ${(back.t - due).toFixed(2)} s from its time`);
           if (step) assert.ok(back.t <= cd.T0 + 4 * cd.half + 4 + 0.1, `${seed}: the picture's last step on the board`);
           backs++;
@@ -804,6 +805,10 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const board = shotAt(log, back.t + 1e-3);
         assert.equal(board.card, prev.card);
         assert.ok(board.t - cut.t >= min - 0.01, `${seed}: the face held its minimum`);
+        // never more than 1.8 s of ticks on the faces with nothing said, once they have held the minimum (on air, 14 Oct,
+        // round 15: PICTURE THIS's wide 2.1-2.2 s silent after the recap, waiting for the reveal's beat)
+        const lastOff = Math.max(...log.says.filter((x) => x.off !== null && x.off <= back.t + 1e-6).map((x) => x.off));
+        assert.ok(back.t - lastOff <= 1.8 + 0.01 || board.t - cut.t <= min + 0.05, `${seed}: the faces ${(back.t - lastOff).toFixed(2)} s silent before the board is back`);
         const first = log.shots.find((x) => x.card === board.card);
         assert.equal(board.card.epoch, first.t, `${seed}: the board's clock runs from its first cut`);
         const r = log.trace.find((x) => x.k === 'reveal' && x.t > back.t - 1e-6);
@@ -1101,11 +1106,15 @@ describe('PAY ATTENTION and the LATEST ticker: never a story the edition uses', 
     // (step 7 on air, 12–13 Oct: an execution, a murder, a fatal ride, a war and a named person's cancer scrolled under
     // the quiz; round 14, 13–14 Oct: a state's emergency rule, party politics, an election, protests, a person's denial)
     const grave = ['Watch: Emergency calls from botched Christa Pike execution released', 'Tupac Shakur killer sentenced to 40 years in prison', 'Horrified witnesses recount fatal rollercoaster incident at Six Flags', 'Funeral for Egyptian flight attendant killed in Houthi attack on Riyadh', 'Pope Leo diagnosed with lung cancer as growth removed during surgery', 'Hurricane Simon and Tropical Storm Rachel kill five people on Mexico’s Pacific coast',
-      'Pakistan imposes emergency rule in former prime minister\'s stronghold', 'Burnham rules out deal with Greens as he condemns ‘Zionism is racism’ policy as ‘antisemitic’– UK politics live', 'US inflation rises more than expected ahead of midterm elections', "Inside Katie Zacharia's very brief White House briefing", "'If we don't scream, they won't listen to us': Student protesters speak to BBC in Paris", 'Zimbabwean author denies using AI to write award-winning story', 'In Phoenix, young ultra-conservatives look to carry on Charlie Kirk’s legacy', 'Bank of Canada holds interest rates at 3.5 percent', 'Bayern’s Michael Olise sent off for ‘super dumb’ yellows within seconds', 'BA flight forced to turn back over cracked window'];
+      'Pakistan imposes emergency rule in former prime minister\'s stronghold', 'Burnham rules out deal with Greens as he condemns ‘Zionism is racism’ policy as ‘antisemitic’– UK politics live', 'US inflation rises more than expected ahead of midterm elections', "Inside Katie Zacharia's very brief White House briefing", "'If we don't scream, they won't listen to us': Student protesters speak to BBC in Paris", 'Zimbabwean author denies using AI to write award-winning story', 'In Phoenix, young ultra-conservatives look to carry on Charlie Kirk’s legacy', 'Bank of Canada holds interest rates at 3.5 percent', 'Bayern’s Michael Olise sent off for ‘super dumb’ yellows within seconds', 'BA flight forced to turn back over cracked window', "Pakistan has locked down Imran Khan's stronghold - but it could backfire", '$15 gets you Psychonauts 2, the latest Like a Dragon game, and more', "Week 6 buzz: What we're hearing on the slumping Eagles, three undefeateds, more", "'I'd talk to the TV': The paid companions bringing warmth to China's lonely"];
     const light = ['Lisbon opens a new riverside tram line', 'England beat Greece in World Cup play-off', 'Formula One to return to Africa for first time in 30 years', 'NASA Develops Batteries to Power Humanity’s Return to Moon'];
-    const news = { stories: new Map([...grave, ...light].map((title, i) => [`g${i}`, { id: `g${i}`, source: 'BBC News', title, summary: '', published: 1000 - i, category: 'world' }])) };
-    const station = new Station({ config: { queueSize: 1 }, newsDesk: news, producer: {}, chain: {}, channel: () => loadChannel() });
-    const items = station.ticker();
+    // (the station's band holds eighteen items: two feeds' worth, each read by the real station)
+    const tickerOf = (titles, from) => {
+      const news = { stories: new Map(titles.map((title, i) => [`g${from + i}`, { id: `g${from + i}`, source: 'BBC News', title, summary: '', published: 1000 - i, category: 'world' }])) };
+      return new Station({ config: { queueSize: 1 }, newsDesk: news, producer: {}, chain: {}, channel: () => loadChannel() }).ticker();
+    };
+    const items = [...tickerOf([...grave.slice(0, 12), ...light], 0), ...tickerOf(grave.slice(12), 100)];
+    assert.equal(items.length, grave.length + light.length);
     for (const t of grave) assert.ok(items.find((x) => x.text === t)?.quizOut, `marked: ${t}`);
     for (const t of light) assert.ok(!items.find((x) => x.text === t)?.quizOut, `not marked: ${t}`);
     // the station's mark is the desk's own judgement: every marked item is one the quiz refuses

@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Archive } from '../server/archive.js';
-import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK, shareName } from '../server/quiz/desk.js';
+import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK, shareName, quizRefuses } from '../server/quiz/desk.js';
 import { graveDay } from '../server/quiz/grave.js';
 import { letterReveal, seeded, londonDayStart, ROUND_TYPES, buildQuestions } from '../server/quiz/rounds.js';
 import { planEdition, contestantsFrom, historyOf, pairings } from '../server/quiz/planner.js';
@@ -59,10 +59,26 @@ describe('what is never asked (§3.1)', () => {
     // found in round 15's reading (14 Oct): a state's deal its aired text puts in a president's mouth, behind a
     // presenter's handoff; trade frictions
     const taiwan = entry({ title: 'Taiwan plans to buy liquefied natural gas from Alaska pipeline project', headline: 'Taiwan plans to buy liquefied natural gas', summary: 'Taiwan planned to buy liquefied natural gas from a U.S. project after extraction and could invest up to $4.4 billion in it', text: 'Thanks, Lola. Taiwan planned to buy liquefied natural gas from a U.S. project, according to ABC News. Under the current plan, the annual purchase and participation in the Alaska project development. This is what Donald Trump, the U.S. President, said, as reported by ABC News.' });
-    assert.equal(entryOut(taiwan), 'politics (a politician named)');
+    assert.equal(entryOut(taiwan), 'politics'); // (a country that plans to buy is its government)
+    assert.equal(entryOut(entry({ title: 'Shipyard wins an order for liquefied gas carriers', summary: 'The yard will build four carriers.', text: 'Thanks, Lola. The yard will build four carriers, according to ABC News. This is what Donald Trump, the U.S. President, said, as reported by ABC News.' })), 'politics (a politician named)');
     assert.equal(out('China’s trade surplus hits $938 billion for Jan-Sep as pressure ramps up to rebalance trade'), 'politics');
     assert.equal(out("'I'd talk to the TV': The paid companions bringing warmth to China's lonely"), 'hardship');
     assert.equal(out('Skydance’s Discovery+ prices increase by up to 20%'), 'hardship');
+    // under the game on round 15's recordings (14 Oct's feeds): what the quiz refuses, by title alone as the ticker has it
+    const refused = {
+      'Taiwan plans to buy liquefied natural gas from Alaska pipeline project': 'politics',
+      'Netflix to cut 1,000 jobs as subscriptions slow': 'hardship',
+      "What this year's final four says about the labor battle -- and the game's future": 'politics',
+      'Prismm helps banks keep inherited money in-house': 'money of people',
+      'Matchup rankings for Week 6: Upgrade Tony Pollard, fade Trevor Lawrence': 'betting',
+      'Espada not returning as Astros manager after winning AL West': 'failure of a person',
+      'College Football Bottom 10: Texas takes major fall': 'failure of a person',
+      "NFL suspends Rams' Jackson for striking Bills' Chubb in face after game": 'failure of a person',
+      'Wilcox the target again in another damaging Man Utd fallout': 'failure of a person',
+      'Pakistan has locked down Imran Khan\'s stronghold - but it could backfire': 'politics',
+    };
+    for (const [title, kind] of Object.entries(refused)) assert.equal(quizRefuses({ title, summary: '' }), kind, title);
+    for (const title of ['Mattingly stays on as Phillies manager, reaching 2-year deal', 'Now you can call anyone with WhatsApp, even if they don’t have WhatsApp', 'Peralta stars as Rays even series against Guardians']) assert.equal(quizRefuses({ title, summary: '' }), null, title);
     // the opening sentence is the story's, never the handoff before it
     assert.equal(entryOut(entry({ title: 'Lisbon opens a riverside tram line', summary: '', text: 'Thanks, Lola. The government opens a riverside tram line in Lisbon. It runs every ten minutes.' })), 'politics');
   });
@@ -101,6 +117,9 @@ describe('one story once an edition', () => {
     const m2 = ev('Museum finds a lost Turner sketch', 'Museum finds a lost Turner sketch', 'The sketch was in a drawer.');
     assert.equal(shareName(m1, m2), false);
     assert.equal(shareName(ev('Telescope opens a quiet new wing number 1', 'Telescope opens a quiet new wing number 1', ''), ev('Telescope opens a quiet new wing number 13', 'Telescope opens a quiet new wing number 13', '')), false);
+    // or a coined compound both use, from one opening name (13 and 14 Oct: two sources' takes, asked on two days)
+    assert.equal(shareName(ev('Google makes it easier to launch your vibe-coded apps', '', ''), ev('Google wants to host your personal vibe-coded apps', '', '')), true);
+    assert.equal(shareName(ev('Google makes it easier to launch your vibe-coded apps', '', ''), ev('Apple ships vibe-coded apps', '', '')), false);
     // a name inside both headlines, as before
     assert.equal(shareName(ev('Citroën unveils electric version of its 2CV', '', ''), ev('Citroën’s iconic 2CV returns as all-electric model', '', '')), true);
   });

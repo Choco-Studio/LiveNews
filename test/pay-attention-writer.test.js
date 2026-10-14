@@ -146,6 +146,16 @@ describe('the episode (§4, §5)', () => {
     assert.ok(estimateSeconds(today) - estimateSeconds([]) >= TODAY_HEADLINE, 'a TODAY headline');
     const line = [{ type: 'quiz', part: 'react', anchor: 'B', text: 'A calculated result, within expected parameters.' }];
     assert.ok(estimateSeconds(line, { A: 'ada', B: 'unit8' }) > estimateSeconds([{ ...line[0], anchor: 'H' }], { A: 'ada', B: 'unit8' }), 'UNIT-8 slower than the host');
+    // LETTER BY LETTER's clock runs to the winning buzz, past a stall (on air, 14 Oct, round 15: counted whole, 10 s)
+    const letters = (stall) => [
+      { type: 'quiz', part: 'frame', anchor: 'H', text: 'From the world desk. Fill it in.', countdown: 10, quiz: { round: 'letters' } },
+      ...(stall ? [{ type: 'quiz', part: 'stall', anchor: 'A', text: 'Buffering.', quiz: { round: 'letters', buzz: { buzzed: true, right: false, stall: true, stage: 1 } } }] : []),
+      { type: 'quiz', part: 'buzz', anchor: 'B', text: 'Bear with taste for honey: Winnie Pooh turns 100.', quiz: { round: 'letters', buzz: { buzzed: true, right: true, stage: 2 } } },
+      { type: 'quiz', part: 'reveal', anchor: 'H', text: 'Yes, Penny.', quiz: { round: 'letters', reveal: true } },
+    ];
+    const talk = 'Buffering.'.length / 15 + 0.4;
+    assert.ok(Math.abs(estimateSeconds(letters(true)) - estimateSeconds(letters(false)) - talk) <= 1, 'a stall adds its line, not the rest of the clock');
+    assert.ok(estimateSeconds(letters(false)) - estimateSeconds([]) < 10 + 6, 'the clock to the stage-two buzz, not the whole 10 s');
   });
   test('an afternoon edition estimated over its bound is shortened before air: whole TODAY OR NOT TODAY headlines first, never a question cut mid-way', () => {
     // a plan with TODAY OR NOT TODAY whose headlines run long (the 72 characters the desk allows)
