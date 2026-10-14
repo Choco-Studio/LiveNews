@@ -360,6 +360,37 @@ Measured on the development archive, with a model of the planner that counts sto
      - a lamp beside a wrong answer goes out at the reveal, so gold only ever means right.
 4. **Director and pace**: the shots, the countdowns timed to the reading rule, the lock-in and buzz beats, the half-note
    ticks.
+   *Built; the critique passed at 9.75 in round 5 (`docs/roadmap/critique/pay-attention-director.md`):*
+   - *The profile `'pay-attention'` (`public/js/pace.js`):*
+     - *290–360 s;*
+     - *the quiz's own pauses: a reply 0.35 s, a turn 0.45 s, the next question 0.75 s, a card 0.55 s, a round 0.95 s;*
+     - *the network's 4 s minimum shot; a studio shot at most 12 s; a board as long as its question; the median 5–9 s.*
+   - *The playout: `public/js/quizplay.js` (pure: the units, the countdowns in half notes, the answers' schedule, the shot
+     plan) and `public/js/quizdirector.js` (`prepareQuiz`, `playQuiz`):*
+     - *a board's clock starts at its own cut, and its times are the segments' real starts;*
+     - *the countdown is `LiveMusic.countdown`'s: PICTURE THIS 7 half notes, LETTER BY LETTER 9, WHERE 6, HOW MANY? 4,
+       TODAY 3, longer only for what is said inside them;*
+     - *the stings on the reveal; DOUBLE OR NOTHING's drumroll ends on it;*
+     - *`setQuizState` through the v2 direction;*
+     - *a reveal holds its board 3 s (2 s with the credit said, WHERE 2.4 s), and no cut leaves it before the host has
+       read the answer off it.*
+   - *The shots:*
+     - *every question part and card on its board, full frame on the quiz's ground (`scenes/quiz-shot.js`);*
+     - *the players' answers in their own words on their faces: LETTER BY LETTER's buzz on the buzzer's single, HOW
+       MANY?'s guesses on the wide, the board back 0.4 s before the reveal on its own clock;*
+     - *the lock-ins on the board, by the reading rule (§4: the options on screen to the last lock-in);*
+     - *the welcome, the scores, the tally and the sign-off on the wide;*
+     - *a player's line on their single or the wide, the host's on his single or the wide;*
+     - *a short reaction on the reveal's board, or, before LETTER BY LETTER, on the wide with the next frame;*
+     - *player B's single never under the tag;*
+     - *the half-time strip with the scores line;*
+     - *no two-shot exists in `quizCamera`.*
+   - *The station:*
+     - *`QUIZ_VIEW=1` lifts the desk's three-day minimum, only for a draft on air by `DRAFTS_ON_AIR`;*
+     - *no edition is made whose PICTURE THIS picture the station cannot fetch, and the director preloads each through
+       `/api/img`.*
+   - *Open for step 7: every timing was measured on a stub voice. Boards are about three quarters of the air, and a run
+     of boards can last up to 85 s (TODAY's six headlines).*
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
    *Built; the three critiques passed at 9.8 in round 3 (`docs/roadmap/critique/pay-attention-set.md`,
    `pay-attention-open.md`, `pay-attention-sound.md`):*
