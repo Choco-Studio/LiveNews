@@ -36,6 +36,7 @@ import { LSTAR, DARKER, labRGB } from './color.js';
 import { stampText, textWidth, capHeight, textMask } from './text.js';
 import { textPixels } from '../../../font.js';
 import { resolveStyle } from './styles.js';
+import { quizIdlePhase } from './quiz.js';
 
 const B16 = Uint8Array.from([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
 const WIDE_K = F / SET.wallZ; // px per unit of the wall in the wide shot (0.714)
@@ -2249,38 +2250,61 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       break;
     }
     case 'quiz': {
-      // PAY ATTENTION's question board at rest: the programme's name in fog (the font's own pixels, so it draws without a
-      // DOM too), on one line or two (PAY / ATTENTION) as the free box allows, and under it the two players' marks, a
-      // circle and a square in fog outline: two players, one board. No gold (gold is a lit lamp) and no purple (the frame's)
+      // PAY ATTENTION's question board at rest: the programme's emblem (the two players' lamps, a circle and a square, in
+      // their housings on a purple plaque with its fog rim) beside its name (white over silver, the open's board face),
+      // the name on one line or two (PAY / ATTENTION) beside it as the free box allows, else the emblem over the name. Every 8 s
+      // the emblem tests its lamps, the circle then the square lit gold for a beat (quiz.js quizIdlePhase: still during
+      // a question, both dark then).
       const one = textPixels('PAY ATTENTION', 'body'), l1 = textPixels('PAY', 'body'), l2 = textPixels('ATTENTION', 'body');
-      const block = (u, two) => {
-        const w = (two ? Math.max(l1.width, l2.width) : one.width) * u;
-        const h = ((two ? 2 * one.cap + 3 : one.cap) + 4 + QUIZ_MARK) * u;
-        return [w, h];
+      const PW = QUIZ_PLAQUE.w, PH = QUIZ_PLAQUE.h, gap = 5;
+      const shapes = {
+        row: (u) => [(PW + gap + one.width) * u, Math.max(PH, one.cap) * u],
+        two: (u) => [(PW + gap + Math.max(l1.width, l2.width)) * u, Math.max(PH, 2 * one.cap + 3) * u],
+        column: (u) => [Math.max(PW, l1.width, l2.width) * u, (PH + 4 + 2 * one.cap + 3) * u],
+        stack: (u) => [Math.max(PW, one.width) * u, (PH + 4 + one.cap) * u],
       };
-      let u = ts, two = false;
-      // (2 px of air either side: the head's own 6 px margin is already out of the free boxes)
-      const fits = (uu, tt) => fitsSomewhere(L, block(uu, tt)[0] + 2, block(uu, tt)[1] + 2 + reserve);
-      if (!fits(u, false)) {
-        if (fits(u, true)) two = true;
-        else if (u > 1 && fits(1, false)) u = 1;
-        else if (u > 1 && fits(1, true)) [u, two] = [1, true];
-        else [u, two] = [1, !fits(1, false)];
+      // (air round the block: 12 px across, so the name never runs to the bezel, 2 px over and under; the head's own
+      // 6 px margin is already out of the free boxes)
+      const fits = (kind, uu) => fitsSomewhere(L, shapes[kind](uu)[0] + 12, shapes[kind](uu)[1] + 2 + reserve);
+      let kind = 'row', u = ts;
+      found: for (const uu of ts > 1 ? [ts, 1] : [1]) {
+        for (const kk of ['row', 'two', 'column', 'stack']) {
+          if (fits(kk, uu)) {
+            [kind, u] = [kk, uu];
+            break found;
+          }
+        }
+        [kind, u] = ['stack', 1];
       }
-      const [nw, nh] = block(u, two);
-      box = pickBox(L, nw + 2, nh + 2 + reserve, false);
+      const [nw, nh] = shapes[kind](u);
+      box = pickBox(L, nw + 12, nh + 2 + reserve, false);
       const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
       const cx = Math.round((f.x0 + f.x1) / 2);
       const top = Math.round(f.y0 + Math.max(u, (fh - nh) * 0.45));
-      const stamp = (t, x, y) => { for (const [gx, gy] of t.pixels) rect(b, x + gx * u, y + gy * u, x + (gx + 1) * u, y + (gy + 1) * u, C.fog); };
-      let y = top;
-      if (two) {
-        stamp(l1, cx - Math.round((l1.width * u) / 2), y);
-        y += (one.cap + 3) * u;
-        stamp(l2, cx - Math.round((l2.width * u) / 2), y);
-      } else stamp(one, cx - Math.round((one.width * u) / 2), y);
-      y += (one.cap + 4) * u;
-      drawQuizMarks(b, cx, y, u);
+      const x0 = cx - Math.round(nw / 2);
+      const phase = quizIdlePhase(env.t);
+      // the name: white, its lower rows silver (the open's board face)
+      const stamp = (t, x, y) => {
+        for (const [gx, gy] of t.pixels) rect(b, x + gx * u, y + gy * u, x + (gx + 1) * u, y + (gy + 1) * u, gy >= Math.ceil(t.cap / 2) ? C.silver : C.white);
+      };
+      if (kind === 'stack') {
+        drawQuizPlaque(b, cx - Math.round((PW * u) / 2), top, u, phase);
+        stamp(one, cx - Math.round((one.width * u) / 2), top + (PH + 4) * u);
+      } else if (kind === 'column') {
+        drawQuizPlaque(b, cx - Math.round((PW * u) / 2), top, u, phase);
+        stamp(l1, cx - Math.round((l1.width * u) / 2), top + (PH + 4) * u);
+        stamp(l2, cx - Math.round((l2.width * u) / 2), top + (PH + 4 + one.cap + 3) * u);
+      } else {
+        drawQuizPlaque(b, x0, top + Math.round((nh - PH * u) / 2), u, phase);
+        const tx = x0 + (PW + gap) * u;
+        if (kind === 'row') stamp(one, tx, top + Math.round((nh - one.cap * u) / 2));
+        else {
+          const ty = top + Math.round((nh - (2 * one.cap + 3) * u) / 2);
+          stamp(l1, tx, ty);
+          stamp(l2, tx, ty + (one.cap + 3) * u);
+        }
+      }
+      sig = 1 + phase;
       IDLE.cx = cx;
       IDLE.cy = top + Math.round(nh / 2);
       IDLE.hw = Math.ceil(nw / 2);
@@ -2357,17 +2381,44 @@ function drawIdle(b, L, spec, style, env, caption = '') {
   return sig;
 }
 
-// PAY ATTENTION's two players' marks under its name on the board at rest: a circle and a square, fog outlines on the
-// board's black, side by side (wall px at scale u; QUIZ_MARK px tall at u = 1)
-const QUIZ_MARK = 7;
-const QUIZ_CIRCLE = ['..###..', '.#...#.', '#.....#', '#.....#', '#.....#', '.#...#.', '..###..'];
-const QUIZ_SQUARE = ['#######', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '#######'];
-function drawQuizMarks(b, cx, y, u) {
-  const gap = 5;
-  const x0 = cx - Math.round(((7 * 2 + gap) * u) / 2);
-  for (const [k, art] of [[0, QUIZ_CIRCLE], [1, QUIZ_SQUARE]]) {
-    const ox = x0 + k * (7 + gap) * u;
-    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (art[j][i] === '#') rect(b, ox + i * u, y + j * u, ox + (i + 1) * u, y + (j + 1) * u, C.fog);
+// PAY ATTENTION's emblem on the board at rest (wall px at scale u; QUIZ_PLAQUE.w x .h at u = 1): a purple plaque with
+// its fog rim, a black outline; in it the two players' lamps in their black housings, the circle and the square, each
+// dark (an ink face in its fog outline) or lit (gold, its highlight cream, its lower edge orange)
+//   f fog rim, p purple, k black (housing), c circle lamp, s square lamp
+const QUIZ_PLAQUE_ART = [
+  '.fffffffffffffffffffffff.',
+  'fpppppppppppppppppppppppf',
+  'fppppkkkkkpppkkkkkkkkkppf',
+  'fpppkkccckkppkssssssskppf',
+  'fppkkccccckkpkssssssskppf',
+  'fppkccccccckpkssssssskppf',
+  'fppkccccccckpkssssssskppf',
+  'fppkccccccckpkssssssskppf',
+  'fppkkccccckkpkssssssskppf',
+  'fpppkkccckkppkssssssskppf',
+  'fppppkkkkkpppkkkkkkkkkppf',
+  'fpppppppppppppppppppppppf',
+  '.fffffffffffffffffffffff.',
+];
+const QUIZ_PLAQUE = { w: QUIZ_PLAQUE_ART[0].length, h: QUIZ_PLAQUE_ART.length };
+function drawQuizPlaque(b, x0, y0, u, phase) {
+  const art = QUIZ_PLAQUE_ART;
+  const lamp = (ch, i, j) => {
+    const lit = (ch === 'c' && phase === 1) || (ch === 's' && phase === 2);
+    // the lamp's own outline: a lamp pixel beside a housing pixel
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => art[j + dj]?.[i + di] !== ch);
+    if (!lit) return edge ? C.fog : C.ink;
+    const below = art[j + 1]?.[i] !== ch;
+    const hi = !edge && art[j - 2]?.[i] !== ch && art[j][i - 2] !== ch;
+    return below ? C.orange : hi ? C.cream : C.yellow;
+  };
+  for (let j = 0; j < art.length; j++) {
+    for (let i = 0; i < art[j].length; i++) {
+      const ch = art[j][i];
+      if (ch === '.') continue;
+      const c = ch === 'f' ? C.fog : ch === 'p' ? C.purple : ch === 'k' ? C.black : lamp(ch, i, j);
+      rect(b, x0 + i * u, y0 + j * u, x0 + (i + 1) * u, y0 + (j + 1) * u, c);
+    }
   }
 }
 
@@ -2448,6 +2499,7 @@ function clockOf(spec, style, env) {
     // and the background cache only invalidates when a pixel actually changed (the signature)
     return Math.round(env.t * (env.lod >= 1 ? 30 : 60));
   }
+  if (style.wallIdle === 'quiz') return 1 + quizIdlePhase(env.t);
   if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week', 'fulltime', 'quiz'].includes(style.wallIdle)) {
     if (env.lod >= 2) return 0;
     const R = Math.max(6, Math.round(23 * env.cs));

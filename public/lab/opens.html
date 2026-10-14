@@ -29,7 +29,7 @@
     <script type="module">
       // Lab for public/js/scenes/{opens,cards,worldmap}.js: every frame is a pure
       // function of t (the graphics clock is frozen) so contact sheets are exact.
-      import { drawOpen, openFor } from '../js/scenes/opens.js';
+      import { drawOpen, openFor, warmStudioOpens } from '../js/scenes/opens.js';
       import { renderTune } from '../js/audio/synth.js';
       import * as cards from '../js/scenes/cards.js';
       import { drawWorldMap, warmMapData } from '../js/scenes/worldmap.js';
@@ -328,7 +328,9 @@
         }
         return [...out.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
       }
-      window.__lab = { render, set, hash, offPalette, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor };
+      // the opens shot in a v2 studio (PAY ATTENTION's) load it as the channel's renderer does; ?v2=0 shows their flat open
+      const ready = /^(0|false|off|no)$/i.test(params.get('v2') || '') ? Promise.resolve(null) : warmStudioOpens();
+      window.__lab = { render, set, hash, offPalette, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor, ready };
       // tools/render-audio.mjs (and video checks): an open's theme as the director plays it, from the
       // cut (t = 0) at volume 0.6, stopped (faded) at the open's end
       window.__audio = {

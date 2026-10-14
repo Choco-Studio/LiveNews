@@ -246,7 +246,7 @@ const DEFS = {
     // the ceiling: the wall's light eases out well under the ceiling line (Y -148 here) and is black above Y -121: the
     // pools' tops stay 4 px under the graphics' top row in the wide (the clock's plate never cuts them)
     top: { y0: -121, y1: -101, to: 0 },
-    ceilingY: -148, // the one ceiling line at y 6 in the quiz's wide (lowered and pulled back: see quiz.js quizCamera)
+    ceilingY: -400, // no grid line: the quiz's soffit carries its own white light at the top of the wall (quiz.js)
     sides: { x0: 236, x1: 300 },
     // one pool from above behind each contestant (in the wide their heads stand in front of wall X ±150..±195): a flat
     // ink plateau with a slate heart above the hair and a narrow Bayer edge, falling back to ink below the heads
