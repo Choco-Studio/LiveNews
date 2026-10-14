@@ -236,6 +236,26 @@ describe('heard on air (step 7, the editions of 12–13 Oct with the real voices
     // hidden: …")
     for (const line of Object.values(HOST.roundIntro).flat()) assert.ok(!/\bHere(?:'s| is)\b/i.test(line), line);
   });
+  test('DOUBLE OR NOTHING never offers again a wrong option the rounds showed (on air, 12 Oct: the same decoy twice)', () => {
+    let offers = 0;
+    for (const { plan } of eds) {
+      const shown = new Set(plan.rounds.flatMap((r) => r.questions.flatMap((q) => (q.options || []).filter((o) => o.letter !== q.answer).map((o) => o.key || o.words || o.country))));
+      for (const o of plan.don.offers) {
+        const q = o.question;
+        for (const x of (q.options || []).filter((y) => y.letter !== q.answer)) {
+          offers++;
+          assert.ok(!shown.has(x.key || x.words || x.country), `${x.words || x.country} offered twice`);
+        }
+      }
+    }
+    assert.ok(offers >= 10, `${offers} wrong options in DOUBLE OR NOTHING`);
+  });
+  test('nothing read twice: WHERE\'s headline never ends on a question the pins ask again, HOW MANY? never describes its board', () => {
+    // (on air, 12-13 Oct: "Here's the headline: … Where is this story?" then "Is it Chile, Singapore or Greece?"; "The
+    // sentence, with the figure hidden: …" over a board titled FILL IN THE NUMBER)
+    for (const line of HOST.frame.where) assert.ok(/\{words\}$/.test(line), line);
+    for (const line of HOST.frame.howmany) assert.ok(!/hidden|covered|blank/i.test(line), line);
+  });
   test('nobody regrets an answer they never gave: when nobody buzzed LETTER BY LETTER, no player reacts to the miss', () => {
     let silent = 0;
     for (const { episode } of eds) {

@@ -129,10 +129,12 @@ function fill(types, pool, all, ctx, rnd) {
     if (!questions) return null;
     rounds.push({ type: t, questions });
   }
-  // (DOUBLE OR NOTHING's wrong options may be ones the rounds showed: only one of its offers airs)
+  // (DOUBLE OR NOTHING's wrong options: none the rounds showed when the pool allows, else they may be: on air, 12 Oct,
+  // "NASA spots patch of Moon-like rock on Earth" was a wrong option in PICTURE THIS and again in DOUBLE OR NOTHING)
   const donOffers = [];
   for (const o of don.offers) {
-    const questions = buildQuestions(don.type, o.asked, options, rnd, { todayStart: ctx.todayStart, taken: new Set(), extraPlaces: ctx.extraPlaces });
+    const build = (seen) => buildQuestions(don.type, o.asked, options, rnd, { todayStart: ctx.todayStart, taken: new Set(seen), extraPlaces: ctx.extraPlaces });
+    const questions = build(taken) || build([]);
     if (questions) donOffers.push({ desk: o.desk, question: questions[0] });
   }
   if (!donOffers.length) return null;

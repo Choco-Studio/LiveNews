@@ -88,8 +88,8 @@ export const HOST = {
     ],
     where: [
       'Where in the world is this story? {words}',
-      'Here\'s the headline: {words}. Where is this story?',
-      '{words}. Where in the world?',
+      'Here\'s the headline: {words}',
+      'Where did this happen? {words}',
       'Where is this? {words}',
       'Find the pin. {words}',
       'Here\'s one for the map: {words}',
@@ -115,7 +115,7 @@ export const HOST = {
     todayTally: ['That round: {a} {sa}, {b} {sb}.', 'Quickfire over. {a} got {sa} of six, {b} {sb}.', 'Six headlines done: {a} {sa}, {b} {sb}.', 'The quickfire count: {a} {sa}, {b} {sb}.'],
     howmany: [
       '{ask}? Here\'s the sentence as it aired: {masked}',
-      'The sentence, with the figure hidden: {masked} {ask}?',
+      '{masked} {ask}?',
       '{masked} What is the number?',
       'Here it is: {masked} Your guesses.',
       'Fill in the number: {masked}',

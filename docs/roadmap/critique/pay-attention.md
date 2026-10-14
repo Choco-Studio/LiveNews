@@ -37,8 +37,9 @@ faults of the build; they are listed at the end.
     DOUBLE OR NOTHING on PICTURE THIS); Paco Pixel v Penny Sterling from round 2, once the desk's new exclusions changed
     its pool (HOW MANY? / PICTURE THIS / LETTER BY LETTER, DOUBLE OR NOTHING on WHERE, a sudden-death tie-break).
 
-  Every PICTURE THIS picture the plans asked for was fetchable (The Verge, TechCrunch, Ars Technica, BBC, ScienceDaily,
-  The Guardian); no moment had to be dropped for a picture.
+  Every PICTURE THIS picture the plans asked for was fetchable when the edition was made (The Verge, TechCrunch, Ars
+  Technica, BBC, ScienceDaily, The Guardian), so no moment had to be dropped for a picture. E1's pictures still did not
+  reach the screen until round 6 (round 5, fault 1).
 - **Recording**: `tools/record.mjs` at the channel's normal scale (384 × 216 × 5, 1920 × 1080, 30 fps) with sound,
   `--progressive`, the page's clock a minute or two after the edition was made (`--time`), so no credit shows a time
   still to come. A new `--trace` option writes the director's timeline into the report: every music cue and countdown the
@@ -634,11 +635,11 @@ editions are measured with the recorded voices:
 - the players' lines on a board are 2–5 %;
 - a board with nothing said is 4–7 % (the pauses before the options and the pins, and a reveal's hold).
 
-The director takes every face the rules allow. Every question has one, the runs of boards stay under 36 s, and the
-boards are where the game is. The step-4 reviewer's 65 % was measured on the stub voice, which read faster than the
-recorded voices. The panel no longer counts the share as a fault. It stays as what keeps the picture from 10, and it is
-put to the owner at the end. If 65 % is to hold on air, the levers are the reading rule or the host's pace, not the
-director.
+Every question has a face, and the runs of boards stay under 36 s. The step-4 reviewer's 65 % was measured on the stub
+voice, which read faster than the recorded voices. The bound is not met on these editions: E0 is over it in every
+round, and E1 in two rounds of six. The panel did not drop it. It is left open for the reviewer, and the remaining
+levers that keep the reading rule were looked for: the board's 4–7 % with nothing said, and any text read twice (round
+10).
 
 | Category | Score | What keeps it from 10 |
 |---|---|---|
@@ -646,9 +647,107 @@ director.
 | Entertainment and repertoire | 9.7 | an afternoon edition and TODAY OR NOT TODAY not yet heard |
 | Game legibility and tension | 9.8 | a clock that runs out with nobody buzzing is 9.6 s of tiles and ticks |
 | Format clarity and rhythm | 9.8 | the boards' share |
-| Picture | 9.8 | the boards' share; a reveal's cut lands between words when no phrase start is within reach |
+| Picture | 9.6 | the boards' share over the reviewer's 65 % (69.1 % and 65.1 %: open); a reveal's cut lands between words when no phrase start is within reach |
 | Sound | 9.8 | the wide under a clock's last ticks after a short recap |
 | Data robustness | 9.7 | no afternoon edition and no TODAY OR NOT TODAY on the real archive yet |
 
-**Round score: 9.7**, not above it. Every edition so far is an evening, and the bible's step 7 asks for an afternoon and
+**Round score: 9.6** (the boards' share). Besides that, every edition so far is an evening, and the bible's step 7 asks for an afternoon and
 an evening. The archive allowed no afternoon until 14 Oct's afternoon had aired.
+
+## Round 10 — the boards' time with nothing said, and the words read twice
+
+Round 9 left the boards' share open (the reviewer's 65 %). Two levers keep the bible's reading rule. One is the 4–7 % of
+the air the boards stand with nothing said. The other is text read twice. Split by what comes before and after it
+(rounds 8–9, both editions), the boards' silence is:
+
+- **options → the prompt** (PICTURE THIS): 1.1–1.4 s each, the largest. That is a turn's pause (0.45 s), then the
+  countdown asked for, then the bed's wait for its next half note (0–1.07 s) on top;
+- **headline → pins** (WHERE): 0.9–1.5 s each, for the same reason;
+- **a reveal → the next card or frame**: 0.7–1.9 s, the board's own 4 s and the reveal's hold;
+- **the round's card → the frame**: 0.5 s, the card's 4 s against a shorter rule;
+- **frame → options**: 0.4 s, a turn's pause.
+
+Read twice: WHERE's frames "Here's the headline: … Where is this story?" and "… Where in the world?", where the pins
+then ask "Is it Chile, Singapore or Greece?"; HOW MANY?'s "The sentence, with the figure hidden: …" over a board titled
+FILL IN THE NUMBER. Found with them, a repertoire fault: DOUBLE OR NOTHING offered again a wrong option the rounds had
+shown (E0: "NASA spots patch of Moon-like rock on Earth" in PICTURE THIS and in DOUBLE OR NOTHING). The planner allowed
+it, because only one of the offers airs. Quiz producer.
+
+Changes:
+
+1. **The line on the first tick follows its options or headline by 0.2 s and the bed's wait, with no turn's pause on
+   top** (`TICK_GAP`; `playQuestion`, PICTURE THIS and WHERE). Test: "the line said on the first tick follows the options
+   or the headline by its gap and the bed's half-note wait…".
+2. **Nothing read twice** (`banks.js`): WHERE's six frames end on the headline (the pins ask the question), and HOW
+   MANY?'s frames never describe the board. Test: "nothing read twice…".
+3. **DOUBLE OR NOTHING never offers a wrong option the rounds showed** when the pool allows (`planner.js`). Test.
+
+**Recordings.** `r10/e0.mp4` (337.8 s; two LETTER BY LETTER headlines nobody named) and `r10/e1.mp4` (327.4 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Boards' share; longest run | **68.4 %**; 27.7 s | 64.1 %; 30.8 s |
+| What the boards carry | the host reading 42.6 %; the clock 14.2 % (two clocks run out); the players 4.7 %; the host's other lines 1.4 %; nothing said 5.5 % | 42.4 %; 13.5 %; 3.1 %; 1.1 %; 4.1 % |
+| Options → the prompt | 0.90 s on average, four (1.15 s before) | 0.87 s, three |
+| Headline → pins | 0.78 s on average, three (0.9–1.5 s before) | — |
+| Facts against the plan and the archive | 33, 0 wrong | 31, 0 wrong |
+| Shots | 43 (20 studio); 7.6 a minute; busiest 10; median 4.87 s | 46 (22); 8.4; 12; 4.80 s |
+| Silent studio shots (≥ 1.5 s) | 5; 2.07 s | 1; 1.60 s (the sign-off's hold) |
+| Loudness | −15.7 LUFS, LRA 5.5 LU, −4.9 dBTP; open −18.0 | −15.6, 5.6, −4.8; −18.0 |
+| Voice over the music (median; lowest) | 22.6 dB; 19.2 dB | 23.9 dB; 20.0 dB |
+
+The prompts (+0.21 s before the first tick), the drumroll, the captions (0…+33 ms) and the length bound held. The
+cuts to answers came 132 ms before their first words, and no cut fell inside a word.
+
+The two changes take about 0.3 s off each line on the tick and up to 1.5 s off a question that would have read its board
+twice. That is 2–3 s an edition, about a point of the share. The share still moves more with the play: E0 ran 68.4 %
+with two clocks run out, 14.2 % of its air.
+
+Fault:
+
+1. **A round's card stood 2.2 s silent again** (E0, PICTURE THIS). The last LETTER BY LETTER question had no face. Its
+   reaction-led frame missed the wide's minimum by 0.3 s, so the reaction stayed on the board. Its only player line
+   was a stall, which stays on the board. Its owed wide then pushed the round's card into the rule, as in round 6.
+   Director.
+
+### Fixes
+
+1. **A reaction a little short of the wide's minimum still carries LETTER BY LETTER's or PICTURE THIS's frame**
+   (`KEEP_BEAT` 0.4 s), the frame waiting the beat before its first word (`playQuestion`'s beat now applies to a link
+   too). Test: "a round's card never stands silent past its rule by more than 1.5 s".
+
+## Round 11 — after round 10's changes
+
+**Recordings.** `r11/e0.mp4` (310.4 s; Lola 19, Sam 18) and `r11/e1.mp4` (315.0 s; Paco 16, Penny 15).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 78 of 78 heard, 0 browser sentences | 72 of 72, 0 |
+| Facts against the plan and the archive | 35, 0 wrong | 32, 0 wrong |
+| PICTURE THIS pictures on screen | 4 of 4 | 3 of 3 |
+| Shots | 44 (20 studio); 8.5 a minute; busiest 11; median 4.79 s; longest studio 7.09 s | 45 (22); 8.6; 11; 5.45 s; 8.13 s |
+| Boards' share; longest run | **67.6 %**; 31.4 s | 62.3 %; 32.4 s |
+| What the boards carry | the host reading 45.5 %; the clock 10.4 %; the players 4.8 %; the host's other lines 1.5 %; nothing said 5.4 % | 42.4 %; 9.3 %; 4.6 %; 1.2 %; 5.0 % |
+| A reaction carrying the next frame after a beat | once ("Simple." then "From the science desk. Fill it in." on the wide, the tiles at its end) | twice |
+| Silent studio shots (≥ 1.5 s) | 2; 1.60 s (the final reactions, the sign-off's hold) | 2; 1.87 s |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | 0…+33 ms | 0…+32 ms |
+| Loudness | −15.7 LUFS, LRA 4.6 LU, −5.0 dBTP; open −18.0 | −15.6, 4.3, −4.7; −18.0 |
+| Voice over the music (median; lowest) | 23.1 dB; 18.5 dB | 23.4 dB; 19.2 dB |
+| The ticker under the game | 4 items; none an edition story, none grave | 6; none |
+
+No new fault was found. The cuts to answers came 132 ms before their first words, and no cut fell inside a word. No
+round's card stood silent. E1's boards are under the reviewer's 65 % and E0's are not (67.6 %). The bound stays open.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.8 | the ticker's hard politics under the game (allowed, no tragedy) |
+| Entertainment and repertoire | 9.7 | no afternoon edition, no TODAY OR NOT TODAY yet |
+| Game legibility and tension | 9.8 | a clock that runs out with nobody buzzing is 9.6 s of tiles and ticks |
+| Format clarity and rhythm | 9.8 | a reveal's board holds its 4 s before the next board when the reveal is short |
+| Picture | 9.6 | E0's boards 67.6 %, over the reviewer's 65 % (open) |
+| Sound | 9.8 | the wide under a clock's last ticks after a short recap |
+| Data robustness | 9.7 | no afternoon edition, no TODAY OR NOT TODAY yet |
+
+**Round score: 9.6.**

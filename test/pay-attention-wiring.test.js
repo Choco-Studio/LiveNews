@@ -299,6 +299,42 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
     assert.ok(cuts >= 10 && onPhrase >= cuts / 2, `${onPhrase} of ${cuts} reveal cuts on a phrase's first word`);
   });
 
+  test('a round\'s card never stands silent past its rule by more than 1.5 s (on air: an owed wide pushed it into the rule, then it held 2.2 s mute)', async () => {
+    let cards = 0;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      const said = saysOf(log, episode);
+      log.shots.forEach((x, k) => {
+        if (x.shot !== 'quiz' || x.card?.board !== 'round') return;
+        const next = log.shots[k + 1];
+        const lines = [...said.values()].filter((l) => l.off > x.t && l.on < next.t);
+        const last = Math.max(x.t, ...lines.map((l) => l.off));
+        cards++;
+        assert.ok(next.t - last <= 1.5, `${seed}: the round's card ${(next.t - last).toFixed(2)} s silent`);
+      });
+    }
+    assert.ok(cards >= 15, `${cards} round cards`);
+  });
+
+  test('the line said on the first tick follows the options or the headline by its gap and the bed\'s half-note wait, no turn\'s pause on top (on air: 1.1-1.4 s of board with nothing said)', async () => {
+    let n = 0;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      const said = saysOf(log, episode);
+      for (const u of quizUnits(episode.segments).filter((x) => x.kind === 'question' && (x.type === 'picture' || x.type === 'where'))) {
+        const before = u.type === 'picture' ? (u.parts.options || [])[0] : u.from;
+        const tick = u.type === 'picture' ? (u.parts.countdown || [])[0] : (u.parts.pins || [])[0];
+        if (before === undefined || tick === undefined) continue;
+        const gap = said.get(tick).on - said.get(before).off;
+        assert.ok(gap >= 0.2 - 0.02 && gap <= 0.2 + HALF_NOTE + 0.05, `${seed} ${u.type}: ${gap.toFixed(2)} s before the line on the tick`);
+        n++;
+      }
+    }
+    assert.ok(n >= 20, `${n} lines on the tick`);
+  });
+
   test('the winner\'s reply to the final score is on a face, never kept on the score card (on air, 13 Oct: the card kept it, the loser\'s came on the wide)', async () => {
     let replies = 0;
     for (const seed of all) {
