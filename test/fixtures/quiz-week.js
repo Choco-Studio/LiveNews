@@ -42,7 +42,7 @@ export function quizEdition(channel, seed = 'w', now = NOW) {
   const contestants = contestantsFrom(channel, ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']);
   const plan = planEdition({ events, entries: archive.entries, now, contestants, history: [], avoid, seed });
   if (!plan.air) return { plan, episode: null, game: null };
-  const { episode, game } = writeEpisode(plan, { channel, now, nextAt: now + 4.5 * H });
+  const { episode, game, plan: aired } = writeEpisode(plan, { channel, now, nextAt: now + 4.5 * H });
   const program = channel.programs['pay-attention'] || channel.drafts?.['pay-attention'] || {};
-  return { plan, game, episode: { ...episode, quizStories: editionStories(plan, events, archive), id: `quiz-${seed}`, cast: { ...episode.cast, H: program.presenters?.[0] || 'qm' }, program: { id: 'pay-attention', title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", theme: 'quiz' } } };
+  return { plan: aired, game, episode: { ...episode, quizStories: editionStories(plan, events, archive), id: `quiz-${seed}`, cast: { ...episode.cast, H: program.presenters?.[0] || 'qm' }, program: { id: 'pay-attention', title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", theme: 'quiz' } } };
 }

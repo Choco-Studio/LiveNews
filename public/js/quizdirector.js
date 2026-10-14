@@ -28,6 +28,7 @@ const REACT_BEAT = 2.0; // s a reaction's face may hold after its words before t
 const LINK_SLACK = 0.6; // s of silence at most on the wide before LETTER BY LETTER's tiles (a link: playLine)
 const KEEP_BEAT = 0.4; // s a reaction and LETTER BY LETTER's (or PICTURE THIS's) frame may fall short of the wide's minimum and still ride it, the frame waiting that beat (playLine, playQuestion)
 const TICK_GAP = 0.2; // s at least between the options or the headline and the line said on the first tick (the prompt, the pins)
+const TODAY_WIDE = 1.6; // s at most TODAY OR NOT TODAY's wide stands before its verdict is heard (the lamps lit on the board first: on air, 14 Oct, the wide waited 2.1-3.1 s silent on the lamps and the clock)
 const CARD_WAIT = 1.8; // ... the first line after a board (the final score's 2 s line leaves its card 1.3-1.7 s short of the minimum: on air, 13 Oct, a winner's reply 0.04 s past 1.6 s stayed on the card)
 const BOARD_MIN = 3.0; // s a reveal stays on the board before a studio shot may take over (the gold, the credit up for 2.75 s)
 const BOARD_MIN_SAID = 2.0; // ... when the host says the credit in the reveal (heard, it need not be read on the board)
@@ -580,7 +581,7 @@ function reveal(d, b, plan, wrongSeats = []) {
   for (const seat of wrongSeats) lamps[seat] = false;
   const scores = { A: q.scores.A + plan.points.A, B: q.scores.B + plan.points.B };
   setState(d, { lamps, scores });
-  d.quizTrace?.push({ k: 'reveal', t: now(), board: b.card.board, right: plan.right, points: { ...plan.points } });
+  d.quizTrace?.push({ k: 'reveal', t: now(), board: b.card.board, right: plan.right, scored: { ...plan.scored }, points: { ...plan.points } });
 }
 
 /** Lamp on (a lock-in, a buzz, a guess). */
@@ -1107,11 +1108,13 @@ async function playToday(d, u, k) {
     const drum = last ? drumroll(d, cd.end) : null;
     const answer = segs[item.frame]?.quiz?.item?.answer;
     const reveal0 = segs[item.reveal];
-    // the lock-ins on the wide once the headline has been read and the board has held its minimum (two known options:
-    // the desks' lamps say it all), and the verdict there with the host
+    // the lock-ins on the board (the lamps beside the headline: two known options, the desks' lamps say it all), then
+    // the wide for the clock's last moment and the verdict there with the host: the wide at most TODAY_WIDE s before the
+    // verdict's first word, once the board has held its minimum
     const min = paceFor(d.scene.program?.id).shots.min;
     const toWide = item.reveal !== null && q.shots[item.reveal] && q.shots[item.reveal].shot !== 'quiz';
-    const awayT = toWide && sched.length ? Math.max(cd.T0 + sched[0].at, b.since + min + 0.05) : Infinity;
+    const heard = Math.max(cd.end, drum ? drum.end : 0) + REVEAL_BEAT + (d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0);
+    const awayT = toWide && sched.length ? Math.max(cd.T0 + sched[0].at, b.since + min + 0.05, heard - TODAY_WIDE) : Infinity;
     let away = false;
     const goWide = async () => {
       if (away || awayT > cd.end + 0.3) return;

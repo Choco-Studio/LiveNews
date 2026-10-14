@@ -31,17 +31,21 @@ function stateActs(text) {
 // hand; each kind is named for that check. Each list is matched on the title, summary and aired text of every airing.
 export const EXCLUDED = [
   ['harm', /\b(?:kill\w*|fatal(?:ly|ity|ities)?|dead|deaths?|die[sd]?|dying|funerals?|injur\w*|hurt|victims?|casualt\w*|missing|rescue[sd]?|rescuers?|evacuat\w*|displac\w*|bod(?:y|ies))\b/i],
-  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*|water levels?|surg(?:e|es|ed|ing) (?:of )?waters?|waters? surg\w*|high water|overflow\w*|swollen rivers?|deluge|torrential)\b/i],
+  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*|water levels?|surg(?:e|es|ed|ing) (?:of )?waters?|waters? surg\w*|high water|overflow\w*|swollen rivers?|deluge|torrential|forced to (?:turn back|return|land|divert|evacuate|stop)|turn(?:s|ed|ing)? back (?:to|after|mid)|emergency (?:landing|stop)|(?:flights?|planes?|jets?|trains?) (?:\w+ )?divert\w*|diverted|mayday|turbulence|grounded|engine (?:failure|fire|fault)|near[- ]miss\w*|mid-air|derailment|stranded)\b/i],
   ['crime', /\b(?:polic(?:e|ing)|officers? (?:said|arrested)|courts?|judges?|trials?|jail\w*|prison\w*|sentenc\w*|charged|charges|arrest\w*|murder\w*|crimes?|criminal\w*|fraud\w*|scam\w*|con(?:s|ned)? (?:homeowners|people|customers|victims)|falsif\w*|forg(?:ed|ery)|evade tax|evasion|dodge tax|launder\w*|bribe\w*|corrupt\w*|scandal\w*|lawsuits?|su(?:e|es|ed|ing)\b|legal action|abuse\w*|assault\w*|raid\w*|detain\w*|detention|investigators?|under investigation|investigat(?:es|ed|ing)? (?:the |a |an )?(?:death|crash|attack|fraud|claims?|allegations?|case|complaints?)|police investigation|criminal investigation|justice department|department of justice|fbi|prosecut\w*|probes? into|exploit(?:ed|ation)|smuggl\w*|thefts?|stolen|steal\w*|robber\w*|hack(?:ed|ers?)|ransomware|cyber-?attacks?|executions?|executed|death row|death penalty|death sentences?|capital punishment|lethal injections?|firing squads?|electric chair|gallows|inmates?)\b/i],
   ['conflict', /\b(?:wars?|warfare|army|armies|armed|military|militar\w*|troops|soldiers?|missiles?|drones? (?:strikes?|attacks?)|(?:air)?strikes? (?:on|against)|attack\w*|terror\w*|bomb\w*|shoot\w*|shots? fired|guns?|gunm[ae]n|weapons?|ceasefire|fightback|offensive|rebels?|militias?|insurgen\w*|houthis?|hamas|hezbollah|taliban|nato|invasion|invad\w*|occupation|hostages?|sanction\w*|defen[cs]e (?:minister|ministry|forces)|frontline|front line|ukraine|russia|gaza|israel\w*|palestin\w*|(?:armed|security|special|government|rebel|federal|allied|enemy|ground|naval|paramilitary|regional) forces|forces (?:enter\w*|captur\w*|seiz\w*|advanc\w*|took|take|withdr\w*|clash\w*|launch\w*|fire[sd]?)|strategic (?:town|city|port|hill)|militants?|jihad\w*|al-shabaab|isis|islamic state|coups?|junta|tigray|darfur|sudan\w*|yemen\w*|syria\w*|somalia\w*|sahel|kashmir|iran\w*|north korea\w*|taiwan strait|south china sea|hormuz|crosshairs|afghan\w*|myanmar|haiti\w*|libya\w*|burkina faso|eritrea\w*|belarus\w*|venezuela\w*)\b/i],
   ['children', /\b(?:child|children|childhood|kids?|boys?|girls?|teen\w*|minors?|pupils?|schools?|schoolchildren|bab(?:y|ies)|toddlers?|infants?|nurser(?:y|ies)|adolescen\w*)\b/i],
-  ['politics', { test: (s) => stateActs(s) }, /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deal|dispute)|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank|press secretary|spokesperson for the|censor\w*|press freedom|suspend(?:s|ed|ing)? (?:broadcasts?|transmissions?|services? of)|trump\w*|biden|kamala harris|vance|starmer|sunak|badenoch|farage|reeves|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|burnham|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/],
+  ['politics', { test: (s) => stateActs(s) }, /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deals?|disputes?|tensions?|frictions?|imbalances?|truce|talks|surplus|deficit|barriers?)|rebalanc\w* (?:its |global )?trade|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank|press secretary|spokesperson for the|censor\w*|press freedom|suspend(?:s|ed|ing)? (?:broadcasts?|transmissions?|services? of)|trump\w*|biden|kamala harris|vance|starmer|sunak|badenoch|farage|reeves|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|burnham|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/],
+  // a head of state or a party leader named anywhere in the story: the deal they announce is politics, wherever the
+  // aired text names them (on air, 14 Oct: "Taiwan plans to buy liquefied natural gas from Alaska pipeline project",
+  // a WHERE question; its aired text: "This is what Donald Trump, the U.S. President, said")
+  ['politics (a politician named)', /\b(?:trump\w*|biden|kamala harris|starmer|sunak|badenoch|farage|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro|white house|downing street|kremlin|prime minister|(?:u\.?s\.? |us |french |russian |chinese |the )president)\b/i],
   ['health', /\b(?:cancer\w*|tumou?rs?|diseases?|diagnos\w*|hospital\w*|patients?|surger(?:y|ies)|operation on|illness\w*|ill\b|sick\w*|virus\w*|outbreaks?|pandemic|epidemic|dementia|alzheimer\w*|stroke\b|heart attack|overdos\w*|suicid\w*|mental health|nhs|medicines? (?:grow )?scarce|nodule)\b/i],
   ['money of people', /\b(?:salar(?:y|ies)|wages?|pay ?(?:rise|cut|deal)|earn(?:s|ed|ing)?\s+(?:up to\s+|over\s+|more than\s+|about\s+|around\s+)?[£$€]|i earn|income|pensions?|fined|fines?\b|damages|compensation|payouts?|net worth|fortune|wealth\w*|billionaires?|millionaires?|inheritance|tax(?:es)? (?:bill|affairs))\b/i],
   ['betting', /\b(?:bet(?:s|ting)?|bookmakers?|bookies|odds|tips?\b|tipster\w*|predictions?|predicted line-?ups?|gambl\w*|casino\w*|lotter(?:y|ies)|jackpot)\b/i],
-  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making)\b/i],
+  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making|price (?:increase|hike|rise)s?|prices? (?:increas|hik|ris|jump|soar|go(?:es)? up)\w*|lonel\w*|social isolation|quitting|losing (?:\d[\d,]* |hundreds of |thousands of |dozens of )?(?:\w+ )?(?:workers|staff|employees|jobs)|(?:staff|workers|employees|drivers|nurses|teachers|posties)\s+(?:are\s+)?(?:quit\w*|leav\w*|walk\w* out)|exodus|efficiency (?:plans?|drives?|savings?|programmes?|cuts?)|cost[- ]cutting|cuts? (?:to|in) (?:staff|jobs|services|deliveries|routes)|under (?:pressure|strain)|overstretched|understaffed|staff shortages?)\b/i],
   ['promotion', /\b(?:\d+ (?:hours|days) (?:to|until|left)|job opportunit\w*|vacanc(?:y|ies)|we(?:'re| are) hiring|apply now|careers? at|your final chance|tickets?|ticket savings|discount\w*|promo codes?|deals? of the day|on sale|buy now|sponsored|giveaway)\b/i],
-  ['failure of a person', /\b(?:flop(?:s|ped|ping)?|box[- ]office (?:bomb|disaster)|weak start|panned|slammed|mock\w*|ridicul\w*|gaffes?|embarrass\w*|humiliat\w*|backlash|push ?back|pushed back|outrage|rows? (?:over|with|between)|feud|criticis\w*|criticiz\w*|apologi[sz]\w*|resign\w*|sacked|fired\b|ousted|quits?\b|wavered|controvers\w*|accus\w*|allegation\w*|alleged\w*|denies|denied)\b/i],
+  ['failure of a person', /\b(?:flop(?:s|ped|ping)?|box[- ]office (?:bomb|disaster)|weak start|panned|slammed|mock\w*|ridicul\w*|gaffes?|embarrass\w*|humiliat\w*|backlash|push ?back|pushed back|outrage|rows? (?:over|with|between)|feud|criticis\w*|criticiz\w*|apologi[sz]\w*|resign\w*|sacked|fired\b|ousted|quits?\b|wavered|controvers\w*|accus\w*|allegation\w*|alleged\w*|denies|denied|sent off|sending[- ]offs?|red cards?|second yellow|yellows|booed|boos|jeered|heckl\w*|dumb|stupid|idiot\w*|daft|blunder\w*|howlers?|own goals?|miss(?:es|ed)? (?:a |the )?penalt\w*|penalty miss\w*|yellow cards?|blames?|blamed|dropped from|axed|benched)\b/i],
 ];
 
 // Reviews and first-person pieces: a verdict is not a fact to quiz on ("Mechanism's first Switch 2 case is as awesome
@@ -319,6 +323,15 @@ export function nextNice(n) {
 // Day words: a TODAY OR NOT TODAY headline must not carry its own answer ("TechCrunch Disrupt 2026 starts tomorrow")
 export const DAY_WORDS = /\b(?:today|tonight|tomorrow|yesterday|this (?:week|weekend|morning|afternoon|evening|year)|last (?:week|night|year)|next (?:week|year)|weekend|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|january|february|march|april|may|june|july|august|september|october|november|december|(?:19|20)\d\d|\d{1,2}(?:st|nd|rd|th)\b|\d+ hours to|hours away|days? away|days? to go)\b/i;
 
+// A presenter's handoff or link, which opens an aired text without saying the story ("Thanks, Lola.", 14 Oct; "Now to
+// Western Norway.")
+const HANDOFF = /^\W*(?:thanks|thank you|cheers|over to|back to|now to|now for|next,|and now|time for|staying with|moving on)\b/i;
+/** A text's opening sentence: the first that is not a handoff or a link of three words or fewer. */
+export function opening(x) {
+  const all = sentencesIn(String(x || ''));
+  return all.find((t) => !HANDOFF.test(t) && t.split(/\s+/).length > 3) || all[0] || '';
+}
+
 /**
  * Why an archive entry cannot be used, or null. Every airing of an event is checked: read grave or serious, grave by
  * text, a bad-news feature subject (closures, job losses), an excluded kind, a review.
@@ -328,24 +341,30 @@ export function entryOut(e) {
   const text = `${e?.title || ''}. ${e?.headline || ''}. ${e?.summary || ''} ${e?.text || ''}`;
   if (isGrave(text)) return 'grave';
   if (notForFeatures(text)) return 'hardship';
-  const first = (x) => sentencesIn(String(x || ''))[0] || '';
-  const kind = excludedKind(text, `${e?.title || ''}. ${e?.headline || ''}. ${first(e?.summary)} ${first(e?.text)}`);
+  const kind = excludedKind(text, `${e?.title || ''}. ${e?.headline || ''}. ${opening(e?.summary)} ${opening(e?.text)}`);
   if (kind) return kind;
   const heads = `${e?.title || ''} | ${e?.headline || ''}`;
   if (OPINION.test(heads) || FIRST_PERSON.test(heads)) return 'opinion';
   return null;
 }
 
-// Under the game, the LATEST ticker carries no tragedy (pay-attention.md §1, §3.3: the channel does not play games beside
-// one): a story grave by its words, or about harm, a disaster, crime, conflict or illness. The editions of 12–13 Oct
-// scrolled an execution, a murder, a fatal ride and a war under the quiz. The station marks such items (`grave`) and the
-// band leaves them out while PAY ATTENTION airs (graphics quizAvoided).
-const TICKER_GRAVE = new Set(['harm', 'disaster', 'crime', 'conflict', 'health']);
-export function tickerGrave(story) {
-  const text = `${story?.title || ''}. ${story?.summary || ''}`;
-  if (isGrave(text)) return true;
-  const kind = excludedKind(text, `${story?.title || ''}. ${sentencesIn(String(story?.summary || ''))[0] || ''}`);
-  return TICKER_GRAVE.has(kind);
+// Under the game, the LATEST ticker carries nothing the quiz itself would refuse (pay-attention.md §1, §3.3): a story
+// grave by its words, a bad-news feature, any excluded kind (harm, disasters, crime, conflict, politics, illness,
+// children, people's money, betting, hardship, promotions, a person's failure) or a review. The editions of 12–13 Oct
+// scrolled an execution, a murder, a fatal ride and a war under the quiz; those of round 14 a state's emergency rule,
+// party politics and an election under it. The station marks such an item with the kind (`quizOut`) and the band leaves
+// it out while PAY ATTENTION airs (graphics quizAvoided): fewer items, never one the game would not ask.
+/** The reason the quiz would refuse a feed story ({ title, summary }) as a question or an option, or null. */
+export function quizRefuses(story) {
+  const title = String(story?.title || '');
+  const summary = String(story?.summary || '');
+  const text = `${title}. ${summary}`;
+  if (isGrave(text)) return 'grave';
+  if (notForFeatures(text)) return 'hardship';
+  const kind = excludedKind(text, `${title}. ${opening(summary)}`);
+  if (kind) return kind;
+  if (OPINION.test(title) || FIRST_PERSON.test(title)) return 'opinion';
+  return null;
 }
 
 /** Real stories only: the development runs' fixture stories have no web link, or one on a reserved host. */
@@ -505,7 +524,26 @@ export function namesIn(words) {
   return out;
 }
 
-/** Do two events look like one story (a shared name), even when the desk's grouping kept them apart? */
-export const shareName = (a, b) => [...namesIn(a.words)].some((n) => namesIn(b.words).has(n));
+// A headline's first word, when it could be a name (capitalised, not a common opener): "Facebook will let you…"
+function openingName(words) {
+  const w = (String(words ?? '').split(/\s+/)[0] || '').replace(/^[‘'"“(]+|[’'"”),.:;!?]+$/g, '').replace(/['’]s$/, '');
+  return w.length >= 3 && /^\p{Lu}/u.test(w) && !COMMON.has(w.toLowerCase()) ? w.toLowerCase() : null;
+}
+// The names in what a story's source opened with: its title and the first sentence of its summary
+const leadNames = (ev) => namesIn(`${ev?.latest?.title || ''} ${sentencesIn(String(ev?.latest?.summary || ''))[0] || ''}`);
+
+/**
+ * Do two events look like one story (a shared name), even when the desk's grouping kept them apart? Two headlines that
+ * open on the same word are one story when their sources' openings share a name besides it: "Facebook will let you
+ * customize your feed algorithm using AI" (The Verge) and "Facebook is giving users more control" (TechCrunch), both
+ * Meta's "Your Algorithm", were asked in one edition on air (step 7, round 15, 13 Oct).
+ */
+export const shareName = (a, b) => {
+  if ([...namesIn(a.words)].some((n) => namesIn(b.words).has(n))) return true;
+  const open = openingName(a.words);
+  if (!open || open !== openingName(b.words)) return false;
+  const nb = leadNames(b);
+  return [...leadNames(a)].some((n) => n !== open && nb.has(n));
+};
 
 export const DAY_MS = DAY;

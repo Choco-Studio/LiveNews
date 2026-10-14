@@ -243,11 +243,11 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.deepEqual(events.map((e) => e.name), ['ticker', 'status', 'schedule']);
     assert.ok(events[0].data.length > 0 && events[0].data.length <= 18);
     // (each item names its story: PAY ATTENTION keeps the stories its edition uses off the band while it airs; an item
-    // grave by its words or kind says so, `grave: true`, and the band leaves it out under the game)
+    // the quiz would refuse says why, `quizOut: 'politics'`, and the band leaves it out under the game)
     for (const item of events[0].data) {
       const keys = Object.keys(item).sort();
-      assert.deepEqual(keys.filter((k) => k !== 'grave'), ['id', 'source', 'text']);
-      if ('grave' in item) assert.equal(item.grave, true);
+      assert.deepEqual(keys.filter((k) => k !== 'quizOut'), ['id', 'source', 'text']);
+      if ('quizOut' in item) assert.ok(typeof item.quizOut === 'string' && item.quizOut.length > 0);
     }
     assert.equal(events[1].data.queue.length, 2);
     assert.equal(events[2].data.upcoming.length, 4);

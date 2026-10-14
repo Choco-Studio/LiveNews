@@ -129,9 +129,10 @@ export class QuizDesk {
     this.pending = null;
     this.checked = null;
     if (!plan?.air) return null;
-    const { episode, game } = writeEpisode(plan, { channel, now, table: this.table, recentLines, nextAt });
-    this.record(plan);
-    return { episode: { ...episode, quizStories: plan.stories || null }, plan, game };
+    // (the plan as aired: the writer's length guard may drop TODAY OR NOT TODAY headlines, which are then not asked)
+    const { episode, game, plan: aired = plan } = writeEpisode(plan, { channel, now, table: this.table, recentLines, nextAt });
+    this.record(aired);
+    return { episode: { ...episode, quizStories: plan.stories || null }, plan: aired, game };
   }
 
   record(plan) {

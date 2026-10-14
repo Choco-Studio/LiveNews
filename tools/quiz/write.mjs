@@ -62,11 +62,11 @@ for (let i = 0; i < Number(opts.editions) * 4 && written < Number(opts.editions)
   // the station's six hours of recent lines: the edition before this one
   // (each edition its own moment, as on air: the banks are picked by the edition's time)
   plan.at = now - (20 - written) * 4.5 * 3600_000;
-  const { episode, game } = writeEpisode(plan, { channel, now, table, nextAt, recentLines: lastLines });
+  const { episode, game, plan: aired } = writeEpisode(plan, { channel, now, table, nextAt, recentLines: lastLines });
   lastLines = episode.segments.map((x) => x.text).filter(Boolean);
   written++;
   // (with --reuse the editions before sit four days back: the pairing rules let pairs meet again, the rotation still turns)
-  history.push({ ...historyOf(plan), at: opts.reuse ? now - 4 * 86400_000 + i * 60_000 : now - (40 - i) * 3600_000 });
+  history.push({ ...historyOf(aired), at: opts.reuse ? now - 4 * 86400_000 + i * 60_000 : now - (40 - i) * 3600_000 });
   const who = (anchor) => (anchor === 'H' ? 'HOST' : (channel.presenters[episode.cast[anchor]]?.name || episode.cast[anchor]).toUpperCase());
   lines.push(`## Edition ${written}: ${episode.title} · ${episode.quiz.types.join(' / ')} · about ${episode.estSeconds} s · ${game.winner ? `${game.winner} wins ${game.scores[game.winner]}–${game.scores[game.loser]}` : 'drawn'}`, '');
   for (const s of episode.segments) {

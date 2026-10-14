@@ -116,15 +116,15 @@ export function sameStory(a, b) {
 
 /**
  * PAY ATTENTION (quizdirector.js): is this LATEST item a story the edition on air uses (asked, offered, its answer), or
- * one the station marked grave (a game never airs beside a tragedy)?
+ * one the station marked as a kind the quiz refuses (grave, politics, crime…: nothing the game would not ask runs under it)?
  * `avoid` = { ids: Set, titles: [] } (scene.quizAvoid): by story id where the item has one, else by its words (the aired
  * headline is often reworded from the feed title: the same story, or three content words in common).
  */
 export function quizAvoided(item, avoid) {
   if (!avoid || !item) return false;
   if (item.id != null && avoid.ids?.has?.(item.id)) return true;
-  // no tragedy under the game: the station marks an item grave by its words or its kind (server/quiz/desk.js tickerGrave)
-  if (item.grave === true) return true;
+  // nothing the quiz would refuse under the game: the station marks the item with the kind (server/quiz/desk.js quizRefuses)
+  if (item.quizOut) return true;
   const text = String(item.text || '');
   if (!text) return false;
   const mine = new Set(contentWords(text));

@@ -908,6 +908,12 @@ Next, in order:
 - TODAY's verdict on its board, or a host line under the lamps;
 - the boards' share, as the reviewer decides.
 
+The reviewer's note on round 14, verbatim:
+
+> round 14 reviewed by the reviewer: not passed; the table line contradicts its board; a person's failure asked as an
+> option; politics and grave items on the ticker under the game; afternoon length; TODAY's silent wides; DOUBLE OR
+> NOTHING's repeated PICTURE THIS
+
 ## The owner's pending choices
 
 These are not faults of the build:
