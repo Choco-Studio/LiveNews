@@ -277,6 +277,55 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
 describe('PAY ATTENTION on air (the director, the fake clock)', () => {
   const all = Object.values(SEEDS);
 
+  test('a face too young for the board carries the next frame after a beat, rather than standing silent to its minimum and the board then cut for the frame', async () => {
+    let beats = 0;
+    const min = paceFor('pay-attention').shots.min;
+    for (const seed of all) {
+      const { episode } = edition(seed);
+      const log = await played(seed);
+      const said = saysOf(log, episode);
+      for (const b of log.trace.filter((x) => x.k === 'beat')) {
+        beats++;
+        assert.ok(log.trace.some((x) => (x.k === 'link' || x.k === 'prelink') && x.i === b.i), `${seed}: the frame ${b.i} on the face after its beat`);
+        const line = said.get(b.i);
+        const face = shotAt(log, line.on + 0.01);
+        assert.ok(face.shot === 'wide' || face.shot === 'close', `${seed}: the frame ${b.i} said on ${face.shot}`);
+        assert.ok(b.beat > 0 && b.beat < min, `${seed}: a beat of ${b.beat.toFixed(2)} s`);
+        const board = log.shots.find((x) => x.t > line.on && x.shot === 'quiz');
+        assert.ok(board.t - face.t >= min - 0.01, `${seed}: the face held ${(board.t - face.t).toFixed(2)} s`);
+        // the board on the frame's mark or its end: never a silence on the face after the frame before the board
+        assert.ok(board.t <= line.off + 0.3, `${seed}: the board ${(board.t - line.off).toFixed(2)} s after the frame`);
+      }
+    }
+    assert.ok(beats >= 1, `${beats} frames carried after a beat`);
+  });
+
+  test('a round\'s card gives way to the host\'s single for the rest of the rule and the first frame: the card its minimum, the single its minimum, never silent', async () => {
+    let faces = 0;
+    for (const seed of all) {
+      const log = await played(seed);
+      for (const rf of log.trace.filter((x) => x.k === 'roundface')) {
+        const single = log.shots.find((x) => x.t >= rf.t - 0.01 && x.framing === 'quiz-host');
+        assert.ok(single, `${seed}: the host's single after the round's card`);
+        const card = [...log.shots].reverse().find((x) => x.t < single.t && x.card?.board === 'round');
+        assert.ok(single.t - card.t >= 4 - 0.05, `${seed}: the round's card held ${(single.t - card.t).toFixed(2)} s`);
+        const next = log.shots.find((x) => x.t > single.t);
+        assert.ok(next.t - single.t >= 4 - 0.05, `${seed}: the host's single held ${(next.t - single.t).toFixed(2)} s`);
+        assert.equal(next.shot, 'quiz', `${seed}: the first question's board after it`);
+        // speech on the single all the way: no gap over 1.2 s between the lines said on it
+        const lines = log.says.filter((x) => x.off > single.t && x.on < next.t).sort((a, b) => a.on - b.on);
+        let t = single.t;
+        for (const l of lines) {
+          assert.ok(l.on - t <= 1.2, `${seed}: ${(l.on - t).toFixed(2)} s silent on the host's single`);
+          t = Math.max(t, l.off);
+        }
+        assert.ok(next.t - t <= 1.2, `${seed}: ${(next.t - t).toFixed(2)} s silent before the board`);
+        faces++;
+      }
+    }
+    assert.ok(faces >= 3, `${faces} rounds open on the host`);
+  });
+
   test('heard on air (step 7): the prompt and the pins end as the first tick sounds; the clock runs under the faces to the reveal; the board back for the picture\'s last step; the recap inside the clock', async () => {
     let prompts = 0;
     let backs = 0;
@@ -403,8 +452,11 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const parts = u.type === 'letters' ? [...(u.parts.stall || []), ...(u.parts.buzz || [])].sort((a, b) => said.get(a).on - said.get(b).on) : u.type === 'howmany' ? u.parts.guess : u.parts.lock;
         assert.equal(answers.length, (parts || []).length, `${seed} ${u.type}: every answer on the board`);
         (parts || []).forEach((i) => {
-          const a = answers.find((x) => x.seat === episode.segments[i].anchor && Math.abs(x.at - rel(i)) < 0.02);
+          // (a buzz held for the cut to the buzzer's single: the lamp and the board's clock on the buzz, `at`, its answer
+          // heard from the cut, `heard`, a second at most later)
+          const a = answers.find((x) => x.seat === episode.segments[i].anchor && Math.abs((x.heard ?? x.at) - rel(i)) < 0.02);
           assert.ok(a, `${seed} ${u.type}: the answer of ${episode.segments[i].anchor} at its line's start`);
+          if (a.heard !== undefined) assert.ok(a.heard > a.at && a.heard - a.at <= 1.0 + 0.02 && episode.segments[i].part === 'buzz', `${seed}: a buzz held ${(a.heard - a.at).toFixed(2)} s`);
           if (u.type !== 'letters' && u.type !== 'howmany') assert.equal(a.answer, episode.segments[i].quiz.lock.answer);
           if (u.type === 'howmany') assert.equal(a.said, episode.segments[i].quiz.guess.said);
         });
@@ -596,6 +648,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
 
   test('the answers on the players\' faces: a buzz on the buzzer\'s single, the guesses and the last lock-in on the wide, on the line\'s first word or once the board has held its minimum; the board back 0.4 s before its reveal, its clock running on', async () => {
     let aways = 0;
+    let held = 0;
     const min = paceFor('pay-attention').shots.min;
     for (const seed of all) {
       const { episode } = edition(seed);
@@ -620,6 +673,16 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const line = said.get(w.i);
         const onWord = Math.abs(line.on - w.t) < 1e-3;
         assert.ok(onWord || (w.t > line.on && w.t <= line.off + 0.6 && cut.t - prev.t < min + 0.35), `${seed}: the cut on the answer (${(w.t - line.on).toFixed(2)} s in)`);
+        // (step 7, on air: a buzz's cut on its first word, the buzz held for it a second at most when the board was young)
+        if (seg.part === 'buzz') {
+          assert.ok(onWord, `${seed}: the buzzer's single ${(w.t - line.on).toFixed(2)} s into the answer`);
+          const press = log.trace.find((x) => x.k === 'press' && x.i === w.i);
+          if (press) {
+            held++;
+            assert.ok(w.t - press.t > 0 && w.t - press.t <= 1.0 + 0.02, `${seed}: a buzz held ${(w.t - press.t).toFixed(2)} s`);
+            assert.ok(cut.t - prev.t < min + 0.1, `${seed}: held past the board's minimum`);
+          }
+        }
         if (seg.part === 'buzz') assert.ok(cut.framing === (seg.anchor === 'A' ? 'quiz-a' : 'quiz-b') || (seg.anchor === 'B' && cut.framing === 'quiz-wide'), `${seed}: the buzzer's single (${cut.framing})`);
         else assert.equal(cut.framing, 'quiz-wide');
         // back to the same board, its clock from its first cut, the reveal on it 0.4 s later
@@ -634,6 +697,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       }
     }
     assert.ok(aways >= 40, `answers on the players' faces: ${aways}`);
+    assert.ok(held >= 1, `buzzes held for the buzzer's single: ${held}`);
   });
 
   test('every question has a face moment (an answer, the verdict or a reaction on a studio shot), no run of boards past 45 s, boards under 65 % of the air', async () => {

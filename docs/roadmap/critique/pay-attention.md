@@ -192,3 +192,164 @@ the faces, the recap), `test/opens.test.js`, `test/camera-polish.test.js`, `test
 `test/server.test.js` (the ticker item may carry `grave: true`).
 
 ---
+## Round 2 — after round 1's fixes
+
+**Recordings.** `r2/e0.mp4` (programme 317.2 s) and `r2/e1.mp4` (333.9 s): E1 is now Paco v Penny (the new exclusions
+changed its pool), HOW MANY? / PICTURE THIS / LETTER BY LETTER, DOUBLE OR NOTHING on WHERE, a sudden-death tie-break.
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 79 of 79 heard, 0 browser sentences | 77 of 77, 0 |
+| Loudness | −15.7 LUFS, LRA 5.0 LU, −4.8 dBTP; open −18.0 | −15.6, 4.6 LU, −5.0; −18.0 |
+| Voice over the music (median; lowest) | 23.1 dB; 18.5 dB (a buzz); DOUBLE OR NOTHING's reveal 26.2 dB (was 15.3) | 23.0 dB; 19.5 dB; its reveal 21.5 dB (was 13.1) |
+| Shots | 46 (21 studio); 8.7 a minute; busiest 13; median 4.70 s; longest studio 7.75 s | 48 (21); 8.6; 12; 5.21 s; 8.70 s |
+| Boards' share; longest run | **67.2 %**; 33.6 s | **67.5 %**; 26.9 s |
+| Silent studio shots (≥ 1.5 s) | 2; longest 1.60 s (was 4.49) | 1; 1.60 s |
+| The prompt or the pins to the first tick | +0.21 s, all seven | +0.21 s, all four |
+| The drumroll | on the clock's last four ticks, ending on its last beat and the reveal | the same, on WHERE |
+| Captions | 0…+33 ms | −1…+33 ms |
+
+Checked fixed on air: the edition voiced; the recaps on the wide ("Agreed, then: C.", "Lola says the Philippines, Sam
+says France.") and no studio shot silent past 1.6 s; the prompt a beat before the first tick; the roll on the grid; "On my
+right, Paco… On my left, Penny"; contractions; no line twice; no tragedy on the band (the LATEST items under the game were
+a legal claim over Falklands oil, a White House briefing, student protesters, a lonely-hearts business in China).
+
+Faults:
+
+1. **Boards 67 % of the air**, above the 65 % the reviewer held the director to in step 4. The faces now gave way to the
+   board as soon as they had said their lines, and WHERE's shorter reveal left no words for the verdict's wide. Director,
+   quiz producer.
+2. **Cuts still inside words**: "reported" (+272 ms), "BBC" (+192 ms). The word-safe cut fired at once whenever the mouth's
+   timeline sat between its words, while the recording was still inside one. Director.
+3. **"A near thing. Nobody has it."**: $150 and $250 against $200, equally close, scored nobody. Quiz producer,
+   first-time viewer ("they were both 50 off").
+4. **"We are level, so Lola picks."**: the writer's own line, not contracted; and a level game could have drawn "you're
+   behind" from the bank. Quiz producer.
+
+| Category | Score | Worst fault |
+|---|---|---|
+| Editorial accuracy and standards | 9.5 | (none on the plan; the ticker's politics under the game, kept: see round 4) |
+| Entertainment and repertoire | 9.2 | 3, 4 |
+| Game legibility and tension | 9.2 | 3 |
+| Format clarity and rhythm | 9.3 | 1 |
+| Picture | 9.3 | 1, 2 |
+| Sound | 9.5 | 2 |
+| Data robustness | 9.4 | 2 (no test held a cut to the recording) |
+
+**Round score: 9.2.**
+
+### Fixes
+
+1. **The faces hold to the reveal's beat** (`quizdirector.js` `back`): the countdown's last ticks and the host's recap on
+   the players, as before round 1; only when PICTURE THIS's picture still has a step to take after they came in does the
+   board come back once they have held the minimum and said their lines.
+2. **A recorded voice's cut is the recording's** (`audio.js` `recordedVoiceAt`, `director.js` `cutWhenClear`): at once in
+   the clip's own silence (its loudness envelope), else on the next word mark, or after the last word as the voice falls
+   silent; never the mouth's timeline.
+3. **Equally close guesses are both the closest** (`server/quiz/players.js`): two points each, "Equally close: two points
+   each." (`banks.js` `equallyClose`).
+4. **"We're level"**, and a level DOUBLE OR NOTHING never draws a line for the player behind (`writer.js`).
+
+## Round 3 — after round 2's fixes
+
+**Recordings.** `r3/e0.mp4` (327.7 s), `r3/e1.mp4` (327.8 s).
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Boards' share; longest run | **65.7 %**; 31.5 s | 63.5 %; 27.5 s |
+| Shots | 47 (21 studio); 8.6 a minute; median 4.77 s; longest studio 9.06 s | 46 (22); 8.4; 4.84 s; 9.26 s |
+| Silent studio shots (≥ 1.5 s) | 6; longest 2.22 s (a buzzer's single holding its 4 s after a 2.4 s answer) | 3; 2.05 s |
+| Voice over the music | median 23.1 dB, lowest 18.5 dB | 22.7 dB, 19.7 dB |
+| Music between voices | −36.4 dBFS (10–90 % −39.0 to −33.3) | −36.8 (−39.3 to −34.7) |
+| Loudness | −15.7 LUFS, LRA 5.0, −4.9 dBTP | −15.6, 4.8, −4.9 |
+| Cuts inside a word | 0 | 1 (below) |
+
+Faults:
+
+1. **A board cut 0.56 s early, inside "How many?"**: HOW MANY?'s board was to land on "A barn owl…", where the host starts
+   reading off it; the speech marks fired on the mouth's timeline, and the recording's question pause is longer than the
+   timeline's. Director.
+2. **Boards still 65.7 % in E0**: the three round cards alone hold 16–20 s of every edition (5 % of the air), a title and a
+   rule on the dark ground while the host speaks. Director, quiz producer.
+
+| Category | Score | Worst fault |
+|---|---|---|
+| Editorial accuracy and standards | 9.6 | (the ticker's politics; HOW MANY?'s "$149 HomePod mini" said as the answer) |
+| Entertainment and repertoire | 9.6 | (the host's recaps are a bank of eight a kind) |
+| Game legibility and tension | 9.6 | 2 |
+| Format clarity and rhythm | 9.5 | 2 |
+| Picture | 9.5 | 1, 2 |
+| Sound | 9.7 | — |
+| Data robustness | 9.5 | 1 (the marks' test ran on the browser voice only) |
+
+**Round score: 9.5.**
+
+### Fixes
+
+1. **Speech marks fire on the recording's words** (`audio.js` `#pollMarks`): a mark is reached when the recording's first
+   word at or after its character starts. Test: `test/audio-engine.test.js`.
+2. **Every round opens on the host** (`quizdirector.js` `roundFace`): the round's card holds the network's minimum for its
+   name, then the host's single takes the rest of the rule and the first question's frame up to where it reads off the
+   board (LETTER BY LETTER's desk, a preamble, "Which story is this picture…"), when those words fill the single; the cut
+   lands between two words. Test: "a round's card gives way to the host's single…".
+3. **The recorder notes the ticker** (`tools/record.mjs`): every LATEST item on screen with its times, in the report, so
+   the band under the game is checked item by item, not by eye.
+
+
+## Round 4 — after round 3's fixes
+
+**Recordings.** `r4/e0.mp4` (programme 317.2 s) and `r4/e1.mp4` (319.4 s). The writer and the players are seeded by the
+moment the plan is made, so each round's remake has the same questions with fresh lines and play.
+
+| Measure | E0 | E1 |
+|---|---|---|
+| Voices | 80 of 80 heard, 0 browser sentences | 72 of 72, 0 |
+| Shots | 45 (20 studio); 8.5 a minute; busiest 12; median 4.88 s; longest studio 8.57 s | 45 (21); 8.5; 12; 5.32 s; 8.12 s |
+| Boards' share; longest run | **67.2 %**; 29.2 s | 63.8 %; 30.1 s |
+| The round's card giving way to the host | 0 of 3 rounds | 1 of 3 (LETTER BY LETTER) |
+| Cuts inside a word | 0 | 0 |
+| The cut to a buzz | **+856 ms** into the answer | **+681 ms** |
+| The cut to a guess or a last lock-in | 132 ms before the first word, all seven | all six |
+| Silent studio shots (≥ 1.5 s) | 3; longest 2.34 s (the late buzz's single) | 3; 2.22 s (the wide after a short recap, the clock ticking) |
+| The prompt or the pins to the first tick | +0.21 s, all seven | all four |
+| The drumroll | PICTURE THIS's last four ticks, ending on the reveal | WHERE's, the same |
+| Captions | 0…+32 ms | 0…+33 ms |
+| Loudness | −15.7 LUFS, LRA 4.9 LU, −4.9 dBTP; open −18.0 | −15.6, 4.8, −4.9; −18.0 |
+| Voice over the music (median; lowest) | 23.4 dB; 18.9 dB | 22.6 dB; 18.6 dB |
+| Music between voices | −37.0 dBFS (10–90 % −39.0 to −34.9) | −36.4 (−38.8 to −34.7) |
+| The ticker under the game | 4 LATEST items; none an edition story, none grave | 7; none |
+
+Faults:
+
+1. **A buzz's cut inside the answer.** E0: "Scientists find | vanilla's hidden healing potential", 0.86 s in. E1: "Apple's
+   smart | home lineup…", 0.69 s in. Each buzzer's single then stood 2.3 and 2.1 s silent before the board came back.
+   Both buzzes came 3.4–3.5 s after their board's cut, before its 4 s minimum, and step 4's fallback then cut between the
+   answer's words. The analysis printed the same in round 3 (+0.53, +0.63, +0.81 s): the panel counted the silent single
+   there and missed its cause. Director (the step-7 check), first-time viewer ("I missed the start of her answer").
+2. **The round's card gave way to the host in one round of six**, and E0's boards were 67.2 %. The round lines run
+   4.4–5.7 s, so 0.4–1.7 s are left once the card has held 4 s. PICTURE THIS's frame was counted only up to "picture",
+   although nothing in it is read off the board. Director, quiz producer.
+
+| Category | Score | Worst fault |
+|---|---|---|
+| Editorial accuracy and standards | 9.6 | (as round 3) |
+| Entertainment and repertoire | 9.6 | (as round 3) |
+| Game legibility and tension | 9.5 | 1 (the answer starts on the board, the face after) |
+| Format clarity and rhythm | 9.5 | 2 |
+| Picture | 9.4 | 1, 2 |
+| Sound | 9.7 | — |
+| Data robustness | 9.4 | 1 (the faces test let a buzz's cut fall between its words) |
+
+**Round score: 9.4**, below round 3's: a fault round 3 missed.
+
+### Fixes
+
+1. **A buzz is answered on the buzzer's single** (`quizdirector.js` `cutFor`, `answers`, `BUZZ_HOLD`). When the board has
+   not yet held its minimum, the buzz still lands on its beat: the lamp lights, the board's clock stops and the ticks end.
+   The answer is then said on the cut to the single, at most a second later. That stays inside the buzz's stage, because
+   the next stage is three half notes on. A board younger than that keeps the buzz; the question has its face elsewhere
+   (its frame, the reveal's tail, a reaction). The board's buzz records both times (`at`, `heard`). Test: the faces test
+   now holds every buzz's cut to its first word and counts the held buzzes; the board times test checks `heard`.
+2. **PICTURE THIS's whole frame rides the round's single** (`roundFace`), as LETTER BY LETTER's does. The picture lands
+   on a word the single has reached, or as the frame ends. After a reaction, its frame rides the wide with the reaction
+   when it reads nothing off the board before a word (`playLine`).

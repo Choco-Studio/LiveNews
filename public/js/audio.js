@@ -607,6 +607,23 @@ export class AudioEngine {
   #pollMarks(run, final = false) {
     const marks = run.marks;
     if (!marks || run.markCursor >= marks.length) return;
+    // a recorded voice: on the recording's own word, never the mouth's timeline, which runs at its own pace between its
+    // anchors (PAY ATTENTION's HOW MANY? board, cut on "A barn owl…", landed 0.56 s early inside "How many?", 13 Oct)
+    if (Array.isArray(run.recWords) && run.recWords.length) {
+      const now = performance.now();
+      while (run.markCursor < marks.length) {
+        const m = marks[run.markCursor];
+        const w = run.recWords.find((x) => x.char >= m.char);
+        if (!final && !(w && now >= w.perf)) break;
+        run.markCursor++;
+        try {
+          run.onMark(m.i);
+        } catch (err) {
+          console.warn('[audio] onMark failed', err);
+        }
+      }
+      return;
+    }
     let reached = -1;
     let sentence = run.sentence;
     if (final) sentence = Infinity;
@@ -753,6 +770,8 @@ export class AudioEngine {
     // (the recording's own word starts, as heard: a cut that must land between two words waits for the next one,
     // director.cutWhenClear; the mouth's timeline runs at its own pace between anchors and may change word mid-sound)
     run.wordStarts = words.map((w) => perf0 + w.t);
+    // (and the marks fire on them: a mark is reached when the recording's first word at or after its character starts)
+    run.recWords = words.map((w) => ({ perf: perf0 + w.t, char: w.char }));
     const lv = audio.levels;
     const env = lv && Array.isArray(lv.values) && lv.values.length && Number(lv.rate) > 0 ? { rate: Number(lv.rate), values: lv.values, perf0 } : null;
     run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0, env };

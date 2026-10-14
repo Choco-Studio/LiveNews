@@ -566,7 +566,8 @@ function pageInit(CFG) {
   REC.chunk = (ch, from, count) => b64(new Uint8Array(REC.audioOut[ch].buffer, from * 4, count * 4));
 
   // Instrumentation of the channel's own objects (main.js hands them over).
-  window.__recHook = ({ audio, director }) => {
+  window.__recHook = ({ audio, director, renderer = null }) => {
+    REC.renderer = renderer;
     try {
       if (audio && typeof audio.sfx === 'function') {
         const sfx = audio.sfx.bind(audio);
@@ -645,7 +646,7 @@ if (!opts.step) {
   // the product code is untouched). main.js keeps them as top-level `audio` and `player`.
   await page.route(/\/js\/main\.js(\?.*)?$/, async (route) => {
     const res = await route.fetch();
-    const hook = "\ntry { window.__recHook?.({ audio: typeof audio !== 'undefined' ? audio : null, director: typeof player !== 'undefined' ? player : null }); } catch (e) { /* recorder hook */ }\n";
+    const hook = "\ntry { window.__recHook?.({ audio: typeof audio !== 'undefined' ? audio : null, director: typeof player !== 'undefined' ? player : null, renderer: typeof renderer !== 'undefined' ? renderer : null }); } catch (e) { /* recorder hook */ }\n";
     const body = `${await res.text()}${hook}`;
     await route.fulfill({ response: res, body, headers: { ...res.headers(), 'cache-control': 'no-store', 'content-length': String(Buffer.byteLength(body)) } });
   });
@@ -725,12 +726,14 @@ for (let i = 0; i < total; i++) {
     let sig = '';
     for (let k = 0; k < d.length; k += 4) sig += String.fromCharCode(Math.round(d[k] * 0.3 + d[k + 1] * 0.59 + d[k + 2] * 0.11));
     const sc = window.__rec?.director?.scene;
-    return { url: c.toDataURL('image/png'), perf: performance.now(), sig: btoa(sig), sub: sc?.subtitle ?? null, shot: sc?.shot ?? null };
+    // (the LATEST band's item on screen: the ticker's own words, for a check of what scrolls under a programme)
+    const tk = window.__rec?.renderer?.graphics?.ticker?.cur;
+    return { url: c.toDataURL('image/png'), perf: performance.now(), sig: btoa(sig), sub: sc?.subtitle ?? null, shot: sc?.shot ?? null, tick: tk ? String(tk.base ?? tk.text ?? '') : null };
   }, opts.selector);
   if (!shot) throw new Error(`no canvas matches ${opts.selector}`);
   perfs.push(shot.perf);
   sigs.push(Buffer.from(shot.sig, 'base64'));
-  scenes.push({ sub: shot.sub, shot: shot.shot });
+  scenes.push({ sub: shot.sub, shot: shot.shot, tick: shot.tick });
   fs.writeFileSync(path.join(dir, `f${String(i).padStart(6, '0')}.png`), Buffer.from(shot.url.split(',')[1], 'base64'));
   if (i % (opts.fps * 10) === 0) {
     // (with --progressive, how far the sound has rendered: seconds of each context's timeline)
@@ -899,6 +902,16 @@ function buildReport() {
     }
     return null;
   };
+  // the LATEST band's items as they were on screen: [{ text, from, to }] in video seconds
+  const tickerRuns = () => {
+    const out = [];
+    scenes.forEach((x, f) => {
+      const last = out[out.length - 1];
+      if (x.tick && last && last.text === x.tick && last.to >= (f - 1) / opts.fps - 1e-6) last.to = f / opts.fps;
+      else if (x.tick) out.push({ text: x.tick, from: f / opts.fps, to: f / opts.fps });
+    });
+    return out;
+  };
   const sync = [];
   for (const e of events) {
     if (e.type === 'sfx' && e.va >= 0.1 && e.va < opts.seconds - 0.3) sync.push({ kind: 'sfx', at: e.va, label: e.name, audioMs: onset(e.va), pictureMs: change(e.va) });
@@ -928,6 +941,7 @@ function buildReport() {
     speech: { recorded: sentences.filter((e) => e.recorded).length, browser: sentences.filter((e) => !e.recorded).length, clips },
     events: events.map(({ t, ...e }) => e),
     sync,
+    ticker: tickerRuns(),
     ...(traces ? { trace: traces } : {}),
   };
 }

@@ -59,7 +59,7 @@ export const HOST = {
     ],
     howmany: [
       'Round {k}: HOW MANY? Closest guess takes two points; spot on takes three.',
-      'HOW MANY? for round {k}. Here\'s the sentence as it aired, with the number covered up.',
+      'HOW MANY? for round {k}. Guess the number we covered up.',
       'Round {k} is HOW MANY? No options. Just your best guess.',
       'Round {k}: HOW MANY? Numbers, as we reported them. Guess close.',
     ],

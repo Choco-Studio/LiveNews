@@ -156,6 +156,10 @@ describe('the words', () => {
     assert.equal(placeSaid('United States'), 'the United States');
     assert.equal(placeSaid('Madagascar'), 'Madagascar');
     assert.equal(figureSaid({ sentence: 'A barn owl and 15 chicks are ringed.', masked: 'A barn owl and ▮▮ chicks are ringed.', figure: { value: '15', label: 'CHICKS' } }), '15 chicks');
+    // a sum of money with its rate, never with what it bought (on air, 13 Oct: "The answer: $149 HomePod mini")
+    assert.equal(figureSaid({ sentence: 'Plans ranging from $8 to $200 per month.', masked: 'Plans ranging from $8 to ▮▮▮▮ per month.', figure: { value: '$200', label: 'PER MONTH' } }), '$200 per month');
+    assert.equal(figureSaid({ sentence: 'The new $149 HomePod mini will be available.', masked: 'The new ▮▮▮▮ HomePod mini will be available.', figure: { value: '$149', label: 'HOMEPOD MINI' } }), '$149');
+    assert.equal(figureSaid({ sentence: 'Bumble just agreed to a $1.3 billion acquisition.', masked: 'Bumble just agreed to a ▮▮▮▮▮▮ acquisition.', figure: { value: '$1.3 billion', label: 'ACQUISITION' } }), '$1.3 billion');
   });
   test('every player has a full bank, and UNIT-8 never laughs', () => {
     for (const [id, bank] of Object.entries(PLAYERS)) {
@@ -226,6 +230,26 @@ describe('heard on air (step 7, the editions of 12–13 Oct with the real voices
         assert.match(s.text, /^It's /);
       }
     }
+  });
+  test('a round\'s rule never presents its first question, which the frame then presents again', () => {
+    // (on air, 13 Oct: "Here's the sentence as it aired, with the number covered up." then "The sentence, with the figure
+    // hidden: …")
+    for (const line of Object.values(HOST.roundIntro).flat()) assert.ok(!/\bHere(?:'s| is)\b/i.test(line), line);
+  });
+  test('nobody regrets an answer they never gave: when nobody buzzed LETTER BY LETTER, no player reacts to the miss', () => {
+    let silent = 0;
+    for (const { episode } of eds) {
+      const segs = episode.segments;
+      segs.forEach((s, i) => {
+        if (s.part !== 'reveal' || s.quiz?.round !== 'letters') return;
+        let f = i - 1;
+        while (f > 0 && segs[f].part !== 'frame') f--;
+        if (segs.slice(f, i).some((x) => x.part === 'buzz' || x.part === 'stall')) return;
+        silent++;
+        assert.notEqual(segs[i + 1]?.part, 'react', `${s.text} / ${segs[i + 1]?.text}`);
+      });
+    }
+    assert.ok(silent >= 1, `${silent} LETTER BY LETTER questions nobody buzzed`);
   });
   test('a story aired in the small hours aired overnight, not this morning', () => {
     const night = Date.parse('2026-10-15T23:40:00Z'); // 00:40 London on the 16th

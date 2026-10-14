@@ -80,10 +80,14 @@ export function figureSaid(q) {
   const after = masked.slice(i).replace(/^▮+/, '');
   const value = s.slice(i, s.length - after.length).trim();
   const labelWords = new Set(String(q.figure.label || '').toLowerCase().split(/[^a-z]+/).filter(Boolean));
+  // a sum of money takes only a rate after it ("$200 per month"), never what it bought: "The answer: $149 HomePod mini"
+  // and "$1.3 billion acquisition" are heard as one name (on air, 13 Oct)
+  const money = /[$£€¥]|\b(?:dollars?|pounds?|euros?)\b/i.test(value);
   const follow = [];
   for (const w of after.trim().split(/\s+/)) {
     const bare = w.replace(/[^\p{L}]/gu, '');
     if (!bare || !labelWords.has(bare.toLowerCase()) || follow.length >= 3) break;
+    if (money && !follow.length && bare.toLowerCase() !== 'per') break;
     follow.push(w.replace(/[.,;:!?]+$/, ''));
   }
   return [value, ...follow].join(' ');
@@ -223,8 +227,12 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     const pb = pts(b) * (double?.[b] || 1);
     if ((reactions.get(roundKey(key)) || 0) >= 2) return;
     const before = segs.length;
+    // (a miss is regretted by a player who answered: when nobody buzzed LETTER BY LETTER, nobody gave an answer to call
+    // overpriced or too fast; on air, 13 Oct: "Nobody has it. It was: …" "Overpriced answer.")
+    const answered = (id) => q.type !== 'letters' || !!played.plays?.[id]?.stall;
+    const missed = [hash(key) % 4 < 2 ? a : b, hash(key) % 4 < 2 ? b : a].find(answered);
     if (pa !== pb && (hash(key) % 3 !== 0 || pa + pb >= 3)) react(pa > pb ? a : b, 'right', key);
-    else if (pa === 0 && pb === 0 && hash(key) % 2) react(hash(key) % 4 < 2 ? a : b, 'wrong', key);
+    else if (pa === 0 && pb === 0 && hash(key) % 2 && missed) react(missed, 'wrong', key);
     if (segs.length > before) reactions.set(roundKey(key), (reactions.get(roundKey(key)) || 0) + 1);
   };
   const reactions = new Map();
