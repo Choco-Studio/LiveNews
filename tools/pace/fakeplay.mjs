@@ -8,6 +8,25 @@ import fs from 'node:fs';
 import { Director } from '../../public/js/director.js';
 import { splitSentences } from '../../public/js/audio/sentences.js';
 
+/** When (s after the line starts) the stub voice reaches each char of `chars`: 15 characters a second, 0.3 s between sentences. */
+export function speechMarks(text, lines, chars) {
+  const starts = [];
+  let from = 0;
+  let t = 0;
+  for (const l of lines) {
+    const at = text.indexOf(l.slice(0, 12), from);
+    const c = at >= 0 ? at : from;
+    starts.push({ c, t, len: l.length });
+    from = c + l.length;
+    t += l.length / 15 + 0.3;
+  }
+  return (chars || []).map((ch) => {
+    let s = starts[0] || { c: 0, t: 0, len: 0 };
+    for (const x of starts) if (x.c <= ch) s = x;
+    return s.t + Math.min(s.len, Math.max(0, ch - s.c)) / 15;
+  });
+}
+
 export function fakeClock() {
   let t = 1e6; // ms
   let seq = 0;
@@ -51,7 +70,7 @@ export function fakeClock() {
  * Play `ep` on the default path (no v2) on the fake clock: { shots, says, sfx, lookups }. `voiceLookup` (s): each
  * recorded-voice lookup (voices.audioFor) takes that long on the clock, as a late clip's server lookup does.
  */
-export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLookup = 0 } = {}) {
+export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLookup = 0, marks = false } = {}) {
   const clock = fakeClock();
   const log = { shots: [], says: [], sfx: [], lookups: [] };
   try {
@@ -61,11 +80,13 @@ export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLoo
       stop() {},
       playTune: () => ({ stop() {} }),
       sfx: (name, o) => log.sfx.push({ name, t: clock.now(), startAt: o?.startAt != null ? o.startAt / 1000 : null }),
-      speak(text, slot, { onSentence } = {}) {
+      speak(text, slot, { onSentence, marks: at = [], onMark } = {}) {
         return new Promise((resolve) => {
           const lines = splitSentences(text);
           const say = { text, slot, on: clock.now(), off: null };
           log.says.push(say);
+          // (opt-in: each mark fires when the voice reaches its character, inside its sentence at the same rate)
+          if (marks && typeof onMark === 'function') speechMarks(text, lines, at).forEach((t, k) => setTimeout(() => onMark(k), t * 1000));
           let i = 0;
           const step = () => {
             if (i >= lines.length) {
@@ -118,11 +139,11 @@ export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLoo
 async function cli() {
   const file = process.argv[2];
   if (!file) {
-    console.error('usage: node tools/pace/fakeplay.mjs episode.json [--no-pictures]');
+    console.error('usage: node tools/pace/fakeplay.mjs episode.json [--no-pictures] [--marks]');
     process.exit(1);
   }
   const ep = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const log = await playDefault(ep, { pictures: !process.argv.includes('--no-pictures') });
+  const log = await playDefault(ep, { pictures: !process.argv.includes('--no-pictures'), marks: process.argv.includes('--marks') });
   const t0 = log.seen[0]?.t ?? 0;
   const ev = [
     ...log.seen.map((x) => ({ t: x.t, s: `SHOT ${x.shot.padEnd(12)} ${String(x.focus || '').padEnd(2)} ${x.len.toFixed(2)} s` })),

@@ -119,7 +119,14 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - Ya conectado al canal como programa de tipo concurso; aún no está en la parrilla.
     - ✅ Paso 3, los gráficos (9,75). ✅ Paso 6, los tres candidatos a presentador (9,75): falta que elijas uno.
     - ✅ Paso 5: el plató (9,75), la cabecera (9,75, a la octava ronda: cada lámpara se enciende con su foco cayendo sobre la mesa del jugador) y la música y los efectos.
-    - En marcha: 4 la dirección. Después: 7 dos ediciones grabadas.
+    - 🟡 Paso 4, la dirección: construida, pero no pasa. El agente se puso 9,75 y mi revisión le da 9,0:
+      - la cinta de noticias de abajo puede enseñar la respuesta;
+      - hay tramos de hasta 85 s de pizarras sin ver a nadie;
+      - la cabeza del presentador tapa el nombre del programa en la pantalla del fondo;
+      - el marcador del descanso pisa las bombillas;
+      - la pizarra de "¿cuántos?" queda medio vacía.
+      Vuelve a trabajo.
+    - Después: 7 dos ediciones grabadas.
 
 ## E. Plató, gráficos y cámara
 24. Plató:

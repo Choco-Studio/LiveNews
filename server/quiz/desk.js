@@ -444,6 +444,8 @@ export function quizEvents(archive, { now = Date.now(), days = 7, same = null, r
       ids: g.ids,
       words,
       image: withImage?.image || null,
+      // the airing that carried the picture (the station serves it as /api/img/<imageId>: the director's preload)
+      imageId: withImage?.id || null,
       place: usablePlace(latest, words),
       optionPlace: optionPlace(latest),
       figure,

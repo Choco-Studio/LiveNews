@@ -21,6 +21,7 @@ export class Archive {
     this.log = log;
     this.entries = []; // oldest first
     this.byId = new Map(); // story id -> the latest entry's story fields
+    this.pictured = new Map(); // story id -> the latest entry that aired it with its picture (a retelling may carry none)
     this.load();
   }
 
@@ -47,6 +48,7 @@ export class Archive {
     if (!e?.id || !Number.isFinite(e.at)) return;
     this.entries.push(e);
     this.byId.set(e.id, e);
+    if (e.image) this.pictured.set(e.id, e);
   }
 
   /**
@@ -113,12 +115,18 @@ export class Archive {
 
   prune() {
     const since = this.now() - this.days * DAY;
-    if (this.entries.length && this.entries[0].at < since) this.entries = this.entries.filter((e) => e.at >= since);
+    if (this.entries.length && this.entries[0].at < since) {
+      this.entries = this.entries.filter((e) => e.at >= since);
+      for (const [id, e] of this.pictured) if (e.at < since) this.pictured.delete(id);
+    }
   }
 
   story(id) {
     const e = this.byId.get(id);
-    return e ? { id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, image: e.image, images: e.images, link: e.link, kw: e.kw, archived: true } : null;
+    // (the story's picture is the one it aired with, even when a later retelling, NEWS IN 60's, carried none: /api/img
+    // serves it, as PAY ATTENTION's PICTURE THIS asks it)
+    const pic = e?.image ? e : this.pictured.get(id);
+    return e ? { id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, image: pic?.image ?? null, images: pic?.images, link: e.link, kw: e.kw, archived: true } : null;
   }
 
   /**

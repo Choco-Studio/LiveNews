@@ -58,6 +58,7 @@ const KEYS = [
   'WEATHER_TTL_MIN',
   'ROTATION_START',
   'DRAFTS_ON_AIR',
+  'QUIZ_VIEW',
   'STATION_CLOCK',
 ];
 

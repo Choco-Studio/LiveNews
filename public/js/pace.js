@@ -287,6 +287,35 @@ const PROGRAMMES = {
     listener: { reactionGap: 7, nodsPerMin: [1.2, 6] },
     music: { minBed: 25, maxChangesPerMin: 1.5 },
   },
+  'pay-attention': {
+    label: 'quick and warm, a game',
+    // pay-attention.md §4: 300-345 s at the voices' rate, up to 360 s with a tie-break (targetSeconds [290, 360]). The
+    // open, the welcome and the players, three rounds of three questions (TODAY OR NOT TODAY: six headlines), the
+    // scores at half time, DOUBLE OR NOTHING, the result and the week's table, the sign-off. A game moves: short
+    // turns between the host and the players, a question played as one board segment (director.js: the countdown
+    // on the bed's half notes, the lock-ins and buzzes on its clock, the reveal on its last tick)
+    length: {
+      target: [290, 360],
+      blocks: ['open', 'welcome', 'round', 'round', 'scores', 'round', 'double', 'result', 'table', 'signoff'],
+    },
+    open: { firstWord: 0.5 },
+    // the quiz's own pauses (gapKind: both segments are the quiz's): quizTurn between two lines of one exchange,
+    // quizReact before a player's reaction (a reply comes quickly), quizNext before the next question, quizCard
+    // from a round's card into its first question, quizBlock before a round, the scores, DOUBLE OR NOTHING or the
+    // result; inside a question the director keeps its own beats (the countdown's clock)
+    gaps: { story: 0.8, handover: 0.5, chatTurn: 0.4, quizTurn: 0.45, quizReact: 0.35, quizNext: 0.75, quizCard: 0.55, quizBlock: 0.95, beforeOutro: 0.85, jitter: 0.05 },
+    holds: { signoff: 1.2, endcard: 3.0 },
+    // the shots (director.js playQuiz, quizplay.js planQuizShots): the quiz's wide, the host's single, the players'
+    // singles and the boards; never faster than the network's 4 s; a studio shot at most 12 s; a question board holds
+    // its whole question (quizMax: PICTURE THIS runs about 27 s from its frame to its reveal). The median band is the
+    // measured one (18 editions, 5.1-9.0 s), inside the owner's floor: a question's board runs 9-28 s (cut by the
+    // buzzer's single or the guessers' wide), the studio's shots 4-12 s
+    shots: { median: [5, 9], studioMax: 12, singleSoft: 10, cutsPerMinMax: 10, quiz: true, quizMax: 40 },
+    moves: { max: 0, minGap: Infinity }, // the quiz's framings are locked off (studio/quiz.js quizCamera)
+    gestures: { perMin: 5, minGap: 4.5, beatsPerMin: 7, rest: 0.6, grave: 2, floor: 2.5 },
+    listener: { reactionGap: 7, nodsPerMin: [1, 6] },
+    music: { minBed: 20, maxChangesPerMin: 2 },
+  },
   'news-60': {
     label: 'brisk but readable',
     // news-60.md: 55-65 s of air ("NEWS IN 60"); up to 70 s when the six items run long, never two minutes
@@ -358,6 +387,7 @@ const isSignpost = (s) => !!s && (s.signpost === true || (s.type === 'chat' && S
  */
 export function gapKind(prev, next) {
   if (!prev || !next) return 'story';
+  if (prev.type === 'quiz' && next.type === 'quiz') return quizGap(prev, next);
   if (next.type === 'outro') return 'beforeOutro';
   if (prev.type === 'intro') return 'afterIntro';
   if (next.type === 'cross') return 'link'; // a correspondent link: the two-way keeps its turns close
@@ -370,6 +400,19 @@ export function gapKind(prev, next) {
   if (inRoundup(prev) !== inRoundup(next)) return 'block';
   if (next.block) return 'block';
   return prev.anchor && next.anchor && prev.anchor !== next.anchor ? 'handover' : 'story';
+}
+
+// PAY ATTENTION's parts that open a block (pay-attention.md §4): a round's card, the scores, DOUBLE OR NOTHING, the
+// tie-break, the result
+const QUIZ_BLOCK = new Set(['round', 'scores', 'don', 'tie', 'result']);
+/** The pause between two of PAY ATTENTION's segments (server/quiz/writer.js parts). */
+function quizGap(prev, next) {
+  if (next.part === 'signoff') return 'beforeOutro';
+  if (QUIZ_BLOCK.has(next.part)) return 'quizBlock';
+  if (next.part === 'react' || next.part === 'pick') return 'quizReact';
+  if (prev.part === 'round' || prev.part === 'tie') return 'quizCard';
+  if (next.part === 'frame') return 'quizNext';
+  return 'quizTurn';
 }
 
 /**
@@ -589,6 +632,7 @@ export function shotMax(programId, shot) {
   if (shot === 'full') return S.picture[1];
   if (shot === 'fact') return S.factMax;
   if (shot === 'scores') return S.scoresMax || 40; // SCORE CENTRE: a board segment, on air for its whole segment
+  if (shot === 'quiz') return S.quizMax || 40; // PAY ATTENTION's boards: a question on air from its frame to its reveal
   return S.studioMax;
 }
 

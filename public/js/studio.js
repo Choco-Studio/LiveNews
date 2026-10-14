@@ -17,6 +17,7 @@ import { ACTIONS } from './cues.js';
 import { Graphics } from './graphics/index.js';
 import { picturePan } from './pace.js';
 import { FrameGuard } from './graphics/guard.js';
+import { drawQuizShot, drawQuizStrip } from './scenes/quiz-shot.js';
 // WORLD WEATHER's weather centre (the standing presenter uses the v2 rig): loaded in the background at start-up
 let WEATHER = null;
 import('./scenes/weather/index.js').then((m) => (WEATHER = m), (err) => console.warn('[weather] scene unavailable', err));
@@ -226,6 +227,10 @@ export class Renderer {
       case 'scores':
         // FULL TIME's SCORE CENTRE (director.js playBoardSegment): the stadium's board filling the frame, a row as it is read
         return drawScoreboard(ctx, dt, card, THEME_ACCENT[program?.theme] || P.orange);
+      case 'quiz':
+        // PAY ATTENTION's boards (quizdirector.js): a question from its frame to its reveal, a round's card, DOUBLE OR
+        // NOTHING, the final score, the week's table, full frame on the quiz's ground (scenes/quiz-shot.js)
+        return drawQuizShot(ctx, t, dt, card);
       case 'weather':
         if (WEATHER) return WEATHER.drawWeather(ctx, t, scene, this.audio);
         return drawWorldMap(ctx, t, dt, {}); // the idle world until the weather centre has loaded
@@ -342,6 +347,8 @@ export class Renderer {
 
   render(t, scene) {
     this.guard.shot(this, t, scene); // drawShot, isolated: overlays and stinger always draw
+    // PAY ATTENTION's scores strip over the studio (the half-time scores and the banter after them)
+    if (scene.quizStrip && (scene.shot === 'wide' || scene.shot === 'close')) drawQuizStrip(this.ctx, t, scene.quizStrip);
     this.drawOverlays(t, scene);
     if (scene.stinger) {
       const p = (t - scene.stinger.start) / cards.STINGER_DURATION;

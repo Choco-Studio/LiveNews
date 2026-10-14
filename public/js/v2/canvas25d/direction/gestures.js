@@ -83,6 +83,8 @@ import { TILT } from '../space.js';
 import { planShots } from './shots.js';
 import { paceFor, gestureBudget, CHANNEL } from '../../../pace.js';
 import { CAPTION, STRAP, TICKER, W as LAYOUT_W } from '../../../graphics/layout.js';
+import { HOST_GESTURES } from '../cast/pay-attention.js';
+import { QUIZ_SEATS } from '../studio/quiz.js';
 
 /** config/channel.json programs.<id>.gestures, mirrored for the client (test/v2-hands.test.js checks parity). */
 export const CONFIG_POLICY = {
@@ -213,6 +215,30 @@ export const BIBLE = {
     greeting: true,
     storyCount: [1, 2],
   },
+  // PAY ATTENTION (pay-attention.md §2, §9 step 4): the host's list is the quizmaster's (cast/pay-attention.js
+  // HOST_GESTURES): a point to a player only where the director asks for it (its cue names the side: the near arm turns
+  // to B, `far` to A), the count, the lean, the open palm, the steeple, a nod; the players react to the game (a nod, a
+  // lean, a beat, a steeple; a shrug only on doubt, a head shake only on a no). Never a laugh, applause, a wave, a
+  // thumbs up, a fist pump or a facepalm (the owner's rule: no laughter, no applause, no studio audience)
+  'pay-attention': {
+    speaker: {
+      qm: HOST_GESTURES.allow.filter((n) => n !== 'look_partner' && n !== 'point_screen' && !HOST_GESTURES.deny.includes(n)),
+      '*': ['nod', 'lean_in', 'raise_hand', 'steeple', 'shrug', 'shake_head'],
+    },
+    banned: [...LIGHT, 'wave', 'point_camera', 'glasses', ...HOST_GESTURES.deny],
+    story: ['nod', 'count', 'lean_in', 'raise_hand', 'steeple'],
+    chat: ['shrug', 'shake_head'],
+    grave: ['nod', 'steeple'],
+    cap: 1,
+    lead: [0.2, 0.3],
+    greeting: true,
+    signoffPapers: true,
+    storyCount: [0, 1],
+    beats: {
+      density: { quiz: 0.35, chat: 0.3 },
+      variants: ['raise_hand:beat', 'raise_hand:offer', 'steeple:press', 'raise_hand:box', 'raise_hand:tick'],
+    },
+  },
   'news-60': {
     speaker: ['nod', 'lean_in', 'papers'],
     banned: [...LIGHT, 'wave', 'point_screen', 'raise_hand'],
@@ -261,6 +287,8 @@ const FAMILY = {
   'shake_head:slow': 'shake_head',
   'point_screen:open': 'point_screen',
   'point_partner:after_you': 'point_partner',
+  'point_partner:far': 'point_partner',
+  'point_partner:after_you_far': 'point_partner',
   // (critic r3: a hand to the jaw is a hand to the jaw, brief or held: Ada's chin and chin touch aired back to back)
   'chin:touch': 'chin',
 };
@@ -272,7 +300,7 @@ export const familyOf = (e) => {
 };
 const keyOf = familyOf;
 /** Legacy shots in which the presenter is not in vision: a gesture's apex never lands there. */
-const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines', 'scores']);
+const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines', 'scores', 'quiz']);
 const GRAVE_AMP = [0.6, 0.7];
 const RAISE_CAP = 1; // the full palm-out raise_hand: per presenter per episode
 const REPEAT_GAP = 45; // s: one marked family never twice within this on air, whoever performs it
@@ -296,6 +324,8 @@ function listFor(v, id) {
   if (Array.isArray(v)) return v;
   if (v && typeof v === 'object') {
     if (id && Array.isArray(v[id])) return v[id];
+    // (a table's default list, '*': PAY ATTENTION's players, whoever plays tonight)
+    if (Array.isArray(v['*'])) return v['*'];
     // an unknown presenter in a per-presenter table: the union of the lists
     return [...new Set(Object.values(v).flat())];
   }
@@ -1046,8 +1076,10 @@ function planInternal(ctx) {
     return { out: out.concat(finish(P)), P };
   }
 
-  // ---- greeting nod (the presenter's first turn in the opening)
-  if (B.greeting !== false && (P.ep.greet[ctx.index] || ctx.type === 'intro') && P.admit('nod', { structural: true })) {
+  // ---- greeting nod (the presenter's first turn in the opening; PAY ATTENTION: the host's welcome, each player's
+  // first reply)
+  const quizGreet = ctx.type === 'quiz' && (ctx.seg.part === 'welcome' || (ctx.seg.part === 'react' && !(ctx.episode.segments || []).slice(0, ctx.index).some((x) => x.anchor === ctx.speaker && x.chars > 0)));
+  if (B.greeting !== false && (P.ep.greet[ctx.index] || ctx.type === 'intro' || quizGreet) && P.admit('nod', { structural: true })) {
     const m = text.match(/\b(good (evening|morning|afternoon|night)|welcome|hello)\b/i) || text.match(/\bI'?m\b|\bI am\b/);
     const char = m ? m.index : ctx.sentences[ctx.sentences.length - 1]?.start || 0;
     P.placeNear('nod', char, { variant: R.variants.nod || 'single', spill: true, free: true });
@@ -1068,7 +1100,8 @@ function planInternal(ctx) {
     if (name === 'glasses') continue; // the glasses keep their own moment and rarity (placeGlasses)
     if (name === 'point_screen' && !pictureFollows(ctx, ctx.timeAt(cue.char) + 0.6)) continue;
     if (name === 'lean_in' && B.leanInPerEpisode && P.ep.leanIn !== ctx.index) continue;
-    P.placeVisible(name, cue.char, {});
+    // (a cue may name its variant: PAY ATTENTION's host points to player A with the far arm, point_partner:far)
+    P.placeVisible(name, cue.char, cue.variant ? { variant: cue.variant } : {});
   }
 
   // ---- TECH BYTES / COSMOS: a presenter who wears glasses pushes them up now and then, between two sentences
@@ -1106,7 +1139,7 @@ function planInternal(ctx) {
   if (ctx.type === 'story' && ctx.feature !== 'roundup') fillStory(P, ctx, R);
 
   // ---- MONEY MINUTE / tech / cosmos: a chat or intro may carry one listed gesture too
-  if ((ctx.type === 'chat' || ctx.type === 'intro') && R.pid !== 'world-now' && P.count < R.cap && P.r() < 0.4) fillStory(P, ctx, R, 1);
+  if ((ctx.type === 'chat' || ctx.type === 'intro' || ctx.type === 'quiz') && R.pid !== 'world-now' && P.count < R.cap && P.r() < 0.4) fillStory(P, ctx, R, 1);
 
   // ---- owner 20:40: small motivated beats on most other sentences of light and neutral segments
   addBeats(P, ctx, R);
@@ -1467,6 +1500,11 @@ export function gestureVisible(ctx, ev) {
 export const handBandOf = (L, ev) => handBand(L, defOf(ev), ev);
 
 const SIDE = { A: 1, B: -1 };
+/** The speaker's seat (world X): the desk's A, B or solo seat; PAY ATTENTION's three on studio/quiz.js QUIZ_SEATS. */
+function seatXOf(ctx, solo) {
+  if (ctx.cast?.H) return (ctx.speaker === 'H' ? QUIZ_SEATS.host : QUIZ_SEATS[ctx.speaker] || QUIZ_SEATS.host).X;
+  return solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
+}
 /** Is the speaker's apex hand of this gesture inside the shot that is on air at its apex? */
 function handsVisible(ctx, ev, d) {
   if (!ctx.shots || !ctx.shots.length) return true; // no camera plan (labs, tests): nothing to check
@@ -1477,7 +1515,7 @@ function handsVisible(ctx, ev, d) {
   if (!name) return false;
   const solo = !ctx.duo;
   // a single on the other presenter does not show the speaker's hands
-  if (!solo && cut.focus && cut.focus !== ctx.speaker && name !== 'wide' && name !== 'two') return false;
+  if (!solo && cut.focus && cut.focus !== ctx.speaker && name !== 'wide' && name !== 'two' && name !== 'quiz-wide') return false;
   const L = lookFor(ctx.speakerId);
   if (!L) return true;
   let cam;
@@ -1487,7 +1525,7 @@ function handsVisible(ctx, ev, d) {
     fault('camera framing', err); // fail open on air (the gesture plays), but never silently
     return true;
   }
-  const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
+  const X = seatXOf(ctx, solo);
   const p = placeActor(cam, X);
   const b = handBand(L, d, ev);
   const single = p.s >= SINGLE_SCALE;
@@ -1640,8 +1678,7 @@ function scaleAt(ctx, t) {
   try {
     const solo = !ctx.duo;
     const cam = cameraFraming(name, { cast: ctx.cast, focus: cut.focus || ctx.speaker, programId: ctx.programId, solo });
-    const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
-    return placeActor(cam, X).s;
+    return placeActor(cam, seatXOf(ctx, solo)).s;
   } catch (err) {
     fault('camera framing', err);
     return null;

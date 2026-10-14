@@ -47,6 +47,7 @@ export const OVERLAYS = {
   twoway: 'news', // the presenter and the correspondent side by side
   broll: 'news', // the place's footage (or the story's picture) under the correspondent's voice
   scores: 'news', // FULL TIME's SCORE CENTRE: the stadium's board over the stand (captions under it, no strap)
+  quiz: 'news', // PAY ATTENTION's boards (scenes/quiz-shot.js): the board in the safe area, captions under it, no strap
   breakingCard: 'bug',
   ad: 'ad',
 };

@@ -106,7 +106,7 @@ export class Producer {
     this.lastWeeklyAt = 0;
     // PAY ATTENTION (kind 'quiz'): the quiz desk plans each edition from the archive and keeps its history and weekly
     // table in data/quiz (server/quiz/edition.js)
-    this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log }) : null;
+    this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log, view: !!config?.quizView }) : null;
     // FULL TIME (kind 'sport'): when it last aired, the stories it told then, and its leads lately (a lead that led in
     // the last three hours does not lead again; an edition airs at least 40 % new stories)
     this.lastSportAt = 0;
@@ -402,7 +402,17 @@ export class Producer {
    */
   async produceQuiz(channel, program) {
     const t0 = Date.now();
-    const made = this.quiz?.make(program, channel, { recentLines: this.recentText() });
+    const plan0 = this.quiz?.planFor(program, channel);
+    if (!plan0) return null;
+    // never PICTURE THIS without its picture (pay-attention.md §9 step 3): every picture the edition may ask is fetched
+    // into the station's picture cache now (the director preloads it from /api/img); one that fails, no edition
+    const missing = await this.quizPicturesMissing(plan0);
+    if (missing) {
+      this.quiz.drop();
+      this.log.warn?.(`[producer] ${program.title}: a picture could not be fetched (${missing}); no edition this time`);
+      return null;
+    }
+    const made = this.quiz.make(program, channel, { recentLines: this.recentText(), plan: plan0 });
     if (!made) return null;
     const { episode: body, plan } = made;
     const cast = body.cast.H === 'host' ? { ...body.cast, H: program.presenters[0] } : body.cast;
@@ -428,6 +438,26 @@ export class Producer {
     };
     this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - t0) / 1000).toFixed(1)} s: ${plan.pair.join(' v ')}, ${plan.types.join(' / ')}`);
     return episode;
+  }
+
+  /**
+   * PAY ATTENTION's pictures (PICTURE THIS, and DOUBLE OR NOTHING's when it is a picture): fetched into the picture
+   * cache under the airing that carried them (question.imageId), so /api/img serves each at once. Returns the id of
+   * the first that failed, or null (also without a picture cache: tests).
+   */
+  async quizPicturesMissing(plan) {
+    if (!this.images || typeof this.images.get !== 'function') return null;
+    const questions = [...(plan.rounds || []).flatMap((r) => r.questions || []), ...(plan.don?.offers || []).map((o) => o.question)].filter((q) => q?.type === 'picture');
+    for (const q of questions) {
+      const id = q.imageId || q.key;
+      try {
+        const entry = await this.images.get(id, [q.image].filter(Boolean));
+        if (!entry || entry.error) return id;
+      } catch {
+        return id;
+      }
+    }
+    return null;
   }
 
   /**

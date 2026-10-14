@@ -59,9 +59,10 @@ const now = () => performance.now() / 1000;
 const minShot = (scene) => paceFor(scene.program?.id).shots.cooldown;
 const STINGER = CHANNEL.stinger; // s (cards.js STINGER_DURATION)
 const GAP_AFTER = 0.3; // s: the plan's pause when no episode profile is known
-export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores']);
+// (PAY ATTENTION's boards: 'quiz', a full-frame graphic like SCORE CENTRE; its wide is the quiz's own, 'quiz-wide')
+export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores', 'quiz']);
 const STUDIO = new Set(['wide', 'close']);
-const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide']);
+const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide', 'quiz-wide']);
 
 /** The legacy shot name for a planned shot (framing names never reach graphics). */
 export function legacyShot(shot, framing) {
@@ -617,8 +618,8 @@ export class LiveDirection {
    * falls back to the browser voice); a plan made for other timing is re-made for it.
    * Returns the handle for speak() and onSentence.
    */
-  begin(seg, recorded = undefined) {
-    const h = guarded('begin', () => this.begin0(seg, recorded));
+  begin(seg, recorded = undefined, opts = undefined) {
+    const h = guarded('begin', () => this.begin0(seg, recorded, opts));
     if (!h) return null;
     // the handle's calls are guarded too: speak() and onSentence never see a v2 throw
     const { speak } = h;
@@ -630,7 +631,7 @@ export class LiveDirection {
     };
   }
 
-  begin0(seg, recorded) {
+  begin0(seg, recorded, opts = undefined) {
     const i = this.indexOf(seg);
     let p = i >= 0 ? this.planAt(i) : null;
     if (!p) return null;
@@ -639,6 +640,20 @@ export class LiveDirection {
     p.speechStart = null;
     p.speechEnd = null;
     this.scene.segPlan = p;
+    // the caller makes every cut (PAY ATTENTION: quizdirector.js): the plan airs for the gestures, looks and nods only
+    if (opts?.cuts === false) {
+      return {
+        plan: p,
+        speak: null,
+        sentence: (si) => {
+          if (si === 0 && p.speechStart == null) p.speechStart = now();
+        },
+        end: () => {
+          p.speechEnd = now();
+          this.lastSpoken = { ep: this.ep, index: i, end: p.speechEnd };
+        },
+      };
+    }
     const story = this.story?.seg === seg ? this.story : null;
     const cues = story ? story.cues : cuesFromPlan(p);
     const apply = story ? story.handler : (cue) => this.studioCut(cue);
@@ -776,6 +791,14 @@ export class LiveDirection {
     const t0 = point ? point.t0 : ctx?.sentences?.[si]?.t0;
     const rate = p.speechStart != null && t0 > 1 ? Math.min(1.5, Math.max(0.9, (now() - p.speechStart) / t0)) : 1;
     return holdCut(p, si, onAir, { programId: s.program?.id, gap, cues, closeFraming, wideFraming, nextOpen, rate, point });
+  }
+
+  /**
+   * PAY ATTENTION's set (studio/quiz.js setQuizState through set.js): the question flag (the moving heads still), the
+   * lamps, the desks' scores, at time t (s, the renderer's clock: performance.now() / 1000).
+   */
+  quizState(o, t) {
+    guarded('quizState', () => SETM.setQuizState?.(o, t));
   }
 
   /** Default cue handler: studio cuts only, MIN_SHOT holds (chats, outros, intros without a montage). */
