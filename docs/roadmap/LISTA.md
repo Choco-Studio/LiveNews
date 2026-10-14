@@ -120,7 +120,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - ✅ Paso 3, los gráficos (9,75). ✅ Paso 6, los tres candidatos a presentador (9,75): falta que elijas uno.
     - ✅ Paso 5: el plató (9,75), la cabecera (9,75, a la octava ronda: cada lámpara se enciende con su foco cayendo sobre la mesa del jugador) y la música y los efectos.
     - ✅ Paso 4, la dirección (9,75, tras devolverla una vez): la cinta de noticias nunca lleva una noticia de las preguntas; las caras de los jugadores salen en cada pregunta y nunca hay más de 34 s seguidos de pizarras.
-    - Siguiente: 7, dos ediciones grabadas con voz y la revisión final.
+    - 🟡 Paso 7, en antena: tres ediciones grabadas con voz y noticias reales (dos de noche y una de tarde), 14 rondas. No pasa todavía: el agente da 9,5 y mi revisión encuentra además que la frase final de la clasificación contradice el cartel, una opción se burla del error de una persona real y la cinta lleva política dura debajo del juego. Arreglados por el camino: las voces no leían el concurso, una pregunta sobre una ejecución, tragedias en la cinta y la ronda de fotos que salía vacía. Vuelve a trabajo.
 
 ## E. Plató, gráficos y cámara
 24. Plató:

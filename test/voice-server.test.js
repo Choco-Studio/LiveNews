@@ -122,6 +122,21 @@ describe('voice plan: what the worker is asked', () => {
     assert.ok(!isSpoken(null));
   });
 
+  test("PAY ATTENTION's lines are voiced: the host's and the players' (type 'quiz'), never the open's empty segment", () => {
+    // (step 7 on air: the station made editions whose 70 lines had no recorded voice at all)
+    assert.ok(isSpoken({ type: 'quiz', part: 'frame', anchor: 'H', text: 'Which story is this picture from?' }));
+    assert.ok(isSpoken({ type: 'quiz', part: 'lock', anchor: 'A', text: 'C, please.' }));
+    assert.ok(!isSpoken({ type: 'quiz', part: 'open', anchor: 'H', text: '' }));
+    assert.equal(segmentType({ type: 'quiz' }), 'quiz');
+    const seg = { type: 'quiz', part: 'reveal', anchor: 'H', emotion: 'neutral', text: "It's B. Well played, Lola. From The Verge, on TECH BYTES this evening." };
+    const req = segmentRequest(seg, { presenterId: 'qm', presenter: CHANNEL.presenters.qm, casting: CASTING, presets: PRESETS, speech });
+    assert.equal(req.voice, CASTING.qm.voice);
+    assert.ok(req.phrases.length >= 2);
+    // a game's quick turns: the clip ends on a short tail, no longer than a chat's
+    const tail = (type) => segmentRequest({ ...seg, type }, { presenterId: 'qm', presenter: CHANNEL.presenters.qm, casting: CASTING, presets: PRESETS, speech }).phrases.at(-1).pauseAfter;
+    assert.ok(tail('quiz') <= tail('chat') + 1e-9, `${tail('quiz')} vs ${tail('chat')}`);
+  });
+
   test('every presenter of config/channel.json has a cast voice', () => {
     for (const id of Object.keys(CHANNEL.presenters)) {
       assert.ok(CASTING[id]?.voice, `${id} is not in server/voice/casting.json`);

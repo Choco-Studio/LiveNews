@@ -239,3 +239,17 @@ test('programme ids that are Object.prototype keys get the generic open and acce
     draws((ctx) => cards.drawFactCard(ctx, 0, 1, { fact: '2,400 flights', programId: id }));
   }
 });
+
+test("a cast too long for the plate's line keeps every name whole: first names before any ellipsis (PAY ATTENTION, 13 Oct)", async () => {
+  const { creditNames, lockupLayout } = await import('../public/js/scenes/opens/kit.js');
+  const { measureText } = await import('../public/js/font.js');
+  const room = 384 - 19 - 152 - measureText('WITH ') - 2;
+  assert.equal(creditNames(['Quinn Query', 'Lola Byte', 'Sam Night'], room).names, 'QUINN QUERY, LOLA BYTE & SAM NIGHT');
+  const three = creditNames(['Quinn Query', 'UNIT-8', 'Penny Sterling'], room).names;
+  assert.equal(three, 'QUINN, UNIT-8 & PENNY');
+  assert.ok(!/\.\.\.|…/.test(three));
+  assert.ok(measureText(three) <= room);
+  assert.equal(creditNames([], room), null);
+  const lay = lockupLayout({ title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", presenters: ['Quinn Query', 'UNIT-8', 'Penny Sterling'], key: 'pa-u8-penny' }, { ink: 'light' });
+  assert.equal(lay.credits.names, 'QUINN, UNIT-8 & PENNY');
+});

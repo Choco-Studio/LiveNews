@@ -116,9 +116,12 @@ function serveEvents(req, res) {
 }
 
 async function serveImage(res, id) {
-  const story = newsDesk.get(id);
-  if (!story?.image) return sendJson(res, 404, { error: 'no image' });
-  const entry = await images.get(id, story.images || [story.image]);
+  // a PAY ATTENTION picture as the producer fetched it for an edition: its story may be days old and gone from the desk,
+  // or on it with other candidates (the director preloads it from here)
+  const kept = producer.quizPicture(id);
+  const story = kept ? null : newsDesk.get(id);
+  if (!kept && !story?.image) return sendJson(res, 404, { error: 'no image' });
+  const entry = kept || (await images.get(id, story.images || [story.image]));
   // The detail (paths, upstream errors) stays in the server log; the client only learns it failed.
   if (entry.error) return sendJson(res, 502, { error: 'image unavailable' });
   res.writeHead(200, {

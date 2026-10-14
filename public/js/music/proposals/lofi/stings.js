@@ -547,10 +547,12 @@ export const STINGS = {
    * PAY ATTENTION's DOUBLE OR NOTHING (pay-attention.md §6: "a drumroll"): two bars at the quiz's tempo, a snare roll in
    * thirty-seconds and a timpani roll in sixteenths on E-flat (the 5th: the question still open), both rising from soft;
    * on the next downbeat the landing: a timpani on A-flat, a felt kick, Ab add9 on a bell and a pluck (no crash). The bed
-   * steps out on the beat before it (the cue sheet). 6.3 s with its ring.
+   * steps out on the beat before it (the cue sheet). 6.3 s with its ring. Ducked under a voice like the quiz's other
+   * stings: the host may recap the locks over the roll, and reveals 0.4 s after its landing (on air, 13 Oct, the landing's
+   * bells left the reveal's first words 13 dB over the music, every other line 17.6 dB or more).
    */
   quizDrumroll(eng, t) {
-    const dest = bus(eng, 0.37);
+    const dest = eng.duckedSting ? eng.duckedSting(0.37, 0.18) : bus(eng, 0.37);
     const spb = QUIZ_SPB, bars = 2, end = t + bars * 4 * spb;
     const n = bars * 4 * 8;
     for (let i = 0; i < n; i++) {

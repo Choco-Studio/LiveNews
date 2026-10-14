@@ -65,6 +65,7 @@ class Run {
     this.sentence = -1;
     this.anchors = null; // recorded voice: [{ perf, w }] word starts still to apply
     this.nextAnchor = 0;
+    this.wordStarts = null; // recorded voice: every word's first sound (performance.now() ms), the whole clip's
     this.loud = null; // recorded voice: analyser for the real loudness
     this.marks = null; // [{ char (in text), sentence, rel, fired }]
     this.markCursor = 0;
@@ -455,6 +456,36 @@ export class AudioEngine {
    * folded into their neighbours, every shape held >= 80 ms (lip closures
    * excepted) and the jaw smoothed over ~100 ms (<= ~0.12 per 60 fps frame).
    */
+  /**
+   * The recorded voice playing now, as the recording has it (not the mouth's timeline): { next, level } with `next` the
+   * next word's first sound (performance.now() ms; null once the last word has started) and `level` the clip's own
+   * loudness envelope now (0..1 over its top 40 dB), or null when no recorded voice is playing.
+   */
+  recordedVoiceAt(now = performance.now()) {
+    const run = this.#run;
+    if (!run || run.cancelled || !Array.isArray(run.wordStarts) || !run.wordStarts.length) return null;
+    const env = run.loud?.env;
+    let level = 1;
+    if (env) {
+      const i = Math.floor(((now - env.perf0) / 1000) * env.rate);
+      if (i >= env.values.length) return null; // (the clip has ended)
+      level = i < 0 ? 0 : Number(env.values[i]) || 0;
+    }
+    let next = null;
+    for (const t of run.wordStarts) {
+      if (t > now + 1) {
+        next = t;
+        break;
+      }
+    }
+    return { next, level };
+  }
+
+  /** The next word's first sound in the recorded voice playing now (ms), or null (recordedVoiceAt). */
+  nextWordAt(now = performance.now()) {
+    return this.recordedVoiceAt(now)?.next ?? null;
+  }
+
   speechFrame(now = performance.now(), slot, out, opts) {
     const calm = opts?.calm === true;
     const run = this.#run;
@@ -576,6 +607,23 @@ export class AudioEngine {
   #pollMarks(run, final = false) {
     const marks = run.marks;
     if (!marks || run.markCursor >= marks.length) return;
+    // a recorded voice: on the recording's own word, never the mouth's timeline, which runs at its own pace between its
+    // anchors (PAY ATTENTION's HOW MANY? board, cut on "A barn owl…", landed 0.56 s early inside "How many?", 13 Oct)
+    if (Array.isArray(run.recWords) && run.recWords.length) {
+      const now = performance.now();
+      while (run.markCursor < marks.length) {
+        const m = marks[run.markCursor];
+        const w = run.recWords.find((x) => x.char >= m.char);
+        if (!final && !(w && now >= w.perf)) break;
+        run.markCursor++;
+        try {
+          run.onMark(m.i);
+        } catch (err) {
+          console.warn('[audio] onMark failed', err);
+        }
+      }
+      return;
+    }
     let reached = -1;
     let sentence = run.sentence;
     if (final) sentence = Infinity;
@@ -719,6 +767,11 @@ export class AudioEngine {
     this.#voiceOn();
     const t0 = ctx.currentTime + DUCK_LEAD / 1000;
     const perf0 = this.#heardAt(t0);
+    // (the recording's own word starts, as heard: a cut that must land between two words waits for the next one,
+    // director.cutWhenClear; the mouth's timeline runs at its own pace between anchors and may change word mid-sound)
+    run.wordStarts = words.map((w) => perf0 + w.t);
+    // (and the marks fire on them: a mark is reached when the recording's first word at or after its character starts)
+    run.recWords = words.map((w) => ({ perf: perf0 + w.t, char: w.char }));
     const lv = audio.levels;
     const env = lv && Array.isArray(lv.values) && lv.values.length && Number(lv.rate) > 0 ? { rate: Number(lv.rate), values: lv.values, perf0 } : null;
     run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0, env };

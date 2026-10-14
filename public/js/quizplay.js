@@ -25,7 +25,7 @@
 export const HALF_NOTE = 120 / 112;
 
 /** The writer's question parts (a question runs from its frame to its reveal). */
-export const QUESTION_PARTS = new Set(['frame', 'options', 'countdown', 'lock', 'buzz', 'stall', 'guess', 'pins', 'reveal', 'tally']);
+export const QUESTION_PARTS = new Set(['frame', 'options', 'countdown', 'lock', 'recap', 'buzz', 'stall', 'guess', 'pins', 'reveal', 'tally']);
 /** The quiz's framings (camera.js composes them from studio/quiz.js quizCamera; the seats are QUIZ_SEATS). */
 export const QUIZ_FRAMING = Object.freeze({ wide: 'quiz-wide', H: 'quiz-host', A: 'quiz-a', B: 'quiz-b' });
 export const QUIZ_FRAMINGS = Object.freeze(Object.values(QUIZ_FRAMING));
@@ -186,6 +186,12 @@ export function answerSchedule(unit, segments, cast, { half = HALF_NOTE, speech 
   const segs = segments || [];
   const out = [];
   const after = (prev, t) => (prev ? Math.max(t, prev.at + prev.dur + 0.25) : t);
+  // the host's recap of the locks (writer: 'recap'), a beat after the last one, on the same clock
+  const recapAfter = (prev) => {
+    const i = (unit.parts.recap || [])[0];
+    if (i === undefined || !prev) return;
+    out.push({ i, seat: 'H', at: prev.at + prev.dur + 0.3, dur: speech(segs[i]), kind: 'recap' });
+  };
   const key = (i) => `${unit.from}:${i}:${segs[i]?.anchor || ''}`;
   if (unit.type === 'picture') {
     const locks = (unit.parts.lock || []).map((i) => ({ i, step: segs[i]?.quiz?.lock?.step || 4 }));
@@ -197,6 +203,7 @@ export function answerSchedule(unit, segments, cast, { half = HALF_NOTE, speech 
       prev = { i: l.i, seat: segs[l.i].anchor, at, dur: speech(segs[l.i]), kind: 'lock' };
       out.push(prev);
     }
+    recapAfter(prev);
   } else if (unit.type === 'letters') {
     const list = [...(unit.parts.stall || []).map((i) => ({ i, kind: 'stall' })), ...(unit.parts.buzz || []).map((i) => ({ i, kind: 'buzz' }))];
     for (const b of list) b.stage = Math.max(1, Math.min(3, segs[b.i]?.quiz?.buzz?.stage || 3));
@@ -216,6 +223,7 @@ export function answerSchedule(unit, segments, cast, { half = HALF_NOTE, speech 
       prev = { i, seat: segs[i].anchor, at, dur: speech(segs[i]), kind: unit.type === 'where' ? 'lock' : 'guess' };
       out.push(prev);
     });
+    if (unit.type === 'where') recapAfter(prev);
   } else if (unit.type === 'today' && item) {
     // the lamps: each player within the first two half notes, the quicker one first (seeded); no words
     const reveal = segs[item.reveal];
@@ -254,7 +262,7 @@ export function revealPlan(unit, segments, cast, { item = null, double = null } 
 // ---------------------------------------------------------------------------------------------- the shot plan
 
 const BOARD = 'quiz';
-const ANSWER_PARTS = new Set(['lock', 'buzz', 'stall', 'guess']);
+const ANSWER_PARTS = new Set(['lock', 'recap', 'buzz', 'stall', 'guess']);
 const WIDE_PARTS = new Set(['welcome', 'scores', 'signoff', 'tally']);
 const MIN = 4.0; // the network's minimum shot (pace.js shots.min), planned with a margin
 const MARGIN = 0.4;
@@ -340,9 +348,15 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     if (u.kind !== 'question') return;
     // PICTURE THIS and WHERE: the last lock-in on the wide (both lamps lit: the reading rule has kept the options on
     // screen to it), the board back for the reveal
+    // (the host's recap of the locks rides on the same shot; the director brings the board back once the faces have
+    // held, so an early lock-in leaves the picture's last step and the clock's end on the board: quizdirector back)
     if (u.type === 'picture' || u.type === 'where') {
-      const last = answerSchedule(u, segs, episode.cast).filter((a) => a.kind === 'lock').at(-1);
-      if (last) shots[last.i] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+      const sched = answerSchedule(u, segs, episode.cast);
+      const last = sched.filter((a) => a.kind === 'lock').at(-1);
+      if (last) {
+        shots[last.i] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+        for (const r of sched.filter((a) => a.kind === 'recap')) shots[r.i] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+      }
     }
     // TODAY OR NOT TODAY: its options are two and known, so once the headline is read on its board the lock-ins
     // light the desks on the wide, and the verdict stays there (the last headline's on its board when the round's tally

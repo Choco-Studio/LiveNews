@@ -11,7 +11,7 @@
 //   prepareQuiz(d, episode)   → d.quiz (null for any other programme)
 //   playQuiz(d, episode)      the edition after the open, to its end card
 //   quizMusic(d, seg)         the bed's moment for a quiz segment that starts speaking (director.js musicSegment)
-import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES } from './quizplay.js';
+import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
 
@@ -23,12 +23,18 @@ const PICTURE_WAIT = 3.0; // s a PICTURE THIS question waits for its picture bef
 const STUDIO_WAIT = 1.2; // s a studio line waits for its cut likewise (a longer hold: the cut lands between two words)
 const BACK_BEAT = 0.4; // s the board is back on air before its reveal (after a buzz or the guesses on the players' faces)
 const OWED_BEAT = 2.6; // ... when it is the question's only face moment (the players are the show: every question has one)
+const BUZZ_HOLD = 1.2; // s at most between a buzz (its lamp, the clock stopped) and its answer, said on the buzzer's single (inside its stage: the next is three half notes on)
 const REACT_BEAT = 2.0; // s a reaction's face may hold after its words before the next board (the players are the show)
 const LINK_SLACK = 0.6; // s of silence at most on the wide before LETTER BY LETTER's tiles (a link: playLine)
-const CARD_WAIT = 1.6; // ... the first line after a board (the final score's 2 s line leaves its card 1.3 s short of the minimum)
+const KEEP_BEAT = 0.4; // s a reaction and LETTER BY LETTER's (or PICTURE THIS's) frame may fall short of the wide's minimum and still ride it, the frame waiting that beat (playLine, playQuestion)
+const TICK_GAP = 0.2; // s at least between the options or the headline and the line said on the first tick (the prompt, the pins)
+const CARD_WAIT = 1.8; // ... the first line after a board (the final score's 2 s line leaves its card 1.3-1.7 s short of the minimum: on air, 13 Oct, a winner's reply 0.04 s past 1.6 s stayed on the card)
 const BOARD_MIN = 3.0; // s a reveal stays on the board before a studio shot may take over (the gold, the credit up for 2.75 s)
 const BOARD_MIN_SAID = 2.0; // ... when the host says the credit in the reveal (heard, it need not be read on the board)
 const VERDICT_MIN = 2.0; // s of the reveal's words (and the pause after) the verdict's wide must have left to be worth a cut
+const PHRASE_EARLY = 0.6; // s a reveal's cut may come before its planned moment to land on a phrase's first word
+const PHRASE_LATE = 0.8; // ... and after it
+const PHRASE_LEAD = 0.12; // s before that word's first sound as planned (the recording starts up to 0.05 s sooner than the channel's latency allows: the cut in the pause before the word, else on its first sound)
 
 /** The players' first names as the writer says them ("Dr Nova Reyes" is Nova, unit8 is UNIT-8). */
 function firstName(channel, id) {
@@ -332,8 +338,13 @@ async function playLine(d, i) {
     if (segs[i]?.part === 'react' && !owed && q.shots[j]?.shot === 'quiz' && len < min + 0.1 - REACT_BEAT) {
       // LETTER BY LETTER next: its frame (the desk, which reads nothing off the board) rides on the quiz's wide with the
       // reaction, the host seen saying it, and the tiles come up as it ends (a face between two boards, no silence)
+      // (PICTURE THIS too, when its frame reads nothing off the board before a word: "Which story did this picture come
+      // with?"; the picture then lands on a word the wide has reached, playQuestion's mark)
       const nu = q.units.find((x) => x.kind === 'question' && x.from === j);
-      if (nu?.type === 'letters' && j === i + 1 && len + speechOf(segs[j]) >= min + 0.1 - LINK_SLACK) {
+      const rides = nu?.type === 'letters' || (nu?.type === 'picture' && boardTextStart(nu, segs[j]) > 0);
+      // (a reaction a little short of it rides all the same, the frame after a beat: on air, 13 Oct, "Yes!" stayed on the
+      // board 0.3 s short, the next question then had no face, and its owed wide left the round's card silent 2.2 s)
+      if (rides && j === i + 1 && len + speechOf(segs[j]) >= min + 0.1 - LINK_SLACK - KEEP_BEAT) {
         const wide = { shot: 'wide', framing: 'quiz-wide', focus: 'H' };
         for (const x of [segs[i], segs[j]]) x.quizShot = { ...wide, board: null }; // (the v2 planner's gestures and looks)
         await cutOnWord(d, { ...wide, link: true }, {}, STUDIO_WAIT);
@@ -387,6 +398,11 @@ async function playCard(d, u, k) {
   }
   let since = null;
   await cutOnWord(d, plannedSpec(q, u.from), { card, onCut: () => (since = d.scene.shotSince) }, BOARD_WAIT);
+  // a round's card holds the network's minimum for its name, then the host's single takes the rest of the rule and the
+  // first question's frame, up to the moment it reads off the board (LETTER BY LETTER's desk, WHERE's and HOW MANY?'s
+  // preamble, PICTURE THIS's "Which story is this picture…"): a face at every round's start, never a silent one (on air,
+  // 12-13 Oct, the round cards held 16-20 s of the edition's boards)
+  if (u.board === 'round' && since !== null) roundFace(d, u, k, since);
   // DOUBLE OR NOTHING's pick on the player's single: the cut in the host's last words once the card has held its
   // minimum (the reaction shot's grammar), when the single then holds without standing silent more than a beat;
   // else the card keeps the pick (the desk lights as the player names it)
@@ -405,6 +421,16 @@ async function playCard(d, u, k) {
     }
   }
   if (pick !== null && tail === null) segs[pick].quizShot = { shot: 'quiz', framing: null, focus: null, board: card.board }; // (kept on the card)
+  // the final score lands a beat before a short result line when the winner's reply would otherwise wait past CARD_WAIT
+  // for the card's minimum and stay on the card (the winner is the shot: playLine)
+  if (u.board === 'final' && since !== null && segs[u.to + 1]?.part === 'react') {
+    const wait = since + paceFor(d.scene.program?.id).shots.min - (now() + speechOf(seg) + pause(d, u.to));
+    const beat = Math.min(1.2, wait - (CARD_WAIT - 0.1));
+    if (beat > 0) {
+      d.quizTrace?.push({ k: 'scorebeat', t: now(), beat });
+      await sleep(beat * 1000);
+    }
+  }
   await say(d, u.from);
   if (u.to > u.from) {
     await sleep(pause(d, u.from) * 1000);
@@ -414,6 +440,38 @@ async function playCard(d, u, k) {
     }
     await say(d, u.to);
   }
+}
+
+/**
+ * The host's single after a round's card (playCard): armed when the round's line still has words left once the card
+ * has held the minimum, and those words, the pause and the next frame up to its board fill the single's minimum (the
+ * next question then rides on it: playQuestion's link or preamble). The cut lands between two words.
+ */
+function roundFace(d, u, k, since) {
+  const q = d.quiz;
+  const segs = q.episode.segments;
+  const nu = q.units[k + 1];
+  if (!nu || nu.kind !== 'question' || busyMinute(d)) return;
+  const frame = segs[nu.from];
+  if (frame?.anchor !== 'H') return;
+  const min = paceFor(d.scene.program?.id).shots.min;
+  const cutAt = since + min + 0.05;
+  const left = now() + speechOf(segs[u.from]) - cutAt; // the line's words after the cut
+  if (left < 0.5) return;
+  // the frame's time on the single: LETTER BY LETTER's whole frame (the tiles after it), PICTURE THIS's whole frame (it
+  // reads nothing off the board: the picture lands on a word the single has reached, playQuestion's mark), WHERE's and
+  // HOW MANY?'s preamble to the headline or the sentence (read off the board)
+  const mark = nu.type === 'letters' ? 0 : boardTextStart(nu, frame);
+  if (nu.type !== 'letters' && mark <= 0) return;
+  const pre = nu.type === 'letters' || nu.type === 'picture' ? speechOf(frame) : (mark / Math.max(1, String(frame.text).length)) * speechOf(frame);
+  const need = nu.type === 'where' || nu.type === 'howmany' ? min + 0.4 : min - LINK_SLACK;
+  if (left + pause(d, u.from) + pre < need) return;
+  const spec = { shot: 'close', framing: 'quiz-host', focus: 'H' };
+  setTimeout(() => {
+    if (q.onAir?.card?.board !== 'round') return;
+    d.quizTrace?.push({ k: 'roundface', t: now(), i: u.from });
+    cutTo(d, spec, { wordSafe: true });
+  }, Math.max(0, cutAt - now()) * 1000);
 }
 
 /** The seat of the player behind before DOUBLE OR NOTHING (the writer's `trailing`, else the pick's speaker, else the lower score). */
@@ -464,7 +522,9 @@ function onBoard(d, spec, card) {
     b.since ??= d.scene.shotSince;
     card.epoch = b.since;
   };
-  b.cut = () => cutOnWord(d, spec, { card, onCut: first }, BOARD_WAIT);
+  // (the words that read off the board wait for it as long as the shot on air holds its minimum: never a headline begun
+  // over the card before it, as on air, 14 Oct, "'Jellyfish' effect lights | up blank sky" over DOUBLE OR NOTHING's card)
+  b.cut = () => cutOnWord(d, spec, { card, onCut: first }, Math.max(BOARD_WAIT, paceFor(d.scene.program?.id).shots.min + 0.05));
   // the countdown starts only with the board on air (a cut the cooldown held back comes first)
   b.ready = async () => {
     for (let n = 0; b.since === null && n < 400; n++) await sleep(20);
@@ -542,12 +602,37 @@ async function playQuestion(d, u, k) {
   // LETTER BY LETTER's frame (the desk: it reads nothing off the board) on the studio shot on air (a link, or the wide or
   // a single a reaction opened) when that shot can hold until the frame's end, then the tiles: one more face
   const minShot = paceFor(d.scene.program?.id).shots.min;
-  const age = typeof d.onAir === 'function' ? d.onAir() : now() - (d.scene.shotSince || 0);
+  let age = typeof d.onAir === 'function' ? d.onAir() : now() - (d.scene.shotSince || 0);
   const studio = q.onAir && (q.onAir.shot === 'wide' || q.onAir.shot === 'close');
-  const link = u.type === 'letters' && segs[u.from]?.anchor === 'H' && (!!q.onAir?.link || (studio && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
+  // (a round's card, or DOUBLE OR NOTHING's, a second or more short of its minimum, one that came in inside its words,
+  // carries the frame as a face would, its preamble or its desk said over the card: on air, 12-14 Oct, a question with no
+  // face took the wide after its reveal, the next card then came in inside its words and stood mute 2.2 s before the next
+  // board. It is no face for the question that follows. A card that held its whole line, a short one, gives way to the
+  // board as before: the board's own age lets a quick buzz go to the buzzer's single)
+  const youngCard = q.onAir?.shot === 'quiz' && (q.onAir?.card?.board === 'round' || q.onAir?.card?.board === 'double') && age < minShot - 1.0;
+  const carrier = studio || youngCard;
+  // the face on air still too young for the board: the frame waits the beat that lets the face carry it (LETTER BY
+  // LETTER's or PICTURE THIS's whole frame, WHERE's or HOW MANY?'s preamble to its mark), rather than the face standing
+  // silent to its minimum and the board then cut for the frame (on air, 12 Oct: a verdict's wide 2.1 s silent before
+  // WHERE's "Here's one for the map: …" on its board). Never a longer silence than that: the beat is shorter by the
+  // frame's words on the face, and no more cuts.
+  if (carrier && segs[u.from]?.anchor === 'H' && age < minShot) {
+    const at0 = boardTextStart(u, segs[u.from]);
+    const whole = u.type === 'letters' || (u.type === 'picture' && at0 > 0);
+    // (the face holds its minimum to the frame's end, or to the mark with playQuestion's 0.4 s to spare: the silence is
+    // a beat before the frame, never a dead one before the tiles or the picture)
+    const carry = whole ? speechOf(segs[u.from]) : at0 > 0 ? (at0 / Math.max(1, String(segs[u.from].text).length)) * speechOf(segs[u.from]) - 0.42 : -Infinity;
+    const beat = minShot - age - carry;
+    if (beat > 0 && beat < minShot - age - 0.3) {
+      d.quizTrace?.push({ k: 'beat', t: now(), i: u.from, beat });
+      await sleep(beat * 1000);
+      age += beat;
+    }
+  }
+  const link = u.type === 'letters' && segs[u.from]?.anchor === 'H' && (!!q.onAir?.link || (carrier && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
   if (link) {
-    d.quizTrace?.push({ k: 'link', t: now(), i: u.from });
-    segs[u.from].quizShot = { shot: q.onAir.shot, framing: q.onAir.framing ?? null, focus: q.onAir.focus ?? 'H', board: null };
+    d.quizTrace?.push({ k: 'link', t: now(), i: u.from, card: youngCard || undefined });
+    segs[u.from].quizShot = { shot: q.onAir.shot, framing: q.onAir.framing ?? null, focus: q.onAir.focus ?? 'H', board: youngCard ? 'round' : null };
   }
   // WHERE's and HOW MANY?'s preamble on the studio shot on air when it has held its minimum by then, the board cut as
   // the host starts reading the headline or the sentence (a speech mark): the board is there for every word read off it
@@ -556,9 +641,12 @@ async function playQuestion(d, u, k) {
   // (PICTURE THIS's frame reads nothing off its board: when the face is too young for the board on its mark, the frame
   // still starts on it and the picture lands between two words once the face has held, or as the frame ends, rather
   // than leave the face standing silent; its options are read on the board all the same)
-  const prelink = pre > 0 && studio && segs[u.from]?.anchor === 'H' && (age + preAt >= minShot + 0.4 || (u.type === 'picture' && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
-  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark: pre });
-  q.faced = link || prelink; // (its frame on a face: else owed, until an answer, the verdict or a reaction is on one)
+  const prelink = pre > 0 && carrier && segs[u.from]?.anchor === 'H' && (age + preAt >= minShot + 0.4 || (u.type === 'picture' && age + speechOf(segs[u.from]) >= minShot - LINK_SLACK));
+  // (PICTURE THIS's mark moves to the first word the face will have held to: the picture lands on a word's first sound,
+  // never inside one after the cooldown, 0.3-0.8 s past "picture")
+  const mark = prelink && u.type === 'picture' && age + preAt < minShot + 0.1 ? wordFrom(segs[u.from], pre, minShot - age + 0.25) : pre;
+  if (prelink) d.quizTrace?.push({ k: 'prelink', t: now(), i: u.from, mark, card: youngCard || undefined });
+  q.faced = (link || prelink) && !youngCard; // (its frame on a face: else owed, until an answer, the verdict or a reaction is on one)
   if (!link && !prelink) await b.cut();
   const latency = d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
   const part = (name) => (u.parts[name] || [])[0];
@@ -566,7 +654,7 @@ async function playQuestion(d, u, k) {
   const plan = revealPlan(u, segs, cast, { double: u.double ? q.double : null });
   // the frame (the board's question), and what the host reads before the countdown
   if (prelink) {
-    await say(d, u.from, null, { marks: [pre], onMark: () => b.since === null && b.cut() });
+    await say(d, u.from, null, { marks: [mark], onMark: () => b.since === null && b.cut() });
     if (b.since === null) await b.cut(); // (a voice without marks: the board after the frame)
   } else await say(d, u.from);
   if (link) await b.cut();
@@ -583,9 +671,11 @@ async function playQuestion(d, u, k) {
     if (b.since === null) return null;
     const start = cd.T0 + a.at - latency;
     const t = Math.max(start, b.since + min + 0.05);
-    // a buzz stops the ticks: at least 0.6 s of its words on the face, never a face silent past OWED_BEAT after them;
+    // a buzz stops the ticks: its answer is said on the buzzer's single from its first word, BUZZ_HOLD at most after the
+    // buzz while the board holds its minimum (the lamp lit, the board's clock stopped: answers' hold), else it stays on the
+    // board (on air, 12-13 Oct, the cut came 0.7-0.9 s into the answer, and the single then stood 2.1-2.3 s silent);
     // a lock-in or a guess may land after its words while the clock still ticks (the lamps lit on the desks)
-    if (a.kind === 'buzz') return t <= Math.min(start + a.dur + OWED_BEAT - min, start + a.dur - 0.6) ? t : null;
+    if (a.kind === 'buzz') return t - start <= BUZZ_HOLD ? t : null;
     return t <= cd.end - 1.0 ? t : null;
   };
   /** The answer that takes the players' faces on countdown `cd`: the first planned on a studio shot whose words allow it. */
@@ -596,7 +686,7 @@ async function playQuestion(d, u, k) {
     return trigger && a === trigger ? cutFor(cd, a) : null;
   };
   let away = null;
-  const back = async (t) => {
+  const back = async (t, spoken = now(), cd = null) => {
     if (!away) return t;
     if (!Number.isFinite(away.since)) {
       // (never on air: a cut still held back at the reveal is dropped, the board keeps the question)
@@ -605,8 +695,12 @@ async function playQuestion(d, u, k) {
       away = null;
       return t;
     }
-    // (the faces hold to the reveal's BACK_BEAT: the countdown's last ticks on the players, not on the board)
-    await sleepUntil(Math.max(away.since + min + 0.02, held(t) - BACK_BEAT));
+    // the faces hold to the reveal's BACK_BEAT (the countdown's last ticks on the players, the host's recap with them),
+    // but PICTURE THIS's picture still has a step to take after they came in: then the board is back once they have held
+    // the network's minimum and said their lines, and the step is seen (on air, 12 Oct: a wide after a step-2 lock-in held
+    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air)
+    const step = u.type === 'picture' && cd && away.since < cd.T0 + PICTURE_STEPS[4] * cd.half;
+    await sleepUntil(Math.max(away.since + min + 0.02, step ? Math.min(held(t) - BACK_BEAT, spoken + 0.35) : held(t) - BACK_BEAT));
     cutTo(d, spec, { card });
     d.quizTrace?.push({ k: 'back', t: now(), board: card.board });
     away = null;
@@ -637,6 +731,20 @@ async function playQuestion(d, u, k) {
       await sleepUntil(cd.T0 + a.at - latency);
       const seg = segs[a.i];
       const t = awayAt(cd, a);
+      // a buzz the board is still too young to leave: the buzz now (the lamp, the board's clock stopped on its beat), its
+      // answer on the cut to the buzzer's single as the board has held its minimum (cutFor: BUZZ_HOLD at most)
+      if (a.kind === 'buzz' && t !== null && t > now() + 0.02) {
+        lampOn(d, a.seat);
+        const press = b.at() + latency;
+        d.quizTrace?.push({ k: 'press', t: now() + latency, seat: a.seat, i: a.i });
+        await sleepUntil(t);
+        goAway(a, false);
+        o.buzzes = [...o.buzzes, { seat: a.seat, at: press, heard: b.at() + latency, stall: false }];
+        d.quizTrace?.push({ k: a.kind, t: now() + latency, seat: a.seat, i: a.i, planned: cd.T0 + a.at });
+        await say(d, a.i);
+        lastEnd = now();
+        continue;
+      }
       if (t !== null && t <= now() + 0.02) goAway(a, false);
       else if (t !== null) {
         away = { since: Infinity, due: t }; // (pending: the board's return waits for it)
@@ -646,8 +754,9 @@ async function playQuestion(d, u, k) {
       const at = b.at() + latency;
       if (a.kind === 'lock') o.locks = [...o.locks, { seat: a.seat, answer: seg.quiz?.lock?.answer, at }];
       else if (a.kind === 'guess') o.guesses = [...o.guesses, { seat: a.seat, said: seg.quiz?.guess?.said || '', at, points: seg.quiz?.guess?.points || 0 }];
-      else o.buzzes = [...o.buzzes, { seat: a.seat, at, stall: a.kind === 'stall' }];
-      lampOn(d, a.seat);
+      else if (a.kind !== 'recap') o.buzzes = [...o.buzzes, { seat: a.seat, at, stall: a.kind === 'stall' }];
+      // (the host's recap of the locks lights nothing: the desks already show them)
+      if (a.kind !== 'recap') lampOn(d, a.seat);
       d.quizTrace?.push({ k: a.kind, t: now() + latency, seat: a.seat, i: a.i, planned: cd.T0 + a.at });
       await say(d, a.i);
       lastEnd = now();
@@ -663,24 +772,50 @@ async function playQuestion(d, u, k) {
   let drum = null;
   // (the reveal never comes before DOUBLE OR NOTHING's drumroll has landed)
   const held = (t) => Math.max(t, drum ? drum.end : 0);
+  /**
+   * Half notes enough for the clock to run on under the players' faces to the board's return and the reveal (the face
+   * the plan takes: its cut, the network's minimum, the beat back), when the countdown asks for its first tick `lead` s
+   * from now: the ticks stay under the faces and the reveal lands on the clock's last beat, never 1.6 s of a stopped
+   * clock (12 Oct), and DOUBLE OR NOTHING's drumroll starts and ends on the bed's beat.
+   */
+  const coverHalves = (halves, lead) => {
+    const face = faces[0];
+    if (!face) return halves;
+    const t0 = now() + lead; // (the first tick at the earliest)
+    const cut = Math.max(face.at - latency, b.since === null ? 0 : b.since + min + 0.05 - t0);
+    return Math.max(halves, Math.ceil((cut + min + 0.02 + BACK_BEAT) / HALF_NOTE - 1e-6));
+  };
+  /**
+   * A line that asks for the countdown (PICTURE THIS's "Lock it in.", WHERE's pins) said so that it ends as the first
+   * tick sounds: the countdown is asked for first, on the bed's next half note after the line's length, and the line
+   * waits for it (on air the prompt ended up to 0.9 s before the first tick, a dead beat on the clock, 12 Oct).
+   */
+  const sayOnTick = async (i, cd) => {
+    if (i === undefined) return;
+    await sleepUntil(cd.T0 - speechOf(segs[i]) - latency - 0.15);
+    await say(d, i);
+  };
   if (u.type === 'picture') {
     await sleep(pause(d, u.from) * 1000);
     const oi = part('options');
+    const ci = part('countdown');
     if (oi !== undefined) {
       o.optionsAt = b.at();
       await say(d, oi);
-      await sleep(pause(d, oi) * 1000);
+      // (a prompt next: its pause is the countdown's lead, below, never a turn's pause and then the bed's half-note wait
+      // on top of it: on air, 12-13 Oct, 1.1-1.4 s of the board with nothing said before every prompt)
+      if (ci === undefined) await sleep(pause(d, oi) * 1000);
     }
     await b.ready();
-    const ci = part('countdown');
-    const halves = countdownHalves('picture', scheduleNeed(sched));
-    // the prompt ("Lock it in.") is said as the countdown asks for its first tick: the ticks start as it ends
+    // the prompt ("Lock it in.") ends as the first tick sounds, TICK_GAP at least after the options (plus the bed's wait)
     const promptLen = ci !== undefined ? speechOf(segs[ci]) : 0;
-    const cd = countdown(d, b, halves, promptLen + 0.05);
+    const lead = ci !== undefined ? TICK_GAP + promptLen + latency + 0.15 : 0.2;
+    const halves = coverHalves(countdownHalves('picture', scheduleNeed(sched)), lead);
+    const cd = countdown(d, b, halves, lead);
     if (u.double) drum = drumroll(d, plannedReveal(cd));
-    if (ci !== undefined) await say(d, ci);
+    await sayOnTick(ci, cd);
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd, cd));
   } else if (u.type === 'letters') {
     await b.ready();
     const win = sched.find((a) => a.kind === 'buzz');
@@ -692,31 +827,36 @@ async function playQuestion(d, u, k) {
     o.winner = plan.winner;
     awayAt(cd, null);
     const wAt = win ? awayAt(cd, win) : null;
-    const planned = win ? Math.max(cd.T0 + win.at + win.dur + 0.3, wAt !== null ? wAt + min + 0.02 + BACK_BEAT : 0) : cd.end;
+    // (a buzz held for its cut is said from it: answers)
+    const wSaid = win ? Math.max(cd.T0 + win.at, wAt !== null ? wAt + latency : 0) : 0;
+    const planned = win ? Math.max(wSaid + win.dur + 0.3, wAt !== null ? wAt + min + 0.02 + BACK_BEAT : 0) : cd.end;
     if (u.double) drum = drumroll(d, planned);
     const lastEnd = await answers(cd);
     revealT = held(await back(win ? lastEnd + 0.3 : Math.max(cd.end, lastEnd + 0.2)));
   } else if (u.type === 'where') {
-    await sleep(pause(d, u.from) * 1000);
     const pi = part('pins');
+    if (pi === undefined) await sleep(pause(d, u.from) * 1000);
+    await b.ready();
+    // the pins are read so that the last ends as the first tick sounds, TICK_GAP at least after the headline
+    const lead = pi !== undefined ? TICK_GAP + speechOf(segs[pi]) + latency + 0.15 : 0.3;
+    const halves = coverHalves(countdownHalves('where', scheduleNeed(sched)), lead);
+    const cd = countdown(d, b, halves, lead);
+    if (u.double) drum = drumroll(d, plannedReveal(cd));
     if (pi !== undefined) {
+      await sleepUntil(cd.T0 - speechOf(segs[pi]) - latency - 0.15);
       o.pinsAt = b.at();
       await say(d, pi);
     }
-    await b.ready();
-    const halves = countdownHalves('where', scheduleNeed(sched));
-    const cd = countdown(d, b, halves, 0.3);
-    if (u.double) drum = drumroll(d, plannedReveal(cd));
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd));
   } else {
     // HOW MANY?
     await b.ready();
-    const halves = countdownHalves('howmany', scheduleNeed(sched));
+    const halves = coverHalves(countdownHalves('howmany', scheduleNeed(sched)), 0.3);
     const cd = countdown(d, b, halves, 0.3);
     if (u.double) drum = drumroll(d, plannedReveal(cd));
     const lastEnd = await answers(cd);
-    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2)));
+    revealT = held(await back(Math.max(cd.end, lastEnd + 0.2), lastEnd));
   }
   await sleepUntil(revealT);
   reveal(d, b, plan, wrongSeats(u, segs, plan));
@@ -753,6 +893,36 @@ function revealWait(d) {
 function revealHold(u, seg) {
   const said = !!seg?.quiz?.credit && String(seg.text || '').includes(seg.quiz.credit);
   return Math.max(said ? BOARD_MIN_SAID : BOARD_MIN, u.type === 'where' ? WHERE_SETTLE : 0);
+}
+
+/**
+ * The first word of a line at or after char `from` whose first sound comes `t` s or more into the line (a char offset;
+ * the line's end when none): from the recording's word marks, else at the line's average pace.
+ */
+export function wordFrom(seg, from, t) {
+  const text = String(seg?.text || '');
+  const words = Array.isArray(seg?.audio?.words) && seg.audio.words.length ? seg.audio.words : null;
+  if (words) {
+    for (const w of words) if (w.char >= from && w.t >= t) return w.char;
+    return text.length;
+  }
+  const len = speechOf(seg);
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(text))) if (m.index >= from && (m.index / Math.max(1, text.length)) * len >= t) return m.index;
+  return text.length;
+}
+
+/**
+ * A line's phrase starts: each word after a comma, a full stop, a colon, a semicolon, a question or an exclamation mark,
+ * with its first sound in s into the line ({ char, t }): from the recording's word marks, else at the line's pace.
+ */
+export function phraseStarts(seg) {
+  const text = String(seg?.text || '');
+  const words = Array.isArray(seg?.audio?.words) && seg.audio.words.length ? seg.audio.words : null;
+  const len = speechOf(seg);
+  const list = words ? words.map((w) => ({ char: w.char, t: w.t })) : [...text.matchAll(/\S+/g)].map((m) => ({ char: m.index, t: (m.index / Math.max(1, text.length)) * len }));
+  return list.filter((w) => w.char > 0 && /[,.;:!?]["'’”)]?\s*$/.test(text.slice(0, w.char)));
 }
 
 /**
@@ -836,7 +1006,7 @@ function revealCut(d, u, ri, b, nx) {
     // (a tail held back past its time would leave the reaction's face silent more than a beat: then the board keeps it)
     const at = Math.max(earliest, end - need);
     if (at > end - need + REACT_BEAT) return null;
-    return { k: 'tail', spec: plannedSpec(q, nx), at, end, slack: 0.3 };
+    return { k: 'tail', spec: plannedSpec(q, nx), at, min: earliest, end, slack: 0.3 };
   }
   if (next?.shot === 'quiz' && u.kind === 'question' && u.type !== 'today') {
     // LETTER BY LETTER next: the verdict's wide carries its frame too (the desk, which reads nothing off the board), and
@@ -844,9 +1014,9 @@ function revealCut(d, u, ri, b, nx) {
     const nu = q.units.find((x) => x.kind === 'question' && x.from === nx);
     if (nu?.type === 'letters' && segs[nx]?.anchor === 'H') {
       const slack = Math.max(0.1, paceFor(d.scene.program?.id).shots.min - LINK_SLACK - pause(d, ri) - speechOf(segs[nx])); // (the cut inside the reveal's words)
-      if (earliest <= end - slack) return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H', link: true }, at: earliest, end, slack };
+      if (earliest <= end - slack) return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H', link: true }, at: earliest, min: earliest, end, slack };
     }
-    return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H' }, at: earliest, end, slack: VERDICT_MIN - pause(d, ri) };
+    return { k: 'verdict', spec: { shot: 'wide', framing: 'quiz-wide', focus: 'H' }, at: earliest, min: earliest, end, slack: VERDICT_MIN - pause(d, ri) };
   }
   return null;
 }
@@ -859,12 +1029,26 @@ async function sayReveal(d, u, ri, b, nx) {
   d.quiz.lastReveal = { card: b.card, at: now() - b.at() + b.card.o.revealAt, hold: revealHold(u, d.quiz.episode.segments[ri]) };
   const plan = revealCut(d, u, ri, b, nx);
   let timer = null;
+  const t0 = now() + (d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0); // (the reveal's first sound)
   const arm = () => {
     if (!plan || timer) return;
-    const at = Math.max(plan.at, now());
+    let at = Math.max(plan.at, now());
     if (at > plan.end - plan.slack) return;
+    // on a phrase's first word when one is near (PHRASE_EARLY before, PHRASE_LATE after, inside the cut's own window):
+    // "From Euronews Business, | on MONEY MINUTE", "Points for both of you. | From The Verge", never "Euronews |
+    // Business" or "both of | you." (on air, 12-13 Oct)
+    const lo = Math.max(plan.min ?? plan.at, now(), at - PHRASE_EARLY);
+    const hi = Math.min(plan.end - plan.slack, at + PHRASE_LATE);
+    const near = phraseStarts(d.quiz.episode.segments[ri])
+      .map((w) => t0 + w.t - PHRASE_LEAD)
+      .filter((t) => t >= lo && t <= hi)
+      .sort((x, y) => Math.abs(x - at) - Math.abs(y - at))[0];
+    const planned = at;
+    if (near !== undefined) at = near;
     timer = setTimeout(() => {
-      d.quizTrace?.push({ k: plan.k, t: now() });
+      // (the window and the line's start as offsets from the cut, so a recording's report can place them)
+      const t = now();
+      d.quizTrace?.push({ k: plan.k, t, i: ri, phrase: near !== undefined, dAt: planned - t, dLo: lo - t, dHi: hi - t, dT0: t0 - t });
       cutTo(d, plan.spec, { wordSafe: true, onCut: () => (d.quiz.faced = true) });
     }, (at - now()) * 1000);
   };

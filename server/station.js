@@ -1,6 +1,7 @@
 import { loadChannel, publicChannel } from './channel.js';
 import { isBreaking, notNews } from './news.js';
 import { publicError } from './usage.js';
+import { tickerGrave } from './quiz/desk.js';
 
 /** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
 function publicFeedStatus(feeds) {
@@ -274,8 +275,9 @@ export class Station {
       .filter((s) => !notNews(s))
       .sort((a, b) => b.published - a.published)
       .slice(0, 18)
-      // (the story's id: PAY ATTENTION's director keeps every story its edition uses off the ticker while it airs)
-      .map((s) => ({ id: s.id, source: s.source, text: s.title }));
+      // (the story's id: PAY ATTENTION's director keeps every story its edition uses off the ticker while it airs, and
+      // `grave`: no tragedy scrolls under the game either)
+      .map((s) => ({ id: s.id, source: s.source, text: s.title, ...(tickerGrave(s) ? { grave: true } : {}) }));
   }
 
   async refreshNews() {

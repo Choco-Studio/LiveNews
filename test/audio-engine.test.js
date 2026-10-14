@@ -415,6 +415,26 @@ describe('AudioEngine: mixer', () => {
     // Word at 1.0 s + 0.12 s scheduling lead + 0.03 s output latency: onSentence fires as it is heard.
     assert.ok(subs[1][1] > 1050 && subs[1][1] < 1300, `second sentence at ${subs[1][1]} ms`);
   });
+
+  test("a recorded voice's marks fire on the recording's words, not on the mouth's timeline", async () => {
+    // (PAY ATTENTION, 13 Oct: "How many? A barn owl…": the board cut on "A barn" came 0.56 s early, inside "How many?",
+    // where the recording's question pause is longer than the timeline's)
+    globalThis.AudioContext = FakeContext;
+    const e = new AudioEngine();
+    await e.unlock();
+    const text = 'How many? A barn owl and its chicks.';
+    const buffer = e.context.createBuffer(1, 48000 * 3, 48000);
+    const words = [{ t: 0.0, char: 0 }, { t: 0.25, char: 4 }, { t: 1.2, char: 10 }, { t: 1.24, char: 12 }, { t: 1.5, char: 17 }];
+    const fired = [];
+    const t0 = performance.now();
+    const run = e.speak(text, 'H', { audio: { buffer, words }, marks: [10], onMark: () => fired.push(performance.now() - t0) });
+    await sleep(1700);
+    e.stop();
+    await run;
+    // the word at 1.2 s + the 0.12 s scheduling lead (+ the fake's output latency): never on the timeline's own pace
+    assert.equal(fired.length, 1);
+    assert.ok(fired[0] > 1250 && fired[0] < 1450, `the mark at ${fired[0].toFixed(0)} ms`);
+  });
 });
 
 describe('AudioEngine: sync, lateness and robustness', () => {

@@ -128,7 +128,10 @@ export function playHowMany(q, ids, rnd) {
   const exact = (id) => q.figure.exact && plays[id].guess === fig.n;
   for (const id of ids) plays[id].points = 0;
   if (exact(a) || exact(b)) for (const id of ids) plays[id].points = exact(id) ? 3 : 0;
+  // (equally close, either side of the figure: both are the closest guess, two points each; on air, 13 Oct, $150 and
+  // $250 against $200 scored nobody and the host said "A near thing. Nobody has it.")
   else if (plays[a].off !== plays[b].off) plays[plays[a].off < plays[b].off ? a : b].points = 2;
+  else for (const id of ids) plays[id].points = 2;
   for (const id of ids) plays[id].right = plays[id].points > 0;
   return plays;
 }

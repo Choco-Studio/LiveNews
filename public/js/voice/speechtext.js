@@ -1318,6 +1318,7 @@ const SEGMENT_PROSODY = {
   lighter: { speed: 1.02, pause: 1, end: 0.6, lead: 0.04 },
   ad: { speed: 1.04, pause: 0.85, end: 0.3, lead: 0 },
   cross: { speed: 1.01, pause: 0.95, end: 0.35, lead: 0 }, // a correspondent link: a two-way keeps its turns close
+  quiz: { speed: 1.02, pause: 0.92, end: 0.3, lead: 0 }, // PAY ATTENTION: a game's quick turns, a line said on its tick
   default: { speed: 1, pause: 1, end: 0.55, lead: 0.04 },
 };
 
@@ -1591,7 +1592,7 @@ export function planSpeech(text, opts = {}) {
 // quietens; the words worth leaning on (numbers, records, "not") get a lift.
 // The voice engine bends the audio to it (tools/voice/engine.py, dsp.pitch_curve).
 const MELODY_MOOD = { neutral: 1, happy: 1.15, serious: 0.7, sad: 0.6, surprised: 1.25, thinking: 0.9 };
-const MELODY_SEGMENT = { breaking: 0.8, lighter: 1.15, chat: 1.1, ad: 0.8, headline: 1.05, roundup: 1.05 };
+const MELODY_SEGMENT = { breaking: 0.8, lighter: 1.15, chat: 1.1, ad: 0.8, headline: 1.05, roundup: 1.05, quiz: 1.1 };
 const MELODY_LIMIT = 2; // semitones either way, planned: the bend plus the engine's steering stays within a natural reach
 const REPORTING_END = /\b(?:said|says|told (?:reporters|the [\p{L}]+)|added|reported|reports|warned|confirmed|announced|explained|insisted)[.,;:!?…]?$/iu;
 const REPORTING_START = /^(?:according to|as reported by|(?:said|says|added|warned|insisted)\s)/i;

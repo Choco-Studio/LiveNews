@@ -18,7 +18,7 @@ export const BREATHS = false;
 export const MELODY = true;
 
 // Segments a presenter reads aloud.
-export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather', 'cross']); // weather: WORLD WEATHER (server/weatherwriter.js); cross: a correspondent link (server/correspondents.js)
+export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather', 'cross', 'quiz']); // weather: WORLD WEATHER (server/weatherwriter.js); cross: a correspondent link (server/correspondents.js); quiz: PAY ATTENTION (server/quiz/writer.js)
 
 // Clip ids: 'v' + 20 hex characters of the request hash (safe in URLs and file names).
 export const ID_RE = /^v[0-9a-f]{20}$/;
