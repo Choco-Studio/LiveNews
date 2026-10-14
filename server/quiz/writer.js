@@ -230,10 +230,10 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   const d = game.don;
   const desks = d.offered.map((x) => (DESKS[x] || x).toLowerCase());
   if (d.offered.length > 1) {
-    host('don', `${d.level ? `We are level, so ${first(d.trailing)} picks. ` : ''}${pick(HOST.don, 'don', { name: first(d.trailing), desks: `${desks[0]} or ${desks[1]}` })}`, { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before } });
+    host('don', `${d.level ? `We are level, so ${first(d.trailing)} picks. ` : ''}${pick(HOST.don, 'don', { name: first(d.trailing), desks: `${desks[0]} or ${desks[1]}` })}`, { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
     player(d.trailing, 'pick', pick(PLAYERS[d.trailing]?.pick || ['{desk}.'], 'pick', { desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() }).replace(/^./, (c) => c.toUpperCase()), { quiz: { desk: d.offer.desk } });
   } else {
-    host('don', pick(HOST.donOne, 'don', { name: first(d.trailing), desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() }), { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before } });
+    host('don', pick(HOST.donOne, 'don', { name: first(d.trailing), desk: (DESKS[d.offer.desk] || d.offer.desk).toLowerCase() }), { quiz: { round: d.type, title: 'DOUBLE OR NOTHING', offered: d.offered, scores: d.before, trailing: d.trailing } });
   }
   playOut(d.played.q, d.played, 'don', { double: { [d.trailing]: 2, [d.leader]: 1 }, firstOfRound: true });
 

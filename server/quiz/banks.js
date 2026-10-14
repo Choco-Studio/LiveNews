@@ -122,7 +122,9 @@ export const HOST = {
       '{ask}? {masked}',
     ],
   },
-  countdown: ['Lock it in.', 'Fingers on buzzers.', 'Three seconds.', 'Time is nearly up.', 'Final answers.', 'Decide now.', 'Here we go.', 'Last chance.'],
+  // (said as the countdown starts: its ticks begin as the prompt ends, so never "Three seconds" or "Last chance" before
+  // seven half notes of clock; the director, step 4)
+  countdown: ['Lock it in.', 'Pick your letter.', 'The clock is running.', 'Your time starts now.', 'Over to you.', 'Decide now.', 'Here we go.', 'Lock in when you know.'],
   right: ['{name} has it.', 'Correct, {name}.', 'Yes, {name}.', 'That is right, {name}.', 'Well spotted, {name}.', '{name} takes it.', 'Spot on, {name}.', 'Good answer, {name}.', 'Points for {name}.', 'Nicely done, {name}.', 'Right first time, {name}.', 'Yes. Points to {name}.'],
   wrong: ['Not this time.', 'No points for that one.', 'No, I am afraid.', 'Not quite.', 'It is not.', 'No such luck.', 'Good try, but no.', 'The board says otherwise.', 'Not the one.', 'Unlucky.', 'Close, but no.', 'Not tonight.'],
   both: ['You both have it.', 'Both right.', 'Points for both of you.', 'Two right answers.', 'Both of you, yes.', 'Level on that one: both right.'],

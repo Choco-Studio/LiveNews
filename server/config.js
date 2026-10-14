@@ -39,6 +39,9 @@ const bounded = (key, fallback, min, max) => {
 const rotationStart = env('ROTATION_START', '').trim();
 // drafts put on air for a test or a recording (server/channel.js withDraftsOnAir): "full-time" or "full-time@world-weather"
 const draftsOnAir = env('DRAFTS_ON_AIR', '').split(',').map((x) => x.trim()).filter(Boolean);
+// PAY ATTENTION viewed or recorded as a draft on air before the archive holds its three days (server/quiz/edition.js):
+// the three-day minimum and the overnight hours lifted for a draft put on air by DRAFTS_ON_AIR only, never for air
+const quizView = /^(1|true|yes|on)$/i.test(env('QUIZ_VIEW', '0').trim());
 
 export const config = {
   host: env('HOST', '127.0.0.1'),
@@ -72,6 +75,7 @@ export const config = {
   queueSize: num('QUEUE_SIZE', 2),
   rotationStart,
   draftsOnAir,
+  quizView,
   // The channel's clock (config/channel.json `clock`: NEWS IN 60 at :00 and :30, dayparts). STATION_CLOCK=0 turns it
   // off; a ROTATION_START demo plays the bare rotation unless STATION_CLOCK=1 asks for the clock too
   clock: !/^(0|false|no|off)$/i.test(env('STATION_CLOCK', rotationStart ? '0' : '1')),

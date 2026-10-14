@@ -447,6 +447,9 @@ registerGestures(HEADS);
 registerVariants(BEATS);
 // the far-hand versions of the one-handed beats (`beat_far`, `offer_far`, ...)
 registerVariants(Object.fromEntries(Object.entries(FAR_BEATS).map(([name, list]) => [name, Object.fromEntries(list.map((v) => [`${v}_far`, mirrorDef(GESTURES[name].variants[v])]))])));
+// a point and an open palm to the far side: PAY ATTENTION's host sits at the centre seat between two players (the near
+// arm turns to the one on screen-right, B; `far` and `after_you_far` turn to A, with the head)
+registerVariants({ point_partner: { far: mirrorDef(GESTURES.point_partner), after_you_far: mirrorDef(GESTURES.point_partner.variants.after_you) } });
 
 /** The 7 gestures in the order the rig demo performs them. */
 export const DEMO_SEQUENCE = ['raise_hand', 'wave', 'point_screen', 'nod', 'look_partner', 'shrug', 'count'];

@@ -307,8 +307,10 @@ const PROGRAMMES = {
     holds: { signoff: 1.2, endcard: 3.0 },
     // the shots (director.js playQuiz, quizplay.js planQuizShots): the quiz's wide, the host's single, the players'
     // singles and the boards; never faster than the network's 4 s; a studio shot at most 12 s; a question board holds
-    // its whole question (quizMax: PICTURE THIS runs about 27 s from its frame to its reveal)
-    shots: { median: [4.5, 7], studioMax: 12, singleSoft: 10, cutsPerMinMax: 10, quiz: true, quizMax: 40 },
+    // its whole question (quizMax: PICTURE THIS runs about 27 s from its frame to its reveal). The median band is the
+    // measured one (18 editions, 5.1-9.0 s), inside the owner's floor: a question's board runs 9-28 s (cut by the
+    // buzzer's single or the guessers' wide), the studio's shots 4-12 s
+    shots: { median: [5, 9], studioMax: 12, singleSoft: 10, cutsPerMinMax: 10, quiz: true, quizMax: 40 },
     moves: { max: 0, minGap: Infinity }, // the quiz's framings are locked off (studio/quiz.js quizCamera)
     gestures: { perMin: 5, minGap: 4.5, beatsPerMin: 7, rest: 0.6, grave: 2, floor: 2.5 },
     listener: { reactionGap: 7, nodsPerMin: [1, 6] },

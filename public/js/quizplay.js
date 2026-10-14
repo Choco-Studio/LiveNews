@@ -255,9 +255,11 @@ export function revealPlan(unit, segments, cast, { item = null, double = null } 
 
 const BOARD = 'quiz';
 const ANSWER_PARTS = new Set(['lock', 'buzz', 'stall', 'guess']);
-const WIDE_PARTS = new Set(['welcome', 'scores', 'signoff']);
+const WIDE_PARTS = new Set(['welcome', 'scores', 'signoff', 'tally']);
 const MIN = 4.0; // the network's minimum shot (pace.js shots.min), planned with a margin
 const MARGIN = 0.4;
+/** s a board's first line may wait for the board's cut (quizdirector.js BOARD_WAIT): a run before a board may end short. */
+export const BOARD_WAIT = 2.5;
 
 /** A board shot for a unit. */
 const boardShot = (unit, k, anchor) => ({ shot: BOARD, framing: null, focus: anchor || 'H', board: unit.kind === 'question' ? unit.type : unit.board, unit: k });
@@ -272,7 +274,7 @@ const studioShot = (framing) => (framing === QUIZ_FRAMING.wide ? { shot: 'wide',
  * hold one alone), none longer than the studio maximum where a speaker change allows a cut; player B's single is the
  * wide while the programme's tag shows (`tagUntil`: s after the open's cut). o = { gapAfter(i) → s, studioMax, min }.
  */
-export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, min = MIN, tagUntil = TAG_CLEAR, units = null } = {}) {
+export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, min = MIN, tagUntil = TAG_CLEAR, units = null, endHold = 1.2 } = {}) {
   const segs = episode?.segments || [];
   const U = units || quizUnits(segs);
   const shots = new Array(segs.length).fill(null);
@@ -292,16 +294,30 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
       for (let i = u.from; i <= u.to; i++) len[i] = u.kind === 'open' ? 0 : speechOf(segs[i]);
     }
   });
-  const dur = (i) => len[i] + (i < segs.length - 1 ? gapAfter(i) : 0);
+  // (the sign-off's hold on its shot before the end card counts as its air)
+  const dur = (i) => len[i] + (i < segs.length - 1 ? gapAfter(i) : endHold);
   const start = new Array(segs.length).fill(0);
   for (let i = 1; i < segs.length; i++) start[i] = start[i - 1] + (segs[i - 1]?.part === 'open' ? 0 : dur(i - 1));
   // boards first
   U.forEach((u, k) => {
     if (u.kind === 'open') shots[u.from] = { shot: 'open', framing: null, focus: 'H' };
-    else if (u.kind === 'question' || u.kind === 'card') for (let i = u.from; i <= u.to; i++) shots[i] = boardShot(u, k, segs[u.from]?.anchor);
+    // (TODAY OR NOT TODAY's tally is the host's line to the studio after the sixth stamp: the wide, the lamps and scores)
+    else if (u.kind === 'question' || u.kind === 'card') for (let i = u.from; i <= u.to; i++) if (segs[i]?.part !== 'tally') shots[i] = boardShot(u, k, segs[u.from]?.anchor);
   });
-  // a final score shorter than the minimum keeps the board into the next line (the winner's first words over it)
-  // (never past the minimum: the reactions belong to the faces)
+  // the answers said in the players' own words, on their faces: LETTER BY LETTER's buzz on the buzzer's single (the wide
+  // while player B's single would stand under the tag), HOW MANY?'s guesses on the wide (both desks lighting). The
+  // lock-ins stay on their board (the reading rule: the options on screen to the last lock-in), and a stall too (the
+  // clock runs on for the other player). The director keeps any of them on the board that has not yet held the minimum.
+  U.forEach((u) => {
+    if (u.kind !== 'question') return;
+    if (u.type === 'letters') {
+      for (const j of u.parts.buzz || []) {
+        const seat = segs[j]?.anchor;
+        shots[j] = { ...studioShot(seat === 'B' && start[j] < tagUntil ? QUIZ_FRAMING.wide : QUIZ_FRAMING[seat] || QUIZ_FRAMING.wide), answer: true };
+      }
+    }
+    if (u.type === 'howmany') for (const j of u.parts.guess || []) shots[j] = { ...studioShot(QUIZ_FRAMING.wide), answer: true };
+  });
   // the studio runs between them
   let i = 0;
   while (i < segs.length) {
@@ -311,54 +327,65 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     }
     const run = [];
     while (i < segs.length && !shots[i]) run.push(i++);
-    planRun(run);
+    // (a run the next board follows may end on a short shot: the board's first line waits for its cut, up to BOARD_WAIT)
+    planRun(run, shots[i]?.shot === BOARD ? BOARD_WAIT : 0);
   }
   function prefer(j) {
     const s = segs[j];
     if (WIDE_PARTS.has(s?.part)) return QUIZ_FRAMING.wide;
     return QUIZ_FRAMING[s?.anchor] || QUIZ_FRAMING.H;
   }
-  function planRun(run) {
-    const groups = [];
-    let cur = null;
-    const rest = (k) => run.slice(k).reduce((t, j) => t + dur(j), 0);
-    run.forEach((j, k) => {
-      const want = prefer(j);
-      if (!cur) {
-        cur = { segs: [j], framing: want, len: dur(j), speakers: new Set([segs[j]?.anchor]), forced: WIDE_PARTS.has(segs[j]?.part) };
-        return;
-      }
-      const same = want === cur.framing || (cur.framing === QUIZ_FRAMING.wide && (cur.forced || cur.speakers.size > 1) && cur.len < min + MARGIN);
-      const canCut = cur.len >= min + MARGIN && rest(k) >= min + MARGIN;
-      const tooLong = cur.len + dur(j) > studioMax;
-      if (!same && (canCut || (tooLong && cur.len >= min))) {
-        groups.push(cur);
-        cur = { segs: [j], framing: want, len: dur(j), speakers: new Set([segs[j]?.anchor]), forced: WIDE_PARTS.has(segs[j]?.part) };
-        return;
-      }
-      cur.segs.push(j);
-      cur.len += dur(j);
-      cur.speakers.add(segs[j]?.anchor);
-      cur.forced ||= WIDE_PARTS.has(segs[j]?.part);
-      // a shot that carries several speakers (or the welcome, the scores, the sign-off) is the wide
-      if (cur.speakers.size > 1 || cur.forced) cur.framing = QUIZ_FRAMING.wide;
-    });
-    if (cur) groups.push(cur);
-    // two neighbours on the same camera are one shot
-    const merged = [];
-    for (const g of groups) {
-      const last = merged[merged.length - 1];
-      if (last && last.framing === g.framing) {
-        last.segs.push(...g.segs);
-        last.len += g.len;
-      } else merged.push(g);
+  // a run of studio lines is cut into shots by the cheapest partition (a run holds a few lines: every way of cutting
+  // it is tried): a shot under the network's minimum costs dearly (the last may lean on the board after it waiting up
+  // to BOARD_WAIT), one past the studio maximum too, two neighbours on the same camera are no cut at all (never
+  // allowed); several speakers are the wide; one speaker's lines are best on their single, the welcome, the scores, the
+  // tally and the sign-off on the wide (the host's single when the wide would run past the maximum), and every cut
+  // costs a little (no choppy cutting for its own sake)
+  function options(g) {
+    if (g.speakers.size > 1) return [[QUIZ_FRAMING.wide, 0]];
+    const one = [...g.speakers][0];
+    const single = one === 'B' && start[g.segs[0]] < tagUntil ? null : QUIZ_FRAMING[one] || QUIZ_FRAMING.H; // B never under the tag
+    if (g.forced) return single ? [[QUIZ_FRAMING.wide, 0], [single, 1.5]] : [[QUIZ_FRAMING.wide, 0]];
+    const own = one === 'A' || one === 'B' ? -1.5 : 0; // a player's own single
+    return single ? [[single, own], [QUIZ_FRAMING.wide, 1]] : [[QUIZ_FRAMING.wide, 1]];
+  }
+  function planRun(run, allow) {
+    const n = run.length;
+    let best = null;
+    const limit = n > 12 ? 0 : 1 << (n - 1); // (a run longer than twelve lines, never written, stays one shot)
+    for (let mask = 0; mask < Math.max(1, limit); mask++) {
+      const groups = [];
+      let g = null;
+      run.forEach((j, k) => {
+        if (!g || (limit && mask & (1 << (k - 1)))) groups.push((g = { segs: [], len: 0, speakers: new Set(), forced: false }));
+        g.segs.push(j);
+        g.len += dur(j);
+        g.speakers.add(segs[j]?.anchor);
+        g.forced ||= WIDE_PARTS.has(segs[j]?.part);
+      });
+      let cost = 0;
+      groups.forEach((x, k) => {
+        // the cheapest camera that is not the one before (a cut to the same picture is none)
+        const opts = options(x).filter(([f]) => !k || f !== groups[k - 1].framing);
+        if (!opts.length) {
+          cost += 1000;
+          x.framing = options(x)[0][0];
+        } else {
+          opts.sort((a, b) => a[1] - b[1]);
+          x.framing = opts[0][0];
+          cost += opts[0][1];
+        }
+        const last = k === groups.length - 1;
+        const len = last ? x.len + allow : x.len;
+        if (len < min + MARGIN) cost += 100 * (min + MARGIN - len);
+        if (last && allow && x.len < min) cost += 2 * (min - x.len); // (the silence the board's wait costs)
+        const cap = x.segs.some((j) => segs[j]?.part === 'signoff') ? studioMax - MARGIN : studioMax; // (the stinger's transition after the hold)
+        if (x.len > cap) cost += 50 * (x.len - cap);
+        cost += 0.5;
+      });
+      if (!best || cost < best.cost - 1e-9) best = { cost, groups };
     }
-    for (const g of merged) {
-      // player B's single never under the programme's tag (it would stand under the purple tag: studio/quiz.js)
-      let framing = g.framing;
-      if (framing === QUIZ_FRAMING.B && start[g.segs[0]] < tagUntil) framing = QUIZ_FRAMING.wide;
-      for (const j of g.segs) shots[j] = { ...studioShot(framing), strip: segs[g.segs[0]]?.part === 'scores' || g.segs.some((x) => segs[x]?.part === 'scores' && x <= j) || undefined };
-    }
+    for (const x of best.groups) for (const j of x.segs) shots[j] = { ...studioShot(x.framing), strip: (x.framing === QUIZ_FRAMING.wide && x.segs.some((y) => segs[y]?.part === 'scores' && y <= j)) || undefined };
   }
   // two neighbouring studio shots on the same camera after the B rule are one shot
   for (let j = 0; j < segs.length; j++) {

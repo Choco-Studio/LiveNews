@@ -541,8 +541,8 @@ describe('config/channel.json', () => {
   const feedCategories = new Set(JSON.parse(fs.readFileSync(REAL_FEEDS_FILE, 'utf8')).map((f) => f.category));
   const programs = Object.entries(channel.programs);
   // the fresh-news programmes (a weather programme is written from the weather data: test/weather.test.js; SEVEN DAYS
-  // from the archive of what aired: test/weekly.test.js)
-  const news = programs.filter(([, p]) => p.kind !== 'weather' && p.kind !== 'weekly');
+  // from the archive of what aired: test/weekly.test.js; PAY ATTENTION's quiz from it too: test/pay-attention-*.test.js)
+  const news = programs.filter(([, p]) => p.kind !== 'weather' && p.kind !== 'weekly' && p.kind !== 'quiz');
 
   test('is a valid GLOBIT 24 channel line-up', () => {
     assert.doesNotThrow(() => validateChannel(channel));
@@ -561,8 +561,13 @@ describe('config/channel.json', () => {
   });
 
   test('every programme has what the writer and the producer need', () => {
-    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather' || q.kind === 'weekly')) {
+    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather' || q.kind === 'weekly' || q.kind === 'quiz')) {
       for (const key of ['title', 'tagline', 'theme', 'style']) assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
+    }
+    // the quiz: its host presents, its contestants are presenters of other programmes (pay-attention.md §2)
+    for (const [id, p] of programs.filter(([, q]) => q.kind === 'quiz')) {
+      assert.equal(p.presenters.length, 1, `${id}: one host`);
+      assert.ok((p.contestants || []).length >= 2 && !p.contestants.includes(p.presenters[0]), `${id}.contestants`);
     }
     for (const [id, p] of news) {
       for (const key of ['title', 'tagline', 'theme', 'style', 'storyLength']) {

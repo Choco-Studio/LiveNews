@@ -36,10 +36,10 @@ function archive() {
   a.entries.sort((x, y) => x.at - y.at);
   return a;
 }
-// the channel with a test host and the quiz as a programme
+// the channel with the quiz as a programme (config/channel.json's draft moved on air; the host is config's qm)
 function channelWithQuiz() {
   const ch = structuredClone(loadChannel());
-  ch.presenters.qm = { ...structuredClone(ch.presenters.sam), name: 'Test Host', personality: 'the quizmaster (a test stand-in)' };
+  if (ch.drafts) delete ch.drafts['pay-attention'];
   ch.programs['pay-attention'] = { kind: 'quiz', title: 'PAY ATTENTION', tagline: "THE WEEK'S NEWS AS A GAME", theme: 'quiz', presenters: ['qm'], contestants: ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam'], style: 'The week’s news as a game.', minGapHours: 4, targetSeconds: [290, 360] };
   return ch;
 }

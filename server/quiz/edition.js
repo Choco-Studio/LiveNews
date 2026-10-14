@@ -17,8 +17,11 @@ const DAY = 86400_000;
 export const DEFAULT_CONTESTANTS = Object.freeze(['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']);
 
 export class QuizDesk {
-  constructor({ archive = null, same = null, dir = null, now = () => Date.now(), log = console } = {}) {
+  constructor({ archive = null, same = null, dir = null, now = () => Date.now(), log = console, view = false } = {}) {
     this.archive = archive;
+    // QUIZ_VIEW (server/config.js): a draft put on air by DRAFTS_ON_AIR may be viewed before the archive holds three
+    // days and at any hour; an official programme never (plan() asks the channel which drafts are on air)
+    this.view = !!view;
     this.same = same;
     this.now = now;
     this.log = log;
@@ -47,7 +50,8 @@ export class QuizDesk {
     if (now - this.lastAt < (program.minGapHours ?? 4) * 3600_000) return { air: false, reason: `the last edition aired under ${program.minGapHours ?? 4} hours ago` };
     const entries = this.archive.entries.filter((e) => e.at <= now && realEntry(e));
     const { events, avoid } = quizEvents(this.archive, { now, days: 7, same: this.same });
-    return planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid });
+    const view = this.view && Array.isArray(channel?.draftsOnAir) && channel.draftsOnAir.includes(program.id);
+    return planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid, ...(view ? { minArchiveDays: 0, checkHour: false } : {}) });
   }
 
   /**
@@ -63,9 +67,23 @@ export class QuizDesk {
     return result;
   }
 
-  /** The edition: the kept plan if it is fresh, else a new one; null when nothing fits. */
-  make(program, channel, { now = this.now(), recentLines = [], nextAt = null } = {}) {
-    const plan = this.pending && now - this.pending.at < 10 * 60_000 ? this.pending.plan : this.plan(program, channel, now);
+  /** The plan the next edition would air (the kept one if it is fresh, else a new one, kept), or null when nothing fits. */
+  planFor(program, channel, now = this.now()) {
+    if (this.pending && now - this.pending.at < 10 * 60_000) return this.pending.plan;
+    const plan = this.plan(program, channel, now);
+    this.pending = plan.air ? { at: now, plan } : null;
+    return plan.air ? plan : null;
+  }
+
+  /** Forget the kept plan (the producer refused it: a picture the station could not fetch). */
+  drop() {
+    this.pending = null;
+    this.checked = null;
+  }
+
+  /** The edition: `plan` (planFor's), else the kept plan if it is fresh, else a new one; null when nothing fits. */
+  make(program, channel, { now = this.now(), recentLines = [], nextAt = null, plan: given = null } = {}) {
+    const plan = given || (this.pending && now - this.pending.at < 10 * 60_000 ? this.pending.plan : this.plan(program, channel, now));
     this.pending = null;
     this.checked = null;
     if (!plan?.air) return null;

@@ -23,8 +23,10 @@ const W = 384, H = 216;
 // step 7; server/channel.js loadChannel(file, { drafts: true }) merges them as the producer's harnesses do): a drafted
 // programme's set is built, warmed and held to every rule below like the others
 const channel = loadChannel(new URL('../config/channel.json', import.meta.url).pathname, { drafts: true });
-// the studio programmes (WORLD WEATHER airs from its own weather centre, scenes/weather, not the desk set)
-const PROGRAMS = Object.keys(channel.programs).filter((id) => channel.programs[id].kind !== 'weather');
+// the studio programmes (WORLD WEATHER airs from its own weather centre, scenes/weather, not the desk set; PAY ATTENTION
+// from its quiz studio, studio/quiz.js: three seats and framings of its own, held to these rules in its own framings by
+// test/pay-attention-set.test.js)
+const PROGRAMS = Object.keys(channel.programs).filter((id) => channel.programs[id].kind !== 'weather' && channel.programs[id].kind !== 'quiz');
 
 /** A fixture picture as the director would hold it: 416x234 RGBA (box-sampled, not pixelated). */
 function fixture(name) {
@@ -73,7 +75,7 @@ describe('styles: setStyle per programme', () => {
     }
     assert.deepEqual([...STYLE_IDS].sort(), [...PROGRAMS].sort());
     // the drafts are exactly config's drafts (a programme on air is never counted twice, nor a draft lost)
-    assert.deepEqual([...(channel.drafted || [])].sort(), ['full-time']);
+    assert.deepEqual([...(channel.drafted || [])].sort(), ['full-time', 'pay-attention']);
   });
   test('unknown ids get the home look under their own id; setStyle sets the default', () => {
     for (const id of ['weekend-review', '', null, undefined, 42]) {
