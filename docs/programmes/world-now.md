@@ -242,8 +242,8 @@ Every line of a link is a fact of that story's source (`groundedText`, as for an
 
 | | Desk (strap label by the place) | Look | Voice |
 |---|---|---|---|
-| Rhea Raster | EUROPE / AFRICA DESK | black hair in a sleek low chignon, warm brown skin, black jacket, white top | bf_lily + 25% bf_emma, en-GB |
-| Vic Vector | AMERICAS DESK | black wave crop close to the skull with a crisp line-up, deep brown skin, steel-blue jacket, open white collar | am_eric + 30% am_onyx, en-US |
+| Rhea Raster | EUROPE / AFRICA DESK | black hair in a sleek low chignon, warm brown skin, black jacket, white top | bf_emma + 40% af_aoede, en-GB (16 Oct; was bf_lily + 25% bf_emma) |
+| Vic Vector | AMERICAS DESK | black wave crop close to the skull with a crisp line-up, deep brown skin, steel-blue jacket, open white collar | am_puck + 20% am_michael + 15% am_onyx, en-US (16 Oct; was am_eric + 30% am_onyx) |
 | Mika Voxel | ASIA-PACIFIC / MIDDLE EAST DESK | sleek black bob with a blunt fringe, light warm skin, pale grey blazer, black top | af_aoede, en-US |
 
 All three wear an earpiece with its clear tube running into the collar, and a small lapel microphone. They move like correspondents, not like presenters at a desk:

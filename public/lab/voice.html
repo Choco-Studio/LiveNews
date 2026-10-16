@@ -32,6 +32,42 @@
       the browser voice. window.__lab: list(), play(i), playAll(), stop(), state().
     </div>
     <pre id="out"></pre>
+    <!-- Before and after the voices round of 16 Oct (docs/roadmap/critique/voices-naturalness.md): each re-cast
+         character saying the same line in the old voice and the new one, from voices/manifest.json (static files:
+         no server needed). The old blend stays in server/voice/casting.json (`previous`) to go back in one step. -->
+    <section id="ab" hidden>
+      <h3>Before / after (16 Oct voices round)</h3>
+      <p class="abnote"></p>
+      <table id="abtable"></table>
+    </section>
+    <style>
+      #ab { max-width: 1152px; margin-top: 12px; }
+      #ab h3 { color: #feae34; font-size: 13px; margin: 0 0 4px; }
+      #ab .abnote { color: #8b9bb4; margin: 0 0 8px; }
+      #ab table { border-collapse: collapse; width: 100%; }
+      #ab td { padding: 4px 6px; border-top: 1px solid #262b44; vertical-align: top; }
+      #ab td small { display: block; color: #8b9bb4; }
+      #ab audio { width: 230px; height: 28px; }
+    </style>
+    <script type="module">
+      // the before/after table: one row per character, the old voice and the new one on the same line
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+      try {
+        const res = await fetch('voices/manifest.json');
+        if (res.ok) {
+          const m = await res.json();
+          const sec = document.getElementById('ab');
+          sec.querySelector('.abnote').textContent = m.note || '';
+          document.getElementById('abtable').innerHTML = (m.rows || [])
+            .map((r) => `<tr><td>${esc(r.name)}<small>${esc(r.role)}</small></td>` +
+              `<td>before<audio controls preload="none" src="voices/${esc(r.before.file)}"></audio><small>${esc(r.before.voice)}</small></td>` +
+              `<td>after<audio controls preload="none" src="voices/${esc(r.after.file)}"></audio><small>${esc(r.after.voice)}</small></td>` +
+              `<td><small>${esc(r.line)}</small></td></tr>`)
+            .join('');
+          sec.hidden = false;
+        }
+      } catch { /* no manifest: the lab works as before */ }
+    </script>
     <script type="module">
       import { P } from '../js/palette.js';
       import { drawText, wrapLines, measureText } from '../js/font.js';

@@ -457,8 +457,10 @@ class VoiceEngine:
         lead, tail = int(0.012 * sr), int(0.025 * sr)
         # breaths between sentences (dsp.breath_into): presenters only, unless the request turns them off
         breaths = req.get('breaths', True) is not False and not str(req.get('effect') or '').startswith('robot') and not req.get('raw')
-        # the planner's newsreader melody (speechtext planMelody), unless the request turns it off; never for a robot
+        # the planner's newsreader melody (speechtext planMelody), unless the request turns it off; never for a robot.
+        # Its loudness contour always; its pitch only when BEND is on or the request asks ('bend': true): see BEND
         melody = req.get('melody', True) is not False and not str(req.get('effect') or '').startswith('robot')
+        bend = BEND if req.get('bend') is None else bool(req.get('bend'))
 
         clips = []
         for ph in phrases:
@@ -483,10 +485,10 @@ class VoiceEngine:
                           'tokens': [t for t, _ in token_ph], 'starts': starts, 'timeline': timeline})
         if not clips:
             raise ValueError('nothing audible was synthesised')
-        # bend the phrases to their melody: the pitch now (the timing stays put, so the word times hold),
-        # the gain after the levelling below
+        # the phrases' melody: the gain contour after the levelling below (and the pitch now, when bending: the
+        # timing stays put, so the word times hold)
         if melody:
-            shape_melody(clips, sr)
+            shape_melody(clips, sr, bend=bend)
         for c in clips:
             c['level'] = dsp.active_level_db(c['audio'], sr)
 
@@ -553,16 +555,31 @@ class VoiceEngine:
         return audio, sr, reply
 
 
-# How much of Kokoro's own sentence-to-sentence wander the melody replaces. Each phrase is a separate pass and
-# lands wherever the model puts it (a closing sentence often higher than the lead, measured: medians spread
+# Whether the melody bends the pitch of the voice (dsp.pitch_curve), or only shapes its loudness. Off since the
+# voices round of 16 Oct (docs/roadmap/critique/voices-naturalness.md): on the same 21 clips of the seven presenters,
+# one Kokoro pass each, the bend cost 0.15 on a predicted listening score (20 of 21 clips better without it), and
+# a constant 1-semitone bend alone cost 0.08: the resample and splice smooth the voice's own roughness
+# (harmonics-to-noise +0.7 dB, aperiodicity down), the "processed" colour, and the planned swings (up to 2 st
+# a sentence) cost the rest. Kokoro already reads each sentence with a melody of its own; the plan's lifts on the
+# words worth leaning on stay as loudness. True brings the bend back (a request may also ask with 'bend': true).
+BEND = False
+
+# When bending: how much of Kokoro's own sentence-to-sentence wander the melody replaces. Each phrase is a separate
+# pass and lands wherever the model puts it (a closing sentence often higher than the lead, measured: medians spread
 # over 2.5 semitones at random), which would blur the planned line; most of that is taken out first.
 STEER = 0.9
 
 
-def shape_melody(clips, sr):
-    """Bend each clip (in place) to its phrase's melody: its pitch steered from where Kokoro left it to the
-    planned level (dsp.pitch_curve, length kept) and the gain curve kept for after the levelling."""
+def shape_melody(clips, sr, bend=True):
+    """Shape each clip (in place) to its phrase's melody: the gain curve kept for after the levelling and, when
+    bending, its pitch steered from where Kokoro left it to the planned level (dsp.pitch_curve, length kept)."""
     if not any(c['phrase'].pitch != (0.0, 0.0) or c['phrase'].accents or c['phrase'].gain for c in clips):
+        return
+    if not bend:
+        for c in clips:
+            curve = melody_curve(c, sr)
+            if curve is not None:
+                c['gain'] = (curve[0], curve[2])
         return
     tracks = [dsp.pitch_track(c['audio'], sr)[1] for c in clips]
     voiced = [f for f in tracks if len(f)]

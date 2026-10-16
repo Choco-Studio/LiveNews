@@ -1,10 +1,10 @@
 {
-  "_note": "Voice-over artists for the commercials (ids = ad module ids in public/js/ads/). Kokoro blends kept apart from the presenters' voices (server/voice/casting.json) so an advert never sounds like the newsreader who just handed over. 'default' covers ads added later: picked by the ad's own voice.gender and voice.lang. speed is the Kokoro speed; every line must fit the gap before the ad's next script line (checked when the server renders them). 4 Oct: the correspondents (Rhea bf_lily+bf_emma, Vic am_eric+am_onyx, Mika af_aoede) took three of the free voices; the defaults moved off them (male-us am_liam+am_onyx: 62 from Vic, >86 from the presenters; female-us af_sky+af_river: >71 from everyone, Nova 56 before).",
+  "_note": "Voice-over artists for the commercials (ids = ad module ids in public/js/ads/). Kokoro blends kept apart from the presenters' voices (server/voice/casting.json) so an advert never sounds like the newsreader who just handed over. 'default' covers ads added later: picked by the ad's own voice.gender and voice.lang. speed is the Kokoro speed; every line must fit the gap before the ad's next script line (checked when the server renders them). 4 Oct: the correspondents (Rhea bf_lily+bf_emma, Vic am_eric+am_onyx, Mika af_aoede) took three of the free voices; the defaults moved off them (male-us am_liam+am_onyx: 62 from Vic, >86 from the presenters; female-us af_sky+af_river: >71 from everyone, Nova 56 before). 16 Oct (voices round, docs/roadmap/critique/voices-naturalness.md): Leo Sepia leads with bm_fable, so the two adverts that led with it lead with onyx and lewis, fable kept as their colour (every line still fits its slot). 'continuity' is the break bumper's line, not an advert: until 16 Oct it took the female-gb default.",
   "bitfizz-cola": {
-    "voice": "bm_fable:0.7+am_onyx:0.3",
+    "voice": "am_onyx:0.55+bm_fable:0.45",
     "speed": 0.9,
     "lang": "en-gb",
-    "notes": "Whispered whisky-ad baritone: fable's plummy en-GB, darkened with onyx."
+    "notes": "Whispered whisky-ad baritone: onyx's dark weight with fable's plummy en-GB. 16 Oct voices round: Leo Sepia leads with bm_fable now (the best-graded British male voice no WORLD NOW presenter leads with), so the advert leads with onyx and keeps fable as its colour (before: bm_fable:0.7+am_onyx:0.3)."
   },
   "screechnet": {
     "voice": "am_onyx:0.55+bm_george:0.45",
@@ -19,10 +19,10 @@
     "notes": "Sombre insurance-ad woman: soft, sincere, unhurried. Owner 4 Oct round: bf_lily became Rhea Raster's voice (WORLD NOW correspondent), so the ad is pure bf_alice (measured: >84 from every presenter, 56 from Rhea, who airs only inside WORLD NOW's links)."
   },
   "grand-buffer": {
-    "voice": "bm_fable:0.6+bm_lewis:0.4",
+    "voice": "bm_lewis:0.55+bm_fable:0.45",
     "speed": 0.86,
     "lang": "en-gb",
-    "notes": "Slow, plummy hotel concierge."
+    "notes": "Slow, plummy hotel concierge. 16 Oct voices round: led by lewis now that Leo Sepia leads with bm_fable (before: bm_fable:0.6+bm_lewis:0.4)."
   },
   "cloudbrella": {
     "voice": "af_sky:0.6+af_river:0.4",
@@ -47,6 +47,12 @@
     "speed": 0.9,
     "lang": "en-gb",
     "notes": "Hushed luxury-travel narrator."
+  },
+  "continuity": {
+    "voice": "bf_lily:0.5+bf_isabella:0.25+bf_emma:0.25",
+    "speed": 0.87,
+    "lang": "en-gb",
+    "notes": "The break bumper's continuity line (public/js/ads/index.js CONTINUITY, voiced like an advert's script): the same voice as server/voice/casting.json's 'continuity' entry, which explains it (16 Oct voices round). Before, the bumper took the female-gb default below (bf_alice, graded D, 3.59 on the bumper's lines); to have it back, copy the casting entry's previous over both."
   },
   "default": {
     "male-gb": {

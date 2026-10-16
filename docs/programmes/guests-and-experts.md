@@ -8,14 +8,14 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 Â
 
 | Expert | Title (strap) | Desk | Programmes | Studio | Look | Voice (Kokoro) |
 |---|---|---|---|---|---|---|
-| Omar Ledger | Economics Editor | economics | WORLD NOW, MONEY MINUTE | markets | receding hairline with a thin salt-and-pepper crop, trimmed grey beard, dark rectangular glasses, near-black charcoal suit, blue tie | am_adam 60% + am_onyx 40%, en-GB, 0.96 |
-| Clara Meridian | Diplomatic Correspondent | diplomacy | WORLD NOW | bureau | short silver pixie with a side-swept fringe, pearl studs, royal-blue blazer, white blouse, silver brooch | ff_siwis 50% + af_sky 50%, en-GB, 0.95 |
-| Dev Isobar | Climate Correspondent | climate | WORLD NOW, COSMOS DESK | field | high-top of short twists over faded sides, clean-shaven, deep brown skin, forest-green blazer over a cream knit | am_liam, en-US, 1.03 |
-| Dr Tomas Albedo | Planetary Scientist | planetary | COSMOS DESK | observatory | bald crown with wild white tufts above and behind the ears, white moustache, round glasses, brown cardigan, pale shirt | am_santa 60% + am_onyx 40%, en-US, 0.94 |
-| June Kernel | Security & Hardware Analyst | tech | TECH BYTES | lab | asymmetric magenta undercut (one side shaved, the long top swept to the jaw), black roll-neck | af_jessica, en-US, 1.06 |
-| Dr Amara Pulse | Health Correspondent | health | WORLD NOW | clinic | shoulder-length box braids (two gold cuffs), deep brown skin, gold hoops, white jacket over a navy top | hf_alpha 50% + af_river 50%, en-GB, 0.98 |
-| Leo Sepia | Culture Correspondent | culture | WORLD NOW | gallery | ginger curly mop, short ginger beard, charcoal blazer over a mustard knit | am_liam 60% + im_nicola 40%, en-GB, 1.04 |
-| Ines Clause | Legal Affairs Correspondent | legal | WORLD NOW | chambers | long chestnut waves from a centre parting, tan skin, plum tailored jacket, white blouse, fine gold chain | ef_dora 55% + af_sky 45%, en-US, 1.02 |
+| Omar Ledger | Economics Editor | economics | WORLD NOW, MONEY MINUTE | markets | receding hairline with a thin salt-and-pepper crop, trimmed grey beard, dark rectangular glasses, near-black charcoal suit, blue tie | am_michael 55% + bm_daniel 45%, en-GB, 1.03 |
+| Clara Meridian | Diplomatic Correspondent | diplomacy | WORLD NOW | bureau | short silver pixie with a side-swept fringe, pearl studs, royal-blue blazer, white blouse, silver brooch | bf_isabella 55% + af_bella 45%, en-GB, 0.95 |
+| Dev Isobar | Climate Correspondent | climate | WORLD NOW, COSMOS DESK | field | high-top of short twists over faded sides, clean-shaven, deep brown skin, forest-green blazer over a cream knit | am_fenrir 50% + am_liam 30% + am_onyx 20%, en-US, 1.13 |
+| Dr Tomas Albedo | Planetary Scientist | planetary | COSMOS DESK | observatory | bald crown with wild white tufts above and behind the ears, white moustache, round glasses, brown cardigan, pale shirt | am_michael 52% + am_eric 48%, en-US, 0.90 |
+| June Kernel | Security & Hardware Analyst | tech | TECH BYTES | lab | asymmetric magenta undercut (one side shaved, the long top swept to the jaw), black roll-neck | af_sarah 60% + af_aoede 40%, en-US, 1.11 |
+| Dr Amara Pulse | Health Correspondent | health | WORLD NOW | clinic | shoulder-length box braids (two gold cuffs), deep brown skin, gold hoops, white jacket over a navy top | af_alloy 55% + bf_emma 45%, en-GB, 0.98 |
+| Leo Sepia | Culture Correspondent | culture | WORLD NOW | gallery | ginger curly mop, short ginger beard, charcoal blazer over a mustard knit | bm_fable 60% + bm_daniel 40%, en-GB, 1.15 |
+| Ines Clause | Legal Affairs Correspondent | legal | WORLD NOW | chambers | long chestnut waves from a centre parting, tan skin, plum tailored jacket, white blouse, fine gold chain | af_kore 55% + af_sky 45%, en-US, 1.14 |
 
 - **Config:** each is a presenter in `config/channel.json` with `role`, `personality`, `voice` and `expert: { desk, backdrop }`. A programme lists its experts (`experts`, its own speciality first: ties go to that order) and how many analyses it airs (`analyses`, 0 to 2; WORLD NOW, TECH BYTES, COSMOS DESK and MONEY MINUTE air 1 each today, NEWS IN 60 and WORLD WEATHER none). A programme may name a `resident` among its experts: part of its format, booked whenever a story fits (MONEY MINUTE's Omar, TECH BYTES' June, COSMOS DESK's Tomas). `server/channel.js` refuses an unknown expert, a presenter without a known desk or a backdrop, `analyses` out of range, or a resident who is not one of the programme's experts; the tests check that every backdrop is a drawn studio.
 - **Desks:** `server/experts.js` `EXPERT_DESKS`: what each covers, the feed categories that lean its way, the words of its field, and the presenter's stock questions.
@@ -88,17 +88,29 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
 
 ## 6. Voices (`server/voice/casting.json`)
 
-- **Auditioned on an analyst's answer:** 79 candidate blends over four rounds (`casting.json` notes). Measured:
-  - timbre: 40-band mel cepstrum, coefficients 1-12;
-  - pitch: median F0 and IQR;
-  - intelligibility: PocketSphinx's word error rate on the same copy.
-- **Distance from the cast:** every expert is at least 55 from the presenter they talk to and from the voices of their programmes; the cast's own closest pairs are 63-66.
-  - Tomas sits nearest UNIT-8 (51, heard through its robot effect) and Sam (53, never on COSMOS).
-  - Clara and Ines share af_sky (37 apart), but differ by accent (en-GB, en-US), pace, and a French against a Spanish colour.
-- **Never** an advert's lead voice either (`adcast.json`): Ines leads with ef_dora and Clara holds af_sky to an equal share, since an advert leads with af_sky.
-- **Never** a presenter's lead voice, nor any of Paco's (bm_george, bm_lewis, bm_daniel).
-- **Accent:** non-English Kokoro voices (ff_siwis, hf_alpha, im_nicola, ef_dora) are blended for colour and read with English phonemes, so the accent stays the config's.
-- **Pace:** each speed follows the personality: Tomas unhurried 0.94, June quick 1.06. All use WORLD NOW's pause set.
+Re-cast in the voices round of 16 Oct (owner: "los nuevos personajes tienen voces algo artificiales";
+`docs/roadmap/critique/voices-naturalness.md`). The first casting had a rule that every blend be made of components
+no one else used; with every English Kokoro voice taken, it gave the experts voices of other languages reading
+English (ff_siwis, hf_alpha, im_nicola, ef_dora) and Kokoro's weakest English voices (am_adam, am_santa, am_liam,
+af_jessica). The rules now:
+
+- **English voices only**, the dominant one graded C or better by Kokoro's own release notes
+  (`tools/voice/voice-grades.json`), written first in the blend.
+- **Never the lead voice of a presenter they air with** (a presenter of another programme may share it), nor any of
+  Paco's own components (bm_george, bm_lewis); no advert leads with an expert's lead voice (`adcast.json`).
+- **Measured, not assumed** (`tools/voice/audit.py`, summary in `tools/voice/voice-audit.json`, tested by
+  `test/voice-casting.test.js`): every two people of one programme at least 40 apart in timbre, every two voices of
+  the channel at least 25; a recogniser's word error rate and a predicted listening score on the channel's own
+  copy; the accent a classifier hears.
+- **Accent:** each reads with the config's phonemes and is heard with that accent (an accent classifier, see the
+  critique). Clara leads with bf_isabella; Leo leads with bm_fable, which is only lightly British, so his second
+  voice is British too (bm_daniel: with am_puck he was heard as American); Amara has bf_emma and Omar bm_daniel in
+  their blends, which is what makes them sound British (an American voice read with British phonemes alone still
+  sounds American).
+- **Pace:** each speed keeps the old voice's pace on the same copy within a few per cent (characters a second), so
+  the programmes' timings hold. All use WORLD NOW's pause set.
+- **Going back:** the replaced blend of each stays in its entry (`previous`): copying `previous.voice`,
+  `previous.speed` and `previous.lang` over the entry brings it back.
 
 ## 7. Files
 

@@ -466,8 +466,11 @@ Measured on the development archive, with a model of the planner that counts sto
      - *C: an azure hijab framing the face and draped over the shoulders, light tan skin, a charcoal jacket over a white
        blouse, a gold pin (on Penny's body).*
    - *Voices (`server/voice/casting.json` `qm`, its `candidates`): A, bright and quick, American (female); B, a light,
-     lively baritone, American (male); C, clear and even, British (female). None shares a voice component with any
-     presenter or expert.*
+     lively baritone, American (male); C, clear and even, British (female). Re-cast in the voices round of 16 Oct
+     (owner: "la voz de la chica de camiseta roja suena fatal"): the first three were voices of other languages
+     reading English; now A af_bella 60% + af_kore 40%, B am_puck 55% + am_eric 45%, C af_kore 50% + bf_emma 25% + bf_lily 25%,
+     each led by an English voice no player leads with, measured against the eight players
+     (`docs/roadmap/critique/voices-naturalness.md`). The old ones stay under `previous`.*
    - *For the director (step 4): cast id `qm`, seated at the centre podium (`SET.seatX.solo` until step 5's set gives
      it a seat), its gestures in `HOST_GESTURES` (`cast/pay-attention.js`: no laughing), `point_partner` sided for
      each player.*
