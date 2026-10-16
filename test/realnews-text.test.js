@@ -33,7 +33,11 @@ describe('a sentence cut to length keeps its sense, or is not aired', () => {
     assert.equal(cut("The Tigray People's Liberation Front (TPLF), which has been running the region, said its decision to relocate was made because of concerns about risks to civilians."), null, 'a light passive needs its complement');
     assert.equal(cut('The United States removed its B-1 bombers from a UK air base one week after the arrests of five men near the base.'), null, 'a span of time keeps its "after"');
     assert.equal(cut('It also remains unclear how a citizen of Oman, an Arab country that has no diplomatic relations with Israel, was able to board the flight in Dubai.', 16), null, 'a "how" clause keeps its verb');
-    assert.equal(cut("Lula is challenged by 11 candidates, although BBC Brazil's poll aggregator suggests that candidates other than Lula and Bolsonaro will get only about 10% of the vote.", 20), 'Lula is challenged by 11 candidates.', 'a "that" clause keeps its verb; a pair of names stays whole');
+    // (16 Oct: the other side of a sentence stays with it, or the sentence is not cut: a cut before "although" or "but"
+    // would say only half, "Pope Leo XIV has been diagnosed with lung cancer[ but had successful surgery…]")
+    assert.equal(cut("Lula is challenged by 11 candidates, although BBC Brazil's poll aggregator suggests that candidates other than Lula and Bolsonaro will get only about 10% of the vote.", 20), null, 'never without its "although"');
+    assert.equal(cut('Pope Leo XIV has been diagnosed with lung cancer but had successful surgery to remove a lower lobe of his right lung, the Vatican has said in a medical bulletin.', 20), null, 'never without its "but"');
+    assert.equal(cut('Officials in the city closed the two schools near the river, as residents waited for news on Sunday.', 12), 'Officials in the city closed the two schools near the river.');
     assert.equal(cut('With counting nearly concluded, Serb nationalist Zeljka Cvijanovic, Bosniak moderate leftist Denis Becirovic and Croat Zeljko Komsic appeared to have won.'), null, 'an opening phrase is not a clause; a list stays whole');
     assert.equal(cut("Nationalist parties dominated races as citizens chose officials across many tiers of government, including members of the country's multiethnic presidency.", 16), 'Nationalist parties dominated races as citizens chose officials across many tiers of government.', 'never an adjective without its noun');
   });
@@ -41,7 +45,10 @@ describe('a sentence cut to length keeps its sense, or is not aired', () => {
   test('the clean cuts still come', () => {
     assert.equal(cut('Airports in Cancún and Mérida have closed, and hotels have moved guests to inner rooms to wait out the storm.'), 'Airports in Cancún and Mérida have closed.');
     assert.equal(cut('The hurricane made landfall near Cancún on Sunday morning, the first major storm of the season and the strongest in years.'), 'The hurricane made landfall near Cancún on Sunday morning.');
-    assert.equal(cut('Officials are investigating how the fire started, the ministry said in a statement on Sunday evening.', 16), 'Officials are investigating how the fire started.');
+    // (16 Oct: who says it stays, or the sentence is not cut: the cut that once took "the ministry said…" away would leave
+    // the channel saying it; "No commercial goods are entering the Gaza Strip[, Israeli authorities said]" went the same way)
+    assert.equal(cut('Officials are investigating how the fire started, the ministry said in a statement on Sunday evening.', 12), null, 'never the words that say who says it');
+    assert.equal(cut('Officials are investigating how the fire started, after the blaze spread to a second warehouse on Sunday evening.', 12), 'Officials are investigating how the fire started.');
   });
 });
 

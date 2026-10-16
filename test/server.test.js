@@ -66,6 +66,10 @@ async function startApp(env = {}) {
   // PAY ATTENTION's desk measures its texts with the boards' own fit (and the pixel font it uses)
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'quiz-fit.js'), path.join(dir, 'public', 'js', 'scenes', 'quiz-fit.js'));
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'font.js'), path.join(dir, 'public', 'js', 'font.js'));
+  // the air as it plays (server/airtime.js): the pace profiles and the opens' lengths
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'pace.js'), path.join(dir, 'public', 'js', 'pace.js'));
+  fs.mkdirSync(path.join(dir, 'public', 'js', 'scenes', 'opens'), { recursive: true });
+  for (const f of ['cues.js', 'worldcues.js']) fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'opens', f), path.join(dir, 'public', 'js', 'scenes', 'opens', f));
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>test page</title>');
   fs.writeFileSync(path.join(dir, 'public', 'js', 'app.js'), 'export const ok = true;');
   fs.mkdirSync(path.join(dir, 'public-evil'));

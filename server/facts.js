@@ -523,15 +523,21 @@ export function quotesIn(text) {
       const quote = m[1].trim().replace(/[,;:]+$/, '');
       if (quote.split(/\s+/).length < 3) continue;
       if (out.some((q) => q.text === quote)) continue;
-      out.push({ text: quote, by: speakerOf(s, m.index, m.index + m[0].length), index: m.index });
+      // (a quotation that ends its sentence with a full stop is not attributed by the next sentence: "…quoted a government
+      // source as saying: “Andrew Bailey needs to focus on doing his job.” Miller said the Treasury…" once put the
+      // government source's words in the IFS director's mouth, and re-staged them as hers, Guardian 12 Oct)
+      // (and a speaker is a name or a role, never a clause's words: "…described it as a threat but said: “…”" once gave "a
+      // threat but", aired as "As a threat but put it", Guardian 15 Oct)
+      const by = speakerOf(s, m.index, m.index + m[0].length, { closed: /\.\s*$/.test(m[1]) });
+      out.push({ text: quote, by: by && /\b(?:but|and|or|as|which|that|who|whom|of|to|with|for|by|from|if|when|while)$/i.test(by) ? null : by, index: m.index });
     }
   }
   return out.sort((a, b) => a.index - b.index);
 }
 
 // "…,” the mayor said." / "…,” said Ana Silva." / "The minister said: “…”"
-function speakerOf(s, start, end) {
-  const after = s.slice(end, end + 80);
+function speakerOf(s, start, end, { closed = false } = {}) {
+  const after = closed ? '' : s.slice(end, end + 80);
   const before = s.slice(Math.max(0, start - 80), start);
   // (a common noun's phrase has one article: "a move the company says “will pave the way”" is said by the company, TechCrunch 9 Oct)
   const NAME = "((?:[Tt]he|[Aa]n?) (?!(?:the|an?)\\b)[a-z][a-z'-]*(?: (?!(?:the|an?|says?|said|added)\\b)[a-z][a-z'-]*){0,4}|[A-Z][\\w'’.-]+(?: [A-Z][\\w'’.-]+){0,3})";
@@ -916,10 +922,31 @@ export function fixNameTypos(text, title, whole = text) {
   for (const m of t.matchAll(/(?<![\p{L}])\p{Lu}\p{Ll}{3,}(?![\p{L}])/gu)) {
     const w = m[0];
     if (fixes.has(w) || names.includes(w)) continue;
-    const n = names.find((x) => x[0] === w[0] && oneEdit(w, x));
+    // (never a word and its own inflection: "Australia" is not a typo of the headline's "Australian", 14 Oct)
+    const n = names.find((x) => x[0] === w[0] && oneEdit(w, x) && !x.startsWith(w) && !w.startsWith(x));
     if (n && count(w) === 1 && count(n) >= 2) fixes.set(w, n);
   }
   let out = t;
   for (const [w, n] of fixes) out = out.replace(new RegExp(`(?<![\\p{L}])${w}(?![\\p{L}])`, 'u'), n);
   return out;
 }
+
+// A view nobody is said to hold, which the presenter would then state as the channel's: a recommendation ("Backing the
+// genocide case against Myanmar must be followed by concrete action", Al Jazeera; "energy is an essential good and people
+// should not have to think twice…", BBC; "He has to learn from it", a coach's words without their quotation marks) or a
+// judgement in the outlet's voice ("It would be surprising if both were wrong", Guardian analysis; "…awkwardly glancing up
+// at her audience less than she should", The Verge; "…governments that could do more have not done so"; real news 12-14
+// Oct). A sentence that says who holds the view keeps it (theirs, said so); a rule ("If the fourth attempt fails, a snap
+// election must be called") is no view.
+const VIEW_MODAL = /\b(?:should|must|ought to|needs? to|has to|have to|had better)\b/i;
+const VIEW_WORDS = /\b(?:(?:un)?surprisingly|unsurprising|beautiful|awkward(?:ly)?|unconvincing|embarrassing|shameful|disgraceful|absurd|ridiculous|bizarre|astonishing|outrageous|appalling|dreadful|brilliant|wonderful|fantastic|superb|admirabl[ey]|laughabl[ey]|pathetic|dubious|reckless|foolish|hypocritic\w*|ironically|unfortunately|fortunately|sadly|thankfully|hopefully|clearly|obviously|undoubtedly|of course|could do more|have not done so|less than (?:she|he|they|it|we) should|it is (?:hard|easy) to (?:see|feel|argue|imagine|understand)|it would be (?:surprising|wise|wrong|right|unwise|a mistake)|easy to feel|which is (?:beautiful|wonderful|great|terrible|sad)|as luck would have it|in a good way|greatest spectacles?|looks like (?:the|its|their) (?:company's |firm's )?best)\b/i;
+const HELD_BY = /\b(?:said|says|say|told|tells|warned|warns|added|adds|according to|argued|argues|believes?|believed|claims?|claimed|insisted|insists|urged|urges|called for|calls for|wrote|writes|recommend\w*|suggest\w*|stressed|noted|accused|accuses|demanded|demands)\b/i;
+export const outletView = (t) => {
+  const unq = String(t).replace(/“[^”]*”|"[^"]*"|‘[^’]*’/g, ' ');
+  // (advice in the outlet's voice, an instruction to the reader: "Always keep a timeline of interactions with a company…",
+  // a consumer column, Guardian 14 Oct)
+  if (/^(?:Always|Make sure|Remember to|Be sure to|Beware|Avoid|Don['’]t|Do not|Never (?:give|share|pay|click|assume|sign)|Keep (?:a|your)|Check (?:your|whether|that|if)|Consider|Ask (?:for|your))\b/.test(unq.trim())) return true;
+  if (HELD_BY.test(unq)) return false;
+  const rule = /\b(?:if|unless|under (?:the|its|their) (?:law|rules|constitution)|required|requires|by law|legally|obliged|allowed|permitted)\b/i.test(unq);
+  return (VIEW_MODAL.test(unq) && !rule) || VIEW_WORDS.test(unq);
+};

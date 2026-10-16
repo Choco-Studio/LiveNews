@@ -12,7 +12,7 @@
 //   deskOf(location)              the desk and its strap label for a story's location, or null
 //   rosterOf(program, presenters) the programme's correspondents: [{ id, name, first, desk }]
 //   presenceClaim(text)           true when a line claims the speaker is at the scene (never aired)
-//   throwLine / askLine / thanksLine   the presenter's lines of a link, varied by a seed
+//   throwLine / askLine / followLine / thanksLine   the presenter's lines of a link, varied by a seed
 import { lookupPlace } from './gazetteer.js';
 
 export const DESKS = {
@@ -144,6 +144,21 @@ export function askLine(c, seed, answer = '') {
     ? [`${c.first}, what happens next?`, `${c.first}, what comes next?`]
     : [`${c.first}, what else do we know?`, `${c.first}, what more can you tell us?`];
   return choose(list, `${seed}~ask`);
+}
+
+/**
+ * A long programme's second prompt, after the first answer: what comes next when the answer says so, else what more
+ * is known; never the first prompt's words again (`first`).
+ */
+export function followLine(c, seed, answer = '', first = '') {
+  const list = AHEAD.test(answer)
+    ? [`And ${c.first}, what happens next?`, `${c.first}, what comes next?`, `And what comes next, ${c.first}?`]
+    : [`${c.first}, what else do we know?`, `And what more can you tell us, ${c.first}?`, `${c.first}, what else is in the detail?`];
+  // (never the first prompt's question again in other order: "Vic, what more can you tell us?" then "And what more can you
+  // tell us, Vic?", real news 13 Oct)
+  const core = (q) => String(q).toLowerCase().replace(new RegExp(`\\b${c.first.toLowerCase()}\\b`, 'g'), ' ').replace(/\band\b/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const fresh = list.filter((q) => core(q) !== core(first));
+  return choose(fresh.length ? fresh : list, `${seed}~follow`);
 }
 
 /** The presenter's thanks, after the answer. */

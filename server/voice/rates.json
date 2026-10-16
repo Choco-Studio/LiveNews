@@ -1,0 +1,67 @@
+{
+ "measured": "2026-10-16",
+ "from": "2235 clips",
+ "median": 2.627,
+ "presenters": {
+  "paco": {
+   "wps": 2.452,
+   "clips": 456
+  },
+  "lola": {
+   "wps": 2.595,
+   "clips": 543
+  },
+  "max": {
+   "wps": 2.627,
+   "clips": 212
+  },
+  "ada": {
+   "wps": 2.549,
+   "clips": 157
+  },
+  "nova": {
+   "wps": 2.309,
+   "clips": 90
+  },
+  "unit8": {
+   "wps": 2.274,
+   "clips": 127
+  },
+  "penny": {
+   "wps": 2.596,
+   "clips": 114
+  },
+  "sam": {
+   "wps": 2.78,
+   "clips": 375
+  },
+  "rhea": {
+   "wps": 2.671,
+   "clips": 51
+  },
+  "vic": {
+   "wps": 2.834,
+   "clips": 34
+  },
+  "mika": {
+   "wps": 2.739,
+   "clips": 25
+  },
+  "omar": {
+   "wps": 2.733,
+   "clips": 15
+  },
+  "dev": {
+   "wps": 3.027,
+   "clips": 12
+  },
+  "tomas": {
+   "wps": 2.437,
+   "clips": 11
+  },
+  "june": {
+   "wps": 2.931,
+   "clips": 13
+  }
+ }
+}

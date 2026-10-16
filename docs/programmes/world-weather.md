@@ -39,7 +39,7 @@ The world's weather in about five minutes, presented by Sam Night standing at a 
    - the wind.
 
    Every city on the map is read out.
-3. **Warnings** (up to two, serious tone):
+3. **Warnings** (up to three, serious tone):
    - the alert level and the source;
    - the winds and the storm category (Saffir-Simpson, from the sustained wind);
    - where it is;
@@ -130,10 +130,10 @@ Every segment carries `shot`: the camera the weather centre gives it.
 | Segment | Shot | What it says (written from the data alone, `server/weatherwriter.js`) |
 |---|---|---|
 | `headline` | `mcu` | The greeting, the day's big weather story (a cyclone, a flood, extreme heat, a deluge, real cold, or the planet's contrast) and what is coming |
-| `world` | `graphic` | The next 24 hours round the planet as a time-lapse: the deepest low near people and where it goes, the strongest high, the wettest area. Each high or low named is a `pin` |
-| `zone` ×6 | `wall` | Two or three standouts per zone (not every city). The rest stay on the map. Then a comparison when a zone has one, and one line for the people who live there: an umbrella, the shade, a coat, a terrace. Odd zones use the short form |
+| `world` | `graphic` | The next 24 hours round the planet as a time-lapse: the deepest low near people and where it goes, the strongest high, the wettest area, and the day's strongest gusts on the map when they reach 60 km/h. Each high or low named is a `pin` |
+| `zone` ×6 | `wall` | Two or three standouts per zone (not every city). The rest stay on the map. Then a comparison when a zone has one, and one line for the people who live there: an umbrella, the shade, a coat, a terrace. Then, when the zone has said little (62 words or fewer, at most 75 in all), one line for tomorrow where the weather turns, for a city THE NEXT THREE DAYS does not show ("Tomorrow, Vancouver: rain arrives, with a cooler high of 14 degrees"). Every zone in full since 16 Oct: the short form for odd zones kept the programme at about four minutes against its `targetSeconds` 270–480 (`docs/roadmap/critique/fallback-lengths.md`). When the report has no moving sky (so no `world` segment), the day's strongest gusts, 60 km/h or more, are said in their own zone |
 | `hotcold` | `board` | HOT & COLD: the third, second and hottest place, then the cold side to the coldest, then the gap between the two ends. It draws on the 70 places (the zones' cities and 26 famous hot and cold places, `EXTRA`) |
-| `warning` | `warning` | As round 2: GDACS's orange and red alerts, a serious tone, silence under it |
+| `warning` | `warning` | As round 2: GDACS's orange and red alerts, a serious tone, silence under it. Up to three since 16 Oct (two had left a third red or orange alert unsaid) |
 | `outlook` | `board` | THE NEXT THREE DAYS for five cities (the most changeable of each zone, west to east): tomorrow, then by the third day, and the high |
 | `outro` | `mcu` | A last line from the day's figures ("I hope you get Tokyo's sunshine, not Mexico City's rain"), then the sign-off |
 

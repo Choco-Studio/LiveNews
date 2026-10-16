@@ -233,7 +233,7 @@ function lifeLine(L, cities, pick, said) {
   return true;
 }
 
-function zoneLine(zone, pick, { short = false } = {}) {
+function zoneLine(zone, pick, { short = false, ahead = null, gusty = null } = {}) {
   const L = new Line();
   const days = zone.cities.map((c) => c.today);
   const wetShare = days.filter(isWet).length / days.length;
@@ -290,6 +290,28 @@ function zoneLine(zone, pick, { short = false } = {}) {
     L.add(pick(['Quite a contrast: ', 'Big differences, too: ', 'And what a spread: ']), hi, ` is ${gap} ${UNIT} warmer than `, lo).stop();
   }
   lifeLine(L, zone.cities, pick, said);
+  // (the day's strongest gusts on our map, said in their own zone when there is no world line to say them)
+  // ("Cooler in Chicago… Hold on to your hat in Chicago" said the city twice: a city already named is windy "too")
+  if (gusty && said.has(gusty.id)) L.add(gusty, pick([' is windy too, with gusts of ', ' gets the strongest winds on our map, gusting to ']), `${gusty.today.gust} kilometres an hour`).stop();
+  else if (gusty) L.add(pick(['Hold on to your hat in ', 'The strongest winds on our map today are in ']), gusty, `, with gusts of ${gusty.today.gust} kilometres an hour`).stop();
+  // what tomorrow brings where the weather turns (the forecast's own tomorrow: rain arriving, the rain clearing, a jump in
+  // the temperature), for a city THE NEXT THREE DAYS does not show; a zone whose weather holds says nothing more
+  // (a zone stays a few standouts: no line for tomorrow on one that has already said much, its bible's 75 words)
+  if (ahead && L.text.split(/\s+/).length <= 62) {
+    const turn = (c) => {
+      const a = c.today, b = c.tomorrow;
+      if (!b) return 0;
+      return (isWet(a) !== isWet(b) ? 5 : 0) + (isStorm(b) && !isStorm(a) ? 4 : 0) + (b.kind === 'snow' && a.kind !== 'snow' ? 4 : 0) + Math.max(0, Math.abs(b.max - a.max) - 3);
+    };
+    const c = zone.cities.filter((x) => !ahead.has(x.id) && turn(x) >= 4).sort((a, b) => turn(b) - turn(a))[0];
+    if (c) {
+      // (and how the temperature turns, when the phrase does not say it: "rain arrives, with a cooler high of 14 degrees")
+      const phrase = dayPhrase(c.today, c.tomorrow, pick);
+      const dt = c.tomorrow.max - c.today.max;
+      const turn2 = !/warmer|cooler/.test(phrase) && Math.abs(dt) >= 4 ? (dt > 0 ? 'warmer ' : 'cooler ') : '';
+      L.add(pick(['Tomorrow, ', 'By tomorrow, ', 'Looking ahead to tomorrow, ']), c, `: ${phrase}, with a ${turn2}high of ${deg(c.tomorrow.max)} ${UNIT}`).stop();
+    }
+  }
   return L.done();
 }
 
@@ -370,6 +392,9 @@ function worldLine(report, places, pick) {
   const wet = rainiestArea(sky, places);
   if (wet && (!low || km(wet, low) > 1500)) L.add(pick(['The heaviest rain falls over ', 'The wettest weather is over ']), wet.area, pick([', where downpours keep coming', ' through the day', ''])).stop();
   if (!low && !high && !wet) L.add('A quiet day for the big weather systems, so let us go straight round the world').stop();
+  // the strongest gusts of the day on our map, when they are strong enough to feel (the forecast's own gusts)
+  const gusty = places.filter((c) => !c.extra && Number.isFinite(c.today?.gust) && c.today.gust >= 60).sort((a, b) => b.today.gust - a.today.gust)[0];
+  if (gusty) L.add(pick(['The windiest spot on our map today is ', 'Hold on to your hat in ', 'The strongest winds of the day are in ']), gusty, `, with gusts of ${gusty.today.gust} kilometres an hour`).stop();
   return L.done();
 }
 
@@ -553,9 +578,16 @@ export function writeWeather(report, { presenter = { name: 'Sam Night' }, channe
   const segments = [seg('headline', 'mcu', headlineLine(report, places, { name, title, hasHotCold: !!hotCold, hasOutlook: outlook.length >= 3 }, pick), { emotion: 'happy' })];
   if (report.sky) segments.push(seg('world', 'graphic', worldLine(report, places, pick), { timelapse: { from: 0, to: report.sky.hours.at(-1) } }));
   // six zones would be a list again: the quietest zones get the short form (two groups, no comparison)
-  report.zones.forEach((z, i) => segments.push(seg('zone', 'wall', zoneLine(z, pick, { short: i % 2 === 1 }), { zone: z.id, ...(report.sky ? { timelapse: { from: 0, to: 12 } } : {}) })));
+  // (every zone in full, its third standout and its contrast when its figures have them: the short form for odd zones
+  // kept the programme at about four minutes against its four and a half to eight, real data 12-16 Oct; a zone with
+  // less to say says less, never more than three standouts, so it stays a story, not the list round 3 replaced)
+  const ahead = new Set(outlook.length >= 3 ? outlook.map((c) => c.id) : []);
+  // (without the moving sky there is no world line: the day's strongest gusts, 60 km/h or more, go to their own zone)
+  const gusty = report.sky ? null : places.filter((c) => !c.extra && Number.isFinite(c.today?.gust) && c.today.gust >= 60).sort((a, b) => b.today.gust - a.today.gust)[0] || null;
+  report.zones.forEach((z) => segments.push(seg('zone', 'wall', zoneLine(z, pick, { ahead, gusty: gusty?.zone === z.id ? gusty : null }), { zone: z.id, ...(report.sky ? { timelapse: { from: 0, to: 12 } } : {}) })));
   if (hotCold) segments.push(seg('hotcold', 'board', hotColdLine(hotCold, pick), { board: { kind: 'hotcold', hot: hotCold.hot, cold: hotCold.cold }, emotion: 'happy' }));
-  report.warnings.slice(0, 2).forEach((w, i) => segments.push(seg('warning', 'warning', warningLine(w, pick, i), { warning: w.id, emotion: 'serious' })));
+  // (up to three warnings: GDACS's third alert of the day is as real as its first, and it was left unsaid, 16 Oct)
+  report.warnings.slice(0, 3).forEach((w, i) => segments.push(seg('warning', 'warning', warningLine(w, pick, i), { warning: w.id, emotion: 'serious' })));
   if (outlook.length >= 3) {
     segments.push(seg('outlook', 'board', outlookLine(outlook, pick), {
       board: { kind: 'outlook', days: outlook[0].outlook.map((d) => ({ date: d.date, name: weekday(d.date).slice(0, 3).toUpperCase() })), cities: outlook.map((c) => ({ id: c.id, name: c.name, zone: c.zone, today: c.today, days: c.outlook })) },

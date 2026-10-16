@@ -199,8 +199,9 @@ describe('MONEY MINUTE format round (9 Oct)', () => {
     assert.ok(!/€17\.8bn|Exclusive:/.test(text), text);
     const num = script.segments.find((s) => s.feature === 'number');
     assert.ok(num, 'a number of the day');
-    assert.match(spoken(num.text), /^Our number of the day: \$20 billion\./);
-    assert.equal(num.numbers?.[0]?.value, '$20 BILLION');
-    assert.equal(num.numbers?.[0]?.label, 'BELOW ESTIMATES');
+    // (the figure is one a sentence of the story says: OpenAI's $20bn sits only in a 35-word sentence that cannot be
+    // shortened around it, so the wastewater trade's £340m is the number, said in its own sentence; fallback-lengths.md)
+    assert.match(spoken(num.text), /^Our number of the day: more than £340m\. .*£340m/);
+    assert.equal(num.numbers?.[0]?.value, '£340M');
   });
 });

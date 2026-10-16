@@ -151,7 +151,9 @@ describe('the script', () => {
     assert.deepEqual(ep.storyIds, []);
     // shorter than round 2's list of every city (about 3.5 minutes of speech), still a programme
     const words = ep.segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0);
-    assert.ok(words > 380 && words < 640, `${words} words`);
+    // (16 Oct: every zone in full and a line for tomorrow where the weather turns, to reach the programme's four and a half
+    // minutes on real data: still well short of round 2's list of every city)
+    assert.ok(words > 380 && words < 780, `${words} words`);
     for (const z of ep.segments.filter((s) => s.kind === 'zone')) {
       assert.ok(z.text.split(/\s+/).length <= 75, `a zone is a few standouts, not a list: ${z.text}`);
       assert.ok(new Set(z.marks.map((m) => m.city)).size >= 2, z.text);
