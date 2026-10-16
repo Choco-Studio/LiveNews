@@ -253,6 +253,9 @@ export const plainTitle = (title) =>
       .replace(/^(\s*\w+)\s+live\s*:\s*/i, '$1: ')
       .replace(/(\s\w+)\s+live\s*:\s*/i, '$1: ')
       .replace(/\s*\blive!\s*/i, ' ')
+      // (a wire roundup's tail: "Iran calls latest US response to proposal insufficient, and other Mideast developments",
+      // ABC News 12 Oct, once read whole as the story's first sentence)
+      .replace(/,?\s+and (?:other|more)\s+(?:[\w-]+\s+){0,3}(?:developments|news|updates|headlines|stories)\s*$/i, '')
       .trim()
   ).replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 

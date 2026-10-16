@@ -61,8 +61,9 @@ export function dropTranscriptLines(text) {
 // news, and a teaser cut off mid-phrase ("Supernumerary Rainbows over […]") says nothing.
 const FUNCTION_WORDS = /^(?:a|an|the|of|in|on|at|to|for|and|or|but|is|are|was|were|has|have|had|will|would|said|says|with|from|by|as|that|this|it|its|their|after|before|over|into)$/i;
 // (and a live page's link line: "Business live – latest updates", Guardian 12 Oct, aired as a story's last sentence;
-// "Follow our live coverage." alone, never a line with news in it: "Follow the latest from the talks, where…")
-const TAGLINES = /^(?:each day a different image|discover the cosmos|astronomy picture of the day)\b|^(?:[\w-]+\s+){0,3}live\s*[–—-]\s*(?:latest|all the latest|live)\s+(?:updates|news)\b|^(?:follow|read) (?:our|the) (?:latest|live)(?: live)? (?:coverage|updates|news|blog|page)(?: here)?\W*$/i;
+// "Follow our live coverage." alone, never a line with news in it: "Follow the latest from the talks, where…"; and an
+// outlet's own promotion: "Get our breaking news email, free app or daily news podcast.", Guardian Australia 13 Oct)
+const TAGLINES = /^(?:each day a different image|discover the cosmos|astronomy picture of the day)\b|^(?:[\w-]+\s+){0,3}live\s*[–—-]\s*(?:latest|all the latest|live)\s+(?:updates|news)\b|^(?:follow|read) (?:our|the) (?:latest|live)(?: live)? (?:coverage|updates|news|blog|page)(?: here)?\W*$|^(?:get|sign up for|subscribe to|download) our (?:[\w-]+\s+){0,4}(?:emails?|newsletters?|apps?|podcasts?)\b/i;
 
 const SENTENCE_VERB = /^(?:is|are|was|were|will|has|have|had|said|says|host|hosts|face|faces|meet|meets|play|plays|beat|beats|visit|visits|welcome|welcomes|win|wins|won|lost|drew|draws|lead|leads|led|join|joins|joined|sign|signs|signed|named|scored|scores)$/;
 /** Is this sentence a run of menu words (most words capitalised, almost no function words)? */

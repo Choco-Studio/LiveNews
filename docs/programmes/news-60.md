@@ -119,6 +119,7 @@ The speed comes from the editing: one idea per item, a cut on every sentence, an
   - It is measured the way `tools/voice/measure.py` does it: words ÷ segment duration, with planned pauses included.
   - `TARGET_WPM['sam']` in measure.py is 185 today and must become 170. Calibrate the `sam` preset's `speed` in `tools/voice/presets.json` with `measure.py rates`.
   - Never speed the voice up to fit. The fit step (see Structure) drops items instead *(our rule)*.
+  - The fit step times the edition as it will air (16 Oct, `server/airtime.js`): the open, every line at its voice's measured Kokoro rate, the pace profile's pauses and the end card, against 60 s, accepting `targetSeconds` 55–70. Counted as words at 170 wpm it had let editions air 74 s on average on real news (`docs/roadmap/critique/fallback-lengths.md`).
 - **Pauses** *(our rule)*:
   - Inside a segment: the engine defaults, 0.15 s at a comma and 0.35 s at a full stop (`DEFAULT_PAUSES` in `tools/voice/textnorm.py`).
   - Between segments: 0.7 s. This is a director gap, and the cut and the tick sit in it.

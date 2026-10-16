@@ -610,7 +610,10 @@ describe('mock provider', () => {
     assert.equal(storySegs(await raw({ stories, count: 2 })).length, 2);
     assert.equal(storySegs(await raw({ stories, count: 10 })).length, 4);
     assert.equal(storySegs(await raw({ stories, count: undefined, program: { ...PROGRAM, stories: 3 } })).length, 3);
-    const many = Array.from({ length: 8 }, (_, i) => ({ ...stories[0], id: `m${i}` }));
+    // (eight different stories: one headline eight times is one event, told once, 16 Oct)
+    const PLACES = ['Lisbon', 'Nairobi', 'Lima', 'Oslo', 'Hanoi', 'Accra', 'Quito', 'Riga'];
+    const WHAT = ['bridge', 'tunnel', 'stadium', 'harbour', 'library', 'museum', 'market', 'station'];
+    const many = PLACES.map((p, i) => ({ ...stories[0], id: `m${i}`, title: `${p} reopens its ${WHAT[i]} after repairs`, summary: `Officials in ${p} have reopened the city's ${WHAT[i]}. The work took ${i + 2} months.` }));
     assert.equal(storySegs(await raw({ stories: many, count: undefined, program: undefined })).length, 5);
   });
 

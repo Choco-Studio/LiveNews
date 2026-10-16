@@ -22,62 +22,65 @@ import { AHEAD } from './correspondents.js';
  * its stem), `categories` the feed categories that lean that way. A story goes to the desk with the most hits;
  * two hits at least.
  */
+// (the first question is one any of the story's sentences answers: "how rare is this?" and "how worried should people be?"
+// were answered with what the satellite measures and what a flaw affects, COSMOS and TECH BYTES 13-14 Oct; a question that
+// promises a size, a cause or a future is the follow-up's, fitted to the answer, followLine)
 export const EXPERT_DESKS = {
   economics: {
     covers: 'the economy, prices and wages, interest rates, markets, trade, budgets and business results',
     label: 'ECONOMICS',
     categories: ['business'],
     words: /\b(?:econom\w*|inflation|interest rates?|rates? (?:rise|cut|hold)|central bank\w*|bank of england|federal reserve|the fed|ecb|recession|gdp|growth|prices?|wages?|pay|jobs?|unemployment|employment|markets?|shares?|stocks?|bonds?|currency|currencies|pound|dollar|euro|yen|tariffs?|trade|exports?|imports?|budget|taxe?s?|deficit|debt|borrowing|mortgages?|energy bills?|cost of living|retail|sales|profits?|earnings|investors?)\b/gi,
-    ask: ['what does this tell us about the economy?', 'how significant is this?', 'what is behind it?', 'what should we make of it?', 'what does this mean for households?', 'why does this matter?', 'how big a change is this?'],
+    ask: ['what does this tell us about the economy?', 'what is behind it?', 'what should we make of it?', 'what is the bigger picture?', 'what stands out to you?', 'what should people know about this?'],
   },
   diplomacy: {
     covers: 'talks, summits, sanctions, alliances and relations between countries',
     label: 'DIPLOMACY',
     categories: ['world'],
     words: /\b(?:diploma\w*|talks|summit|ceasefire|truce|negotiat\w*|treaty|accord|sanctions?|foreign minist\w*|foreign secretary|secretary of state|ambassadors?|embass\w*|envoy|united nations|\bun\b|security council|nato|g7|g20|european union|\beu\b|alliance|allies|bilateral|peace (?:deal|plan|talks)|state visit|prime minister|president|foreign policy|border|refugees?|conflict|war)\b/gi,
-    ask: ['what is behind this?', 'what does each side want?', 'how significant is this?', 'what should we make of it?', 'why now?', 'what has changed?', 'how much does this move things?'],
+    ask: ['what is behind this?', 'what should we make of it?', 'what is the background here?', 'what is the bigger picture?', 'what stands out to you?', 'what should people know about this?'],
   },
   climate: {
     covers: 'climate, weather extremes, the environment, energy and wildlife',
     label: 'CLIMATE',
     categories: ['science'],
     words: /\b(?:climate|warming|emissions?|carbon|co2|greenhouse|heatwave|heat|drought|wildfires?|floods?|flooding|storms?|hurricane|typhoon|cyclone|rainfall|temperatures?|glaciers?|ice sheet|sea ice|sea levels?|oceans?|coral|species|wildlife|biodiversity|forests?|deforestation|renewables?|solar|wind farms?|wind power|environment\w*|pollution|plastic|conservation|weather)\b/gi,
-    ask: ['what is the bigger picture?', 'how unusual is this?', 'what does this tell us?', 'what should we make of it?', 'why does this matter?', 'how big a change is this?', 'what stands out to you?'],
+    ask: ['what is the bigger picture?', 'what does this tell us?', 'what should we make of it?', 'what is behind it?', 'what stands out to you?', 'what should people know about this?'],
   },
   planetary: {
     covers: 'space missions, planets, moons, comets and what telescopes find',
     label: 'SPACE',
     categories: ['science'],
     words: /\b(?:planets?|planetary|moons?|lunar|mars|martian|venus|jupiter|saturn|mercury|neptune|uranus|pluto|asteroids?|comets?|meteors?|meteorites?|telescopes?|hubble|webb|nasa|esa|space ?x|spacecraft|probe|rover|orbit\w*|launch\w*|rocket|astronaut\w*|space station|galax\w*|stars?|solar system|sun|eclipse|exoplanets?|black holes?|universe|cosmic|astronom\w*)\b/gi,
-    ask: ['what makes this special?', 'how big a deal is this?', 'what does it tell us?', 'what should we make of it?', 'what will scientists be looking for?', 'why does this matter?', 'how rare is this?'],
+    ask: ['what does it tell us?', 'what should we make of it?', 'what is the bigger picture?', 'what is the story behind it?', 'what stands out to you?', 'what should people know about this?'],
   },
   tech: {
     covers: 'security flaws and attacks, chips and devices, AI systems, apps and platforms',
     label: 'TECHNOLOGY',
     categories: ['tech'],
     words: /\b(?:cyber\w*|hack\w*|breach\w*|ransomware|malware|phishing|vulnerabilit\w*|flaw|exploit|passwords?|encryption|privacy|data|chips?|semiconductors?|processors?|gpus?|hardware|devices?|smartphones?|phones?|laptops?|batter(?:y|ies)|artificial intelligence|\bai\b|models?|chatbots?|algorithms?|software|apps?|platforms?|cloud|servers?|robots?|robotics)\b/gi,
-    ask: ['what does this actually do?', 'how worried should people be?', 'what is really new here?', 'what should we make of it?', 'who does this affect?', 'why does this matter?', 'how big a step is this?'],
+    ask: ['what is going on here?', 'what should we make of it?', 'what is behind it?', 'what is the bigger picture?', 'what stands out to you?', 'what should people know about this?'],
   },
   health: {
     covers: 'medicine, hospitals, diseases, vaccines and treatments',
     label: 'HEALTH',
     categories: ['science'],
     words: /\b(?:health|hospitals?|nhs|doctors?|nurses?|patients?|vaccin\w*|virus\w*|viral|infections?|disease\w*|outbreaks?|pandemic|epidemic|cancer|diabetes|heart disease|dementia|obesity|drugs?|medicines?|medical|treatments?|trials?|therapy|surgery|world health organization|mental health|screening|antibiotics?|bird flu|flu|measles|covid)\b/gi,
-    ask: ['what does this mean for patients?', 'how worried should people be?', 'how significant is this?', 'what should we make of it?', 'what is behind it?', 'why does this matter?', 'who is most affected?'],
+    ask: ['what is behind it?', 'what should we make of it?', 'what does this tell us?', 'what is the bigger picture?', 'what stands out to you?', 'what should people know about this?'],
   },
   culture: {
     covers: 'films, music, books, art, museums, festivals and heritage',
     label: 'CULTURE',
     categories: [],
     words: /\b(?:films?|movies?|cinema|box office|music|albums?|songs?|concerts?|tour|festivals?|art|artists?|paintings?|exhibitions?|museums?|galler(?:y|ies)|theatre|theater|books?|novels?|authors?|awards?|oscars?|prize|archaeolog\w*|heritage|historic|statue|fashion|video games?|television|tv series|streaming|actors?|actress|singers?|bands?)\b/gi,
-    ask: ['why does this matter to people?', 'what makes this special?', 'what is the story behind it?', 'what should we make of it?', 'how rare is this?', 'why now?', 'what stands out to you?'],
+    ask: ['what is the story behind it?', 'what should we make of it?', 'what is the background here?', 'what stands out to you?', 'what does it tell us?', 'what should people know about this?'],
   },
   legal: {
     covers: 'courts, rulings, trials, laws and regulators',
     label: 'LEGAL',
     categories: [],
     words: /\b(?:courts?|judges?|judgment|ruling|ruled|rules?|trial|verdict|convicted|acquitted|sentenced?|appeal\w*|lawsuit|sued|legal|lawyers?|law|laws|legislation|supreme court|high court|prosecutors?|charges?|charged|regulators?|watchdog|fined?|antitrust|competition authority|inquiry|injunction|constitution\w*)\b/gi,
-    ask: ['what did the court actually decide?', 'what happens now?', 'how significant is this ruling?', 'what should we make of it?', 'what does the ruling change?', 'who does this affect?', 'why does this matter?'],
+    ask: ['what is the background to this case?', 'what should we make of it?', 'what is behind it?', 'what is the bigger picture?', 'what stands out to you?', 'what should people know about this?'],
   },
 };
 
@@ -166,7 +169,7 @@ export function introLine(e, seed, turn) {
 
 // A grave story's questions (decision 3, owner 12 Oct: grave news "se presenta con respeto pero bien"): the background
 // and what happens now, never "how big a deal", never a guess at causes or blame
-export const GRAVE_ASK = ['what is the background to this?', 'what do we know so far?', 'what happens now?', 'how did we get here?', 'what is the response so far?'];
+export const GRAVE_ASK = ['what is the background to this?', 'what do we know so far?', 'what more do we know?', 'what is the picture so far?', 'what else do we know at this stage?'];
 
 /** The presenter's first question, addressed by first name (one sentence, a question); a grave story's are sober. */
 export function questionLine(e, seed, question = null, turn, { grave = false } = {}) {

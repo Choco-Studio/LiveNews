@@ -7,9 +7,9 @@
 // lead, no banter next to grave news...), whatever the writer was.
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
-import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
+import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, outletView, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
-import { askLine, deskOf, presenceClaim, thanksLine, throwLine } from './correspondents.js';
+import { askLine, deskOf, followLine, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 import { EXPERT_DESKS, expertFor, introLine as expertIntro, questionLine as expertQuestion, followLine as expertFollow, thanksLine as expertThanks, expertKicker } from './experts.js';
 import { NEXT_LIMITS, SHARE_LIMITS, WHO_LIMITS, normalizeNext, normalizeShare, normalizeWho, saysPerson, saysShare, saysWhen } from './boards.js';
 
@@ -948,13 +948,47 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
 }
 
 /**
+ * A clause that opens on its subject and has a plain finite verb within its first words: an auxiliary ("are", "have",
+ * "would"), a past form ("won", "said", "travelled") or a reporting verb ("says", "warns"), never a word in -s alone
+ * ("disruptions", "captures": a plural noun is read as a verb too often to split on).
+ */
+const PLAIN_PRESENT = /^(?:says|warns|claims|insists|argues|adds|tells|reports|believes|thinks|admits|denies|confirms|plans|wants|needs)$/;
+function plainClause(t) {
+  const words = String(t).split(/\s+/).slice(0, 9).map((w) => w.replace(/^[^\p{L}\d]+|[^\p{L}\d'’-]+$/gu, '').toLowerCase());
+  const verb = (w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/.test(w) || PLAIN_PRESENT.test(w);
+  // (a subject first: never a verb, "…, and says the UK is…" has lost its own, BBC 14 Oct; nor a bare verb: "Introduce
+  // penalties…")
+  if (!words[0] || verb(words[0]) || /^(?:introduce|create|allow|make|give|take|add|keep|help|set|put|bring|send|cut|raise|ban|end|stop|start|open|close|extend|expand|provide|require|include|launch|build|offer|use|say|warn|call)$/.test(words[0])) return false;
+  // its own verb comes before anything it embeds ("price caps to ensure people can only buy…": the "can" is the
+  // infinitive's clause's, the item has none of its own, Guardian 14 Oct); a comma before the verb ends a compound
+  // subject that began before the joint ("…, and the release of strategic energy stocks, had helped…")
+  for (let i = 1; i < words.length; i++) {
+    if (/^(?:to|that|which|who|whom|whose|whether|if|because|when|where|while|as)$/.test(words[i])) return false;
+    if (verb(words[i])) return !/,$/.test(String(t).split(/\s+/)[i - 1] || '');
+  }
+  return false;
+}
+
+/** A plain verb among a phrase's first words, its first included ("should be visible…", "police fired…"), before anything it embeds. */
+function plainVerbIn(t) {
+  const words = String(t).split(/\s+/).slice(0, 9).map((w) => w.replace(/^[^\p{L}\d]+|[^\p{L}\d'’-]+$/gu, '').toLowerCase());
+  for (const w of words) {
+    if (/^(?:to|that|which|who|whom|whose|whether|if|because|when|where|while)$/.test(w)) return false;
+    if (AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/.test(w) || PLAIN_PRESENT.test(w)) return true;
+  }
+  return false;
+}
+
+/**
  * A long sentence told as two, the way a broadcast writer shortens: at ", and" / "; " / ", but" when both sides are
  * whole clauses within `max` words ("Airports in Cancún have closed, and hotels have moved guests to inner rooms"
  * -> two sentences). Null when no such split fits.
  */
 export function splitClauses(sentence, max, min = 4) {
-  const t = String(sentence).trim().replace(/[.!?]+$/, '');
-  for (const m of t.matchAll(/(?:,\s+(and|but)|;\s*(?:and\s+|but\s+)?)\s*/gi)) {
+  // (a closing quotation keeps its own full stop: '…the activists “anarchists.”' once aired with another one after it)
+  const t = String(sentence).trim().replace(/[.!?]+(?=["”’)]*$)/, '').replace(/[.!?]+$/, '');
+  // (a whole word: ", Andy Burnham, said…" is no ", and", 14 Oct)
+  for (const m of t.matchAll(/(?:,\s+(and|but)\b|;\s*(?:and\s+|but\s+)?)\s*/gi)) {
     const head = t.slice(0, m.index).trim();
     let tail = t.slice(m.index + m[0].length).trim();
     const nh = head.split(/\s+/).length;
@@ -978,7 +1012,17 @@ export function splitClauses(sentence, max, min = 4) {
     if (verbish(first) || /^(?:also|then|later|still)$/.test(first || '') || (/^(?:even|just|only|reportedly|allegedly|quickly|eventually|finally|recently|never)$/.test(first || '') && verbish(second))) continue;
     // the second must stand alone: no pronoun opening it without its noun nearby ("it", "they" read fine after the first)
     if (m[1] && /^but$/i.test(m[1])) tail = `But ${tail}`;
-    return [`${head}.`, `${tail[0].toUpperCase()}${tail.slice(1)}.`];
+    // (a clause, not a list's last item: its verb a plain one, never a plural noun read as a verb, "…include a car
+    // accident, and storm-related disruptions to two people’s medical treatment", nor a bare verb, "…, and introduce
+    // penalties for stalking", Guardian 14 Oct)
+    if (!plainClause(tail)) continue;
+    // (nor a head that is only a subordinate clause, "Because service fees are agreed…", or that reports a clause with no
+    // verb of its own, "It said the rerouting of oil supplies away from the strait of Hormuz", Guardian 14 Oct)
+    if (/^(?:Because|Since|As|While|Whilst|If|When|Although|Though|Whereas|Unless|Once|After|Before|Until)\b/.test(head) && !/,\s/.test(head)) continue;
+    const reported = head.match(/\b(?:said|says|say|told|warned|added|argued|claimed|believes|believed|thinks|thought)\s+(?:that\s+)?([^,;]+)$/i);
+    if (reported && !hasFiniteVerb(`X ${reported[1]}`)) continue;
+    const close = (x) => (/[.!?…]["”’)]*$/.test(x) ? x : `${x}.`);
+    return [close(head), close(`${tail[0].toUpperCase()}${tail.slice(1)}`)];
   }
   return null;
 }
@@ -995,17 +1039,27 @@ export function headlineNames(title, summary = '') {
   return [...new Set(words.filter((w, i) => w.length >= 2 && /\p{L}/u.test(w) && NAME_WORD.test(w) && !HEADLINE_FILLER.test(w) && !lookupPlace(w) && (i > 0 || named(w))))];
 }
 
+// Who says it, opening the words a cut would take away (", the agency warned…", ", according to police", ", Afshari said"):
+// what comes before is theirs.
+// (an attribution has its own subject and says no more than who: ", the agency warned", ", police said on Sunday"; never
+// a second predicate, "…and warned that French and German voters faced the same threat", nor a new claim, "…, he said it would…")
+const ATTRIBUTION = /^[\s,;:–—-]*(?:according to\b|(?!(?:and|but|or|then|also|later)\b)(?:(?!(?:where|which|who|whom|whose|that|when|while|if|because|as|although|though|after|before|since|until)\b)[\p{L}\d’'.-]+\s+){1,8}?(?:said|says|say|told|tells|warned|warns|added|adds|claimed|claims|alleged|alleges|reported|reports|announced|announces|stated|states|insisted|insists|confirmed|confirms|estimated|estimates|argued|argues|predicted|predicts|believes|believe|acknowledged|admitted|wrote|writes|suggests|suggested|shows|showed|finds|found|indicates|indicated|revealed|reveals)\b(?!\s+(?:that|to|it|they|he|she|we|i|you|this|there)\b|\s*["“:]))/iu;
+
 /**
  * A sentence cut back to `max` words at its last clause boundary (", a record", " where the species...",
- * ", after a case brought by..."), keeping at least `min` words and every name in `keep` it has; null when no
- * clean cut fits.
+ * ", after a case brought by..."), keeping at least `min` words and every name in `keep` it has, and never the words
+ * that say who says it; null when no clean cut fits.
  */
 export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
   const t = String(sentence).trim().replace(/[.!?]+$/, '');
   // a sentence that opens on a subordinate clause has its main clause after the first comma: a cut there would keep
   // only the subordinate one ("As Luis Enrique bids to guide PSG to a third successive Champions League triumph.", BBC
   // Sport 13 Oct, aired on FULL TIME); its cuts must come after that comma
-  const sub = /^(?:As|While|Although|Though|Because|If|When|Since|After|Before|Whereas|Unless|Once|Until)\b/.test(t) ? t.indexOf(', ') : -1;
+  // (and one that opens on a phrase, a preposition's or a verb's in -ing: "By combining machine learning with advanced computer
+  // simulations[, researchers… identified 9,389 individual reactions…]", ScienceDaily 14 Oct, aired as the phrase alone)
+  const leadWord = t.split(/\s+/)[0] || '';
+  const lead = /^(?:By|In|On|At|For|From|Despite|Following|Using|Having|Through|Under|Over|Amid|Among|Unlike|Like|Along|Alongside|Beyond|Within|Across|During|Thanks|According|With|Without)$/.test(leadWord) || (/^\p{Lu}\p{Ll}+ing$/u.test(leadWord) && !PROPER_ING.test(leadWord.toLowerCase()));
+  const sub = /^(?:As|While|Although|Though|Because|If|When|Since|After|Before|Whereas|Unless|Once|Until)\b/.test(t) || lead ? t.indexOf(', ') : -1;
   // (a bare "with" or "as" usually completes what comes before: "visible with binoculars", "served as a base")
   const cuts = [...t.matchAll(/,\s+|\s+(?:where|which|while|after|as|but|and|whose|when|because|although|though|following|before)\s+/g)]
     .filter((m) => m[0].trim() !== 'as' || asStartsClause(t.slice(m.index + m[0].length)))
@@ -1013,12 +1067,30 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     .reverse();
   for (const { at, end, comma } of cuts) {
     if (sub >= 0 && at <= sub) continue;
+    // never the other side of the story: "Pope Leo XIV has been diagnosed with lung cancer[ but had successful surgery…]",
+    // "He received some messages…[ but ignored them, blocked his contact number…]" (real news 13-14 Oct): a cut before a
+    // "but", an "although", a "though" or a "yet" (with its comma or without) would say only the half that alarms
+    // (nor a condition: "…his budget risks being a “work of fiction”[ unless he sets out plans…]", Guardian 12 Oct)
+    const joint = t.slice(end).match(/^(?:but|although|though|yet|even though|despite|however|unless|provided|providing|as long as|only if|except)\b/i) || /\s(?:but|although|though|unless)\s+$/i.test(t.slice(at, end));
+    if (joint) continue;
+    // never a clause it opened left without its verb: "…show that minutes passed as officials[ and responders attempted
+    // to confirm…]" (AP 14 Oct)
+    const opened = t.slice(0, at).match(/\b(?:as|when|while|because|since|until|if|unless|whether|although|though|after|before|where|once)\s+((?:(?!\b(?:as|when|while|because|since|until|if|unless|whether|although|though|after|before|where|once)\b)[^,;])+)$/i);
+    if (opened && !hasFiniteVerb(`X ${opened[1]}`) && opened[1].trim().split(/\s+/).length <= 6) continue;
+    // nor inside a clause an aside interrupts: "…to not return Elizabeth[, aged six at the time, to her Toowoomba home…]"
+    // (the words after the aside go on with the same clause, a preposition first)
+    if (comma) {
+      const segs = t.slice(end).split(/,\s+/);
+      if (segs.length >= 2 && /^(?:to|from|into|onto|upon|with|for|at|in|on|by|of|over|under|than|toward|towards)\b/.test(segs[1]) && !hasFiniteVerb(`X ${segs[0]}`)) continue;
+    }
     // (an aside's dash goes with it: "...the use of clearfell logging[ – where all trees are cut down]")
     const head = t.slice(0, at).trim().replace(/\s*[–—]$/, '');
     const n = head.split(/\s+/).length;
     if (n > max || n < min) continue;
-    // never inside a quotation or a parenthesis ("a bid for a “partial[, progressive return to lessons”]")
+    // never inside a quotation or a parenthesis ("a bid for a “partial[, progressive return to lessons”]"), nor inside an
+    // aside between dashes ("four friends – Hannah, played by Dunham, Marnie[, played by Williams… – living in…]")
     if (unbalanced(head)) continue;
+    if ((head.match(/\s[–—]\s/g) || []).length % 2 === 1 && (t.match(/\s[–—]\s/g) || []).length % 2 === 0) continue;
     // "Windler, working with his wife, Betty, and other spouses[, secretly prepared a batch of flags]": a predicate
     // after the comma belongs to the subject before it (the head has no verb of its own)
     // ("Ticket sales for the satirical black comedy, which stars Cruise…[, dropped by around 60%…]", BBC 12 Oct: an amount
@@ -1053,6 +1125,34 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // never a name the story is about: "...violated a woman’s Fourth Amendment rights [when using Flock to search
     // for her license plate]" under "Federal judge calls Flock ‘indiscriminate mass surveillance’" (4 Oct)
     if (keep.some((k) => t.includes(k) && !head.includes(k))) continue;
+    // never who says it: a claim, a count or a forecast keeps its source ("Europe could face renewed diesel price rises
+    // in the coming weeks[, the International Energy Agency warned…]", "No commercial goods are entering the Gaza
+    // Strip[, Israeli authorities said…]", "Hardliners can use this approach…[, Afshari said]": the channel's own word
+    // once the cut has gone, real news 14 Oct)
+    if (ATTRIBUTION.test(t.slice(at)) || (ATTRIBUTION_IN.test(t.slice(at)) && !ATTRIBUTION_IN.test(` , ${head}`))) continue;
+    // ...nor the attribution that closes the sentence, whatever comes between ("Another vessel, GFS Giselle, sustained
+    // hull damage[ after being hit by a projectile…, it added]", "The man… was found dead under the ride[ after being
+    // ejected…, according to police]", real news 14 Oct)
+    if (TRAILING_ATTRIBUTION.test(t) && !TRAILING_ATTRIBUTION.test(head)) continue;
+    // a "that" or a "to" after a comma completes a verb before it ("…dismissed them as “anarchists” and suggested, without
+    // offering evidence[, that they are backed by foreign powers]", "…she asked Eric Deters, an influential Trump
+    // supporter[, to pay off…]", real news 14 Oct)
+    if (comma && /^(?:that|to)\s/i.test(t.slice(end))) continue;
+    // a relative clause the cut leaves without its verb ("…France Unbowed party, whose chief[, presidential hopeful
+    // Jean-Luc Melenchon, was seen…]", France 24 14 Oct)
+    if (/,\s*(?:who|whom|whose|which|where|when)\b[^,]*$/i.test(head) && !hasFiniteVerb(head.slice(head.lastIndexOf(',') + 1).replace(/^\s*(?:who|whom|whose|which|where|when)\s+/i, 'X '))) continue;
+    // an absolute phrase is no clause ("With all the votes counted by the Statistics Office[, the centrist ANO movement…
+    // has the most]", AP 14 Oct)
+    if (/^(?:With|Without)\s/.test(head) && !/,\s/.test(head)) continue;
+    // nor a lead phrase with no verb of its own ("By combining machine learning with advanced computer simulations[,
+    // researchers… identified 9,389 individual reactions…]", ScienceDaily 14 Oct, aired as an expert's answer)
+    if (/^(?:By|In|On|At|For|From|After|Before|Despite|Following|Using|Having|To|Through|Under|Over|Amid|Among|Since|Unlike|Like|Along|Alongside|Beyond|Within|Across|During|Thanks to|According to)\s|^\p{Lu}\p{Ll}+ing\s/u.test(head) && !/,\s/.test(head) && !hasFiniteVerb(head)) continue;
+    // a list after a colon keeps all its items ("There are two main types of lung cancer: "small cell" cancers[, which
+    // spread…, and "non-small cell" cancers…]", NPR 14 Oct)
+    if (/:\s/.test(head)) continue;
+    // a subordinate clause's comma must lead to the main clause ("While sales of hot chocolate and soup surged in
+    // September compared with August[, by 41% and 35% respectively, they fell sharply…]", BBC 14 Oct)
+    if (/^(?:(?:But|And|Yet|So)\s+)?(?:While|Whilst|Although|Though|Because|If|When|Whereas|Unless|Since|Once|As|After|Before|Until)\b/.test(head) && !head.split(/,\s+/).slice(1).some((x) => plainClause(x))) continue;
     // "between democracy [and barbarism]": a pair is one phrase
     if (/\bbetween\b(?![^]*\band\b)/i.test(head) && /^\s*and\b/i.test(t.slice(at))) continue;
     // "repeated cycles of wetting [and drying could crack stone]": a pair of nouns ("wetting and drying", "oil and
@@ -1063,12 +1163,18 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // (", and governors in an election that will..." is a list's last item: the verb after "that" is not its own)
     const conj = (comma ? (t.slice(end).match(/^(and|or|but)\s+/i)?.[1] || ',') : t.slice(at, end).trim()).toLowerCase();
     const rest = t.slice(end).replace(/^(?:and|or|but)\s+/i, '').split(/[,;:]|\b(?:that|which|who|whom|whose|whether)\b/i)[0];
-    if (['and', 'or', 'but', 'while', 'as'].includes(conj) && !hasFiniteVerb(rest)) continue; // (its first word is its subject)
+    // (a plain verb of its own: "…a formal transition mechanism for loyalist[ and republican groups, provided…]" has
+    // none, "groups" is a noun, real news 14 Oct)
+    // (a second predicate of the same subject counts: "…the 2016 Brexit referendum[ and warned that French and German voters…]")
+    const verbFirst = (x) => ((w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/.test(w) || PLAIN_PRESENT.test(w))(String(x).trim().split(/\s+/)[0]?.toLowerCase() || '');
+    if (['and', 'or', 'but', 'while', 'as'].includes(conj) && !((hasFiniteVerb(rest) || (['and', 'but', 'or'].includes(conj) && verbFirst(rest))) && plainVerbIn(rest))) continue; // (its first word is its subject, or its verb: "…and should be visible")
     // "pick lawmakers[, senators and governors]": a comma inside a list (an "and" soon after, no verb before it)
     // ("cycles of wetting[, drying, freezing and thawing could harm stonework]": a longer list, items to its "and")
     // ("a batch of small red[, white, and blue...]": an Oxford comma too)
     const item = comma ? t.slice(end).match(/^((?:[^,;:]{1,30}?,\s+){0,4}[^,;:]{1,40}?),?\s(?:and|or)\s/i) : null;
-    if (item && item[1].split(/,\s+/).every((x) => x.trim().split(/\s+/).length <= 3 && !hasFiniteVerb(x))) continue; // (a list item is short)
+    // (an item may run to six words: "three counts of rape[, three counts of sexual assault and one count of indecent
+    // assault]" once lost two of a defendant's three charges, BBC 13 Oct)
+    if (item && item[1].split(/,\s+/).every((x) => x.trim().split(/\s+/).length <= 6 && !hasFiniteVerb(x))) continue; // (a list item is short)
     // "Cvijanovic, Bosniak moderate leftist Denis Becirovic[ and ...]": a cut after a list's item (its last
     // segment no verb of its own)
     if (/^(?:and|or)$/.test(conj) && (head.match(/,/g) || []).length >= 1 && !hasFiniteVerb(head.slice(head.lastIndexOf(',') + 1).trim())) continue;
@@ -1102,7 +1208,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (/^\s*and\b/i.test(t.slice(at))) {
       // ("a model showing how common metals like copper[ and zinc may influence…]", ScienceDaily 12 Oct)
       const open = head.match(/\b(?:where|when|while|as|because|although|though|if|which|who|that|whose|how|why|whether|what)\s+((?:[\w’'-]+\s+){0,3}[\w’'-]+)$/i);
-      if (open && !open[1].split(/\s+/).some((w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/i.test(w))) continue;
+      // (its first word is its subject: "as armed police officers[ and army bomb-disposal experts swarmed…]" has no verb
+      // yet, "armed" is the officers', AP 14 Oct)
+      if (open && !open[1].split(/\s+/).some((w, i) => i > 0 && (AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/i.test(w)))) continue;
     }
     // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
     if (/\b(?:was|were|is|are|been|be)\s+(?:made|taken|done|given|reached)$/i.test(head)) continue;
@@ -1112,6 +1220,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said|after|before|since|until|while|because|although|though|when|where|which|who|whose|whom|as|if|about|into|onto|over|under|between|among|through|during|without|within|against|toward|towards|upon|via|per|like|including|despite|amid|such)$/i.test(head)) continue;
     // "...from processing industrial[ and commercial wastewater...]": an adjective pair is one phrase (Guardian 9 Oct)
     if (/^\s*(?:and|or)\b/i.test(t.slice(at)) && /\b[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)$/i.test(head) && /^\s*(?:and|or)\s+[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)\b/i.test(t.slice(at))) continue;
+    // "…as he aligns himself with anti-immigrant[, conservative leaders]": an adjective before a comma waits for the noun
+    // the next one shares (Guardian 14 Oct)
+    if (comma && /\b(?:[a-z]+-[a-z-]+|[a-z]{3,}(?:ive|al|ic|ant|ent|ous|ist|ish|ese|ian|an|ary|ful|less))$/.test(head) && /^[a-z]{3,}(?:ive|al|ic|ant|ent|ous|ist|ish|ese|ian|an|ary|ful|less|ed)\s+[a-z]+/.test(t.slice(end)) && !/\b(?:is|are|was|were|be|been|become|became|seems?|looks?|remains?|stays?)\s+(?:[a-z]+\s+)?[\w-]+$/i.test(head)) continue;
     // "an increased likelihood of wetter[, windier weather than usual]": two adjectives in a row are one phrase, the noun
     // after the second (BBC 12 Oct, aired as "…likelihood of wetter.")
     const ADJ_END = /(?:ier|er|est|al|ic|ous|ive|ful|less|ish|ese|ern|ant|ent|ary|y)$/i;
@@ -1120,7 +1231,14 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // question for its object waits for it (Guardian 12 Oct)
     if (/^(?:where|when|which|how|why|what|whether|who)$/i.test(t.slice(at, end).trim()) && /\b(?:communicat|explain|show|reveal|know|knew|decid|ask|understand|understood|determin|predict|see|saw|seen|learn|wonder|tell|told|describ|discuss|consider|examin|investigat|assess|indicat|signal|judg|choos|chose|remember|forget|forgot|imagin|realis|realiz|notic|discover|outlin|set(?:s|ting)? out|work(?:s|ed|ing)? out|figur(?:e|es|ed|ing) out|find(?:s|ing)? out|found out)[a-z]*$/i.test(head)) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
-    if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
+    // (or any verb that waits for what it reports or asks: "…dismissed the demonstrators as "anarchists" and suggested[,
+    // without offering evidence, that…]", real news 14 Oct)
+    if (/\b(?:say|says|said|warn|warns|warned|believe|believes|believed|expect|expects|suggest|suggests|suggested|claim|claims|claimed|argue|argues|argued|insist|insists|insisted|note|notes|noted|add|adds|added|tell|tells|told|ask|asks|asked|stress|stresses|stressed|acknowledge|acknowledged|admit|admits|admitted|explain|explains|explained|reveal|reveals|revealed|announce|announces|announced|confirm|confirms|confirmed|deny|denies|denied|hope|hopes|hoped|fear|fears|feared|think|thinks|thought|know|knows|knew)$/i.test(head)) continue;
+    // "The more different the foreign language’s sounds are from the native language[, the harder…]": half a comparison
+    if (/^The\s+(?:more|less|fewer|longer|bigger|higher|lower|greater|smaller|faster|slower|earlier|later|better|worse)\b/i.test(head) && !/,\s/.test(head)) continue;
+    // a restrictive clause defines the noun before it: "…can be prosecuted outside the country[ where the abuse occurred]"
+    // says something else without it (Guardian 14 Oct)
+    if (!comma && /^(?:where|which|who|whom|whose|when)$/i.test(t.slice(at, end).trim()) && /\bthe\s+(?:[a-z-]+\s+)?[a-z-]+$/i.test(head)) continue;
     // "...visible with binoculars just [after sunset]": an adverb belongs to the phrase that follows it
     if (CUT_ADVERB.test(head)) continue;
     // "off Queensland, Australia, say...": a place and the country it is in are one name
@@ -1131,6 +1249,10 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // ("With counting nearly concluded, Serb nationalist Zeljka Cvijanovic": an opening phrase is not the clause)
     const main = head.replace(/,\s+(?:which|who|whose|where|when|called|named|known as|dubbed|titled|nicknamed)\b[^,]*(?:,|$)/gi, ' ').replace(/^(?:with|after|before|despite|amid|following|once|since)\s[^,]{1,60},\s*/i, '').replace(/\s+/g, ' ').trim();
     if (!hasFiniteVerb(main) || isFragment(head)) continue; // ("A man who lives in a log cabin[ surrounded by…]")
+    // a name and its apposition are no clause: "Duane Davis, the former Los Angeles gang leader who boasted in books and
+    // interviews of his involvement in the killing of rapper Tupac Shakur[, only to deny it…, was sentenced…]" (BBC
+    // 14 Oct: the verb is the apposition's relative clause's)
+    if (!hasFiniteVerb(head.replace(/["“][^"”]*["”]/g, ' X ').replace(/^((?:\p{Lu}[\p{L}’'.-]*\s+){0,4}\p{Lu}[\p{L}’'.-]*),\s+(?:the|a|an)\s[^,;]*(?:,|$)/u, '$1 ').replace(/\s(?:who|which|whose|whom)\s[^,;]*/gi, ' '))) continue;
     // (a plural noun before its preposition is the subject, not a verb: "Ticket sales for the satirical black comedy[,
     // which stars Cruise…]", BBC 12 Oct; the verb, if any, comes after the phrase)
     const np = main.match(/^\S+\s+[a-z]{3,}s\s+(?:for|of|in|at|on|across|from|among|between|over|under)\s+(.*)$/);
@@ -1153,6 +1275,223 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
   return null;
 }
 
+// ---------------------------------------------------------------- a long sentence told the way a broadcast writer shortens
+
+// What can open a clause of its own after ", as" / ", while" / "; " (its subject): a determiner, a name, a number, a
+// people word. Never "as well as", "such as", "as a result", "while in office".
+const CLAUSE_SUBJECT = /^(?:the|a|an|its|their|his|her|this|these|those|some|many|most|several|other|others|officials|police|authorities|protesters|residents|troops|forces|rescuers|investigators|prosecutors|lawmakers|ministers|analysts|experts|scientists|researchers|doctors|people|workers|students|families|prices|shares|markets|\d[\d,.]*|\p{Lu}[\p{L}’'.-]*)\b/u;
+const NOT_CLAUSE_START = /^(?:well|such|a result|part|far|soon|long|much|many|if|though|of|for|to|in|on|at|by|from|with|without|recently|usual|expected|planned|reported|always|ever|yet|opposed)\b/i;
+// The subject a reporting clause leans on ("Mahmood said ..., adding that ...": "Mahmood"): a name or "the" and a noun
+// of up to three words, never a pronoun (a viewer may not know who "she" is after the cut)
+const REPORT_SUBJECT = /^((?:(?:the|a|an)\s+)?(?:[\p{L}’'-]+\s+){0,3}?[\p{L}’'-]+?)\s+(?:has\s+|had\s+)?(?:said|says|told|warned|added|announced|wrote|argued|stated|claimed|insisted)\b/iu;
+// A frame before the sentence's own subject that a broadcast writer drops first: who was speaking where, a medium
+// ("In a statement,", "On his TikTok account,"), a connective of place or order ("Separately,", "Elsewhere,")
+const FRAME = /^(?:(?:Speaking|Writing|Talking)\s+(?:to|at|on|in|after|before|from)\b[^,]{0,60}|In\s+(?:a|an|its|his|her|their)\s+(?:(?:[\p{L}’'-]+\s+){0,3})(?:statement|interview|post|posts|letter|speech|report|briefing|message|video|update|announcement)\b[^,]{0,40}|On\s+(?:his|her|its|their)\s+(?:[\p{L}’'-]+\s+){0,3}(?:account|page|channel|website|blog|feed)\b[^,]{0,20}|Asked\s+(?:about|whether|if|why|how|what|for)\b[^,]{0,60}|Separately|Elsewhere|Meanwhile|Overall|In addition|Additionally|Last week|Later|Earlier|Later in the day|Earlier in the day|Shortly after(?:wards)?|At the time|Since then)\s*,\s+/u;
+
+/** A sentence that stands on its own as spoken: a capital or a quotation first, balanced, a main clause with its verb. */
+function wellFormed(s) {
+  const t = String(s).trim();
+  if (!/^["“‘]?[\p{Lu}\d]/u.test(t) || unbalanced(t) || t.split(/\s+/).length < 4) return false;
+  if (/\b(?:a|an|the|of|to|and|or|but|that|which|who|with|for|from|by|in|on|at|as)[.!?]?["”’]?$/i.test(t.replace(/[.!?]+["”’)]*$/, ''))) return false;
+  // the main clause: without a quotation, a relative clause, or the apposition after a name ("Duane Davis, the former
+  // gang leader who boasted…" has no verb of its own: a fragment, BBC 14 Oct)
+  const main = t
+    .replace(/["“][^"”]*["”]/g, ' X ')
+    .replace(/,\s+(?:who|which|whose|whom|where)\b[^,;]*(?:,|$)/gi, ' ')
+    .replace(/\s(?:who|which|whose|whom)\s[^,;]*/gi, ' ')
+    .replace(/^((?:\p{Lu}[\p{L}’'.-]*\s+){0,4}\p{Lu}[\p{L}’'.-]*),\s+(?:the|a|an)\s[^,;]*(?:,|$)/u, '$1 ');
+  // (nor a participle's aside: "The interior of its four-storey home, stuffed with historic playbills…" has no verb of
+  // its own, a cut once left it so, Guardian 13 Oct)
+  const bare = main.replace(/,\s+(?:[a-z]+ly\s+)?(?:[a-z]{3,}ed|built|made|held|known|seen|given|taken|written|chosen|led|run|set)\b[^,;]*(?:,|$)/g, ' ');
+  return hasFiniteVerb(bare) && !isFragment(t);
+}
+
+/**
+ * A shortened sentence's own clause: a plain verb (an auxiliary, a past form, a reporting verb), or a present verb in -s
+ * right after its subject ("Poland blames Russia…", "The Sakhalin region includes…"), once a frame before the subject
+ * is set aside. "However, in some good news for households stocking up on trick or treat supplies for Halloween" (BBC
+ * 14 Oct, what a cut once left) has none: "supplies" is a noun.
+ */
+function clauseOf(s) {
+  // (someone's words and who said them: "“We were overwhelmed…,” Teran Madit, a clinical officer, told The Associated Press")
+  if (/^["“][^"”]{8,}[,.!?]?["”],?\s+(?:[^,.;]+?)(?:,\s+[^,.;]{2,60},)?\s+(?:said|says|told|added|wrote|warned|explained|insisted|admitted)\b/u.test(String(s).trim())) return true;
+  let t = String(s).replace(/["“][^"”]*["”]/g, ' X ').replace(/[.!?]+$/, '').trim();
+  // (who says it is no clause of the claim: "In the occupied West Bank, Israeli attacks in Ramallah, the Palestinian
+  // Ministry of Health said" has no verb of its own)
+  const by = t.match(TRAILING_ATTRIBUTION);
+  if (by) t = t.slice(0, by.index);
+  // a frame before the first comma that has no verb of its own ("However, in some good news…", "On Wednesday,")
+  const first = t.split(/,\s+/)[0];
+  if (t.includes(', ') && !plainClause(`X ${first}`)) t = t.slice(first.length + 2);
+  if (plainClause(t) || plainClause(`X ${t}`)) return true;
+  const w = t.split(/\s+/).slice(0, 6).map((x) => x.replace(/[^\p{L}'’-]/gu, ''));
+  return w.some((x, i) => i >= 1 && i <= 4 && /^[a-z]{3,}s$/.test(x) && !/(?:ss|us|is|ics|ness)$/.test(x) && (/^\p{Lu}/u.test(w[i - 1]) || (i >= 2 && /^(?:the|a|an|its|their|his|her|this)$/i.test(w[i - 2]))));
+}
+
+/** The sentence's first clause and the rest at a joint that starts a new clause with its own subject, or null. */
+function clauseSplits(t) {
+  const out = [];
+  // ", as officials ...", ", while Russia ...", "; police ...", " – the ministry ..." (a dash between spaces)
+  for (const m of t.matchAll(/(,\s+(?:as|while|whereas)\s+|;\s+|\s+[–—]\s+)/g)) {
+    const head = t.slice(0, m.index).trim();
+    const tail = t.slice(m.index + m[0].length).trim();
+    if (!CLAUSE_SUBJECT.test(tail) || NOT_CLAUSE_START.test(tail)) continue;
+    // its verb within its first words (a clause, not a list: "…in Paris – a city of…" is an apposition)
+    if (!plainClause(tail)) continue;
+    // never inside a quotation, never a head that waits for its main clause ("Although most were peaceful; …")
+    if (unbalanced(head) || unbalanced(tail) || /^(?:As|While|Although|Though|Because|If|When|Whereas|Unless|Since|Once)\b/.test(head) && !/,/.test(head)) continue;
+    // a dash that closes an aside opened earlier ("X – the city's mayor – said") is no joint
+    if (/[–—]/.test(m[0]) && /[–—]/.test(tail)) continue;
+    out.push([head, tail]);
+  }
+  // ", with the police saying 71 officers have been injured" -> "The police said 71 officers have been injured"
+  const w = t.match(/^(.*?),\s+with\s+((?:the\s+)?[\p{L}’'-]+(?:\s+[\p{L}’'-]+){0,3}?)\s+(saying|adding|warning|claiming|insisting)\s+(.+)$/iu);
+  if (w && CLAUSE_SUBJECT.test(w[2]) && !/\b(?:it|them|him|her)\b/i.test(w[2])) {
+    const verb = { saying: 'said', adding: 'added', warning: 'warned', claiming: 'claimed', insisting: 'insisted' }[w[3].toLowerCase()];
+    out.push([w[1], `${w[2]} ${verb} ${w[4]}`]);
+  }
+  // "Mahmood said ..., adding that ..." -> "... Mahmood added that ..." (a name or "the minister", never a pronoun)
+  const a = t.match(/^(.*?),\s+(adding|warning|saying)\s+(that\s+.+|["“].+)$/i);
+  const who = a ? a[1].match(REPORT_SUBJECT) : null;
+  if (a && who && !/^(?:he|she|they|it|we|i|you)$/i.test(who[1]) && who[1].split(/\s+/).length <= 4) {
+    const verb = { adding: 'added', warning: 'warned', saying: 'said' }[a[2].toLowerCase()];
+    out.push([a[1], `${who[1]} ${verb} ${a[3]}`]);
+  }
+  return out;
+}
+
+// The time, the place or the medium after who said it ("…, Teran Madit told The Associated Press[ by telephone Monday]",
+// "…, Luistro said[ without elaborating]", "…, he said[ in an evening address]"): said again without them, it says less,
+// never something else (real news 12-14 Oct)
+const TRAILING_ADJUNCT = /(?<=\b(?:said|says|told|added|warned|wrote|stated|announced|confirmed|reported|claimed|insisted|explained|argued)(?:\s+(?:the\s+)?[\p{Lu}\p{L}’'.-]+(?:\s+[\p{Lu}][\p{L}’'.-]+){0,3})?)(?:,?\s+(?:by (?:tele)?phone|in an? (?:\w+\s+){0,2}(?:statement|address|interview|post|speech|briefing|message|video)|on (?:social media|X|Telegram|Facebook|Instagram|television|TV|state television|state TV)|without (?:elaborating|giving (?:details|further details|a reason|evidence))|on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?: (?:morning|afternoon|evening|night))?|(?:last|this|earlier this|late last) (?:week|month|year|weekend)|(?:on )?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|yesterday|today))+$/u;
+// A frame before the subject that a shorter sentence does without: what came before or alongside ("After river levels
+// surged…,", "With Middle Eastern fuel exports below half…,", "Despite…,", "Amid…,"); never a condition ("Under the
+// Swedish system,", "If…"), which the claim depends on
+// (and how it was done: "By combining machine learning with advanced computer simulations,", "Using a hybrid quantum computer,")
+const LEAD_PHRASE = /^(?:After|Following|With|Despite|Amid|In response to|As part of|Days after|Hours after|Weeks after|A day after|Two days after|By [a-z]+ing|Using)\b[^,;“”"]{3,110},\s+/u;
+/**
+ * The lighter forms of a sentence (no final stop), the fewest words lost first: a frame or a lead phrase before the
+ * subject, a trailing adjunct after who said it, and the asides between commas: an apposition with no verb of its own
+ * (", Ukraine’s second-largest city,", ", a retired professor, Conservative peer and Anglican priest,"), a relative
+ * clause (", who was sworn in in August,") or a participle's (", released on Tuesday and signed by…,") between the
+ * subject and its verb. Never inside a quotation, never an item of a list ("Hannah, Marnie, Jessa and Shoshanna").
+ */
+function lighterForms(body) {
+  const ops = [];
+  // (a sentence that trails off, "…lots of talent … and Google promptly…", is read whole or not at all)
+  if (/…|\.\.\./.test(body.replace(/["“][^"”]*["”]/g, ' '))) return [];
+  const framed = body.match(FRAME) || body.match(LEAD_PHRASE);
+  if (framed && CLAUSE_SUBJECT.test(body.slice(framed[0].length)) && !NOT_CLAUSE_START.test(body.slice(framed[0].length)) && !unbalanced(framed[0])) ops.push((x) => (x.startsWith(framed[0]) ? x.slice(framed[0].length) : x));
+  if (TRAILING_ADJUNCT.test(body)) ops.push((x) => x.replace(TRAILING_ADJUNCT, ''));
+  // (a quoted word inside an aside is part of it: ", a protein best known as the “glue” holding cells together,")
+  for (const m of body.matchAll(/(?<=[\p{L}\d’'.)])\s*,\s+([^,;()]{2,110}?),\s+/gu)) {
+    if (unbalanced(m[1])) continue;
+    const before = body.slice(0, m.index);
+    const after = body.slice(m.index + m[0].length);
+    const aside = m[1];
+    // (never a condition the claim depends on: ", provided certain conditions are met,", ", if approved,")
+    if (unbalanced(before) || /^(?:and|or|but|nor|then|so|though|although|while|whereas|because|as|when|if|unless|until|before|after|since|where|which|who|that)\b/i.test(after) || /^(?:and|or|but|so|then|that|to|if|unless|provided|providing|assuming|given|except|because|as|when|while|where|though|although|subject to|as long as|only)\b/i.test(aside)) continue;
+    // (a list's items: "…to Uruguay[, Argentina and Peru on November 6,] though…")
+    if (/\s(?:and|or)\s/.test(aside) && !/^(?:who|which|whose)\s/.test(aside) && /^\p{Lu}/u.test(aside)) continue;
+    // (a list: the item before ends a name or a word the aside echoes in shape, or the text goes on with another item)
+    if (/,\s+[^,;]{1,40},\s*$/.test(before) && !/\b(?:who|which|whose)\b/.test(aside)) continue;
+    const words = aside.split(/\s+/).length;
+    if (words > 18) continue;
+    const relative = /^(?:who|which|whose)\s/.test(aside);
+    const participle = !/^(?:provided|needed|required|expected)\b/.test(aside) && /^(?:[a-z]+ly\s+)?(?:[a-z]{3,}ed|built|made|held|known|seen|given|taken|written|chosen|led|run|set|founded|based|located|elected|appointed|backed|funded|reporting|speaking|writing)\b/.test(aside);
+    // (the subject's own verb straight after the aside: "The letter[, released on Tuesday…,] warned…"; never a phrase
+    // that only looks like one, "Mourners in Beheira, Egypt bid farewell to…[, a Flynas flight attendant killed…]")
+    const verbAfter = /^(?:[a-z]+ly\s+)?(?:is|are|was|were|has|have|had|will|would|can|could|may|might|must|should|did|does|do|said|says|told|won|lost|made|took|gave|came|went|saw|found|kept|became|brought|built|sold|paid|spent|ran|held|met|led|sent|wrote|fought|stood|chose|got|knew|left|began|rose|fell|grew|struck|fled|broke|bought|withdrew|[a-z]{3,}ed|[a-z]{3,}s(?=\s+(?:the|a|an|to|that|its|their|his|her|it|them|on|in|up|out|for|with|\d)))\b/.test(after) && !/^[a-z]{3,}(?:ss|us|is|ness|ics)\b/.test(after);
+    // after a place frame ("In Kharkiv[, Ukraine’s second-largest city,] a strike on…"), a whole clause with its subject
+    const placeFrame = /^(?:In|At|Near|Outside|Inside)\s+\p{Lu}[^,]*$/u.test(before) && CLAUSE_SUBJECT.test(after) && !/^(?:who|which|whose|that)\b/i.test(after) && plainClause(after);
+    // (a noun phrase with a participle in it is still one: ", a protein best known as the “glue” holding cells…,"; never who
+    // said it: ", the ministry said,")
+    const nounPhrase = /^(?:a|an|the)\s/i.test(aside) && !/\b(?:said|says|say|told|tells|added|adds|warned|wrote|reported|according)\b/i.test(aside) && !/\b(?:is|are|was|were|has|have|had|will|would)\b/i.test(aside);
+    const apposition = (nounPhrase || (!hasFiniteVerb(`X ${aside}`) && !/^\d+$/.test(aside.trim()))) || /^\d{1,3}$/.test(aside.trim());
+    if (!((relative || participle || apposition) && verbAfter) && !(apposition && placeFrame)) continue;
+    // (two short capitalised words alone may be a list of names or places: kept)
+    if (!relative && !participle && words <= 2 && /^\p{Lu}/u.test(aside) && !placeFrame && !/^\d/.test(aside)) continue;
+    // (an aside before who said it keeps the comma: "…for loyalist and republican groups, it said")
+    const frame = placeFrame || ATTRIBUTION.test(after);
+    const span = m[0];
+    const drop = (x) => x.replace(span, frame ? ', ' : ' ');
+    drop.who = true; // (who someone is weighs more than when they spoke)
+    ops.push(drop);
+  }
+  // every combination of up to three, the fewest words lost first (an aside counting a word more: "Teran Madit, a clinical
+  // officer, told The Associated Press" keeps who she is before "by telephone Monday")
+  const forms = new Map();
+  const n = Math.min(ops.length, 6);
+  const len = (x) => x.split(/\s+/).length;
+  for (let mask = 1; mask < 1 << n; mask++) {
+    const chosen = ops.filter((_, i) => mask & (1 << i));
+    if (chosen.length > 3) continue;
+    const x = chosen.reduce((acc, op) => op(acc), body).replace(/\s+/g, ' ').trim();
+    const cost = len(body) - len(x) + chosen.filter((op) => op.who).length;
+    if (x && x !== body && !(forms.get(x) <= cost)) forms.set(x, cost);
+  }
+  return [...forms.keys()].sort((p, q) => forms.get(p) - forms.get(q));
+}
+
+/**
+ * A long sentence of a story told as a broadcast writer shortens it (WORLD NOW's bible: at most 20 words a sentence),
+ * as one or two whole sentences of at most `max` words, or null. In order, losing the least: as it is; split at a
+ * joint where a new clause starts with its own subject (", as officials said...", "; police...", ", with the police
+ * saying..." becomes "The police said...", "..., adding that..." becomes "Mahmood added that..."), or into its two
+ * whole clauses (splitClauses); a frame before the subject dropped ("Speaking to reporters, ", "In a statement, "),
+ * or an aside between commas (", who was sworn in in August,"); a trailing clause cut (trimClause). Every sentence it
+ * returns stands on its own: a capital first, balanced quotation marks, a main clause with its verb, the names in
+ * `keep` it had.
+ */
+export function compressSentence(sentence, max, { keep = [], min = 6 } = {}) {
+  const t = String(sentence).trim();
+  const words = (x) => x.split(/\s+/).filter(Boolean).length;
+  const end = (x) => (/[.!?…]["”’)]?$/.test(x) ? x : `${x.replace(/[,;:\s]+$/, '')}.`);
+  const cap = (x) => x.replace(/^(["“‘]?)(\p{Ll})/u, (m, q, c) => q + c.toUpperCase());
+  const keeps = (parts) => keep.every((k) => !t.includes(k) || parts.some((p) => p.includes(k)));
+  const ok = (parts) => parts.every((p) => words(p) <= max && words(p) >= Math.min(min, 4) && wellFormed(p) && clauseOf(p)) && keeps(parts);
+  if (words(t) <= max) return wellFormed(t) ? [t] : null;
+  const body = t.replace(/[.!?]+$/, '');
+  // 1. split at a joint (nothing lost)
+  for (const [head, tail] of clauseSplits(body)) {
+    const parts = [end(head), end(cap(tail))];
+    if (ok(parts)) return parts;
+  }
+  const two = splitClauses(t, max, 4);
+  if (two && ok(two)) return two;
+  // 2. what a broadcast writer leaves out first, alone and together, the least first: a frame before the subject, the
+  // time or the medium after who said it, an aside between commas; then try again
+  const lighter = lighterForms(body).map(cap);
+  for (const x of lighter) {
+    if (words(x) <= max && ok([end(x)])) return [end(x)];
+    for (const [head, tail] of clauseSplits(x)) {
+      const parts = [end(head), end(cap(tail))];
+      if (ok(parts)) return parts;
+    }
+  }
+  // 3. a trailing clause cut (it says less, never something else); a sentence that ends on who says it keeps them, the
+  // cut made before ("Pulido, 62, was taken into US custody[ after an investigation led by…], American officials said
+  // on Sunday.")
+  for (const x of [body, ...lighter]) {
+    const cut = trimClause(x, max, min, { keep });
+    if (cut && ok([cut])) return [cut];
+    const by = x.match(TRAILING_ATTRIBUTION);
+    if (by && !unbalanced(x.slice(0, by.index))) {
+      const room = max - words(by[1]);
+      const main = x.slice(0, by.index);
+      const short = room >= min ? trimClause(main, room, min, { keep }) : null;
+      const said = short && clauseOf(short) ? `${short.replace(/[.!?]+$/, '')}, ${by[1]}.` : null;
+      if (said && ok([said])) return [said];
+    }
+  }
+  return null;
+}
+// ", American officials said on Sunday", ", according to police", ", the ministry told reporters": who says it, last
+// (and what follows the verb: "on Sunday", "in a video posted to social media", "told reporters")
+const TRAILING_ATTRIBUTION = /,\s+((?:according to [^,;“”"]{2,60})|(?:(?!(?:who|which|whose|whom|that|where|when|while|and|but|was|were|is|are|has|have|had|be|been|being|will|would)\b)(?:the\s+)?[\p{L}\d’'.-]+(?:\s+[\p{L}\d’'.-]+){0,9}?\s+(?:said|says|warned|warns|added|adds|told|reported|reports|announced|confirmed|claimed|stated|estimated|believes|argued|wrote|heard|was told|were told|suggests|suggested|shows|showed|finds|found|indicates|indicated|revealed|reveals)(?:\s+[^,;“”"]{1,44})?))$/u;
+// who says it, anywhere in the words a cut takes away: "according to an internal memo seen by Reuters", ", officials said"
+const ATTRIBUTION_IN = /\baccording to\b|,\s+(?:(?!(?:where|which|who|whom|whose|that|when|while|if|because|as|although|though|after|before|since|until)\b)[\p{L}\d’'.-]+\s+){0,9}?(?:said|says|warned|warns|added|adds|told|reported|announced|confirmed|claimed|stated|estimated|argued|wrote|heard|suggests|suggested|shows|showed|finds|found|indicates|revealed)\b/iu;
+
 /**
  * Does a text leave a quotation or a parenthesis open (“ ” « » " counted, ( ), and single marks: ‘ against a ’
  * that no letter follows, a ' after a space against one before a space; an apostrophe ("NJ’s", "Khans'") is
@@ -1170,7 +1509,7 @@ const CUT_ADVERB = /\b(?:just|shortly|soon|right|even|only|immediately|well|long
 const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|must|should|shall|does|do|did|isn['’]t|aren['’]t|won['’]t|can['’]t)$/i;
 // ("died", "fled": a short past form has fewer than three letters before its -ed, Ars Technica 9 Oct)
 const PAST_FORM = /^(?:died|fled|fed|bled|sped|dug|hung|spun|stuck|struck|swung|burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
-const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
+const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ|allege|accuse|deny|insist|urge|vow|condemn|reject|criticise|criticize|dispute|admit|confirm|announce|seek|oppose|blame|refuse|threaten|flee|mourn)$/i;
 // (a number word before a plural is its count, not a subject before a verb: "Six years ago")
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million|billion|dozens|hundreds|thousands|millions|billions)$/i;
 const PROPER_ING = /^(?:beijing|nanjing|chongqing|kunming|peking|jinping|boeing|reading|woking|ealing|epping|stirling|sterling|corning|kipling|bing|king|ming|viking)$/;
@@ -1634,7 +1973,9 @@ function openerIndex(parts) {
  * buildings."), or when the writer opened on such a sentence, the outlet's own first sentence opens the
  * story instead (it is the source itself, still checked). Without one that stands, the story goes ('').
  */
-function keepOpener(tagged, written, story, check) {
+// A line in the outlet's own voice (its readers addressed, its products offered): never a story's sentence.
+const OUTLET_OWN = /\b(?:[Oo]ur|[Ww]e|[Yy]ou|[Yy]our)\b|^(?:Get|Sign up|Subscribe|Download|Read|Watch|Listen|Follow|Click)\b/;
+function keepOpener(tagged, written, story, check, max = null) {
   const parts = sentencesOf(tagged);
   const at = openerIndex(parts);
   if (at < 0) return tagged;
@@ -1647,7 +1988,18 @@ function keepOpener(tagged, written, story, check) {
   const leans = pointsBack(opener);
   if (!leans && !(lost && !tells(kept))) return tagged;
   // the outlet's first sentence that stands on its own (the summary's first, unless it opens on a pronoun)
-  const standing = sentencesOf(String(story.summary || '')).filter((t, i) => (i === 0 ? !pointsBack(t) : !leansOnPrevious(t)));
+  // (never a view nobody holds, "The reckless missile attack on King Khalid international airport…", and never one breath
+  // past the programme's sentence: a long one is shortened by our rules or passed over; real news 14 Oct)
+  const fits = (t) => {
+    if (outletView(t)) return null;
+    if (!max || t.split(/\s+/).length <= max + 2) return t;
+    const parts = compressSentence(t, max, { min: 8 });
+    return parts ? parts.join(' ') : null;
+  };
+  // (nor a line in the outlet's own voice: "Get our breaking news email, free app or daily news podcast." opened a story on
+  // violence against children three times, Guardian Australia 13 Oct)
+  const outletOwn = (t) => OUTLET_OWN.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
+  const standing = sentencesOf(String(story.summary || '')).filter((t, i) => !outletOwn(t) && (i === 0 ? !pointsBack(t) : !leansOnPrevious(t))).map(fits).filter(Boolean);
   const own = standing.find(tells) || (leans ? standing[0] : null);
   const fixed = own ? check(own) : '';
   // nothing to stand on: a sentence pointing at nothing never airs; a story that merely lost its news stays
@@ -1703,7 +2055,7 @@ export function normalizeBulletin(
     const withCues = Array.isArray(seg.cues) && seg.cues.length ? embedCues(String(seg.text ?? ''), seg.cues) : seg.text;
     let tagged = groundedText(clean(withCues, 2000), source, names, type, { outlets, people });
     // A story opens on a sentence that stands on its own: never on what is left after its opener was dropped.
-    if (story && stripTags(tagged)) tagged = keepOpener(tagged, clean(withCues, 2000), story, (t) => groundedText(t, source, names, type, { outlets, people }));
+    if (story && stripTags(tagged)) tagged = keepOpener(tagged, clean(withCues, 2000), story, (t) => groundedText(t, source, names, type, { outlets, people }), program ? program.sentenceWords ?? SENTENCE_WORDS[program.id] ?? null : null);
     if (!stripTags(tagged)) continue;
     const anchor = seg.anchor === 'B' && !solo ? 'B' : 'A';
     const d = { type, anchor, emotion, tagged, seg, story, source };
@@ -1938,6 +2290,16 @@ export function normalizeBulletin(
       if (gone) c.tagged = '';
       else if (c.stale && !stripTags(c.tagged)) gone = true;
     }
+    // ...and a question never airs without its answer: "So what is the catch?" once led straight into the next story, the
+    // reply gone as aired lately (TECH BYTES 12 Oct)
+    u.chats.forEach((c, k) => {
+      const next = u.chats[k + 1];
+      // (an ask that is no question mark counts: "Walk me through how it works." once led into the next story, its answer
+      // never written, TECH BYTES 14 Oct)
+      const t = stripTags(c.tagged || '');
+      const empty = next && !stripTags(next.tagged || '');
+      if ((/\?\s*$/.test(t) && empty) || (/^(?:Walk me through|Talk me through|Tell me more|Explain)\b/i.test(t) && (!next || empty))) c.tagged = '';
+    });
   }
 
   // Phase 4: finalize every segment.
@@ -1948,7 +2310,9 @@ export function normalizeBulletin(
   const finalize = (d, prevHeavy) => {
     const grave = d.type === 'story' ? d.heavy : prevHeavy;
     const parsed = parseCues(d.tagged, { grave: grave || prevHeavy });
-    const text = clip(parsed.text, LIMITS.text);
+    // (a story may run to the programme's own `storyChars`: a flagship's main story told at length; never under 520)
+    const own = Math.max(Number(program?.storyChars) || 0, Number(program?.storyCharsDeep) || 0);
+    const text = clip(parsed.text, d.type === 'story' && own > LIMITS.text ? own : LIMITS.text);
     if (!text) return null;
     const speaker = d.anchor;
     const where = d.type === 'story' && d === storyList[0] ? 'lead' : d.type;
@@ -2095,16 +2459,17 @@ export function normalizeBulletin(
 
 // ---------------------------------------------------------------- correspondent links
 
-const CROSS_LIMIT = { piece: 4, answer: 2, askWords: 12 };
+const CROSS_LIMIT = { piece: 4, answer: 2, answer2: 2, askWords: 12 };
 // stories between two links (the second one comes after the mid-programme "still to come", not straight after the first)
 export const LINK_GAP = 4;
 
 /**
- * A writer's `cross` for one story, checked line by line: every sentence of the piece and of the answer
+ * A writer's `cross` for one story, checked line by line: every sentence of the piece and of the answers
  * grounded in that story's source (`grounded`: the story check of groundedText), none claiming the speaker
- * is at the scene, none a question; the presenter's prompt short, without a figure or a name. Returns
- * { piece: [sentences], ask: string | null, answer: [sentences] } or null when fewer than two piece
- * sentences stand.
+ * is at the scene, none a question; the presenter's prompts short, without a figure or a name. A long programme's
+ * link may have a second prompt (`follow`) and answer (`answer2`), only after a first answer. Returns
+ * { piece: [sentences], ask: string | null, answer: [sentences], follow: string | null, answer2: [sentences] } or
+ * null when fewer than two piece sentences stand.
  */
 function groundCross(raw, source, grounded) {
   if (!raw || typeof raw !== 'object') return null;
@@ -2119,11 +2484,14 @@ function groundCross(raw, source, grounded) {
   const piece = lines(raw.piece, CROSS_LIMIT.piece);
   if (piece.length < 2) return null;
   const answer = lines(raw.answer, CROSS_LIMIT.answer);
-  // the prompt: the writer's words without a leading name (the channel adds the correspondent's)
-  let ask = stripTags(clean(raw.ask, 120)).replace(/^[A-Z][\w'’-]*,\s*/, '');
-  if (!ask || /\d/.test(ask) || ask.split(/\s+/).length > CROSS_LIMIT.askWords || presenceClaim(ask) || sentencesOf(ask).length > 1) ask = null;
-  else ask = ask[0].toLowerCase() + ask.slice(1);
-  return { piece, ask, answer };
+  const answer2 = answer.length ? lines(raw.answer2, CROSS_LIMIT.answer2) : [];
+  // a prompt: the writer's words without a leading name (the channel adds the correspondent's)
+  const prompt = (v) => {
+    const q = stripTags(clean(v, 120)).replace(/^(?:and\s+)?[A-Z][\w'’-]*,\s*/, '');
+    if (!q || /\d/.test(q) || q.split(/\s+/).length > CROSS_LIMIT.askWords || presenceClaim(q) || sentencesOf(q).length > 1) return null;
+    return q[0].toLowerCase() + q.slice(1);
+  };
+  return { piece, ask: prompt(raw.ask), answer, follow: answer2.length ? prompt(raw.follow) : null, answer2 };
 }
 
 // A chat line that adds one more detail of the story (the long programmes' analysis exchange).
@@ -2198,6 +2566,10 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
     // a piece of three with nothing left to answer keeps two and answers with its last line
     if (!answer.length && piece.length >= 3) answer.push(piece.pop());
     const ask = d.cross.ask ? `${c.first}, ${d.cross.ask}` : askLine(c, key, answer.map(stripTags).join(' '));
+    // a long programme's second prompt and answer (what comes next, else what more is known), never the first one's
+    // words again and never a line already said
+    const answer2 = answer.length ? (d.cross.answer2 || []).filter((t) => !crossRepeats(t, [...said, ...piece, ...answer])) : [];
+    const ask2 = answer2.length ? (d.cross.follow ? `${c.first}, ${d.cross.follow}` : followLine(c, key, answer2.map(stripTags).join(' '), ask)) : null;
     const shared = {
       storyId: seg.storyId,
       headline: seg.headline,
@@ -2219,9 +2591,13 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
       parts.push(part('ask', seg.anchor, ask));
       parts.push(part('answer', slot, answer.map(stripTags).join(' ')));
     }
+    if (ask2 && ask2.toLowerCase() !== ask.toLowerCase()) {
+      parts.push(part('ask', seg.anchor, ask2));
+      parts.push(part('answer', slot, answer2.map(stripTags).join(' ')));
+    }
     parts.push(part('thanks', seg.anchor, thanksLine(c, desk, key)));
     // an analysis line after the story would only say again what the correspondent just said
-    const link = [...said, ...piece, ...answer];
+    const link = [...said, ...piece, ...answer, ...answer2];
     for (let j = x.i + 1; body[j]?.type === 'chat'; ) {
       if (ANALYSIS_LEAD.test(body[j].text) || sentencesOf(body[j].text).some((t) => crossRepeats(t, link))) body.splice(j, 1);
       else j++;
@@ -2397,8 +2773,10 @@ export function collapseCrosses(segments) {
       delete story.link;
       story.cross = { piece: '', ask: '', answer: '' };
     }
-    if (seg.part === 'piece' || seg.part === 'answer') story.cross[seg.part] = seg.text;
-    else if (seg.part === 'ask') story.cross.ask = seg.text;
+    // (a second prompt and answer, a long programme's: the writer's `follow` and `answer2`)
+    if (seg.part === 'piece') story.cross.piece = seg.text;
+    else if (seg.part === 'answer') story.cross[story.cross.answer ? 'answer2' : 'answer'] = seg.text;
+    else if (seg.part === 'ask') story.cross[story.cross.ask ? 'follow' : 'ask'] = seg.text;
   }
   return out;
 }

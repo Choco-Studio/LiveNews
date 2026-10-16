@@ -74,14 +74,19 @@ export function speakerProfile(by, source = '') {
   }
   // (a surname the source gives no first name keeps its title for its role: "Pope Leo")
   const single = /^\p{Lu}[\p{L}'’-]+$/u.test(said) && !kindOf(said) && !BODIES.test(said);
-  const named = (isName(said) || single) && !kindOf(said);
+  // (a courtesy title and a surname is a name, never a role: "Dr Hausfather" once went on air as "the Dr Hausfather", BBC
+  // 13 Oct)
+  const titled = /^(?:Dr|Prof|Professor|Mr|Mrs|Ms|Miss|Sir|Dame)\.?\s+\p{Lu}[\p{L}'’-]+(?:\s+\p{Lu}[\p{L}'’-]+)?$/u.test(said);
+  const named = ((isName(said) || single) && !kindOf(said)) || titled;
   let role = named ? null : said.replace(/^(?:the|a|an)\s+/i, '');
   let org = null;
   if (named) {
     const esc = said.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // "Ana Silva, the mayor of Lisbon," / "Ana Silva, Lisbon's mayor," / "Lisbon mayor Ana Silva" / "Prime Minister Ana Silva"
     const after = new RegExp(`${esc},\\s+((?:the |a |an )?[^,.;]{3,60}?)(?:,|\\.|;| said| told)`).exec(src);
-    const before = new RegExp(`((?:[A-Z][\\w'’.-]+ )?(?:[a-z][\\w'’-]+ ){0,3}(?:[A-Z][a-z]+ )?)${esc}`).exec(src);
+    // (two capitals may lead the title: "Air Force General Alexus Grynkewich" once gave "the Force General", 13 Oct)
+    // (three, "UC Santa Cruz professor Jevgenij Raskatov" once gave "the Cruz professor", 14 Oct)
+    const before = new RegExp(`((?:[A-Z][\\w'’.-]+ ){0,3}(?:[a-z][\\w'’-]+ ){0,3}(?:[A-Z][a-z]+ )?)${esc}`).exec(src);
     // ("Germany’s labour minister and co-leader of the Social Democrats, Bärbel Bas, has quit": the role before, by comma)
     const lead = new RegExp(`([^.;:,]{3,90}),\\s+${esc},`).exec(src);
     // ("Ukrainian President Volodymyr Zelenskyy said": a title of two or three words right before the name)
@@ -90,10 +95,16 @@ export function speakerProfile(by, source = '') {
     else if (before && kindOf(before[1])) role = before[1].trim();
     else if (lead && kindOf(lead[1])) role = lead[1].trim().replace(/^(?:the|a|an)\s+/i, '');
     else if (title && kindOf(title[1])) role = title[1].trim();
+    // (never the words of the sentence before the title: "According to vice-president Stella Li" gave "the According to
+    // vice-president", "…to secretary general Mark Rutte" "the to secretary general", Euronews and BBC 13-14 Oct)
+    if (role) {
+      role = role.replace(/^(?:(?:according to|said|says|told|to|of|by|as|and|with|for|from|in|on|at|the|a|an)\s+)+/i, '').trim();
+      if (!role || !kindOf(role)) role = null;
+    }
     const of = role && /\bof (?:the )?([A-Z][\w'’ -]{2,40})$/.exec(role);
     if (of) org = of[1].trim();
   }
-  const kind = NEVER.test(said) || (role && NEVER.test(role)) ? 'private' : BODIES.test(said) ? 'body' : kindOf(role || '') || (named ? 'named' : 'unknown');
+  const kind = NEVER.test(said) || (role && NEVER.test(role)) ? 'private' : BODIES.test(said) ? 'body' : kindOf(role || '') || (titled ? kindOf(said) : null) || (named ? 'named' : 'unknown');
   // the pronoun the source uses near the speaker's words (the 160 characters after the name, else anywhere once)
   let presentation = 'neutral';
   const at = named ? src.indexOf(said) : -1;
@@ -124,6 +135,9 @@ export function restageCheck({ quote, source = '', story = null, grave = false }
   // panic", ABC 12 Oct)
   if (quote?.text && !/^["“‘']?[\p{Lu}\d]/u.test(String(quote.text).trim())) reasons.push('a fragment of a sentence, not their whole words');
   if (/(?:…|\.\.\.)["”’]?$/.test(String(quote?.text ?? '').trim())) reasons.push('cut short (…): not their whole words');
+  // (words that answer something we do not hear: "I agree, that was by design.", "This is an unadulterated abuse of
+  // power." with its "this" never said, real news 13-14 Oct)
+  if (/^["“‘']?(?:I agree\b|I disagree\b|Yes\b|No\b|Exactly\b|Absolutely\b|Right,|Well,|And\b|But\b|So\b|That(?:'s|’s| is| was)\b|This (?:is|was)\b|It(?:'s|’s| is| was) (?:a|an|the|not|very|really|just|so|what|why|how)\b)/i.test(String(quote?.text ?? '').trim())) reasons.push('answers words we do not hear: not their whole thought');
   // (a person's own family or grief is never re-staged, whoever they are: "After my stepdaughter’s death, I realised…",
   // a minister resigning, Guardian 12 Oct; their role is not what they speak in)
   if (/\b(?:my|our) (?:late |own )?(?:son|daughter|stepdaughter|stepson|step-daughter|step-son|wife|husband|mother|father|mum|dad|child|children|kids|family|brother|sister|partner|grandson|granddaughter|baby)\b/i.test(String(quote?.text ?? ''))) reasons.push('personal words (family, grief): never re-staged');

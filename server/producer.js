@@ -14,6 +14,7 @@ import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
+import { voicedAir } from './airtime.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -191,7 +192,9 @@ export class Producer {
     // A programme with a picture on every item (NEWS IN 60) looks a little deeper, for stories that have one.
     const every = program.pictures === 'every';
     // (FULL TIME too: its balance needs other sports to swap in, and SCORE CENTRE the results its stories do not tell)
-    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * (every || program.kind === 'sport' ? 2.5 : 1.5)));
+    // (a long programme that may take `moreStories` when it runs short looks as much deeper)
+    const deeper = program.moreStories && !this.news?.localOnly; // (never on the offline slate: producer.deepen)
+    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil(((program.stories || 0) + (deeper ? Number(program.moreStories) || 0 : 0)) * (every || program.kind === 'sport' ? 2.5 : deeper ? 2 : 1.5)));
     const list = this.news.candidates(pool, { categories: program.categories, fill: true, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
     if (!every) return list;
     // Stories with a picture first (in the desk's order), then the rest as a fallback for the writer.
@@ -582,9 +585,26 @@ export class Producer {
       // the presenter no longer reads the words the person is about to say: that sentence (never the story's first)
       // goes, and the hand-over ends the story
       const sentences = String(seg.text).split(/(?<=[.!?…]["”’]?)\s+(?=["“‘]?[A-Z0-9])/);
-      const head = squashWords(seg.quote.text).split(' ').slice(0, 5).join(' ');
+      // (its first five words, or fewer when its first sentence is shorter: "As Trump put it: “She went to Greece. She was
+      // doing a good job…”" was read by the presenter and then again by the recreation, NPR 14 Oct)
+      const head = squashWords(String(seg.quote.text).split(/(?<=[.!?…])\s+/)[0]).split(' ').slice(0, 5).join(' ');
       const k = sentences.findIndex((t, j) => j > 0 && head.length >= 12 && squashWords(t).includes(head));
-      if (k > 0) sentences.splice(k, 1);
+      // (all of a quotation of several sentences goes, to its closing mark: "Russia is targeting yet another power plant and
+      // the lives of our people.”" was left in the presenter's voice when only Zelensky's first sentence went, 14 Oct)
+      if (k > 0) {
+        let end = k - 1;
+        let curly = 0;
+        let straight = 0;
+        do {
+          end++;
+          curly += (sentences[end].match(/“/g) || []).length - (sentences[end].match(/”/g) || []).length;
+          straight ^= (sentences[end].match(/"/g) || []).length % 2;
+        } while ((curly > 0 || straight) && end + 1 < sentences.length && end - k < 5);
+        sentences.splice(k, end - k + 1);
+      }
+      // (and a toss to the co-presenter goes: the recreation follows, not them; "…becomes. Nova? This is what Jevgenij
+      // Raskatov… said", COSMOS 14 Oct)
+      while (sentences.length > 1 && /^(?:\[[^\]]*\]\s*)*\p{Lu}[\p{L}-]+[?.]$/u.test(sentences.at(-1).trim())) sentences.pop();
       sentences.push(provenanceLine(booking, seg.source, seg.storyId));
       seg.text = sentences.join(' ');
       seg.link = slot;
@@ -659,16 +679,101 @@ export class Producer {
   async write(ctx) {
     const recent = this.recentText();
     const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [] });
-    const { provider, value } = await this.chain.generate(
-      // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
-      // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
-      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [], analysisTurn: this.analysisTurn },
-      this.normalizer(ctx, ctx.candidates)
-    );
+    // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
+    // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
+    const request = { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [], analysisTurn: this.analysisTurn };
+    const { provider, value } = await this.chain.generate(request, this.normalizer(ctx, ctx.candidates));
     ctx.episode = value;
     ctx.provider = provider;
+    const deeper = await this.deepen(ctx, request, provider);
     this.castCorrespondents(ctx);
-    return { provider };
+    return { provider, ...(deeper ? { depth: deeper.depth, air: Math.round(deeper.air), ...(deeper.fewer ? { fewer: deeper.fewer } : {}) } : {}) };
+  }
+
+  /**
+   * The fallback writer has no running time of its own (an AI writer is asked for the programme's length in its prompt):
+   * it tells as much of each story as the programme needs. While the episode runs short of the programme's
+   * targetSeconds as it will air (server/airtime.js voicedAir: the open, every line at its voice's rate, the pauses, the
+   * end card), it is written again one depth deeper, telling more of each story's dossier (server/providers/mock.js
+   * `depth`; at the deepest, up to the programme's `moreStories` more stories), and the telling nearest the target range
+   * is kept; the first that reaches the range stops the search, so a programme is never told longer than it needs. A
+   * programme timed to the second (NEWS IN 60: the fit stage) is left alone. { depth, air } or null when nothing was
+   * rewritten.
+   */
+  async deepen(ctx, request0, providerName) {
+    let request = request0;
+    const writer = this.chain.providers?.find((p) => p.name === providerName);
+    const target = ctx.program.targetSeconds;
+    if (!(writer?.depths > 0) || !Array.isArray(target) || ctx.program.timing) return null;
+    const [lo, hi] = target;
+    // (aimed a little inside the range, never on its floor: MONEY MINUTE once kept tellings of 241-247 s of its 240-360, a
+    // slower clip or a line the validator drops away from running short; a quarter of the range up, at most 30 s)
+    const aim = lo + Math.min(30, (hi - lo) / 4);
+    const off = (air) => (air < aim ? aim - air : air > hi ? air - hi : 0);
+    // (the episode as it will air: its programme's open and pauses, its cast's voices)
+    const airOf = (episode) => voicedAir({ ...episode, program: { id: ctx.program.id }, cast: ctx.cast });
+    const stories = Number(ctx.program.stories) || 0;
+    // (more stories only when the rotation allows: the desk offered a full pool, twice the programme's stories and its
+    // extra ones; a desk running short keeps them for the programmes after it, the offline slate of ~80 stories once
+    // left NEWS IN 60 and TECH BYTES without theirs in the fourth rotation)
+    // (and never on the offline demo slate, a closed set of stories that comes round again: the stories it would add are
+    // the next programmes' own)
+    const want = stories + (Number(ctx.program.moreStories) || 0);
+    const stock = !this.news?.localOnly && (ctx.candidates?.length || 0) >= Math.ceil(want * 1.5);
+    const moreOf = (depth) => (depth >= writer.depths && stock ? Number(ctx.program.moreStories) || 0 : 0);
+    if (!stock && ctx.program.moreStories) request = { ...request, program: { ...request.program, moreStories: 0 } };
+    // (on the offline slate the deeper telling keeps the desk's own choice of stories, too: looking further down for a
+    // story with an article would take the pictured ones NEWS IN 60 comes round for)
+    if (this.news?.localOnly) request = { ...request, closedSlate: true };
+    const make = async (depth, count) => {
+      const result = await writer.generate({ ...request, depth, ...(count ? { count } : {}) });
+      // (the deepest telling may carry the programme's `moreStories` more)
+      const cap = stories + moreOf(depth);
+      return this.normalizer(cap !== stories ? { ...ctx, program: { ...ctx.program, stories: cap } } : ctx, ctx.candidates)(result.text);
+    };
+    let best = { depth: 0, episode: ctx.episode, air: airOf(ctx.episode) };
+    if (best.air >= aim && best.air <= hi) return null;
+    // (the telling that first went past the top, kept even when a shorter one is nearer the range: told with fewer stories
+    // it may land inside it; WORLD NOW once stayed at 434 s, depth 2, its depth 3 at 760 s never tried shorter, 12 Oct)
+    let over = null;
+    if (best.air < aim) {
+      for (let depth = 1; depth <= writer.depths; depth++) {
+        let episode;
+        try {
+          episode = await make(depth);
+        } catch {
+          break;
+        }
+        const air = airOf(episode);
+        if (air > hi && !over) over = { depth, episode, air };
+        if (off(air) < off(best.air)) best = { depth, episode, air };
+        if (air >= aim) break;
+      }
+    }
+    // Past the top of the range (a telling one depth deeper went over it, or a full one at depth 0): the same telling with
+    // one story fewer, then two, three, four, while it stays over the range; the nearest is kept. A programme never runs
+    // long on our side either (never past its slot on the clock).
+    const from = best.air > hi ? best : best.air < aim ? over : null;
+    if (from) {
+      const floor = Math.max(3, Number(ctx.program.minStories) || 0);
+      // (up to six when the telling carries the programme's extra stories: it has that many more to lose)
+      for (let drop = 1; drop <= (moreOf(from.depth) ? 6 : 4); drop++) {
+        const count = stories - drop;
+        if (count + moreOf(from.depth) < floor) break;
+        let episode;
+        try {
+          episode = await make(from.depth, count);
+        } catch {
+          break;
+        }
+        const air = airOf(episode);
+        if (off(air) < off(best.air)) best = { depth: from.depth, episode, air, fewer: drop };
+        if (air <= hi) break;
+      }
+    }
+    if (best.episode === ctx.episode) return null;
+    ctx.episode = best.episode;
+    return best;
   }
 
   /** Standards editor: checks the script against the sources. Never blocks the show. */
@@ -707,7 +812,13 @@ export class Producer {
   fit(ctx) {
     const timing = ctx.program.timing;
     const words = (seg) => String(seg.text).split(/\s+/).filter(Boolean).length;
-    const estimate = (segs) => 0.3 + segs.reduce((n, seg) => n + words(seg), 0) / (timing.wpm / 60) + (timing.gap ?? 0.7) * (segs.length - 1);
+    // (a programme of the channel's is timed as it will air, server/airtime.js: its open, every line at its voice's
+    // measured rate, the pauses and the end card; NEWS IN 60 once ran 74 s against its 55 to 70 when only its words were
+    // counted, at a rate faster than its voices, real news 12-16 Oct)
+    const voiced = !!ctx.program.id && timing.voiced !== false;
+    const estimate = voiced
+      ? (segs) => voicedAir({ ...ctx.episode, segments: segs, program: { id: ctx.program.id }, cast: ctx.cast })
+      : (segs) => 0.3 + segs.reduce((n, seg) => n + words(seg), 0) / (timing.wpm / 60) + (timing.gap ?? 0.7) * (segs.length - 1);
     const minStories = timing.minStories ?? 1;
     let segs = ctx.episode.segments;
     const options = [{ segs, t: estimate(segs) }];
@@ -731,8 +842,8 @@ export class Producer {
     ctx.episode.storyIds = ctx.episode.storyIds.filter((id) => kept.has(id));
     const intro = best.segs[0];
     if (intro?.teases) intro.teases = intro.teases.map((id) => (id && kept.has(id) ? id : null));
-    const accept = timing.accept || [timing.target * 0.9, timing.target * 1.1];
-    return { estimate: Math.round(best.t * 10) / 10, dropped, ...(best.t < accept[0] ? { short: true } : {}) };
+    const accept = (voiced && Array.isArray(ctx.program.targetSeconds) && ctx.program.targetSeconds) || timing.accept || [timing.target * 0.9, timing.target * 1.1];
+    return { estimate: Math.round(best.t * 10) / 10, dropped, ...(voiced ? { voiced: true } : {}), ...(best.t < accept[0] ? { short: true } : {}) };
   }
 
   /** Pictures for the candidates: article pages, then other outlets' reports of the same event (within a budget). */
