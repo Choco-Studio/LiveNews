@@ -192,3 +192,10 @@ The two things round 3 owed are now read:
 
 Step 7's on-air rounds also fixed the writer's faults the recordings found (the table line, contractions, deeper banks,
 afternoon wording, the estimate and its guard). **Round score: 9.75. Passed.**
+
+**The scripted check (16 Oct, 20:30 London, no reuse).** `tools/quiz/write.mjs --editions 20` wrote 5 editions before
+the week's pool ran out (no story is asked twice in a week; the station airs two editions a day, so five is two and a
+half days of air). By script: no mask, placeholder or unfilled field in any spoken line; no line repeated within an
+edition; every length 324–357 s; one tie-break read right ("Sudden death goes to Max. It was 11 all before that.") with
+the table line matching. The only flag was UNIT-8's "I will not laugh. I do not laugh.", a line about laughing, not a
+laugh.
