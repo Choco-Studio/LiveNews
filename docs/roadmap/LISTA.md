@@ -122,6 +122,8 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - ✅ Paso 4, la dirección (9,75, tras devolverla una vez): la cinta de noticias nunca lleva una noticia de las preguntas; las caras de los jugadores salen en cada pregunta y nunca hay más de 34 s seguidos de pizarras.
     - ✅ Paso 7, en antena (9,75, a la ronda 15): tres ediciones grabadas con voz y noticias reales, dos de noche y una de tarde. La clasificación hablada coincide con el cartel, la cinta no lleva nada que el concurso no preguntaría, la edición de tarde cabe en su tiempo y la ronda final ya no repite la de fotos. Queda por mejorar: las preguntas tiran mucho a tecnología y ciencia, porque el archivo es joven y las noticias del mundo suelen quedar fuera por las reglas (guerras, política, sucesos).
 
+39. 🟡 **Nuevo programa PRESS START (videojuegos, nombre provisional).** Diseño en 9,0, aún no pasa (hace falta más de 9,7). Lee 30 medios de videojuegos; solo cuenta una historia si la publican al menos dos medios distintos y uno serio, lo que deja fuera guías, opiniones, merchandising y rumores. Sale una edición los días laborables hacia las 19:00 y un resumen el fin de semana. Falta demostrar que acierta el 97 % con unas 100 noticias nuevas (unos cinco días laborables de lectura, ya en marcha cada hora). Preguntas para ti cuando pase: presentadores, nombre y clave gratuita de Steam para los jugadores en directo.
+
 ## E. Plató, gráficos y cámara
 24. Plató:
     - cifras cortadas en la pantalla y paneles vacíos;
