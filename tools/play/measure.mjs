@@ -1,7 +1,7 @@
 // PRESS START's niche measurement (docs/programmes/press-start.md §2-§4), step two: every reading tools/play/snapshot.mjs
 // saved, unioned by link, measured.
 //
-//   node tools/play/measure.mjs [--dir data/play-measure] [--archive <the station's data/archive>] [--json out.json]
+//   node tools/play/measure.mjs [--dir data/play-measure] [--archive <the station's data/archive>] [--json out.json] [--events v5|v4]
 //
 // What it reports, per outlet and for the desk:
 //   - the time each outlet's readings cover without a gap, and the complete London days inside it;
@@ -110,12 +110,158 @@ export function sameGamesEvent(desk, a, b) {
 }
 const GENERIC_GAMES = new Set(['rele', 'laun', 'trai', 'upda', 'game', 'play', 'anno', 'reve', 'deta', 'stud', 'deve', 'vers', 'edit', 'seri', 'comi', 'firs', 'show', 'look', 'mode', 'date', 'year', 'take', 'make', 'gets', 'adds', 'more', 'next', 'last', 'says', 'will', 'boss', 'team', 'than', 'with', 'from', 'that', 'this', 'into', 'after', 'over']);
 
-export function clusterEvents(stories, desk, window = 3 * DAY) {
+// The games event test of the bible (press-start.md §4.12, events v7), which does not lean on the desk's sameStory alone:
+// that test reads names from sentence case, and games headlines are often in title case ("Fire Emblem: Fortune's Weave
+// Expansion Pass Announced, Wave 1 Launches Today" has no names for it, and "Fire Emblem" is a fire to it), so v4 missed
+// ten pairs of one event in 98 would-air reports of 14-16 Oct. Two reports are one event when their headlines share a
+// run of two or more words that names something (a word that is not filler, a platform, a month, a bare word like
+// "trailer" or a word of what happened, and capitalised where the headline is in sentence case) and either that run
+// says what happened ("GTA 6 launch trailer") or the rest of the headlines share a word of what happened, never a
+// platform or a maker ("Control Resonant" … "million"). A franchise's name alone never joins two events ("Star Wars
+// Galactic Racer launches on Amazon Luna" / "Star Wars Galactic Racer will soon welcome larger podracing parties").
+// Measured with the clustering below on 14-16 Oct (events v5, frozen 17:51 UTC on 16 Oct): of 98 would-air reports, five
+// pairs were still one event, and two stories were lost to a wrong join. Events v6 ("getting" names nothing) and v7 (a
+// franchise's full name and its short one are one name) followed, with the repeat check (`repeats`, below) for the pairs
+// the event test still splits (bible §4.12).
+const ROMAN = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10' };
+const FILLER = new Set('the a an of to in on for and or with its it is are has have had will would new now today says said say game games more first after over before by as at from that this be been was were can could up out all just not no into than then there their his her they you your our we i my who what when how why which also while still very only so if but about'.split(' '));
+const PLATFORMS = new Set('ps5 ps4 ps3 ps2 ps1 xbox series one switch nintendo playstation steam pc deck mobile ios android console consoles pro x s 2'.split(' '));
+const ACTION = /^(?:launch\w*|trailers?|releas\w*|delay\w*|updat\w*|patch\w*|demos?|sales|sold|million|record\w*|layoffs?|clos\w*|cancel\w*|acquir\w*|announc\w*|reveal\w*|ports?|coming|remov\w*|pulls?|pulled|prices?|beta|dlc|expansion|seasons?|achievements?|ditch\w*|split\w*|shut\w*|sunset\w*)$/;
+// words that name nothing on their own ("first look at", "new trailer", "real life")
+const BARE = new Set(('look looks first last next big best real life official officially finally gameplay video videos trailer story mode version edition free week weekend day year month time times date dates window available playable live add adds get gets getting got '
+  + 'january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday '
+  + 'players player fans fan studio developer developers dev devs publisher company boss ceo director team people world').split(' '));
+// the makers whose name heads half their stories: a shared maker says nothing of what happened ("Activision Confirms Call
+// of Duty Will Get a 'New Sub-Franchise'" is not "The 'Call of Duty tax' … Activision says")
+const MAKERS = new Set('rockstar sony microsoft ubisoft activision blizzard sega capcom epic valve ea bandai namco square enix konami bethesda take two warner bros riot bungie remedy atlus cd projekt red nintendo xbox playstation steam'.split(' '));
+// a franchise's full name and its short one are one name (events v7: "Grand Theft Auto 6 launch trailer suddenly
+// drops…" and "GTA 6 Launch Trailer Available to Watch Right Now" made two events of one trailer on 15 Oct)
+const ALIASES = [[/\bgrand theft auto\b/gi, 'GTA'], [/\bcall of duty\b/gi, 'COD']];
+function headlineTokens(title) {
+  const t0 = ALIASES.reduce((t, [re, short]) => t.replace(re, short), String(title || ''));
+  return t0.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['’]s\b/g, '').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ').filter(Boolean)
+    .map((t) => ({ w: ROMAN[t.toLowerCase()] || t.toLowerCase(), cap: /^[A-Z0-9]/.test(t) }));
+}
+export function headlineWords(title) {
+  return headlineTokens(title).map((t) => t.w);
+}
+// a headline in title case capitalises most of its longer words; in sentence case only names are capitalised
+const titleCase = (T) => {
+  const long = T.filter((t) => t.w.length >= 4 && !/^\d/.test(t.w));
+  return long.length > 0 && long.filter((t) => t.cap).length * 10 >= long.length * 6;
+};
+// a word's root for "what happened": its common endings off ("closing", "closes", "close" are one; "stores" and "story"
+// are not, as four-letter stems made them: "Toy Story" joined "Shogun 2 … from stores")
+export const root = (w) => w.replace(/(?:ing|ed|es|s|e)$/, '');
+/** The longest run of words two headlines share that names something, with both headlines' words; null when none. */
+export function namingRun(a, b) {
+  const TA = headlineTokens(a.title);
+  const TB = headlineTokens(b.title);
+  const A = TA.map((t) => t.w);
+  const B = TB.map((t) => t.w);
+  const [ta, tb] = [titleCase(TA), titleCase(TB)];
+  let best = null;
+  for (let i = 0; i < A.length; i++) {
+    for (let j = 0; j < B.length; j++) {
+      let k = 0;
+      while (i + k < A.length && j + k < B.length && A[i + k] === B[j + k]) k++;
+      if (k < 2) continue;
+      const run = A.slice(i, i + k);
+      // (a run names something only with a word that is neither filler, a platform, a word of what happened nor a bare
+      // word: "launches today" joined "Fire Emblem … Wave 1 Launches Today" to "Gran Turismo 7's Spec IV launches
+      // today"; and capitalised in a headline in sentence case: "breaks new ground" joined Caves of Qud's first early
+      // access expansion to "Former Disco Elysium devs break new ground")
+      const names = (x) => !FILLER.has(A[i + x]) && !PLATFORMS.has(A[i + x]) && !ACTION.test(A[i + x]) && !BARE.has(A[i + x]) && !/^\d+$/.test(A[i + x])
+        && (ta || TA[i + x].cap) && (tb || TB[j + x].cap);
+      if (!run.some((w, x) => names(x))) continue;
+      if (!best || k > best.run.length) best = { run, i, j };
+    }
+  }
+  return best && { ...best, A, B };
+}
+/** How strongly two headlines are one games event: the length of the run of words that ties them, or 0 when none does. */
+export function gamesEventMatch(a, b) {
+  const best = namingRun(a, b);
+  if (!best) return 0;
+  if (best.run.some((w) => ACTION.test(w))) return best.run.length;
+  const rest = (W, at) => new Set(W.filter((w, x) => (x < at || x >= at + best.run.length) && !FILLER.has(w) && !PLATFORMS.has(w) && !BARE.has(w) && !MAKERS.has(w) && !/^\d+$/.test(w)).map(root));
+  const ra = rest(best.A, best.i);
+  const rb = rest(best.B, best.j);
+  return [...ra].some((w) => rb.has(w)) ? best.run.length : 0;
+}
+// The repeat check (bible §4.12): the event test misses some pairs of one event ("Zero Parades, The Successor To Disco
+// Elysium, Has Been Confirmed For Switch 2" / "ZERO PARADES: Director's Cut coming to Switch 2 on November 3"), so a
+// story is not told when PRESS START told one in the last 24 hours whose headline shares a naming run with it **and**
+// a kind of act (two releases, two updates, two sets of sales) or a platform. Another story of the same game, of
+// another kind, is news ("GTA 6 Launch Trailer…" and "GTA 6 Barely Makes the Cut for The Game Awards").
+export const sameGame = (a, b) => namingRun(a, b) !== null;
+const ACT_KINDS = [
+  ['release', /^(?:launch\w*|releas\w*|available|coming|arriv\w*|ports?|ported|out)$/],
+  ['update', /^(?:updat\w*|patch\w*|fix\w*|hotfix\w*)$/],
+  ['delay', /^(?:delay\w*|postpon\w*)$/],
+  ['announce', /^(?:announc\w*|reveal\w*|confirm\w*|unveil\w*|introduc\w*)$/],
+  ['end', /^(?:clos\w*|shut\w*|cancel\w*|ends?|ending|ended|sunset\w*|ditch\w*|remov\w*|pulls?|pulled|delist\w*|finish\w*)$/],
+  ['sales', /^(?:sales|sold|sell\w*|million|copies|record\w*)$/],
+  ['trailer', /^trailers?$/],
+  ['demo', /^demos?$/],
+  ['price', /^(?:prices?|pricing)$/],
+  ['jobs', /^(?:layoffs?|jobs?|redundanc\w*)$/],
+  ['dlc', /^(?:dlc|expansions?|seasons?)$/],
+];
+const PLATFORM_NAMES = new Set('ps5 ps4 switch xbox steam pc ios android iphone ipad playstation'.split(' '));
+const actKinds = (W) => new Set(W.flatMap((w) => ACT_KINDS.filter(([, re]) => re.test(w)).map(([k]) => k)));
+export function repeats(a, b) {
+  const run = namingRun(a, b);
+  if (!run) return false;
+  const ka = actKinds(run.A);
+  if ([...actKinds(run.B)].some((k) => ka.has(k))) return true;
+  const pa = new Set(run.A.filter((w) => PLATFORM_NAMES.has(w)));
+  return run.B.some((w) => pa.has(w));
+}
+export const sameGamesEventV5 = (a, b) => gamesEventMatch(a, b) > 0;
+/** Whether two headlines share a word that names something particular (not a platform, a maker or a bare word), as the
+ * desk's names test must too: "Heavy Metal Death Can now available for PS5, Xbox Series" and "Ancestors: The Humankind
+ * Odyssey coming to PS5, Xbox Series" share only platforms. */
+export function shareAName(a, b) {
+  const TA = headlineTokens(a.title);
+  const TB = headlineTokens(b.title);
+  const [ta, tb] = [titleCase(TA), titleCase(TB)];
+  const named = (T, tc) => new Set(T.filter((t) => (tc || t.cap) && !FILLER.has(t.w) && !PLATFORMS.has(t.w) && !BARE.has(t.w) && !MAKERS.has(t.w) && !ACTION.test(t.w) && !/^\d+$/.test(t.w)).map((t) => t.w));
+  const nb = named(TB, tb);
+  return [...named(TA, ta)].some((w) => nb.has(w));
+}
+
+export function clusterEvents(stories, desk, window = 3 * DAY, test = 'v5') {
   const seeds = [];
   const events = new Map();
   for (const s of [...stories].sort((a, b) => a.published - b.published)) {
-    const related = desk.related(s);
-    const seed = seeds.find((e) => Math.abs(s.published - e.published) < window && related.has(e) && sameGamesEvent(desk, e, s));
+    const near = seeds.filter((e) => Math.abs(s.published - e.published) < window);
+    let seed = null;
+    if (test === 'v5') {
+      // the event it matches best by its reports within the window, by the run test or by the desk's names test for
+      // sentence-case headlines that share no run ("Ubisoft closing Trials developer RedLynx" / "Ubisoft to close Trials
+      // studio RedLynx"); it joins only when it matches at least a third of them. Matching the first report alone split
+      // events whose first report was told differently; matching any one report chained ("Fortnite is coming to Linux"
+      // joined "Big Walk not coming to Xbox", and the boycott took Fortnite off), and so did joining two events a report
+      // matches (every Grand Theft Auto story of a week became one).
+      const related = desk.related(s);
+      const fits = [];
+      for (const e of near) {
+        const within = events.get(e).filter((r) => Math.abs(s.published - r.published) < window);
+        let hits = 0;
+        let sum = 0;
+        for (const r of within) {
+          const m = Math.max(gamesEventMatch(r, s), related.has(r) && shareAName(r, s) && sameGamesEvent(desk, r, s) ? 1.5 : 0);
+          if (m > 0) [hits, sum] = [hits + 1, sum + m];
+        }
+        if (hits && hits * 3 >= within.length) fits.push({ e, score: hits / within.length + sum / 100 });
+      }
+      fits.sort((x, y) => y.score - x.score);
+      if (fits.length) seed = fits[0].e;
+    } else {
+      const related = desk.related(s);
+      seed = near.find((e) => related.has(e) && sameGamesEvent(desk, e, s)) || null;
+    }
     if (seed) events.get(seed).push(s);
     else {
       seeds.push(s);
@@ -125,7 +271,7 @@ export function clusterEvents(stories, desk, window = 3 * DAY) {
   return events;
 }
 
-export async function measure({ dir = path.join(ROOT, 'data/play-measure'), archive = null } = {}) {
+export async function measure({ dir = path.join(ROOT, 'data/play-measure'), archive = null, eventTest = 'v5' } = {}) {
   const outlets = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/play/outlets.json'), 'utf8'));
   const byId = Object.fromEntries(outlets.map((o) => [o.id, o]));
   const snaps = readSnapshots(dir);
@@ -144,7 +290,9 @@ export async function measure({ dir = path.join(ROOT, 'data/play-measure'), arch
         continue;
       }
       r.read++;
-      const parsed = parseFeed(fs.readFileSync(file, 'utf8'), { name: o.name, category: 'games' }, { now: snap.at });
+      // the feed and the older pages a deep reading saved (snapshot.mjs --deep): one reading, back to the oldest page
+      const pageFiles = fs.readdirSync(snap.dir).filter((f) => new RegExp(`^${o.id}-p\\d+\\.xml$`).test(f));
+      const parsed = [file, ...pageFiles.map((f) => path.join(snap.dir, f))].flatMap((f) => parseFeed(fs.readFileSync(f, 'utf8'), { name: o.name, category: 'games' }, { now: snap.at }));
       const cov = readingCovers(parsed.map((s) => s.published), snap.at);
       if (cov) (covers[o.id] ??= []).push(cov);
       for (const s of parsed) {
@@ -187,7 +335,7 @@ export async function measure({ dir = path.join(ROOT, 'data/play-measure'), arch
   const desk = new NewsDesk({ log: { info() {}, warn() {}, error() {} } });
   for (const s of games) desk.stories.set(`${s.outlet}:${s.id}`, Object.assign(s, { source: s.outlet, deskId: `${s.outlet}:${s.id}` }));
   for (const s of games) desk.eventFacts(s);
-  const events = clusterEvents(games, desk);
+  const events = clusterEvents(games, desk, 3 * DAY, eventTest);
   // an event is off whole when any report of it is a leak, harm to people, a conflict or gambling (EVENT_RULES); otherwise
   // it airs from any report that passes every rule
   // (carried by at least half of its reports: one report wrongly joined to an event never takes it off)
@@ -206,20 +354,34 @@ export async function measure({ dir = path.join(ROOT, 'data/play-measure'), arch
   }
 
   // what would air: each usable event told from one report, the outlet's tier first (tools/play/outlets.json: 1 the
-  // trade and platform news desks, 2 the general games and mainstream desks, 3 the desks that write in their own voice,
-  // 4 the platforms' own blogs, never told from), then the report with no evaluative word, then the first filed. An event
-  // whose best report is tier 3 airs only when two or more outlets carry it (a feature or a preview is one outlet's)
+  // trade and platform news desks, 2 the general games and mainstream desks), then the report with no evaluative word,
+  // then the first filed. Tier 3 (the desks that write in their own voice, or mostly guides) and tier 4 (the platforms'
+  // blogs) are never told from (rules v4): they only confirm, counting as a second outlet for an event a tier 1 or 2 report
+  // tells. An event one outlet carries airs only from a report whose headline states an act (a feature, a profile, an
+  // interview or a preview is one outlet's, and states none). Outlets count only for reports that pass every rule.
   const tierOf = (s) => byId[s.outlet]?.tier ?? 3;
   for (const members of events.values()) {
     const ev = members[0].event;
-    const cands = members.filter((m) => m.usable && tierOf(m) <= 3).sort((a, b) => tierOf(a) - tierOf(b) || Number(a.cls.kinds.includes('evaluative words')) - Number(b.cls.kinds.includes('evaluative words')) || a.published - b.published);
+    const cands = members.filter((m) => m.usable && tierOf(m) <= 2).sort((a, b) => tierOf(a) - tierOf(b) || Number(a.cls.kinds.includes('evaluative words')) - Number(b.cls.kinds.includes('evaluative words')) || a.published - b.published);
     if (!cands.length) continue;
-    // (an event only one outlet carries airs only from a tier 1 or 2 report whose headline states an act: a feature, a
-    // profile, an interview or a preview is one outlet's, and states none)
-    if (ev.outlets.size >= 2 || (tierOf(cands[0]) <= 2 && hasNewsVerb(cands[0].title))) {
+    const carried = new Set(members.filter((m) => m.usable).map((m) => m.outlet)).size;
+    // (an outlet marked "alone": false never tells an event it carries alone: Siliconera's single-outlet reports were
+    // Japanese merchandise, cafés and collaborations as often as games news, in every archive page read: held-out sets
+    // E, F and G, bible §3.1)
+    if (carried >= 2 || (hasNewsVerb(cands[0].title) && byId[cands[0].outlet]?.alone !== false)) {
       cands[0].chosen = true;
       ev.chosen = cands[0];
     }
+  }
+  // the repeat check: a would-air report that repeats one told in the 24 hours before it is not told
+  const told = [];
+  for (const s of list.filter((x) => x.chosen).sort((a, b) => a.published - b.published)) {
+    const earlier = told.find((t) => s.published - t.published < DAY && repeats(t, s));
+    if (earlier) {
+      s.chosen = false;
+      s.repeatOf = earlier;
+      s.event.chosen = null;
+    } else told.push(s);
   }
 
   // per outlet
@@ -426,13 +588,13 @@ function printReport(r) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const a = process.argv.slice(2);
   const opt = (k) => (a.includes(k) ? a[a.indexOf(k) + 1] : null);
-  const r = await measure({ dir: path.resolve(ROOT, opt('--dir') || 'data/play-measure'), archive: opt('--archive') });
+  const r = await measure({ dir: path.resolve(ROOT, opt('--dir') || 'data/play-measure'), archive: opt('--archive'), eventTest: opt('--events') || 'v5' });
   const text = printReport(r);
   console.log(text);
   const stamp = r.readings.at(-1);
   const out = path.resolve(ROOT, opt('--json') || `data/play-measure/report-${stamp}.json`);
   const { list, events, ...rest } = r;
-  fs.writeFileSync(out, JSON.stringify({ ...rest, items: list.map((s) => ({ outlet: s.outlet, day: s.day, hour: s.hour, title: s.title, link: s.link, out: s.cls.out, kinds: s.cls.kinds, treatment: s.cls.treatment, outlets: s.event?.outlets.size || 1, chosen: !!s.chosen, date: s.date?.date || null, grave: s.grave.grave, quizKind: s.grave.kind })) }, null, 1));
+  fs.writeFileSync(out, JSON.stringify({ ...rest, items: list.map((s) => ({ outlet: s.outlet, day: s.day, hour: s.hour, title: s.title, link: s.link, out: s.cls.out, kinds: s.cls.kinds, treatment: s.cls.treatment, outlets: s.event?.outlets.size || 1, chosen: !!s.chosen, repeatOf: s.repeatOf ? `${s.repeatOf.outlet}: ${s.repeatOf.title}` : null, date: s.date?.date || null, grave: s.grave.grave, quizKind: s.grave.kind })) }, null, 1));
   fs.writeFileSync(out.replace(/\.json$/, '.md'), text + '\n');
   console.log(`\n[play] report: ${path.relative(ROOT, out)} and .md`);
 }

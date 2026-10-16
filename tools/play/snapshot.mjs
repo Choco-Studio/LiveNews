@@ -1,8 +1,9 @@
-// PLAY's niche measurement (docs/programmes/play.md §2-3), step one: one reading of every candidate games outlet and of
-// the structured sources, saved raw under data/play-measure/ (gitignored: the outlets' text stays on this machine).
+// PRESS START's niche measurement (docs/programmes/press-start.md §3-4), step one: one reading of every candidate games
+// outlet and of the structured sources, saved raw under data/play-measure/ (gitignored: the outlets' text stays on this
+// machine).
 // Run it several times across a session; tools/play/measure.mjs reads every reading and unions the items by link.
 //
-//   NODE_USE_ENV_PROXY=1 node tools/play/snapshot.mjs [--feeds-only] [--out data/play-measure]
+//   NODE_USE_ENV_PROXY=1 node tools/play/snapshot.mjs [--feeds-only] [--deep [--days N] [--pages N] [--only a,b]] [--out data/play-measure]
 //
 // Each reading is a folder data/play-measure/snapshots/<UTC stamp>/ holding <outlet id>.xml and status.json (HTTP code,
 // bytes, items, time), and data/play-measure/data/<UTC stamp>/ holding the structured sources' JSON.
@@ -54,6 +55,31 @@ async function main() {
     if (r.status === 200 && items) fs.writeFileSync(path.join(dir, `${o.id}.xml`), r.body);
     status[o.id] = { status: r.status, bytes: r.body.length, items, ms: r.ms, ...(r.error ? { error: r.error } : {}), ...(r.finalUrl && r.finalUrl !== o.url ? { finalUrl: r.finalUrl } : {}) };
   }));
+  // --deep: a feed that serves older pages (WordPress's ?paged=2, outlets.json "page") is read back up to "deepPages"
+  // pages or ten days, once, so its short first page does not hide whole days (Kotaku's 20 items span a day). A page
+  // that answers anything but 200 with items stops the backfill: a refused page is never worked around.
+  // (--days N reads back N days instead of ten, --pages N up to N pages, --only a,b those outlets: the held-out pages of
+  // the critique's round 7, Siliconera back to late September, were read so)
+  if (args.includes('--deep')) {
+    const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
+    const days = Number(flag('--days')) || 10;
+    const maxPages = Number(flag('--pages')) || null;
+    const only = flag('--only') ? new Set(flag('--only').split(',')) : null;
+    for (const o of outlets.filter((x) => x.page && status[x.id]?.status === 200 && (!only || only.has(x.id)))) {
+      const pages = [];
+      for (let n = 2; n <= (maxPages || o.deepPages || 5); n++) {
+        const url = `${o.url}${o.url.includes('?') ? '&' : '?'}${o.page}=${n}`;
+        const r = await get(url, { accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5' });
+        const items = (r.body.match(/<item[\s>]|<entry[\s>]/g) || []).length;
+        pages.push({ n, status: r.status || r.error, items });
+        if (r.status !== 200 || !items) break;
+        fs.writeFileSync(path.join(dir, `${o.id}-p${n}.xml`), r.body);
+        const oldest = Math.min(...[...r.body.matchAll(/<pubDate>([^<]+)</g)].map((m) => Date.parse(m[1])).filter(Number.isFinite));
+        if (now - oldest > days * 86400_000) break;
+      }
+      status[o.id].pages = pages;
+    }
+  }
   fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify({ at: now, stamp, status }, null, 1));
   const ok = Object.values(status).filter((s) => s.status === 200 && s.items).length;
   console.log(`[play] ${stamp}: ${ok} of ${outlets.length} outlets read into ${path.relative(ROOT, dir)}`);

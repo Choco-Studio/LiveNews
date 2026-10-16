@@ -1,7 +1,7 @@
 // PRESS START's supply model (docs/programmes/press-start.md §7, §9): from a measurement report (tools/play/measure.mjs),
 // what each weekday segment could carry and how many editions a day the would-air events fill.
 //
-//   node tools/play/supply.mjs <report.json> [--days 2026-10-14,2026-10-15]
+//   node tools/play/supply.mjs <report.json> [--days 2026-10-14,2026-10-15] [--hours 12,17,21]
 //
 // Segments by the words of the report the event would be told from: PATCH NOTES (an update, a patch, a DLC, a delay, a
 // port, a demo, a mode's end), ACHIEVEMENT UNLOCKED (a milestone: sales, players, downloads, a record, an anniversary),
@@ -52,7 +52,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const report = JSON.parse(fs.readFileSync(file, 'utf8'));
   const di = rest.indexOf('--days');
   const days = di >= 0 ? rest[di + 1].split(',') : ['2026-10-14', '2026-10-15'];
-  const r = supply(report, days);
+  const hi = rest.indexOf('--hours');
+  const r = supply(report, days, hi >= 0 ? rest[hi + 1].split(',').map(Number) : undefined);
   console.log('| Day | Would air | PATCH NOTES lines | ACHIEVEMENT | Mature titles | Serious, legal, tribute | Dated releases (filed) |');
   console.log('|---|---|---|---|---|---|---|');
   for (const [d, v] of Object.entries(r.perDay)) console.log(`| ${d} | ${v.wouldAir} | ${v.patchNotes} | ${v.achievement} | ${v.mature} | ${v.serious} | ${v.dated} |`);
