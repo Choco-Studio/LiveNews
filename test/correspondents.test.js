@@ -38,9 +38,12 @@ describe('desks and roster', () => {
       assert.ok(casting[c.id]?.voice, `${c.id} has a voice`);
       assert.equal(lookFor(c.id).id, c.id, `${c.id} has a look`);
     }
-    // never a presenter's dominant voice (adcast.json keeps the same rule for adverts)
-    const dominant = (spec) => spec.split('+')[0].split(':')[0];
-    const anchors = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam'].map((id) => dominant(casting[id].voice));
+    // never the dominant voice of WORLD NOW's presenters, whom they talk to (16 Oct: a presenter of another programme
+    // may share it; test/voice-casting.test.js measures every pair, and adcast.json keeps adverts off every lead)
+    const dominant = (spec) => spec.split('+').map((p) => p.split(':')).reduce((a, b) => (Number(b[1] ?? 1) > Number(a[1] ?? 1) ? b : a))[0];
+    const { loadChannel } = await import('../server/channel.js');
+    const anchors = loadChannel().programs['world-now'].presenters.map((id) => dominant(casting[id].voice));
+    assert.ok(anchors.length >= 2);
     for (const c of ROSTER) assert.ok(!anchors.includes(dominant(casting[c.id].voice)), `${c.id} leads with a voice of their own`);
   });
 });

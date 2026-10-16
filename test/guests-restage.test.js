@@ -82,7 +82,7 @@ test('the booking: the same person the same look and voice, labelled RECREATION 
   assert.notEqual(mayor.id, bookGuest(speakerProfile('the mayor', ''), { outlet: 'Other' }).id);
   // the identity's facts shape the look
   assert.equal(guestLook('x', { presentation: 'man', age: 'senior' }).age, 'senior');
-  assert.ok(['bm_daniel:0.5+am_adam:0.5', 'am_santa:0.35+bm_george:0.65', 'am_fenrir:0.45+bm_lewis:0.55'].includes(guestVoice('y', 'man').voice));
+  assert.ok(['bm_daniel:0.5+am_adam:0.5', 'am_eric:0.6+am_onyx:0.4', 'am_onyx:0.6+am_liam:0.4'].includes(guestVoice('y', 'man').voice));
   // the hand-over says where the words come from
   const line = provenanceLine(a, 'Pixelburg Post', 's1');
   assert.match(line, /Ana Silva/);

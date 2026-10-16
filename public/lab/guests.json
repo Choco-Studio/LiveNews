@@ -40,9 +40,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_fenrir:0.45+bm_lewis:0.55",
-     "speed": 0.98,
-     "lang": "en-gb"
+     "voice": "am_onyx:0.6+am_liam:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -89,9 +89,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_fenrir:0.45+bm_lewis:0.55",
-     "speed": 0.98,
-     "lang": "en-gb"
+     "voice": "am_onyx:0.6+am_liam:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -138,7 +138,7 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_nicole:0.55+bf_isabella:0.45",
+     "voice": "bf_lily:0.6+af_sky:0.4",
      "speed": 0.98,
      "lang": "en-gb"
     },
@@ -187,9 +187,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_santa:0.35+bm_george:0.65",
-     "speed": 0.95,
-     "lang": "en-gb"
+     "voice": "am_eric:0.6+am_onyx:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -236,9 +236,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_heart:0.45+bf_emma:0.55",
-     "speed": 0.97,
-     "lang": "en-gb"
+     "voice": "af_sky:0.55+af_jessica:0.45",
+     "speed": 0.98,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -285,9 +285,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_fenrir:0.45+bm_lewis:0.55",
-     "speed": 0.98,
-     "lang": "en-gb"
+     "voice": "am_onyx:0.6+am_liam:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -334,9 +334,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_heart:0.45+bf_emma:0.55",
-     "speed": 0.97,
-     "lang": "en-gb"
+     "voice": "af_sky:0.55+af_jessica:0.45",
+     "speed": 0.98,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -383,9 +383,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_fenrir:0.45+bm_lewis:0.55",
-     "speed": 0.98,
-     "lang": "en-gb"
+     "voice": "am_onyx:0.6+am_liam:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -432,9 +432,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_heart:0.45+bf_emma:0.55",
-     "speed": 0.97,
-     "lang": "en-gb"
+     "voice": "af_sky:0.55+af_jessica:0.45",
+     "speed": 0.98,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -481,9 +481,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "am_fenrir:0.45+bm_lewis:0.55",
-     "speed": 0.98,
-     "lang": "en-gb"
+     "voice": "am_onyx:0.6+am_liam:0.4",
+     "speed": 0.97,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -530,9 +530,9 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_heart:0.45+bf_emma:0.55",
-     "speed": 0.97,
-     "lang": "en-gb"
+     "voice": "af_sky:0.55+af_jessica:0.45",
+     "speed": 0.98,
+     "lang": "en-us"
     },
     "likeness": "none",
     "backdrop": "press",
@@ -628,7 +628,7 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "voice": "bf_alice:0.55+af_river:0.45",
      "speed": 0.98,
      "lang": "en-gb"
     },
@@ -726,7 +726,7 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "voice": "bf_alice:0.55+af_river:0.45",
      "speed": 0.98,
      "lang": "en-gb"
     },
@@ -824,7 +824,7 @@
      "accessories": []
     },
     "voice": {
-     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "voice": "bf_alice:0.55+af_river:0.45",
      "speed": 0.98,
      "lang": "en-gb"
     },

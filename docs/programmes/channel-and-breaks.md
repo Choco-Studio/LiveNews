@@ -371,8 +371,8 @@ These are the same emotions `server/writer.js` treats as grave (`emotion === 'se
 ### 5.1 Delivery and writing
 
 **Continuity voice** (our rule):
-- An unseen announcer, Kokoro **`bf_alice`**. No presenter preset uses it: presenters use bm_george/bm_fable, af_heart/af_bella, am_puck/am_fenrir, bf_emma/bf_lily, af_nova, am_echo, bf_isabella and am_michael/am_onyx.
-- It must pass a blind A/B check against Ada and Penny. If it fails, use `bm_lewis:0.75+bm_daniel:0.25` and give the en-GB ads other voices.
+- An unseen announcer, Kokoro **`bf_lily:0.5+bf_isabella:0.25+bf_emma:0.25`** at speed 0.87 (`server/voice/casting.json` `continuity`, and the same in `server/voice/adcast.json`, which voices the bumper). Until the voices round of 16 Oct it was `bf_alice`, graded D by Kokoro's notes and measured at 3.59 on the bumper's lines on a listening-score predictor (4.17 now); `docs/roadmap/critique/voices-naturalness.md` has the measurements.
+- It leads with a voice no character leads with, so the bumper never sounds like the presenter who has just handed over; it measures 45 or more in timbre from every character (Rosa, Penny and June the nearest). If the owner's ear disagrees, the old voice comes back by copying the casting entry's `previous` (bf_alice, 0.92) over both entries.
 - Pace 150–160 wpm, below the anchors' 165–185 wpm in the sibling files. Those files cite Rodero's study via Journalist's Resource, which I could not re-open.
 
 **Continuity bank:** 4 lines per programme, 20 in all. They are pre-rendered templates, not per-episode scripts.

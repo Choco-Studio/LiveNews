@@ -8,13 +8,15 @@
 import crypto from 'node:crypto';
 
 // Bump when the recipe below changes in a way that changes the audio.
-export const RECIPE = 6; // 4: soft breaths in sentence pauses (owner 3 Oct); 5: breaths off (owner 5 Oct); 6: newsreader melody
+export const RECIPE = 7; // 4: soft breaths in sentence pauses (owner 3 Oct); 5: breaths off (owner 5 Oct); 6: newsreader melody; 7: the melody as loudness, the pitch Kokoro's own (16 Oct)
 
 // Breaths between sentences (tools/voice/dsp.py breath_into). Owner 5 Oct: no breaths (laughs stay).
 export const BREATHS = false;
 
 // The newsreader melody (speechtext planMelody, tools/voice/engine.py shape_melody): each story opens high, steps
 // down and closes low, with lifts on the figures. Owner 10 Oct: "más natural, tipo presentador real, que no aburra".
+// Since 16 Oct the engine lays it on as loudness only (engine.BEND: bending Kokoro's pitch to it measurably cost
+// naturalness); the plan still rides along whole, so turning the bend back on needs no change here.
 export const MELODY = true;
 
 // Segments a presenter reads aloud.

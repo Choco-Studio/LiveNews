@@ -1,0 +1,2845 @@
+{
+ "note": "Written by tools/voice/audit.py measure --write: every cast voice on the audit copy (tools/voice/audit-lines.json), as the station renders it. See docs/roadmap/critique/voices-naturalness.md.",
+ "measuredAt": "2026-10-16",
+ "recipe": 7,
+ "timbreScale": 4.5,
+ "voices": {
+  "ada": {
+   "voice": "bf_emma:0.7+af_sarah:0.3",
+   "speed": 0.87,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 14.88,
+   "wpm": 139.06,
+   "f0": 183.66,
+   "iqrSt": 3.9,
+   "jumps": 0.0132,
+   "aper": 0.0588,
+   "hnr": 11.62,
+   "wer": 0.0435,
+   "accent": 0.566,
+   "accentMin": 0.508,
+   "accentMargin": 0.364,
+   "accentMarginMin": 0.305,
+   "logprob": -0.1,
+   "logprobMin": -0.198,
+   "mos": 4.415,
+   "mosMin": 4.303,
+   "nativeMargin": 0.399,
+   "nativeMarginMin": 0.344,
+   "nearest": [
+    [
+     "rhea",
+     48.7
+    ],
+    [
+     "continuity",
+     61.4
+    ],
+    [
+     "qm:C",
+     70.7
+    ]
+   ]
+  },
+  "amara": {
+   "voice": "af_alloy:0.55+bf_emma:0.45",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 6,
+   "cps": 15.51,
+   "wpm": 150.84,
+   "f0": 162.81,
+   "iqrSt": 3.37,
+   "jumps": 0.0165,
+   "aper": 0.0508,
+   "hnr": 11.96,
+   "wer": 0.024,
+   "accent": 0.403,
+   "accentMin": 0.292,
+   "accentMargin": 0.093,
+   "accentMarginMin": -0.195,
+   "logprob": -0.068,
+   "logprobMin": -0.138,
+   "mos": 4.443,
+   "mosMin": 4.415,
+   "nativeMargin": 0.242,
+   "nativeMarginMin": 0.173,
+   "nearest": [
+    [
+     "qm:C",
+     44.4
+    ],
+    [
+     "june",
+     45.6
+    ],
+    [
+     "penny",
+     52.1
+    ]
+   ]
+  },
+  "clara": {
+   "voice": "bf_isabella:0.55+af_bella:0.45",
+   "speed": 0.95,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 6,
+   "cps": 15.59,
+   "wpm": 150.55,
+   "f0": 201.65,
+   "iqrSt": 3.44,
+   "jumps": 0.0243,
+   "aper": 0.0456,
+   "hnr": 12.68,
+   "wer": 0.023,
+   "accent": 0.499,
+   "accentMin": 0.379,
+   "accentMargin": 0.298,
+   "accentMarginMin": 0.116,
+   "logprob": -0.08,
+   "logprobMin": -0.148,
+   "mos": 4.42,
+   "mosMin": 4.374,
+   "nativeMargin": 0.345,
+   "nativeMarginMin": 0.218,
+   "nearest": [
+    [
+     "rosa",
+     38.8
+    ],
+    [
+     "penny",
+     38.9
+    ],
+    [
+     "lola",
+     47.9
+    ]
+   ]
+  },
+  "continuity": {
+   "voice": "bf_lily:0.5+bf_isabella:0.25+bf_emma:0.25",
+   "speed": 0.87,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 6,
+   "cps": 14.28,
+   "wpm": 139.14,
+   "f0": 194.27,
+   "iqrSt": 4.62,
+   "jumps": 0.0199,
+   "aper": 0.0495,
+   "hnr": 12.12,
+   "wer": 0.0308,
+   "accent": 0.549,
+   "accentMin": 0.467,
+   "accentMargin": 0.322,
+   "accentMarginMin": 0.126,
+   "logprob": -0.082,
+   "logprobMin": -0.179,
+   "mos": 4.302,
+   "mosMin": 4.032,
+   "nativeMargin": 0.386,
+   "nativeMarginMin": 0.257,
+   "nearest": [
+    [
+     "guest:woman:2",
+     32.1
+    ],
+    [
+     "qm:C",
+     41.7
+    ],
+    [
+     "penny",
+     48.3
+    ]
+   ]
+  },
+  "dev": {
+   "voice": "am_fenrir:0.5+am_liam:0.3+am_onyx:0.2",
+   "speed": 1.13,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 6,
+   "cps": 17.04,
+   "wpm": 163.26,
+   "f0": 119.17,
+   "iqrSt": 6.51,
+   "jumps": 0.0119,
+   "aper": 0.1064,
+   "hnr": 9.12,
+   "wer": 0.0298,
+   "accent": 0.683,
+   "accentMin": 0.628,
+   "accentMargin": 0.41,
+   "accentMarginMin": 0.37,
+   "logprob": -0.087,
+   "logprobMin": -0.191,
+   "mos": 4.466,
+   "mosMin": 4.428,
+   "nativeMargin": 0.446,
+   "nativeMarginMin": 0.425,
+   "nearest": [
+    [
+     "max",
+     39.5
+    ],
+    [
+     "vic",
+     40.9
+    ],
+    [
+     "guest:man:0",
+     45.4
+    ]
+   ]
+  },
+  "guest:man:0": {
+   "voice": "bm_daniel:0.5+am_adam:0.5",
+   "speed": 0.97,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 4,
+   "cps": 15.8,
+   "wpm": 150.92,
+   "f0": 122.31,
+   "iqrSt": 4.1,
+   "jumps": 0.018,
+   "aper": 0.1227,
+   "hnr": 8.44,
+   "wer": 0.0339,
+   "accent": 0.478,
+   "accentMin": 0.447,
+   "accentMargin": 0.191,
+   "accentMarginMin": 0.149,
+   "logprob": -0.101,
+   "logprobMin": -0.162,
+   "mos": 4.401,
+   "mosMin": 4.321,
+   "nativeMargin": 0.367,
+   "nativeMarginMin": 0.344,
+   "nearest": [
+    [
+     "dev",
+     45.4
+    ],
+    [
+     "qm:C",
+     54.0
+    ],
+    [
+     "ines",
+     54.5
+    ]
+   ]
+  },
+  "guest:man:1": {
+   "voice": "am_eric:0.6+am_onyx:0.4",
+   "speed": 0.97,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 4,
+   "cps": 16.1,
+   "wpm": 153.21,
+   "f0": 121.8,
+   "iqrSt": 5.22,
+   "jumps": 0.0099,
+   "aper": 0.0649,
+   "hnr": 11.52,
+   "wer": 0.0339,
+   "accent": 0.736,
+   "accentMin": 0.729,
+   "accentMargin": 0.382,
+   "accentMarginMin": 0.352,
+   "logprob": -0.13,
+   "logprobMin": -0.186,
+   "mos": 4.48,
+   "mosMin": 4.444,
+   "nativeMargin": 0.449,
+   "nativeMarginMin": 0.432,
+   "nearest": [
+    [
+     "leo",
+     42.7
+    ],
+    [
+     "kai",
+     52.2
+    ],
+    [
+     "nova",
+     58.7
+    ]
+   ]
+  },
+  "guest:man:2": {
+   "voice": "am_onyx:0.6+am_liam:0.4",
+   "speed": 0.97,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 4,
+   "cps": 14.82,
+   "wpm": 141.04,
+   "f0": 98.97,
+   "iqrSt": 4.24,
+   "jumps": 0.0091,
+   "aper": 0.1073,
+   "hnr": 9.31,
+   "wer": 0.0424,
+   "accent": 0.728,
+   "accentMin": 0.679,
+   "accentMargin": 0.404,
+   "accentMarginMin": 0.323,
+   "logprob": -0.112,
+   "logprobMin": -0.198,
+   "mos": 4.452,
+   "mosMin": 4.413,
+   "nativeMargin": 0.436,
+   "nativeMarginMin": 0.372,
+   "nearest": [
+    [
+     "leo",
+     55.3
+    ],
+    [
+     "ines",
+     70.7
+    ],
+    [
+     "nova",
+     71.0
+    ]
+   ]
+  },
+  "guest:woman:0": {
+   "voice": "bf_lily:0.6+af_sky:0.4",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 4,
+   "cps": 15.2,
+   "wpm": 144.73,
+   "f0": 173.93,
+   "iqrSt": 6.62,
+   "jumps": 0.0226,
+   "aper": 0.0536,
+   "hnr": 12.02,
+   "wer": 0.0339,
+   "accent": 0.409,
+   "accentMin": 0.375,
+   "accentMargin": 0.184,
+   "accentMarginMin": 0.113,
+   "logprob": -0.087,
+   "logprobMin": -0.147,
+   "mos": 4.433,
+   "mosMin": 4.391,
+   "nativeMargin": 0.267,
+   "nativeMarginMin": 0.149,
+   "nearest": [
+    [
+     "june",
+     53.7
+    ],
+    [
+     "ines",
+     56.2
+    ],
+    [
+     "qm:C",
+     58.6
+    ]
+   ]
+  },
+  "guest:woman:1": {
+   "voice": "af_sky:0.55+af_jessica:0.45",
+   "speed": 0.98,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 4,
+   "cps": 16.21,
+   "wpm": 154.37,
+   "f0": 180.28,
+   "iqrSt": 5.51,
+   "jumps": 0.0212,
+   "aper": 0.0645,
+   "hnr": 11.47,
+   "wer": 0.0424,
+   "accent": 0.543,
+   "accentMin": 0.507,
+   "accentMargin": 0.336,
+   "accentMarginMin": 0.29,
+   "logprob": -0.076,
+   "logprobMin": -0.153,
+   "mos": 4.446,
+   "mosMin": 4.4,
+   "nativeMargin": 0.351,
+   "nativeMarginMin": 0.323,
+   "nearest": [
+    [
+     "lola",
+     44.5
+    ],
+    [
+     "june",
+     54.5
+    ],
+    [
+     "ines",
+     55.7
+    ]
+   ]
+  },
+  "guest:woman:2": {
+   "voice": "bf_alice:0.55+af_river:0.45",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 4,
+   "cps": 15.57,
+   "wpm": 147.76,
+   "f0": 195.55,
+   "iqrSt": 4.89,
+   "jumps": 0.0172,
+   "aper": 0.0796,
+   "hnr": 10.57,
+   "wer": 0.0508,
+   "accent": 0.371,
+   "accentMin": 0.342,
+   "accentMargin": 0.101,
+   "accentMarginMin": 0.066,
+   "logprob": -0.09,
+   "logprobMin": -0.157,
+   "mos": 4.433,
+   "mosMin": 4.371,
+   "nativeMargin": 0.307,
+   "nativeMarginMin": 0.272,
+   "nearest": [
+    [
+     "continuity",
+     32.1
+    ],
+    [
+     "penny",
+     67.8
+    ],
+    [
+     "june",
+     68.6
+    ]
+   ]
+  },
+  "ines": {
+   "voice": "af_kore:0.55+af_sky:0.45",
+   "speed": 1.14,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 6,
+   "cps": 16.56,
+   "wpm": 158.68,
+   "f0": 152.95,
+   "iqrSt": 5.51,
+   "jumps": 0.0136,
+   "aper": 0.0485,
+   "hnr": 12.47,
+   "wer": 0.0299,
+   "accent": 0.616,
+   "accentMin": 0.566,
+   "accentMargin": 0.375,
+   "accentMarginMin": 0.322,
+   "logprob": -0.068,
+   "logprobMin": -0.146,
+   "mos": 4.473,
+   "mosMin": 4.447,
+   "nativeMargin": 0.393,
+   "nativeMarginMin": 0.361,
+   "nearest": [
+    [
+     "leo",
+     42.8
+    ],
+    [
+     "qm:B",
+     49.7
+    ],
+    [
+     "kai",
+     50.1
+    ]
+   ]
+  },
+  "june": {
+   "voice": "af_sarah:0.6+af_aoede:0.4",
+   "speed": 1.11,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 6,
+   "cps": 17.21,
+   "wpm": 163.94,
+   "f0": 182.41,
+   "iqrSt": 5.7,
+   "jumps": 0.0214,
+   "aper": 0.0474,
+   "hnr": 12.51,
+   "wer": 0.0296,
+   "accent": 0.597,
+   "accentMin": 0.571,
+   "accentMargin": 0.339,
+   "accentMarginMin": 0.304,
+   "logprob": -0.076,
+   "logprobMin": -0.147,
+   "mos": 4.495,
+   "mosMin": 4.452,
+   "nativeMargin": 0.373,
+   "nativeMarginMin": 0.357,
+   "nearest": [
+    [
+     "qm:C",
+     30.6
+    ],
+    [
+     "amara",
+     45.6
+    ],
+    [
+     "rhea",
+     46.4
+    ]
+   ]
+  },
+  "kai": {
+   "voice": "bm_george:0.55+bm_fable:0.45",
+   "speed": 1.19,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 16.04,
+   "wpm": 159.14,
+   "f0": 129.84,
+   "iqrSt": 5.13,
+   "jumps": 0.0166,
+   "aper": 0.0724,
+   "hnr": 11.07,
+   "wer": 0.0419,
+   "accent": 0.601,
+   "accentMin": 0.571,
+   "accentMargin": 0.292,
+   "accentMarginMin": 0.22,
+   "logprob": -0.132,
+   "logprobMin": -0.227,
+   "mos": 4.36,
+   "mosMin": 4.03,
+   "nativeMargin": 0.517,
+   "nativeMarginMin": 0.453,
+   "nearest": [
+    [
+     "qm:B",
+     39.3
+    ],
+    [
+     "tomas",
+     42.3
+    ],
+    [
+     "leo",
+     46.2
+    ]
+   ]
+  },
+  "leo": {
+   "voice": "bm_fable:0.6+bm_daniel:0.4",
+   "speed": 1.15,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 6,
+   "cps": 15.9,
+   "wpm": 158.01,
+   "f0": 121.4,
+   "iqrSt": 5.38,
+   "jumps": 0.0175,
+   "aper": 0.096,
+   "hnr": 9.57,
+   "wer": 0.026,
+   "accent": 0.606,
+   "accentMin": 0.553,
+   "accentMargin": 0.307,
+   "accentMarginMin": 0.145,
+   "logprob": -0.088,
+   "logprobMin": -0.151,
+   "mos": 4.38,
+   "mosMin": 4.351,
+   "nativeMargin": 0.466,
+   "nativeMarginMin": 0.352,
+   "nearest": [
+    [
+     "guest:man:1",
+     42.7
+    ],
+    [
+     "ines",
+     42.8
+    ],
+    [
+     "kai",
+     46.2
+    ]
+   ]
+  },
+  "lola": {
+   "voice": "af_heart:0.75+af_bella:0.25",
+   "speed": 1,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 15.82,
+   "wpm": 156.79,
+   "f0": 196.35,
+   "iqrSt": 4.2,
+   "jumps": 0.0357,
+   "aper": 0.0555,
+   "hnr": 11.69,
+   "wer": 0.0357,
+   "accent": 0.577,
+   "accentMin": 0.541,
+   "accentMargin": 0.355,
+   "accentMarginMin": 0.289,
+   "logprob": -0.065,
+   "logprobMin": -0.18,
+   "mos": 4.443,
+   "mosMin": 4.367,
+   "nativeMargin": 0.394,
+   "nativeMarginMin": 0.3,
+   "nearest": [
+    [
+     "guest:woman:1",
+     44.5
+    ],
+    [
+     "qm",
+     47.2
+    ],
+    [
+     "qm:A",
+     47.2
+    ]
+   ]
+  },
+  "max": {
+   "voice": "am_fenrir:0.6+am_puck:0.4",
+   "speed": 0.98,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 15.05,
+   "wpm": 142.28,
+   "f0": 123.35,
+   "iqrSt": 7.45,
+   "jumps": 0.0131,
+   "aper": 0.0897,
+   "hnr": 9.89,
+   "wer": 0.0489,
+   "accent": 0.707,
+   "accentMin": 0.659,
+   "accentMargin": 0.368,
+   "accentMarginMin": 0.275,
+   "logprob": -0.101,
+   "logprobMin": -0.17,
+   "mos": 4.422,
+   "mosMin": 4.299,
+   "nativeMargin": 0.479,
+   "nativeMarginMin": 0.437,
+   "nearest": [
+    [
+     "dev",
+     39.5
+    ],
+    [
+     "vic",
+     46.4
+    ],
+    [
+     "omar",
+     47.9
+    ]
+   ]
+  },
+  "mika": {
+   "voice": "af_aoede",
+   "speed": 1,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 15.71,
+   "wpm": 150.07,
+   "f0": 178.6,
+   "iqrSt": 4.58,
+   "jumps": 0.0268,
+   "aper": 0.0262,
+   "hnr": 14.19,
+   "wer": 0.037,
+   "accent": 0.701,
+   "accentMin": 0.682,
+   "accentMargin": 0.401,
+   "accentMarginMin": 0.356,
+   "logprob": -0.063,
+   "logprobMin": -0.16,
+   "mos": 4.405,
+   "mosMin": 4.317,
+   "nativeMargin": 0.434,
+   "nativeMarginMin": 0.42,
+   "nearest": [
+    [
+     "qm",
+     53.1
+    ],
+    [
+     "qm:A",
+     53.1
+    ],
+    [
+     "ines",
+     63.2
+    ]
+   ]
+  },
+  "nova": {
+   "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2",
+   "speed": 0.89,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 14.26,
+   "wpm": 138.25,
+   "f0": 153.1,
+   "iqrSt": 4.07,
+   "jumps": 0.0161,
+   "aper": 0.036,
+   "hnr": 13.48,
+   "wer": 0.0282,
+   "accent": 0.66,
+   "accentMin": 0.606,
+   "accentMargin": 0.373,
+   "accentMarginMin": 0.332,
+   "logprob": -0.067,
+   "logprobMin": -0.146,
+   "mos": 4.493,
+   "mosMin": 4.47,
+   "nativeMargin": 0.376,
+   "nativeMarginMin": 0.332,
+   "nearest": [
+    [
+     "leo",
+     47.8
+    ],
+    [
+     "ines",
+     51.0
+    ],
+    [
+     "rosa",
+     57.8
+    ]
+   ]
+  },
+  "omar": {
+   "voice": "am_michael:0.55+bm_daniel:0.45",
+   "speed": 1.03,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 6,
+   "cps": 15.89,
+   "wpm": 150.61,
+   "f0": 118.71,
+   "iqrSt": 4.44,
+   "jumps": 0.0251,
+   "aper": 0.1021,
+   "hnr": 9.45,
+   "wer": 0.0225,
+   "accent": 0.517,
+   "accentMin": 0.47,
+   "accentMargin": 0.169,
+   "accentMarginMin": 0.118,
+   "logprob": -0.086,
+   "logprobMin": -0.155,
+   "mos": 4.406,
+   "mosMin": 4.362,
+   "nativeMargin": 0.291,
+   "nativeMarginMin": 0.238,
+   "nearest": [
+    [
+     "sam",
+     36.7
+    ],
+    [
+     "tomas",
+     37.4
+    ],
+    [
+     "max",
+     47.9
+    ]
+   ]
+  },
+  "paco": {
+   "voice": "bm_george:0.6+bm_lewis:0.4",
+   "speed": 1.15,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 15.61,
+   "wpm": 156.12,
+   "f0": 123.52,
+   "iqrSt": 4.59,
+   "jumps": 0.0111,
+   "aper": 0.0844,
+   "hnr": 10.22,
+   "wer": 0.0223,
+   "accent": 0.618,
+   "accentMin": 0.555,
+   "accentMargin": 0.365,
+   "accentMarginMin": 0.33,
+   "logprob": -0.086,
+   "logprobMin": -0.168,
+   "mos": 4.343,
+   "mosMin": 4.252,
+   "nativeMargin": 0.49,
+   "nativeMarginMin": 0.407,
+   "nearest": [
+    [
+     "omar",
+     47.9
+    ],
+    [
+     "guest:man:0",
+     54.8
+    ],
+    [
+     "tomas",
+     56.1
+    ]
+   ]
+  },
+  "penny": {
+   "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15",
+   "speed": 1.04,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 16.03,
+   "wpm": 152.13,
+   "f0": 191.65,
+   "iqrSt": 4.45,
+   "jumps": 0.0151,
+   "aper": 0.0451,
+   "hnr": 12.83,
+   "wer": 0.0212,
+   "accent": 0.526,
+   "accentMin": 0.431,
+   "accentMargin": 0.35,
+   "accentMarginMin": 0.285,
+   "logprob": -0.08,
+   "logprobMin": -0.162,
+   "mos": 4.462,
+   "mosMin": 4.429,
+   "nativeMargin": 0.359,
+   "nativeMarginMin": 0.293,
+   "nearest": [
+    [
+     "clara",
+     38.9
+    ],
+    [
+     "rosa",
+     43.5
+    ],
+    [
+     "june",
+     46.5
+    ]
+   ]
+  },
+  "qm": {
+   "voice": "af_bella:0.6+af_kore:0.4",
+   "speed": 1,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 8,
+   "cps": 15.64,
+   "wpm": 151.27,
+   "f0": 178.35,
+   "iqrSt": 5.14,
+   "jumps": 0.0264,
+   "aper": 0.0411,
+   "hnr": 12.88,
+   "wer": 0.04,
+   "accent": 0.635,
+   "accentMin": 0.57,
+   "accentMargin": 0.342,
+   "accentMarginMin": 0.255,
+   "logprob": -0.096,
+   "logprobMin": -0.172,
+   "mos": 4.462,
+   "mosMin": 4.409,
+   "nativeMargin": 0.43,
+   "nativeMarginMin": 0.371,
+   "nearest": [
+    [
+     "lola",
+     47.2
+    ],
+    [
+     "mika",
+     53.1
+    ],
+    [
+     "june",
+     54.1
+    ]
+   ]
+  },
+  "qm:A": {
+   "voice": "af_bella:0.6+af_kore:0.4",
+   "speed": 1,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 8,
+   "cps": 15.64,
+   "wpm": 151.27,
+   "f0": 178.35,
+   "iqrSt": 5.14,
+   "jumps": 0.0264,
+   "aper": 0.0411,
+   "hnr": 12.88,
+   "wer": 0.04,
+   "accent": 0.635,
+   "accentMin": 0.57,
+   "accentMargin": 0.342,
+   "accentMarginMin": 0.255,
+   "logprob": -0.096,
+   "logprobMin": -0.172,
+   "mos": 4.462,
+   "mosMin": 4.409,
+   "nativeMargin": 0.43,
+   "nativeMarginMin": 0.371,
+   "nearest": [
+    [
+     "lola",
+     47.2
+    ],
+    [
+     "mika",
+     53.1
+    ],
+    [
+     "june",
+     54.1
+    ]
+   ]
+  },
+  "qm:B": {
+   "voice": "am_puck:0.55+am_eric:0.45",
+   "speed": 1.02,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 8,
+   "cps": 15.56,
+   "wpm": 151.64,
+   "f0": 131.9,
+   "iqrSt": 5.96,
+   "jumps": 0.0124,
+   "aper": 0.0656,
+   "hnr": 11.41,
+   "wer": 0.045,
+   "accent": 0.758,
+   "accentMin": 0.733,
+   "accentMargin": 0.395,
+   "accentMarginMin": 0.366,
+   "logprob": -0.108,
+   "logprobMin": -0.158,
+   "mos": 4.471,
+   "mosMin": 4.437,
+   "nativeMargin": 0.468,
+   "nativeMarginMin": 0.452,
+   "nearest": [
+    [
+     "vic",
+     37.0
+    ],
+    [
+     "kai",
+     39.3
+    ],
+    [
+     "tomas",
+     42.2
+    ]
+   ]
+  },
+  "qm:C": {
+   "voice": "af_kore:0.5+bf_emma:0.25+bf_lily:0.25",
+   "speed": 1.06,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 8,
+   "cps": 15.52,
+   "wpm": 152.57,
+   "f0": 168.25,
+   "iqrSt": 5.78,
+   "jumps": 0.0131,
+   "aper": 0.0479,
+   "hnr": 12.61,
+   "wer": 0.04,
+   "accent": 0.414,
+   "accentMin": 0.321,
+   "accentMargin": 0.181,
+   "accentMarginMin": 0.084,
+   "logprob": -0.101,
+   "logprobMin": -0.163,
+   "mos": 4.467,
+   "mosMin": 4.437,
+   "nativeMargin": 0.269,
+   "nativeMarginMin": 0.17,
+   "nearest": [
+    [
+     "june",
+     30.6
+    ],
+    [
+     "rhea",
+     39.9
+    ],
+    [
+     "continuity",
+     41.7
+    ]
+   ]
+  },
+  "rhea": {
+   "voice": "bf_emma:0.6+af_aoede:0.4",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 16.1,
+   "wpm": 152.8,
+   "f0": 180.62,
+   "iqrSt": 4.08,
+   "jumps": 0.0178,
+   "aper": 0.0471,
+   "hnr": 12.13,
+   "wer": 0.0278,
+   "accent": 0.505,
+   "accentMin": 0.468,
+   "accentMargin": 0.289,
+   "accentMarginMin": 0.141,
+   "logprob": -0.076,
+   "logprobMin": -0.161,
+   "mos": 4.379,
+   "mosMin": 4.215,
+   "nativeMargin": 0.353,
+   "nativeMarginMin": 0.238,
+   "nearest": [
+    [
+     "qm:C",
+     39.9
+    ],
+    [
+     "june",
+     46.4
+    ],
+    [
+     "ada",
+     48.7
+    ]
+   ]
+  },
+  "rosa": {
+   "voice": "bf_isabella:0.55+af_nova:0.45",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "effect": "none",
+   "clips": 7,
+   "cps": 15.19,
+   "wpm": 151.08,
+   "f0": 185.08,
+   "iqrSt": 3.8,
+   "jumps": 0.018,
+   "aper": 0.0399,
+   "hnr": 13.09,
+   "wer": 0.044,
+   "accent": 0.498,
+   "accentMin": 0.475,
+   "accentMargin": 0.289,
+   "accentMarginMin": 0.227,
+   "logprob": -0.077,
+   "logprobMin": -0.144,
+   "mos": 4.489,
+   "mosMin": 4.476,
+   "nativeMargin": 0.306,
+   "nativeMarginMin": 0.238,
+   "nearest": [
+    [
+     "clara",
+     38.8
+    ],
+    [
+     "penny",
+     43.5
+    ],
+    [
+     "nova",
+     57.8
+    ]
+   ]
+  },
+  "sam": {
+   "voice": "am_michael:0.75+am_onyx:0.25",
+   "speed": 1.19,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 16.96,
+   "wpm": 161.0,
+   "f0": 106.39,
+   "iqrSt": 4.61,
+   "jumps": 0.0179,
+   "aper": 0.1049,
+   "hnr": 9.09,
+   "wer": 0.0259,
+   "accent": 0.717,
+   "accentMin": 0.677,
+   "accentMargin": 0.417,
+   "accentMarginMin": 0.369,
+   "logprob": -0.086,
+   "logprobMin": -0.186,
+   "mos": 4.358,
+   "mosMin": 4.221,
+   "nativeMargin": 0.446,
+   "nativeMarginMin": 0.369,
+   "nearest": [
+    [
+     "omar",
+     36.7
+    ],
+    [
+     "vic",
+     39.5
+    ],
+    [
+     "tomas",
+     40.0
+    ]
+   ]
+  },
+  "tomas": {
+   "voice": "am_michael:0.52+am_eric:0.48",
+   "speed": 0.9,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 6,
+   "cps": 14.91,
+   "wpm": 141.77,
+   "f0": 133.48,
+   "iqrSt": 5.4,
+   "jumps": 0.0191,
+   "aper": 0.0724,
+   "hnr": 11.46,
+   "wer": 0.025,
+   "accent": 0.757,
+   "accentMin": 0.735,
+   "accentMargin": 0.425,
+   "accentMarginMin": 0.394,
+   "logprob": -0.083,
+   "logprobMin": -0.159,
+   "mos": 4.474,
+   "mosMin": 4.444,
+   "nativeMargin": 0.464,
+   "nativeMarginMin": 0.44,
+   "nearest": [
+    [
+     "omar",
+     37.4
+    ],
+    [
+     "sam",
+     40.0
+    ],
+    [
+     "qm:B",
+     42.2
+    ]
+   ]
+  },
+  "unit8": {
+   "voice": "am_echo:0.7+am_fenrir:0.3",
+   "speed": 0.82,
+   "lang": "en-us",
+   "effect": "robot-soft",
+   "clips": 7,
+   "cps": 13.53,
+   "wpm": 129.23,
+   "f0": 110.75,
+   "iqrSt": 1.15,
+   "jumps": 0.0318,
+   "aper": 0.2103,
+   "hnr": 4.04,
+   "wer": 0.0469,
+   "accent": 0.798,
+   "accentMin": 0.788,
+   "accentMargin": 0.49,
+   "accentMarginMin": 0.466,
+   "logprob": -0.077,
+   "logprobMin": -0.174,
+   "mos": 2.727,
+   "mosMin": 2.58,
+   "nativeMargin": 0.501,
+   "nativeMarginMin": 0.466,
+   "nearest": [
+    [
+     "leo",
+     53.7
+    ],
+    [
+     "vic",
+     57.2
+    ],
+    [
+     "ines",
+     60.9
+    ]
+   ]
+  },
+  "vic": {
+   "voice": "am_puck:0.65+am_michael:0.2+am_onyx:0.15",
+   "speed": 1.26,
+   "lang": "en-us",
+   "effect": "none",
+   "clips": 7,
+   "cps": 17.4,
+   "wpm": 164.54,
+   "f0": 105.14,
+   "iqrSt": 5.29,
+   "jumps": 0.0137,
+   "aper": 0.0935,
+   "hnr": 9.41,
+   "wer": 0.037,
+   "accent": 0.748,
+   "accentMin": 0.73,
+   "accentMargin": 0.405,
+   "accentMarginMin": 0.361,
+   "logprob": -0.076,
+   "logprobMin": -0.181,
+   "mos": 4.407,
+   "mosMin": 4.339,
+   "nativeMargin": 0.463,
+   "nativeMarginMin": 0.439,
+   "nearest": [
+    [
+     "qm:B",
+     37.0
+    ],
+    [
+     "sam",
+     39.5
+    ],
+    [
+     "dev",
+     40.9
+    ]
+   ]
+  }
+ },
+ "distance": {
+  "ada": {
+   "amara": 92.9,
+   "clara": 102.8,
+   "continuity": 61.4,
+   "dev": 129.1,
+   "guest:man:0": 109.4,
+   "guest:man:1": 164.2,
+   "guest:man:2": 178.7,
+   "guest:woman:0": 117.1,
+   "guest:woman:1": 122.3,
+   "guest:woman:2": 71.5,
+   "ines": 129.2,
+   "june": 84.8,
+   "kai": 141.7,
+   "leo": 153.8,
+   "lola": 134.6,
+   "max": 117.5,
+   "mika": 151.9,
+   "nova": 156.7,
+   "omar": 117.3,
+   "paco": 115.5,
+   "penny": 84.3,
+   "qm": 126.0,
+   "qm:A": 126.0,
+   "qm:B": 130.3,
+   "qm:C": 70.7,
+   "rhea": 48.7,
+   "rosa": 120.6,
+   "sam": 139.0,
+   "tomas": 124.5,
+   "unit8": 152.6,
+   "vic": 139.4
+  },
+  "amara": {
+   "ada": 92.9,
+   "clara": 61.1,
+   "continuity": 74.6,
+   "dev": 80.2,
+   "guest:man:0": 60.8,
+   "guest:man:1": 78.3,
+   "guest:man:2": 98.0,
+   "guest:woman:0": 81.4,
+   "guest:woman:1": 73.7,
+   "guest:woman:2": 99.3,
+   "ines": 53.8,
+   "june": 45.6,
+   "kai": 71.1,
+   "leo": 73.9,
+   "lola": 83.5,
+   "max": 86.0,
+   "mika": 86.8,
+   "nova": 70.3,
+   "omar": 86.7,
+   "paco": 84.1,
+   "penny": 52.1,
+   "qm": 60.0,
+   "qm:A": 60.0,
+   "qm:B": 60.8,
+   "qm:C": 44.4,
+   "rhea": 57.6,
+   "rosa": 58.4,
+   "sam": 90.5,
+   "tomas": 73.1,
+   "unit8": 85.5,
+   "vic": 77.3
+  },
+  "clara": {
+   "ada": 102.8,
+   "amara": 61.1,
+   "continuity": 60.6,
+   "dev": 95.3,
+   "guest:man:0": 71.6,
+   "guest:man:1": 103.0,
+   "guest:man:2": 112.2,
+   "guest:woman:0": 77.1,
+   "guest:woman:1": 60.2,
+   "guest:woman:2": 78.6,
+   "ines": 76.7,
+   "june": 48.1,
+   "kai": 101.7,
+   "leo": 91.7,
+   "lola": 47.9,
+   "max": 100.3,
+   "mika": 83.0,
+   "nova": 79.6,
+   "omar": 114.9,
+   "paco": 111.5,
+   "penny": 38.9,
+   "qm": 54.6,
+   "qm:A": 54.6,
+   "qm:B": 88.3,
+   "qm:C": 61.0,
+   "rhea": 73.6,
+   "rosa": 38.8,
+   "sam": 122.5,
+   "tomas": 110.9,
+   "unit8": 87.4,
+   "vic": 102.7
+  },
+  "continuity": {
+   "ada": 61.4,
+   "amara": 74.6,
+   "clara": 60.6,
+   "dev": 97.8,
+   "guest:man:0": 79.3,
+   "guest:man:1": 136.6,
+   "guest:man:2": 144.9,
+   "guest:woman:0": 65.9,
+   "guest:woman:1": 74.8,
+   "guest:woman:2": 32.1,
+   "ines": 92.8,
+   "june": 48.4,
+   "kai": 113.8,
+   "leo": 116.7,
+   "lola": 83.6,
+   "max": 88.2,
+   "mika": 112.0,
+   "nova": 117.0,
+   "omar": 96.2,
+   "paco": 100.6,
+   "penny": 48.3,
+   "qm": 89.9,
+   "qm:A": 89.9,
+   "qm:B": 101.5,
+   "qm:C": 41.7,
+   "rhea": 51.6,
+   "rosa": 79.1,
+   "sam": 113.7,
+   "tomas": 104.7,
+   "unit8": 108.3,
+   "vic": 106.8
+  },
+  "dev": {
+   "ada": 129.1,
+   "amara": 80.2,
+   "clara": 95.3,
+   "continuity": 97.8,
+   "guest:man:0": 45.4,
+   "guest:man:1": 88.8,
+   "guest:man:2": 82.9,
+   "guest:woman:0": 73.8,
+   "guest:woman:1": 77.7,
+   "guest:woman:2": 115.1,
+   "ines": 62.6,
+   "june": 79.1,
+   "kai": 63.7,
+   "leo": 72.7,
+   "lola": 96.3,
+   "max": 39.5,
+   "mika": 85.9,
+   "nova": 94.2,
+   "omar": 50.0,
+   "paco": 61.9,
+   "penny": 88.4,
+   "qm": 82.9,
+   "qm:A": 82.9,
+   "qm:B": 51.8,
+   "qm:C": 73.4,
+   "rhea": 97.2,
+   "rosa": 98.1,
+   "sam": 56.2,
+   "tomas": 56.7,
+   "unit8": 69.2,
+   "vic": 40.9
+  },
+  "guest:man:0": {
+   "ada": 109.4,
+   "amara": 60.8,
+   "clara": 71.6,
+   "continuity": 79.3,
+   "dev": 45.4,
+   "guest:man:1": 85.8,
+   "guest:man:2": 88.6,
+   "guest:woman:0": 64.4,
+   "guest:woman:1": 57.4,
+   "guest:woman:2": 97.8,
+   "ines": 54.5,
+   "june": 56.1,
+   "kai": 67.8,
+   "leo": 74.0,
+   "lola": 72.3,
+   "max": 58.7,
+   "mika": 74.4,
+   "nova": 86.9,
+   "omar": 60.4,
+   "paco": 54.8,
+   "penny": 74.8,
+   "qm": 55.2,
+   "qm:A": 55.2,
+   "qm:B": 57.6,
+   "qm:C": 54.0,
+   "rhea": 73.2,
+   "rosa": 85.1,
+   "sam": 74.6,
+   "tomas": 66.9,
+   "unit8": 83.4,
+   "vic": 61.8
+  },
+  "guest:man:1": {
+   "ada": 164.2,
+   "amara": 78.3,
+   "clara": 103.0,
+   "continuity": 136.6,
+   "dev": 88.8,
+   "guest:man:0": 85.8,
+   "guest:man:2": 46.9,
+   "guest:woman:0": 112.0,
+   "guest:woman:1": 94.5,
+   "guest:woman:2": 158.1,
+   "ines": 61.7,
+   "june": 102.5,
+   "kai": 52.2,
+   "leo": 42.7,
+   "lola": 104.4,
+   "max": 113.2,
+   "mika": 87.7,
+   "nova": 58.7,
+   "omar": 107.6,
+   "paco": 105.9,
+   "penny": 104.1,
+   "qm": 84.7,
+   "qm:A": 84.7,
+   "qm:B": 62.7,
+   "qm:C": 108.6,
+   "rhea": 125.4,
+   "rosa": 86.3,
+   "sam": 95.0,
+   "tomas": 82.2,
+   "unit8": 84.5,
+   "vic": 78.9
+  },
+  "guest:man:2": {
+   "ada": 178.7,
+   "amara": 98.0,
+   "clara": 112.2,
+   "continuity": 144.9,
+   "dev": 82.9,
+   "guest:man:0": 88.6,
+   "guest:man:1": 46.9,
+   "guest:woman:0": 110.7,
+   "guest:woman:1": 90.7,
+   "guest:woman:2": 160.8,
+   "ines": 70.7,
+   "june": 108.4,
+   "kai": 73.0,
+   "leo": 55.3,
+   "lola": 103.1,
+   "max": 115.4,
+   "mika": 73.6,
+   "nova": 71.0,
+   "omar": 111.7,
+   "paco": 115.6,
+   "penny": 115.6,
+   "qm": 91.4,
+   "qm:A": 91.4,
+   "qm:B": 83.2,
+   "qm:C": 120.4,
+   "rhea": 137.0,
+   "rosa": 100.2,
+   "sam": 94.4,
+   "tomas": 98.6,
+   "unit8": 75.7,
+   "vic": 81.3
+  },
+  "guest:woman:0": {
+   "ada": 117.1,
+   "amara": 81.4,
+   "clara": 77.1,
+   "continuity": 65.9,
+   "dev": 73.8,
+   "guest:man:0": 64.4,
+   "guest:man:1": 112.0,
+   "guest:man:2": 110.7,
+   "guest:woman:1": 45.1,
+   "guest:woman:2": 77.1,
+   "ines": 56.2,
+   "june": 53.7,
+   "kai": 86.1,
+   "leo": 82.7,
+   "lola": 64.2,
+   "max": 73.2,
+   "mika": 78.6,
+   "nova": 88.2,
+   "omar": 73.4,
+   "paco": 87.3,
+   "penny": 76.2,
+   "qm": 74.1,
+   "qm:A": 74.1,
+   "qm:B": 83.0,
+   "qm:C": 58.6,
+   "rhea": 88.5,
+   "rosa": 81.3,
+   "sam": 79.8,
+   "tomas": 83.6,
+   "unit8": 76.6,
+   "vic": 75.2
+  },
+  "guest:woman:1": {
+   "ada": 122.3,
+   "amara": 73.7,
+   "clara": 60.2,
+   "continuity": 74.8,
+   "dev": 77.7,
+   "guest:man:0": 57.4,
+   "guest:man:1": 94.5,
+   "guest:man:2": 90.7,
+   "guest:woman:0": 45.1,
+   "guest:woman:2": 83.4,
+   "ines": 55.7,
+   "june": 54.5,
+   "kai": 84.9,
+   "leo": 67.9,
+   "lola": 44.5,
+   "max": 88.6,
+   "mika": 71.2,
+   "nova": 75.2,
+   "omar": 89.6,
+   "paco": 98.7,
+   "penny": 67.6,
+   "qm": 61.8,
+   "qm:A": 61.8,
+   "qm:B": 83.6,
+   "qm:C": 69.0,
+   "rhea": 90.7,
+   "rosa": 64.3,
+   "sam": 91.7,
+   "tomas": 93.5,
+   "unit8": 69.2,
+   "vic": 82.0
+  },
+  "guest:woman:2": {
+   "ada": 71.5,
+   "amara": 99.3,
+   "clara": 78.6,
+   "continuity": 32.1,
+   "dev": 115.1,
+   "guest:man:0": 97.8,
+   "guest:man:1": 158.1,
+   "guest:man:2": 160.8,
+   "guest:woman:0": 77.1,
+   "guest:woman:1": 83.4,
+   "ines": 112.7,
+   "june": 68.6,
+   "kai": 136.8,
+   "leo": 135.0,
+   "lola": 94.4,
+   "max": 104.7,
+   "mika": 127.5,
+   "nova": 137.6,
+   "omar": 112.5,
+   "paco": 122.6,
+   "penny": 67.8,
+   "qm": 110.2,
+   "qm:A": 110.2,
+   "qm:B": 125.7,
+   "qm:C": 68.9,
+   "rhea": 71.9,
+   "rosa": 98.4,
+   "sam": 128.2,
+   "tomas": 126.5,
+   "unit8": 120.7,
+   "vic": 124.9
+  },
+  "ines": {
+   "ada": 129.2,
+   "amara": 53.8,
+   "clara": 76.7,
+   "continuity": 92.8,
+   "dev": 62.6,
+   "guest:man:0": 54.5,
+   "guest:man:1": 61.7,
+   "guest:man:2": 70.7,
+   "guest:woman:0": 56.2,
+   "guest:woman:1": 55.7,
+   "guest:woman:2": 112.7,
+   "june": 56.8,
+   "kai": 50.1,
+   "leo": 42.8,
+   "lola": 72.2,
+   "max": 75.8,
+   "mika": 63.2,
+   "nova": 51.0,
+   "omar": 71.5,
+   "paco": 79.7,
+   "penny": 75.4,
+   "qm": 55.8,
+   "qm:A": 55.8,
+   "qm:B": 49.7,
+   "qm:C": 64.1,
+   "rhea": 91.1,
+   "rosa": 68.0,
+   "sam": 63.7,
+   "tomas": 59.2,
+   "unit8": 60.9,
+   "vic": 51.9
+  },
+  "june": {
+   "ada": 84.8,
+   "amara": 45.6,
+   "clara": 48.1,
+   "continuity": 48.4,
+   "dev": 79.1,
+   "guest:man:0": 56.1,
+   "guest:man:1": 102.5,
+   "guest:man:2": 108.4,
+   "guest:woman:0": 53.7,
+   "guest:woman:1": 54.5,
+   "guest:woman:2": 68.6,
+   "ines": 56.8,
+   "kai": 89.2,
+   "leo": 89.0,
+   "lola": 64.4,
+   "max": 83.5,
+   "mika": 71.5,
+   "nova": 83.7,
+   "omar": 85.6,
+   "paco": 86.4,
+   "penny": 46.5,
+   "qm": 54.1,
+   "qm:A": 54.1,
+   "qm:B": 81.6,
+   "qm:C": 30.6,
+   "rhea": 46.4,
+   "rosa": 62.4,
+   "sam": 94.2,
+   "tomas": 87.7,
+   "unit8": 87.5,
+   "vic": 86.9
+  },
+  "kai": {
+   "ada": 141.7,
+   "amara": 71.1,
+   "clara": 101.7,
+   "continuity": 113.8,
+   "dev": 63.7,
+   "guest:man:0": 67.8,
+   "guest:man:1": 52.2,
+   "guest:man:2": 73.0,
+   "guest:woman:0": 86.1,
+   "guest:woman:1": 84.9,
+   "guest:woman:2": 136.8,
+   "ines": 50.1,
+   "june": 89.2,
+   "leo": 46.2,
+   "lola": 104.2,
+   "max": 82.2,
+   "mika": 91.1,
+   "nova": 73.1,
+   "omar": 68.2,
+   "paco": 66.7,
+   "penny": 94.5,
+   "qm": 87.0,
+   "qm:A": 87.0,
+   "qm:B": 39.3,
+   "qm:C": 84.7,
+   "rhea": 106.6,
+   "rosa": 89.0,
+   "sam": 65.0,
+   "tomas": 42.3,
+   "unit8": 81.4,
+   "vic": 54.7
+  },
+  "leo": {
+   "ada": 153.8,
+   "amara": 73.9,
+   "clara": 91.7,
+   "continuity": 116.7,
+   "dev": 72.7,
+   "guest:man:0": 74.0,
+   "guest:man:1": 42.7,
+   "guest:man:2": 55.3,
+   "guest:woman:0": 82.7,
+   "guest:woman:1": 67.9,
+   "guest:woman:2": 135.0,
+   "ines": 42.8,
+   "june": 89.0,
+   "kai": 46.2,
+   "lola": 84.8,
+   "max": 90.5,
+   "mika": 84.9,
+   "nova": 47.8,
+   "omar": 89.0,
+   "paco": 100.1,
+   "penny": 90.0,
+   "qm": 78.3,
+   "qm:A": 78.3,
+   "qm:B": 50.3,
+   "qm:C": 93.4,
+   "rhea": 119.5,
+   "rosa": 72.3,
+   "sam": 74.8,
+   "tomas": 68.9,
+   "unit8": 53.7,
+   "vic": 55.9
+  },
+  "lola": {
+   "ada": 134.6,
+   "amara": 83.5,
+   "clara": 47.9,
+   "continuity": 83.6,
+   "dev": 96.3,
+   "guest:man:0": 72.3,
+   "guest:man:1": 104.4,
+   "guest:man:2": 103.1,
+   "guest:woman:0": 64.2,
+   "guest:woman:1": 44.5,
+   "guest:woman:2": 94.4,
+   "ines": 72.2,
+   "june": 64.4,
+   "kai": 104.2,
+   "leo": 84.8,
+   "max": 104.1,
+   "mika": 66.8,
+   "nova": 70.8,
+   "omar": 117.8,
+   "paco": 116.9,
+   "penny": 76.1,
+   "qm": 47.2,
+   "qm:A": 47.2,
+   "qm:B": 95.3,
+   "qm:C": 80.0,
+   "rhea": 101.8,
+   "rosa": 61.4,
+   "sam": 121.4,
+   "tomas": 118.2,
+   "unit8": 80.0,
+   "vic": 100.9
+  },
+  "max": {
+   "ada": 117.5,
+   "amara": 86.0,
+   "clara": 100.3,
+   "continuity": 88.2,
+   "dev": 39.5,
+   "guest:man:0": 58.7,
+   "guest:man:1": 113.2,
+   "guest:man:2": 115.4,
+   "guest:woman:0": 73.2,
+   "guest:woman:1": 88.6,
+   "guest:woman:2": 104.7,
+   "ines": 75.8,
+   "june": 83.5,
+   "kai": 82.2,
+   "leo": 90.5,
+   "lola": 104.1,
+   "mika": 110.4,
+   "nova": 108.4,
+   "omar": 47.9,
+   "paco": 68.5,
+   "penny": 89.1,
+   "qm": 94.3,
+   "qm:A": 94.3,
+   "qm:B": 58.1,
+   "qm:C": 68.2,
+   "rhea": 97.0,
+   "rosa": 105.2,
+   "sam": 62.7,
+   "tomas": 60.4,
+   "unit8": 79.0,
+   "vic": 46.4
+  },
+  "mika": {
+   "ada": 151.9,
+   "amara": 86.8,
+   "clara": 83.0,
+   "continuity": 112.0,
+   "dev": 85.9,
+   "guest:man:0": 74.4,
+   "guest:man:1": 87.7,
+   "guest:man:2": 73.6,
+   "guest:woman:0": 78.6,
+   "guest:woman:1": 71.2,
+   "guest:woman:2": 127.5,
+   "ines": 63.2,
+   "june": 71.5,
+   "kai": 91.1,
+   "leo": 84.9,
+   "lola": 66.8,
+   "max": 110.4,
+   "nova": 70.4,
+   "omar": 111.7,
+   "paco": 103.8,
+   "penny": 99.7,
+   "qm": 53.1,
+   "qm:A": 53.1,
+   "qm:B": 96.0,
+   "qm:C": 90.9,
+   "rhea": 106.3,
+   "rosa": 87.9,
+   "sam": 109.1,
+   "tomas": 110.3,
+   "unit8": 87.8,
+   "vic": 97.0
+  },
+  "nova": {
+   "ada": 156.7,
+   "amara": 70.3,
+   "clara": 79.6,
+   "continuity": 117.0,
+   "dev": 94.2,
+   "guest:man:0": 86.9,
+   "guest:man:1": 58.7,
+   "guest:man:2": 71.0,
+   "guest:woman:0": 88.2,
+   "guest:woman:1": 75.2,
+   "guest:woman:2": 137.6,
+   "ines": 51.0,
+   "june": 83.7,
+   "kai": 73.1,
+   "leo": 47.8,
+   "lola": 70.8,
+   "max": 108.4,
+   "mika": 70.4,
+   "omar": 115.7,
+   "paco": 116.7,
+   "penny": 90.0,
+   "qm": 59.2,
+   "qm:A": 59.2,
+   "qm:B": 70.0,
+   "qm:C": 93.4,
+   "rhea": 119.5,
+   "rosa": 57.8,
+   "sam": 105.8,
+   "tomas": 97.2,
+   "unit8": 62.5,
+   "vic": 81.6
+  },
+  "omar": {
+   "ada": 117.3,
+   "amara": 86.7,
+   "clara": 114.9,
+   "continuity": 96.2,
+   "dev": 50.0,
+   "guest:man:0": 60.4,
+   "guest:man:1": 107.6,
+   "guest:man:2": 111.7,
+   "guest:woman:0": 73.4,
+   "guest:woman:1": 89.6,
+   "guest:woman:2": 112.5,
+   "ines": 71.5,
+   "june": 85.6,
+   "kai": 68.2,
+   "leo": 89.0,
+   "lola": 117.8,
+   "max": 47.9,
+   "mika": 111.7,
+   "nova": 115.7,
+   "paco": 47.9,
+   "penny": 99.3,
+   "qm": 104.8,
+   "qm:A": 104.8,
+   "qm:B": 65.3,
+   "qm:C": 72.3,
+   "rhea": 93.6,
+   "rosa": 116.6,
+   "sam": 36.7,
+   "tomas": 37.4,
+   "unit8": 97.4,
+   "vic": 52.0
+  },
+  "paco": {
+   "ada": 115.5,
+   "amara": 84.1,
+   "clara": 111.5,
+   "continuity": 100.6,
+   "dev": 61.9,
+   "guest:man:0": 54.8,
+   "guest:man:1": 105.9,
+   "guest:man:2": 115.6,
+   "guest:woman:0": 87.3,
+   "guest:woman:1": 98.7,
+   "guest:woman:2": 122.6,
+   "ines": 79.7,
+   "june": 86.4,
+   "kai": 66.7,
+   "leo": 100.1,
+   "lola": 116.9,
+   "max": 68.5,
+   "mika": 103.8,
+   "nova": 116.7,
+   "omar": 47.9,
+   "penny": 105.6,
+   "qm": 94.2,
+   "qm:A": 94.2,
+   "qm:B": 69.8,
+   "qm:C": 71.4,
+   "rhea": 84.9,
+   "rosa": 119.4,
+   "sam": 75.2,
+   "tomas": 56.1,
+   "unit8": 116.8,
+   "vic": 76.0
+  },
+  "penny": {
+   "ada": 84.3,
+   "amara": 52.1,
+   "clara": 38.9,
+   "continuity": 48.3,
+   "dev": 88.4,
+   "guest:man:0": 74.8,
+   "guest:man:1": 104.1,
+   "guest:man:2": 115.6,
+   "guest:woman:0": 76.2,
+   "guest:woman:1": 67.6,
+   "guest:woman:2": 67.8,
+   "ines": 75.4,
+   "june": 46.5,
+   "kai": 94.5,
+   "leo": 90.0,
+   "lola": 76.1,
+   "max": 89.1,
+   "mika": 99.7,
+   "nova": 90.0,
+   "omar": 99.3,
+   "paco": 105.6,
+   "qm": 78.4,
+   "qm:A": 78.4,
+   "qm:B": 80.8,
+   "qm:C": 51.5,
+   "rhea": 61.8,
+   "rosa": 43.5,
+   "sam": 105.6,
+   "tomas": 94.3,
+   "unit8": 83.5,
+   "vic": 91.8
+  },
+  "qm": {
+   "ada": 126.0,
+   "amara": 60.0,
+   "clara": 54.6,
+   "continuity": 89.9,
+   "dev": 82.9,
+   "guest:man:0": 55.2,
+   "guest:man:1": 84.7,
+   "guest:man:2": 91.4,
+   "guest:woman:0": 74.1,
+   "guest:woman:1": 61.8,
+   "guest:woman:2": 110.2,
+   "ines": 55.8,
+   "june": 54.1,
+   "kai": 87.0,
+   "leo": 78.3,
+   "lola": 47.2,
+   "max": 94.3,
+   "mika": 53.1,
+   "nova": 59.2,
+   "omar": 104.8,
+   "paco": 94.2,
+   "penny": 78.4,
+   "qm:A": 0.0,
+   "qm:B": 76.9,
+   "qm:C": 65.7,
+   "rhea": 86.2,
+   "rosa": 66.8,
+   "sam": 109.8,
+   "tomas": 99.9,
+   "unit8": 85.3,
+   "vic": 89.4
+  },
+  "qm:A": {
+   "ada": 126.0,
+   "amara": 60.0,
+   "clara": 54.6,
+   "continuity": 89.9,
+   "dev": 82.9,
+   "guest:man:0": 55.2,
+   "guest:man:1": 84.7,
+   "guest:man:2": 91.4,
+   "guest:woman:0": 74.1,
+   "guest:woman:1": 61.8,
+   "guest:woman:2": 110.2,
+   "ines": 55.8,
+   "june": 54.1,
+   "kai": 87.0,
+   "leo": 78.3,
+   "lola": 47.2,
+   "max": 94.3,
+   "mika": 53.1,
+   "nova": 59.2,
+   "omar": 104.8,
+   "paco": 94.2,
+   "penny": 78.4,
+   "qm": 0.0,
+   "qm:B": 76.9,
+   "qm:C": 65.7,
+   "rhea": 86.2,
+   "rosa": 66.8,
+   "sam": 109.8,
+   "tomas": 99.9,
+   "unit8": 85.3,
+   "vic": 89.4
+  },
+  "qm:B": {
+   "ada": 130.3,
+   "amara": 60.8,
+   "clara": 88.3,
+   "continuity": 101.5,
+   "dev": 51.8,
+   "guest:man:0": 57.6,
+   "guest:man:1": 62.7,
+   "guest:man:2": 83.2,
+   "guest:woman:0": 83.0,
+   "guest:woman:1": 83.6,
+   "guest:woman:2": 125.7,
+   "ines": 49.7,
+   "june": 81.6,
+   "kai": 39.3,
+   "leo": 50.3,
+   "lola": 95.3,
+   "max": 58.1,
+   "mika": 96.0,
+   "nova": 70.0,
+   "omar": 65.3,
+   "paco": 69.8,
+   "penny": 80.8,
+   "qm": 76.9,
+   "qm:A": 76.9,
+   "qm:C": 72.2,
+   "rhea": 99.7,
+   "rosa": 79.3,
+   "sam": 65.2,
+   "tomas": 42.2,
+   "unit8": 68.3,
+   "vic": 37.0
+  },
+  "qm:C": {
+   "ada": 70.7,
+   "amara": 44.4,
+   "clara": 61.0,
+   "continuity": 41.7,
+   "dev": 73.4,
+   "guest:man:0": 54.0,
+   "guest:man:1": 108.6,
+   "guest:man:2": 120.4,
+   "guest:woman:0": 58.6,
+   "guest:woman:1": 69.0,
+   "guest:woman:2": 68.9,
+   "ines": 64.1,
+   "june": 30.6,
+   "kai": 84.7,
+   "leo": 93.4,
+   "lola": 80.0,
+   "max": 68.2,
+   "mika": 90.9,
+   "nova": 93.4,
+   "omar": 72.3,
+   "paco": 71.4,
+   "penny": 51.5,
+   "qm": 65.7,
+   "qm:A": 65.7,
+   "qm:B": 72.2,
+   "rhea": 39.9,
+   "rosa": 73.2,
+   "sam": 88.9,
+   "tomas": 74.8,
+   "unit8": 93.9,
+   "vic": 80.8
+  },
+  "rhea": {
+   "ada": 48.7,
+   "amara": 57.6,
+   "clara": 73.6,
+   "continuity": 51.6,
+   "dev": 97.2,
+   "guest:man:0": 73.2,
+   "guest:man:1": 125.4,
+   "guest:man:2": 137.0,
+   "guest:woman:0": 88.5,
+   "guest:woman:1": 90.7,
+   "guest:woman:2": 71.9,
+   "ines": 91.1,
+   "june": 46.4,
+   "kai": 106.6,
+   "leo": 119.5,
+   "lola": 101.8,
+   "max": 97.0,
+   "mika": 106.3,
+   "nova": 119.5,
+   "omar": 93.6,
+   "paco": 84.9,
+   "penny": 61.8,
+   "qm": 86.2,
+   "qm:A": 86.2,
+   "qm:B": 99.7,
+   "qm:C": 39.9,
+   "rosa": 92.2,
+   "sam": 111.7,
+   "tomas": 97.8,
+   "unit8": 122.7,
+   "vic": 109.8
+  },
+  "rosa": {
+   "ada": 120.6,
+   "amara": 58.4,
+   "clara": 38.8,
+   "continuity": 79.1,
+   "dev": 98.1,
+   "guest:man:0": 85.1,
+   "guest:man:1": 86.3,
+   "guest:man:2": 100.2,
+   "guest:woman:0": 81.3,
+   "guest:woman:1": 64.3,
+   "guest:woman:2": 98.4,
+   "ines": 68.0,
+   "june": 62.4,
+   "kai": 89.0,
+   "leo": 72.3,
+   "lola": 61.4,
+   "max": 105.2,
+   "mika": 87.9,
+   "nova": 57.8,
+   "omar": 116.6,
+   "paco": 119.4,
+   "penny": 43.5,
+   "qm": 66.8,
+   "qm:A": 66.8,
+   "qm:B": 79.3,
+   "qm:C": 73.2,
+   "rhea": 92.2,
+   "sam": 115.9,
+   "tomas": 103.5,
+   "unit8": 71.1,
+   "vic": 94.8
+  },
+  "sam": {
+   "ada": 139.0,
+   "amara": 90.5,
+   "clara": 122.5,
+   "continuity": 113.7,
+   "dev": 56.2,
+   "guest:man:0": 74.6,
+   "guest:man:1": 95.0,
+   "guest:man:2": 94.4,
+   "guest:woman:0": 79.8,
+   "guest:woman:1": 91.7,
+   "guest:woman:2": 128.2,
+   "ines": 63.7,
+   "june": 94.2,
+   "kai": 65.0,
+   "leo": 74.8,
+   "lola": 121.4,
+   "max": 62.7,
+   "mika": 109.1,
+   "nova": 105.8,
+   "omar": 36.7,
+   "paco": 75.2,
+   "penny": 105.6,
+   "qm": 109.8,
+   "qm:A": 109.8,
+   "qm:B": 65.2,
+   "qm:C": 88.9,
+   "rhea": 111.7,
+   "rosa": 115.9,
+   "tomas": 40.0,
+   "unit8": 83.0,
+   "vic": 39.5
+  },
+  "tomas": {
+   "ada": 124.5,
+   "amara": 73.1,
+   "clara": 110.9,
+   "continuity": 104.7,
+   "dev": 56.7,
+   "guest:man:0": 66.9,
+   "guest:man:1": 82.2,
+   "guest:man:2": 98.6,
+   "guest:woman:0": 83.6,
+   "guest:woman:1": 93.5,
+   "guest:woman:2": 126.5,
+   "ines": 59.2,
+   "june": 87.7,
+   "kai": 42.3,
+   "leo": 68.9,
+   "lola": 118.2,
+   "max": 60.4,
+   "mika": 110.3,
+   "nova": 97.2,
+   "omar": 37.4,
+   "paco": 56.1,
+   "penny": 94.3,
+   "qm": 99.9,
+   "qm:A": 99.9,
+   "qm:B": 42.2,
+   "qm:C": 74.8,
+   "rhea": 97.8,
+   "rosa": 103.5,
+   "sam": 40.0,
+   "unit8": 89.7,
+   "vic": 43.7
+  },
+  "unit8": {
+   "ada": 152.6,
+   "amara": 85.5,
+   "clara": 87.4,
+   "continuity": 108.3,
+   "dev": 69.2,
+   "guest:man:0": 83.4,
+   "guest:man:1": 84.5,
+   "guest:man:2": 75.7,
+   "guest:woman:0": 76.6,
+   "guest:woman:1": 69.2,
+   "guest:woman:2": 120.7,
+   "ines": 60.9,
+   "june": 87.5,
+   "kai": 81.4,
+   "leo": 53.7,
+   "lola": 80.0,
+   "max": 79.0,
+   "mika": 87.8,
+   "nova": 62.5,
+   "omar": 97.4,
+   "paco": 116.8,
+   "penny": 83.5,
+   "qm": 85.3,
+   "qm:A": 85.3,
+   "qm:B": 68.3,
+   "qm:C": 93.9,
+   "rhea": 122.7,
+   "rosa": 71.1,
+   "sam": 83.0,
+   "tomas": 89.7,
+   "vic": 57.2
+  },
+  "vic": {
+   "ada": 139.4,
+   "amara": 77.3,
+   "clara": 102.7,
+   "continuity": 106.8,
+   "dev": 40.9,
+   "guest:man:0": 61.8,
+   "guest:man:1": 78.9,
+   "guest:man:2": 81.3,
+   "guest:woman:0": 75.2,
+   "guest:woman:1": 82.0,
+   "guest:woman:2": 124.9,
+   "ines": 51.9,
+   "june": 86.9,
+   "kai": 54.7,
+   "leo": 55.9,
+   "lola": 100.9,
+   "max": 46.4,
+   "mika": 97.0,
+   "nova": 81.6,
+   "omar": 52.0,
+   "paco": 76.0,
+   "penny": 91.8,
+   "qm": 89.4,
+   "qm:A": 89.4,
+   "qm:B": 37.0,
+   "qm:C": 80.8,
+   "rhea": 109.8,
+   "rosa": 94.8,
+   "sam": 39.5,
+   "tomas": 43.7,
+   "unit8": 57.2
+  }
+ },
+ "groups": {
+  "WORLD NOW": [
+   [
+    "dev",
+    "vic",
+    40.9
+   ],
+   [
+    "leo",
+    "ines",
+    42.8
+   ],
+   [
+    "paco",
+    "omar",
+    47.9
+   ],
+   [
+    "lola",
+    "clara",
+    47.9
+   ],
+   [
+    "omar",
+    "dev",
+    50.0
+   ],
+   [
+    "ines",
+    "vic",
+    51.9
+   ],
+   [
+    "omar",
+    "vic",
+    52.0
+   ],
+   [
+    "amara",
+    "ines",
+    53.8
+   ],
+   [
+    "leo",
+    "vic",
+    55.9
+   ],
+   [
+    "amara",
+    "rhea",
+    57.6
+   ],
+   [
+    "clara",
+    "amara",
+    61.1
+   ],
+   [
+    "paco",
+    "dev",
+    61.9
+   ],
+   [
+    "dev",
+    "ines",
+    62.6
+   ],
+   [
+    "ines",
+    "mika",
+    63.2
+   ],
+   [
+    "lola",
+    "mika",
+    66.8
+   ],
+   [
+    "omar",
+    "ines",
+    71.5
+   ],
+   [
+    "lola",
+    "ines",
+    72.2
+   ],
+   [
+    "dev",
+    "leo",
+    72.7
+   ],
+   [
+    "clara",
+    "rhea",
+    73.6
+   ],
+   [
+    "amara",
+    "leo",
+    73.9
+   ],
+   [
+    "paco",
+    "vic",
+    76.0
+   ],
+   [
+    "clara",
+    "ines",
+    76.7
+   ],
+   [
+    "amara",
+    "vic",
+    77.3
+   ],
+   [
+    "paco",
+    "ines",
+    79.7
+   ],
+   [
+    "dev",
+    "amara",
+    80.2
+   ],
+   [
+    "clara",
+    "mika",
+    83.0
+   ],
+   [
+    "lola",
+    "amara",
+    83.5
+   ],
+   [
+    "paco",
+    "amara",
+    84.1
+   ],
+   [
+    "lola",
+    "leo",
+    84.8
+   ],
+   [
+    "paco",
+    "rhea",
+    84.9
+   ],
+   [
+    "leo",
+    "mika",
+    84.9
+   ],
+   [
+    "dev",
+    "mika",
+    85.9
+   ],
+   [
+    "omar",
+    "amara",
+    86.7
+   ],
+   [
+    "amara",
+    "mika",
+    86.8
+   ],
+   [
+    "omar",
+    "leo",
+    89.0
+   ],
+   [
+    "ines",
+    "rhea",
+    91.1
+   ],
+   [
+    "clara",
+    "leo",
+    91.7
+   ],
+   [
+    "omar",
+    "rhea",
+    93.6
+   ],
+   [
+    "clara",
+    "dev",
+    95.3
+   ],
+   [
+    "lola",
+    "dev",
+    96.3
+   ],
+   [
+    "vic",
+    "mika",
+    97.0
+   ],
+   [
+    "dev",
+    "rhea",
+    97.2
+   ],
+   [
+    "paco",
+    "leo",
+    100.1
+   ],
+   [
+    "lola",
+    "vic",
+    100.9
+   ],
+   [
+    "lola",
+    "rhea",
+    101.8
+   ],
+   [
+    "clara",
+    "vic",
+    102.7
+   ],
+   [
+    "paco",
+    "mika",
+    103.8
+   ],
+   [
+    "rhea",
+    "mika",
+    106.3
+   ],
+   [
+    "rhea",
+    "vic",
+    109.8
+   ],
+   [
+    "paco",
+    "clara",
+    111.5
+   ],
+   [
+    "omar",
+    "mika",
+    111.7
+   ],
+   [
+    "omar",
+    "clara",
+    114.9
+   ],
+   [
+    "paco",
+    "lola",
+    116.9
+   ],
+   [
+    "lola",
+    "omar",
+    117.8
+   ],
+   [
+    "leo",
+    "rhea",
+    119.5
+   ]
+  ],
+  "TECH BYTES": [
+   [
+    "max",
+    "june",
+    83.5
+   ],
+   [
+    "ada",
+    "june",
+    84.8
+   ],
+   [
+    "max",
+    "ada",
+    117.5
+   ]
+  ],
+  "COSMOS DESK": [
+   [
+    "tomas",
+    "dev",
+    56.7
+   ],
+   [
+    "nova",
+    "unit8",
+    62.5
+   ],
+   [
+    "unit8",
+    "dev",
+    69.2
+   ],
+   [
+    "unit8",
+    "tomas",
+    89.7
+   ],
+   [
+    "nova",
+    "dev",
+    94.2
+   ],
+   [
+    "nova",
+    "tomas",
+    97.2
+   ]
+  ],
+  "MONEY MINUTE": [
+   [
+    "penny",
+    "omar",
+    99.3
+   ]
+  ],
+  "SEVEN DAYS": [
+   [
+    "paco",
+    "lola",
+    116.9
+   ]
+  ],
+  "FULL TIME": [
+   [
+    "kai",
+    "rosa",
+    89.0
+   ]
+  ],
+  "PAY ATTENTION": [
+   [
+    "qm",
+    "lola",
+    47.2
+   ],
+   [
+    "qm",
+    "nova",
+    59.2
+   ],
+   [
+    "nova",
+    "unit8",
+    62.5
+   ],
+   [
+    "max",
+    "sam",
+    62.7
+   ],
+   [
+    "paco",
+    "max",
+    68.5
+   ],
+   [
+    "lola",
+    "nova",
+    70.8
+   ],
+   [
+    "paco",
+    "sam",
+    75.2
+   ],
+   [
+    "lola",
+    "penny",
+    76.1
+   ],
+   [
+    "qm",
+    "penny",
+    78.4
+   ],
+   [
+    "max",
+    "unit8",
+    79.0
+   ],
+   [
+    "lola",
+    "unit8",
+    80.0
+   ],
+   [
+    "unit8",
+    "sam",
+    83.0
+   ],
+   [
+    "unit8",
+    "penny",
+    83.5
+   ],
+   [
+    "ada",
+    "penny",
+    84.3
+   ],
+   [
+    "qm",
+    "unit8",
+    85.3
+   ],
+   [
+    "max",
+    "penny",
+    89.1
+   ],
+   [
+    "nova",
+    "penny",
+    90.0
+   ],
+   [
+    "qm",
+    "paco",
+    94.2
+   ],
+   [
+    "qm",
+    "max",
+    94.3
+   ],
+   [
+    "lola",
+    "max",
+    104.1
+   ],
+   [
+    "paco",
+    "penny",
+    105.6
+   ],
+   [
+    "penny",
+    "sam",
+    105.6
+   ],
+   [
+    "nova",
+    "sam",
+    105.8
+   ],
+   [
+    "max",
+    "nova",
+    108.4
+   ],
+   [
+    "qm",
+    "sam",
+    109.8
+   ],
+   [
+    "paco",
+    "ada",
+    115.5
+   ],
+   [
+    "paco",
+    "nova",
+    116.7
+   ],
+   [
+    "paco",
+    "unit8",
+    116.8
+   ],
+   [
+    "paco",
+    "lola",
+    116.9
+   ],
+   [
+    "max",
+    "ada",
+    117.5
+   ],
+   [
+    "lola",
+    "sam",
+    121.4
+   ],
+   [
+    "qm",
+    "ada",
+    126.0
+   ],
+   [
+    "lola",
+    "ada",
+    134.6
+   ],
+   [
+    "ada",
+    "sam",
+    139.0
+   ],
+   [
+    "ada",
+    "unit8",
+    152.6
+   ],
+   [
+    "ada",
+    "nova",
+    156.7
+   ]
+  ]
+ }
+}

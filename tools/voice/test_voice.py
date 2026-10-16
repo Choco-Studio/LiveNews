@@ -326,12 +326,23 @@ class MelodyTest(unittest.TestCase):
         a = self.clip(vowel(1.6, 130.0), pitch=(0.5, 0.5))
         b = self.clip(vowel(1.6, 130.0 * 2 ** (2.4 / 12)), pitch=(-0.5, -0.5))
         dry = [a['audio'].copy(), b['audio'].copy()]
-        engine.shape_melody([a, b], SR)
+        engine.shape_melody([a, b], SR, bend=True)
         for c, x in zip((a, b), dry):
             self.assertEqual(len(c['audio']), len(x))
         after = 12 * math.log2(np.median(dsp.pitch_track(b['audio'], SR)[1]) / np.median(dsp.pitch_track(a['audio'], SR)[1]))
         self.assertAlmostEqual(after, 2.4 * (1 - engine.STEER) - 1.0, delta=0.3)
         self.assertIn('gain', a)
+
+    def test_shape_melody_by_default_shapes_only_the_loudness(self):
+        # 16 Oct A/B (engine.BEND): the bend cost naturalness, so the voice keeps Kokoro's own pitch
+        import engine
+        self.assertFalse(engine.BEND)
+        a = self.clip(vowel(1.6, 130.0), pitch=(1.5, 1.0), gain=0.5, accents=[(11, 15, 2.0, 1.5)])
+        dry = a['audio'].copy()
+        engine.shape_melody([a], SR, bend=False)
+        np.testing.assert_array_equal(a['audio'], dry)
+        times, db = a['gain']
+        self.assertAlmostEqual(float(np.max(db)), 2.0, places=2)  # the lift on the figure, as loudness
 
     def test_caller_melody_is_kept_and_clamped(self):
         text = 'Rates rose. Will they fall?'
@@ -396,6 +407,31 @@ class MetricsTest(unittest.TestCase):
         x2[SR // 2:] += 0.3  # hard step = click
         self.assertGreater(metrics.clicks(x2, SR), base)
 
+    def test_timbre_ignores_level_and_tells_spectra_apart(self):
+        # the voices round's distinctness measure (metrics.timbre_*): coefficient 0 (level) is left out
+        x = speechlike(3.0)
+        a = metrics.timbre_signature([(x, SR)])
+        self.assertEqual(a.shape, (12,))
+        self.assertLess(metrics.timbre_distance(a, metrics.timbre_signature([(x * 0.3, SR)])), 0.5)
+        # the same signal through a brighter tilt (a different vocal tract, as far as the cepstrum knows)
+        bright = np.concatenate([[x[0]], np.diff(x)]) * 3
+        self.assertGreater(metrics.timbre_distance(a, metrics.timbre_signature([(bright, SR)])), 25)
+        # silence carries no weight: only the frames within 35 dB of the loudest count (the two frames that straddle
+        # each edge move it a little, far under the casting's bars of 25 and 40)
+        padded = np.concatenate([np.zeros(SR), x, np.zeros(SR)])
+        self.assertEqual(len(metrics.mel_cepstrum(padded, SR)), len(metrics.mel_cepstrum(x, SR)) + 4)
+        self.assertLess(metrics.timbre_distance(a, metrics.timbre_signature([(padded, SR)])), 10)
+
+    def test_audit_voicing_measures(self):
+        # tools/voice/audit.py: a clean periodic voice has little aperiodicity and a high harmonics-to-noise ratio
+        import audit
+        t = np.arange(2 * SR) / SR
+        clean = sum(np.sin(2 * np.pi * 140 * k * t) / k for k in range(1, 12)) * 0.2
+        noisy = clean + np.random.default_rng(3).standard_normal(len(t)) * 0.08
+        self.assertLess(audit.aperiodicity(clean, SR), audit.aperiodicity(noisy, SR))
+        self.assertGreater(audit.hnr(clean, SR), audit.hnr(noisy, SR) + 6)
+        self.assertGreater(audit.hnr(clean, SR), 20)
+
 
 @unittest.skipUnless(have_models(), 'Kokoro model files not installed')
 class EngineTest(unittest.TestCase):
@@ -424,14 +460,15 @@ class EngineTest(unittest.TestCase):
         self.assertLessEqual(reply['truePeak'], -1.9)
 
     def test_melody_keeps_the_timing(self):
-        # the newsreader melody bends the pitch and gain only: same length, same word times
+        # the newsreader melody, bent (engine.BEND or 'bend': true), moves the pitch and gain only: same length,
+        # same word times
         text = 'Rates rose to 4.75 percent today. Most economists had expected no change.'
         req = {'text': text, 'voice': 'bm_george:0.6+bm_lewis:0.4', 'lang': 'en-gb', 'phrases': [
             {'text': 'Rates rose to 4.75 percent today.', 'pauseAfter': 0.4, 'pitch': [1.4, 1.1], 'gain': 0.5,
              'accents': [{'start': 14, 'end': 18, 'semis': 1.5, 'db': 1.5}]},
             {'text': 'Most economists had expected no change.', 'pitch': [-0.8, -1.1], 'gain': -0.3}]}
         a, _, ra = self.engine.speak({**req, 'melody': False})
-        b, _, rb = self.engine.speak(req)
+        b, _, rb = self.engine.speak({**req, 'bend': True})
         self.assertEqual(ra['words'], rb['words'])
         self.assertEqual(ra['phrases'], rb['phrases'])
         self.assertLess(abs(len(a) - len(b)) / SR, 0.05)  # only the room tail, trimmed by level, may differ
@@ -442,6 +479,19 @@ class EngineTest(unittest.TestCase):
         lead = np.median(f[(t >= p0['t']) & (t < p0['t'] + p0['dur'])])
         close = np.median(f[(t >= p1['t']) & (t < p1['t'] + p1['dur'])])
         self.assertGreater(12 * math.log2(lead / close), 1.0)
+
+    def test_melody_by_default_keeps_kokoros_pitch(self):
+        # without the bend (the default since 16 Oct) the melody only shapes the loudness: Kokoro's pitch is untouched
+        text = 'Rates rose to 4.75 percent today. Most economists had expected no change.'
+        req = {'text': text, 'voice': 'bm_george:0.6+bm_lewis:0.4', 'lang': 'en-gb', 'phrases': [
+            {'text': 'Rates rose to 4.75 percent today.', 'pauseAfter': 0.4, 'pitch': [1.4, 1.1], 'gain': 0.5},
+            {'text': 'Most economists had expected no change.', 'pitch': [-0.8, -1.1], 'gain': -0.3}]}
+        a, _, ra = self.engine.speak({**req, 'melody': False})
+        b, _, rb = self.engine.speak(req)
+        self.assertEqual(ra['words'], rb['words'])
+        ta, fa = dsp.pitch_track(a, SR)
+        tb, fb = dsp.pitch_track(b, SR)
+        self.assertLess(abs(12 * math.log2(np.median(fb) / np.median(fa))), 0.1)
 
     def test_preset_and_robot(self):
         _, _, reply = self.engine.speak({'text': 'Affirmative.', 'voice': 'unit8'})

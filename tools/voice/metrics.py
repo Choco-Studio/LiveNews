@@ -241,3 +241,67 @@ def speech_rate(words, phrases):
     """Words per minute over the time actually spent speaking."""
     talk = sum(p['dur'] for p in phrases)
     return 60 * len(words) / talk if talk > 0 else 0.0
+
+
+# ---------------------------------------------------------------- timbre (distinctness between voices)
+
+def _mel_filterbank(sr, n_fft, n_mels=40, fmin=60.0, fmax=8000.0):
+    """Triangular mel filters (HTK mel scale) over the rfft bins of an n_fft frame."""
+    def mel(f):
+        return 2595.0 * np.log10(1.0 + f / 700.0)
+
+    def hz(m):
+        return 700.0 * (10 ** (m / 2595.0) - 1.0)
+    fmax = min(fmax, sr / 2)
+    pts = hz(np.linspace(mel(fmin), mel(fmax), n_mels + 2))
+    f = np.fft.rfftfreq(n_fft, 1 / sr)
+    fb = np.zeros((n_mels, len(f)))
+    for i in range(n_mels):
+        lo, c, hi = pts[i], pts[i + 1], pts[i + 2]
+        fb[i] = np.clip(np.minimum((f - lo) / (c - lo), (hi - f) / (hi - c)), 0, None)
+    return fb
+
+
+def mel_cepstrum(x, sr, n_mels=40, coeffs=(1, 13), frame=0.025, hop=0.010, floor_db=35.0):
+    """Mel cepstrum of the speech frames of x: (frames, 12) coefficients 1-12 of the DCT (orthonormal) of the
+    40-band log-mel spectrum in dB, frames within `floor_db` of the loudest only (no pauses).
+
+    Coefficient 0 (level) is left out and so is pitch: what is left is the spectral envelope, the timbre a
+    listener tells two voices apart by. Averaged over a voice's clips it is that voice's signature
+    (see timbre_distance)."""
+    x = np.asarray(x, dtype=np.float64)
+    fl, hp = int(frame * sr), int(hop * sr)
+    n_fft = 1 << int(np.ceil(np.log2(fl)))
+    if len(x) < fl + hp:
+        return np.zeros((0, coeffs[1] - coeffs[0]))
+    fr = _frames(x, fl, hp) * np.hanning(fl)
+    level = 10 * np.log10((fr ** 2).mean(axis=1) + 1e-12)
+    fr = fr[level > level.max() - floor_db]
+    power = np.abs(np.fft.rfft(fr, n_fft, axis=1)) ** 2
+    mel = power @ _mel_filterbank(sr, n_fft, n_mels).T
+    # a floor 90 dB under the loudest band, relative so the level of the clip changes nothing
+    logmel = 10 * np.log10(mel + 1e-9 * max(float(mel.max()), 1e-30))
+    k = np.arange(n_mels)
+    basis = np.cos(np.pi / n_mels * (k[None, :] + 0.5) * np.arange(n_mels)[:, None]) * math.sqrt(2.0 / n_mels)
+    basis[0] /= math.sqrt(2.0)
+    cep = logmel @ basis.T
+    return cep[:, coeffs[0]:coeffs[1]]
+
+
+# Scale of timbre_distance: the Euclidean distance of two signatures (dB-cepstrum units) x this factor puts the
+# figures on the scale the earlier castings were judged on (their notes, measured by a script that was not kept):
+# on the 16 Oct cast, Clara-Ines 35 (noted 32-37), Tomas-UNIT-8 51 (51), Dev-Paco 59 (59), Mika-Nova 71 (72),
+# Rhea-Penny 71 (73), the host-Rhea 73 (71). See docs/roadmap/critique/voices-naturalness.md.
+TIMBRE_SCALE = 4.5
+
+
+def timbre_signature(clips):
+    """A voice's signature: the mean mel cepstrum over all speech frames of its clips [(audio, sr), ...]."""
+    frames = [mel_cepstrum(x, sr) for x, sr in clips]
+    frames = [f for f in frames if len(f)]
+    return np.concatenate(frames).mean(axis=0) if frames else None
+
+
+def timbre_distance(a, b):
+    """Distance between two timbre signatures (timbre_signature), on the casting's scale (TIMBRE_SCALE)."""
+    return float(np.linalg.norm(np.asarray(a) - np.asarray(b))) * TIMBRE_SCALE

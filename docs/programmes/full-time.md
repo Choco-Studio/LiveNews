@@ -59,7 +59,13 @@ sources do not say, and nothing a viewer sees is a guess.
     skin, a cream roll-neck, gold studs; **C** shoulder-length dark brown curls under a thin orange headband, olive skin,
     a royal blue track top with a white stripe down each sleeve. **To switch** (both renderers): one letter per presenter
     in `public/js/full-time-looks.js`; a candidate other than A gets its own critique round before it airs.
-- **Voices**: two new blends unlike the 19 on air.
+- **Voices** (`server/voice/casting.json`; re-cast in the voices round of 16 Oct,
+  `docs/roadmap/critique/voices-naturalness.md`): Kai **bm_george 55% + bm_fable 45%**, en-GB, speed 1.19 (the
+  two best-graded British male voices: British to the ear, quick and warm; Paco is far in timbre and never on
+  FULL TIME); Rosa **bf_isabella 55% + af_nova 45%**, en-GB, 0.98 (a calm, dry British alto; first cast with
+  bf_emma in the lead, which put her 38 from Rhea of WORLD NOW).
+  The first blends (Kai bm_lewis + am_puck, Rosa if_sara + bf_alice: an Italian voice reading English) stay in
+  each entry as `previous`, to go back in one step.
 - **The owner approves both faces and both voices** (A/B looks, A/B voices, as for the experts) before they are final;
   until then the programme airs with the first choice and the LISTA asks for the decision.
 

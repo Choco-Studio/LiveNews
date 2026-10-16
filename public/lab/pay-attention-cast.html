@@ -22,11 +22,12 @@
      renderer. ?sheet=candidates | contestants | quiz | quiz-2x | onair | gestures | legacy. window.__lab.sheet(name)
      redraws; window.__ready resolves when drawn. See public/js/v2/canvas25d/labs/pay-attention-cast.js. -->
 <div class="bar"><select id="pick"></select><span id="info"></span></div>
-<!-- the three voice candidates (server/voice/casting.json qm.candidates), as the station renders them: the same lines -->
+<!-- the three voice candidates (server/voice/casting.json qm.candidates), as the station renders them: the quiz's own
+     lines (16 Oct voices round: natural English voices; the old ones are under "previous" in the casting sheet) -->
 <div class="voices">
-  <figure><figcaption>Voice A (provisional): bright and quick, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-a.ogg"></audio><small>jf_gongitsune 70% + pf_dora 30%, en-US, speed 1.08</small></figure>
-  <figure><figcaption>Voice B: a light, lively baritone, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-b.ogg"></audio><small>hm_psi, en-US, speed 1.08</small></figure>
-  <figure><figcaption>Voice C: clear and even, British</figcaption><audio controls preload="none" src="pay-attention-voices/host-c.ogg"></audio><small>jf_nezumi 65% + pf_dora 35%, en-GB, speed 1.06</small></figure>
+  <figure><figcaption>Voice A (provisional): bright and quick, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-a.ogg"></audio><small>af_bella 60% + af_kore 40%, en-US, speed 1.00</small></figure>
+  <figure><figcaption>Voice B: a light, lively baritone, American</figcaption><audio controls preload="none" src="pay-attention-voices/host-b.ogg"></audio><small>am_puck 55% + am_eric 45%, en-US, speed 1.02</small></figure>
+  <figure><figcaption>Voice C: clear and even, British</figcaption><audio controls preload="none" src="pay-attention-voices/host-c.ogg"></audio><small>af_kore 50% + bf_emma 25% + bf_lily 25%, en-GB, speed 1.06</small></figure>
 </div>
 <canvas id="sheet" width="16" height="16"></canvas>
 <script type="module">
