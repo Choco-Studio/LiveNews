@@ -723,6 +723,14 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const on = shotAt(log, said.get(i).on + 0.01);
         const kept = on.shot === 'quiz' && log.trace.some((x) => x.k === 'keep' && x.i === i) && speechOfLine(said.get(i)) < 2;
         assert.ok(on.shot === 'wide' || (on.shot === 'close' && on.focus === seg.anchor) || kept, `${seed}: ${seg.anchor}'s reaction on ${on.shot}/${on.focus}`);
+        // a reaction's face opened in the reveal's last words never stands more than 1.8 s after its last word before a
+        // board (on air, 14 Oct, round 15: "There it is." 2.6 s silent on the winner's single before the final score)
+        if (on.shot !== 'quiz' && log.trace.some((x) => x.k === 'tail' && x.i === i - 1)) {
+          const after = log.shots.find((x) => x.t > on.t + 1e-6);
+          // (the last word heard on the face: the reaction's, or the next frame's lead-in said on it before its board)
+          const lastOff = Math.max(...log.says.filter((x) => x.on < after.t - 1e-6 && x.off !== null).map((x) => x.off));
+          if (after?.shot === 'quiz') assert.ok(after.t - lastOff <= 1.8 + 0.1, `${seed}: ${seg.anchor}'s reaction face ${(after.t - lastOff).toFixed(2)} s silent before the board`);
+        }
       });
       const scores = episode.segments.findIndex((s) => s.part === 'scores');
       const on = shotAt(log, said.get(scores).on + 0.01);

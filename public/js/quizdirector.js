@@ -1003,12 +1003,18 @@ function revealCut(d, u, ri, b, nx) {
   if (next && next.shot !== 'quiz' && next.shot !== 'open') {
     // the next shot's own length: its lines (speech and pauses) until the plan cuts away from it
     let len = pause(d, ri);
-    for (let j = nx; j < segs.length && sameShot(q.shots[j], next); j++) len += speechOf(segs[j]) + pause(d, j);
-    const need = paceFor(d.scene.program?.id).shots.min + 0.1 - len;
+    let j = nx;
+    for (; j < segs.length && sameShot(q.shots[j], next); j++) len += speechOf(segs[j]) + pause(d, j);
+    const min = paceFor(d.scene.program?.id).shots.min;
+    const need = min + 0.1 - len;
     if (need <= 0) return null;
     // (a tail held back past its time would leave the reaction's face silent more than a beat: then the board keeps it)
     const at = Math.max(earliest, end - need);
     if (at > end - need + REACT_BEAT) return null;
+    // (nor a face that would stand more than FACE_QUIET s after its last word before a board: the reveal's board keeps the
+    // reply; on air, 14 Oct, round 15: "There it is." on the winner's single after the sudden-death verdict, 2.6 s silent
+    // before the final score)
+    if (q.shots[j]?.shot === 'quiz' && at + min - (end + len - pause(d, j - 1)) > FACE_QUIET) return null;
     return { k: 'tail', spec: plannedSpec(q, nx), at, min: earliest, end, slack: 0.3 };
   }
   if (next?.shot === 'quiz' && u.kind === 'question' && u.type !== 'today') {

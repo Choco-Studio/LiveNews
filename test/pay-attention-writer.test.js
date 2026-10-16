@@ -138,12 +138,15 @@ describe('the episode (§4, §5)', () => {
   });
   // on air, 14 Oct (round 14): the afternoon edition ran 378.6 s, the writer had estimated 362 (TODAY OR NOT TODAY's
   // headlines 12.6–18.0 s each on air, counted 11.5; UNIT-8's voice a third slower than the host's)
-  test('the estimate is calibrated on the recorded voices: a TODAY OR NOT TODAY headline at least 16 s, UNIT-8 slower than the host', () => {
+  test('the estimate is calibrated on the recorded voices: a TODAY OR NOT TODAY headline 12.5 s in a round, 14.5 s in DOUBLE OR NOTHING, UNIT-8 slower than the host', () => {
     const today = [
       { type: 'quiz', part: 'frame', anchor: 'H', text: 'First: Lufthansa to buy 44.9% of TAP Air Portugal in €1.2B deal.', countdown: 3.2, quiz: { round: 'today' } },
       { type: 'quiz', part: 'reveal', anchor: 'H', text: 'Today: NEWS IN 60 this afternoon. UNIT-8 has it.', quiz: { round: 'today', reveal: true } },
     ];
-    assert.ok(estimateSeconds(today) - estimateSeconds([]) >= TODAY_HEADLINE, 'a TODAY headline');
+    assert.ok(estimateSeconds(today) - estimateSeconds([]) >= TODAY_HEADLINE.round, 'a TODAY headline');
+    const donToday = [{ type: 'quiz', part: 'don', anchor: 'H', text: 'DOUBLE OR NOTHING, from the world desk.' }, ...today];
+    assert.ok(estimateSeconds(donToday) - estimateSeconds(donToday.slice(0, 1)) >= TODAY_HEADLINE.don, 'a DOUBLE OR NOTHING headline');
+    assert.ok(TODAY_HEADLINE.round >= 12 && TODAY_HEADLINE.don > TODAY_HEADLINE.round, 'calibrated on the recordings');
     const line = [{ type: 'quiz', part: 'react', anchor: 'B', text: 'A calculated result, within expected parameters.' }];
     assert.ok(estimateSeconds(line, { A: 'ada', B: 'unit8' }) > estimateSeconds([{ ...line[0], anchor: 'H' }], { A: 'ada', B: 'unit8' }), 'UNIT-8 slower than the host');
     // LETTER BY LETTER's clock runs to the winning buzz, past a stall (on air, 14 Oct, round 15: counted whole, 10 s)
@@ -169,7 +172,9 @@ describe('the episode (§4, §5)', () => {
       const ri = plan.rounds.findIndex((x) => x.type === 'today');
       if (ri < 0) continue;
       const items = plan.rounds[ri].questions[0].items.map((it, i) => ({ ...it, words: long[i % long.length] }));
-      const big = { ...plan, rounds: plan.rounds.map((x, i) => (i === ri ? { ...x, questions: [{ ...x.questions[0], items }] } : x)) };
+      // (and every other headline as long: options read, headlines buzzed)
+      const lengthen = (q, k) => ({ ...q, words: q.words ? long[(k + 1) % long.length] : q.words, options: q.options?.map((o, j) => (o.words ? { ...o, words: long[(k + j + 2) % long.length] } : o)) });
+      const big = { ...plan, rounds: plan.rounds.map((x, i) => (i === ri ? { ...x, questions: [{ ...x.questions[0], items }] } : { ...x, questions: x.questions.map((q, k) => (q.type === 'letters' || q.type === 'picture' ? lengthen(q, k) : q)) })) };
       const whole = writeEpisode(big, { channel, now: NOW, nextAt: NOW + 4.5 * H });
       const { episode, game, plan: aired } = whole;
       const limit = (game.tie ? LENGTH_BOUND.tie : LENGTH_BOUND.plain) - LENGTH_MARGIN;
@@ -190,9 +195,9 @@ describe('the episode (§4, §5)', () => {
       assert.equal(todayFrames.length, kept.length, seed);
       assert.deepEqual(todayFrames.map((x) => x.quiz.item.key), kept.map((x) => x.key), seed);
       const intro = segs.find((x) => x.part === 'round' && x.quiz.round === 'today').text;
-      assert.ok(!/\bsix\b/i.test(intro) || kept.length === 6, `${seed}: ${intro}`);
+      assert.ok(!/\bsix (?:headlines|quick)/i.test(intro) || kept.length === 6, `${seed}: ${intro}`);
       const tally = segs.find((x) => x.part === 'tally');
-      if (tally) assert.ok(!/\bsix\b/i.test(tally.text) || kept.length === 6, `${seed}: ${tally.text}`);
+      if (tally) assert.ok(!/\b(?:of six|six headlines)\b/i.test(tally.text) || kept.length === 6, `${seed}: ${tally.text}`);
       // the game is the one played on the headlines kept: the result's scores are its scores
       assert.deepEqual(segs.find((x) => x.part === 'result').quiz.scores, game.scores, seed);
     }

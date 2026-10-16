@@ -18,12 +18,14 @@ export const BEATS = Object.freeze({ picture: 7.5, letters: 10, where: 6.4, toda
 // The length as the recorded voices air it (step 7: the estimate against the air of the editions recorded in rounds
 // 1–15). Speech at the voices' rate; the countdowns, with the lock-ins and the recap said inside them; a beat on each
 // reveal. Calibrated on the air: LETTER BY LETTER's clock stops at the winning buzz (a stage's third of the clock, the
-// buzz a second into it); a TODAY OR NOT TODAY headline airs at least TODAY_HEADLINE s from its headline to its reveal
-// (on air, 14 Oct: 12.6–18.0 s, the writer had counted 11.5); a PICTURE THIS question PICTURE_EXTRA s over its speech
+// buzz a second into it); a TODAY OR NOT TODAY headline airs at least TODAY_HEADLINE s from its headline to what follows
+// its reveal: a round's 12.5 s, DOUBLE OR NOTHING's 14.5 s, its last stretched for the drumroll (measured on the four
+// afternoon recordings of 14 Oct: round headlines 10.9–15.3 s, DOUBLE OR NOTHING's 11.7–18.0 s; the writer had counted
+// 11.5); a PICTURE THIS question PICTURE_EXTRA s over its speech
 // and steps (the picture's last step on the board, its lock-ins on the wide), a WHERE question WHERE_EXTRA s (the pins);
 // each player's lines at their own voice's rate against the host's (VOICE_RATE: measured on the recordings of rounds
 // 10–15, characters a second with the clip's edges; UNIT-8's voice is the slowest, a third slower than the host's).
-export const TODAY_HEADLINE = 16;
+export const TODAY_HEADLINE = Object.freeze({ round: 12.5, don: 14.5 });
 export const PICTURE_EXTRA = 4.5;
 export const WHERE_EXTRA = 1.2;
 const VOICE_RATE = Object.freeze({ host: 14.2, unit8: 10.1, ada: 12.5, paco: 12.8, penny: 12.6, sam: 14.3, lola: 16.1 });
@@ -44,7 +46,10 @@ export function estimateSeconds(segs, cast = {}) {
   let est = 8;
   let countdown = 0;
   let today = null;
+  let don = false;
   for (const [i, s] of segs.entries()) {
+    if (s.part === 'don') don = true;
+    else if (s.part === 'round' || s.part === 'tie') don = false;
     const talk = String(s.text || '').length / cps(s.anchor) + 0.4;
     let add;
     if (s.part === 'lock' || s.part === 'recap') {
@@ -62,7 +67,7 @@ export function estimateSeconds(segs, cast = {}) {
     if (s.part === 'frame' && s.quiz?.round === 'today') today = 0;
     if (today !== null) today += add;
     if (s.part === 'reveal' && today !== null) {
-      est += Math.max(0, TODAY_HEADLINE - today);
+      est += Math.max(0, (don ? TODAY_HEADLINE.don : TODAY_HEADLINE.round) - today);
       today = null;
     }
   }
