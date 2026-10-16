@@ -122,6 +122,10 @@ const REVIEW = /\breview(?:ed|s)?\b(?!\s+(?:bomb\w*|embargo|copies|codes?)\b)|\b
 // Assassin's Creed game set in China has leaked", "Shrek 2 Remastered Microsoft Store page appears")
 // (a leak as the event, never leaks as a subject a studio talks about: "Rockstar reveals, in interview tackling crunch,
 // delays, and leaks")
+// a store listing or an age rating seen before an announcement (rules v11, from held-out set C: "Shrek 2 Remastered
+// Appears Briefly on XBOX Store", Insider Gaming 16 Oct, while Pure Xbox called the same remaster "Officially Being
+// Remastered"): one such report puts the whole event off (tools/play/measure.mjs)
+const LISTING = /\b(?:store (?:page|listing)s? (?:appears?|spotted|surfaces?|goes live early|briefly)|appears? (?:briefly )?on (?:the )?(?:xbox|microsoft|playstation|ps|nintendo|eshop|steam|epic(?: games)?) store|leaks? via (?:the )?(?:xbox|microsoft|playstation|ps|nintendo|eshop|steam|epic) store|listed (?:early )?on (?:the )?(?:xbox|microsoft|playstation|ps|nintendo|eshop|steam|epic) store|(?:esrb|pegi|usk|grac|cero|acb|classind|ratings? board)(?: rating)? (?:appears|spotted|surfaces|leaks?)|rated (?:in|by) (?:korea|taiwan|australia|brazil|germany|the esrb|esrb|pegi|usk|grac)\b.{0,40}\b(?:before|ahead of|unannounced|yet to be announced)|unannounced .{0,40}\b(?:rated|rating|listing|listed))\b/i;
 const LEAK = /\b(?:leaked|leaker|leakers|leaking|leaks? (?:online|shows?|reveals?|suggests?|points?|claims?|confirms?|appears?)|(?:a|new|latest|massive|huge|alleged|apparent) leak|leak(?:s)? of|datamin\w*|data-?mine\w*|store (?:page|listing) (?:appears|spotted|surfaces)|leaks? via|rating (?:appears|spotted|surfaces))\b/i;
 // rumours and guesses: a report not ours, a guess, an analyst's forecast; this report stays off, and the event airs only
 // from an outlet that states it as announced ("Ubisoft reportedly look to cut 100 more jobs", "Next Red Dead Launching
@@ -184,6 +188,7 @@ export const RULES = [
   ['review', (s) => REVIEW.test(unquoted(head(s)))],
   ['outlet voice', (s) => OUTLET_VOICE.test(unquoted(head(s))) || READER(unquoted(head(s))) || FIRST_PERSON.test(masked(unquoted(head(s)))) || /\?\s*$/.test(unquoted(head(s)).trim()) || notNews({ ...s, title: gameNoun(s.title), category: 'games' })],
   ['leak', (s) => LEAK.test(masked(unquoted(subject(s))))],
+  ['store listing', (s) => LISTING.test(masked(unquoted(subject(s))))],
   ['rumour', (s) => RUMOUR.test(unquoted(subject(s))) || HEDGE.test(unquoted(head(s)))],
   ['explicit', (s) => EXPLICIT.test(subject(s))],
   ['harm to people', (s) => HARM.test(masked(unquoted(subject(s)))) || (died(masked(subject(s))) && !INDUSTRY_PERSON.test(subject(s)))],
@@ -197,13 +202,13 @@ export const RULES = [
   ['evaluative words', (s) => EVALUATIVE.test(unquoted(head(s)))],
 ];
 // the rules that keep a report off the programme (the others change how it is told); a review goes to THE REVIEWS
-export const KEEPS_OFF = new Set(['off-topic', 'guide', 'commerce', 'review', 'outlet voice', 'leak', 'rumour', 'explicit', 'harm to people', 'conflict or politics', 'gambling', 'feud or gossip']);
+export const KEEPS_OFF = new Set(['off-topic', 'guide', 'commerce', 'review', 'outlet voice', 'leak', 'store listing', 'rumour', 'explicit', 'harm to people', 'conflict or politics', 'gambling', 'feud or gossip']);
 // the rules that put the whole event off, whichever outlet's report is told: the event itself is a leak, harm to people,
 // a conflict, gambling or a rumour. The others judge one outlet's telling, and the event airs from another's. A rule puts
 // the event off when at least half of its reports carry it (tools/play/measure.mjs): one report wrongly joined never
 // does, and a report that drops the others' "reportedly" does not make a rumour a fact ("Epic Games delays Disney game
 // and tells developers to go 'AI first'", GamesIndustry.biz 12 Oct, of Business Insider's report that three outlets hedge)
-export const EVENT_RULES = new Set(['leak', 'harm to people', 'conflict or politics', 'gambling', 'rumour']);
+export const EVENT_RULES = new Set(['leak', 'store listing', 'harm to people', 'conflict or politics', 'gambling', 'rumour']);
 
 // A headline that states an act: a launch, a date, a delay, a deal, a closure, a statement. A feature, a profile or an
 // interview states none ("The happiest man in gaming hates generative AI", "'Years of building…' – Why GameDataCore wants

@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classify, gamesTopic, reviewVerdict, hasNewsVerb, unquoted } from '../tools/play/standards.mjs';
 import { releaseDate } from '../tools/play/dates.mjs';
-import { londonDay, londonDayBounds, readingCovers, mergeIntervals, linkKey, clusterEvents, sameGamesEvent, gamesEventMatch, headlineWords, root, shareAName, repeats } from '../tools/play/measure.mjs';
+import { londonDay, londonDayBounds, readingCovers, mergeIntervals, linkKey, clusterEvents, sameGamesEvent, gamesEventMatch, headlineWords, root, shareAName, repeats, independentSources } from '../tools/play/measure.mjs';
 import { deltaE2000, contrast } from '../tools/play/accent.mjs';
 import { score } from '../tools/play/handcheck.mjs';
 import { NewsDesk, keywords } from '../server/news.js';
@@ -213,6 +213,26 @@ test('a story repeats one told in the day before when it names the same game and
   assert.equal(repeats(t('GTA 6 Launch Trailer Available to Watch Right Now, Captured on PS5'), t("GTA 6 Barely Makes the Cut for The Game Awards' Game of the Year Vote")), false);
   // no shared name: another game
   assert.equal(repeats(t('Dementium II coming to Steam on October 20'), t('Brave Dungeon + Dark Witch’s Story: COMBAT coming to PS5 on October 24')), false);
+});
+
+test('corroboration: two independent sources in reports that pass every rule, sister sites counting once', () => {
+  const byId = { pushsquare: { group: 'hookshot' }, nintendolife: { group: 'hookshot' }, gematsu: {}, vgc: {} };
+  const m = (outlet, usable = true) => ({ outlet, usable });
+  // two sister sites are one source
+  assert.equal(independentSources([m('pushsquare'), m('nintendolife')], byId, 'group'), 1);
+  assert.equal(independentSources([m('pushsquare'), m('nintendolife')], byId, 'outlet'), 2);
+  // a report kept off (a column, a leak) corroborates nothing
+  assert.equal(independentSources([m('pushsquare'), m('gematsu', false)], byId, 'group'), 1);
+  assert.equal(independentSources([m('pushsquare'), m('gematsu'), m('vgc')], byId, 'group'), 3);
+});
+
+test('a store listing or a rating seen before an announcement is a leak that puts the whole event off', () => {
+  const k = (title) => classify(item(title));
+  assert.equal(k('Shrek 2 Remastered Appears Briefly on XBOX Store').out, 'store listing');
+  assert.ok(k('Shrek 2 Remastered Appears Briefly on XBOX Store').event.includes('store listing'));
+  assert.ok(k('Shrek 2 Remastered Microsoft Store page appears').kinds.includes('store listing'));
+  // an announced game's rating is news
+  assert.equal(k('GTA VI gets a Mature ESRB rating ahead of its November launch').out, null);
 });
 
 test('events join by a third of their reports, so a report told differently first does not split one, nor one phrase chain two', () => {

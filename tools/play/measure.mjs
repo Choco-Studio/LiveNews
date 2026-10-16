@@ -231,6 +231,12 @@ export function shareAName(a, b) {
   return [...named(TA, ta)].some((w) => nb.has(w));
 }
 
+/** The independent sources that carry an event in reports passing every rule: outlets, or with 'group' their publishers
+ * (sister sites count once: "group" in tools/play/outlets.json). */
+export function independentSources(members, byId, mode = 'group') {
+  return new Set(members.filter((m) => m.usable).map((m) => (mode === 'group' ? byId[m.outlet]?.group || m.outlet : m.outlet))).size;
+}
+
 export function clusterEvents(stories, desk, window = 3 * DAY, test = 'v5') {
   const seeds = [];
   const events = new Map();
@@ -271,7 +277,7 @@ export function clusterEvents(stories, desk, window = 3 * DAY, test = 'v5') {
   return events;
 }
 
-export async function measure({ dir = path.join(ROOT, 'data/play-measure'), archive = null, eventTest = 'v5' } = {}) {
+export async function measure({ dir = path.join(ROOT, 'data/play-measure'), archive = null, eventTest = 'v5', corroboration = 'group' } = {}) {
   const outlets = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/play/outlets.json'), 'utf8'));
   const byId = Object.fromEntries(outlets.map((o) => [o.id, o]));
   const snaps = readSnapshots(dir);
@@ -343,7 +349,8 @@ export async function measure({ dir = path.join(ROOT, 'data/play-measure'), arch
     const counts = {};
     for (const m of members) for (const k of m.cls.event) counts[k] = (counts[k] || 0) + 1;
     // (a rumour needs more than half: one report and one announcement of the same thing is an announcement)
-    const eventOut = Object.keys(counts).filter((k) => (k === 'rumour' ? counts[k] * 2 > members.length : counts[k] * 2 >= members.length));
+    // (a store listing or a rating seen before an announcement puts the event off from one report: rules v11)
+    const eventOut = Object.keys(counts).filter((k) => (k === 'store listing' ? counts[k] >= 1 : k === 'rumour' ? counts[k] * 2 > members.length : counts[k] * 2 >= members.length));
     const ev = { members, outlets: new Set(members.map((m) => m.outlet)), eventOut, usable: !eventOut.length && members.some((m) => !m.cls.out), first: Math.min(...members.map((m) => m.published)) };
     for (const m of members) {
       m.event = ev;
@@ -362,13 +369,19 @@ export async function measure({ dir = path.join(ROOT, 'data/play-measure'), arch
   const tierOf = (s) => byId[s.outlet]?.tier ?? 3;
   for (const members of events.values()) {
     const ev = members[0].event;
-    const cands = members.filter((m) => m.usable && tierOf(m) <= 2).sort((a, b) => tierOf(a) - tierOf(b) || Number(a.cls.kinds.includes('evaluative words')) - Number(b.cls.kinds.includes('evaluative words')) || a.published - b.published);
+    // (rules v12: with corroboration, a tier 2 report tells only from a headline that states an act; the general desks
+    // file features, verdicts and promotions on real events: "Modern Warfare 4 on Switch 2 Is Not The Disaster You'd
+    // Imagine", "You Can Play WoW: Forever For Free Next Week (But There's A Catch)", 16 Oct)
+    const cands = members.filter((m) => m.usable && (tierOf(m) === 1 || (tierOf(m) === 2 && (corroboration === 'off' || hasNewsVerb(m.title))))).sort((a, b) => tierOf(a) - tierOf(b) || Number(a.cls.kinds.includes('evaluative words')) - Number(b.cls.kinds.includes('evaluative words')) || a.published - b.published);
     if (!cands.length) continue;
     const carried = new Set(members.filter((m) => m.usable).map((m) => m.outlet)).size;
-    // (an outlet marked "alone": false never tells an event it carries alone: Siliconera's single-outlet reports were
-    // Japanese merchandise, cafés and collaborations as often as games news, in every archive page read: held-out sets
-    // E, F and G, bible §3.1)
-    if (carried >= 2 || (hasNewsVerb(cands[0].title) && byId[cands[0].outlet]?.alone !== false)) {
+    // the corroboration rule (bible §4.12, rules v11): an event is told only when two independent sources carry it in
+    // reports that pass every rule, sister sites of one publisher counting once ("group" in outlets.json), and a tier 1
+    // or 2 report tells it. With corroboration 'off' (rules v10): an event one outlet carries airs from a headline that
+    // states an act, unless the outlet is marked "alone": false (Siliconera: held-out sets E, F and G)
+    const sources = independentSources(members, byId, corroboration);
+    const tells = corroboration === 'off' ? carried >= 2 || (hasNewsVerb(cands[0].title) && byId[cands[0].outlet]?.alone !== false) : sources >= 2;
+    if (tells) {
       cands[0].chosen = true;
       ev.chosen = cands[0];
     }
@@ -588,7 +601,7 @@ function printReport(r) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const a = process.argv.slice(2);
   const opt = (k) => (a.includes(k) ? a[a.indexOf(k) + 1] : null);
-  const r = await measure({ dir: path.resolve(ROOT, opt('--dir') || 'data/play-measure'), archive: opt('--archive'), eventTest: opt('--events') || 'v5' });
+  const r = await measure({ dir: path.resolve(ROOT, opt('--dir') || 'data/play-measure'), archive: opt('--archive'), eventTest: opt('--events') || 'v5', corroboration: opt('--corroboration') || 'group' });
   const text = printReport(r);
   console.log(text);
   const stamp = r.readings.at(-1);

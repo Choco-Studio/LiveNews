@@ -660,7 +660,7 @@ Faults:
 
 ---
 
-## Where the design stands: not passed
+### Round 11's standing (superseded by round 12)
 
 **The final score is 7.5, under the 9.7 the owner's process asks.** The design is not accepted by its own bar. What
 holds and what does not:
@@ -684,11 +684,157 @@ holds and what does not:
    an announcement stays off, whatever the other reports call it (fault 1).
 3. **A whole weekend read** with the platform desks, and the noon edition's threshold set on it.
 
+## Round 12 — corroboration as a universal rule (the reviewer's lever), judged on every held-out set
+
+The reviewer (16 Oct) kept round 11's 7.5 and refused a model writer as the gate: the station has none, and the design
+must pass on what it has. The lever already proved twice ("tier 3 never tells", "Siliconera never alone") was to be
+tested as a universal rule before concluding that the word lists cannot converge.
+
+What changed:
+
+1. **The corroboration rule** (rules v11; `independentSources`, `tools/play/measure.mjs`): a story is told only when two
+   independent sources carry its event in reports that pass every rule, and a tier 1 or 2 report tells it. Sister sites
+   of one publisher count once (`group` in `tools/play/outlets.json`: Nintendo Life, Push Square and Pure Xbox; PC Gamer
+   and GamesRadar+; IGN, Eurogamer, GamesIndustry.biz and Rock Paper Shotgun; TheGamer and Polygon; The Verge's two
+   feeds; Ars Technica's two). The single-outlet path (a headline that states an act) is gone; so is Siliconera's
+   special rule, which the universal one contains.
+2. **The store-listing rule**: a report that shows a store page or listing, or an age rating, before an announcement
+   puts the whole event off on its own ("Shrek 2 Remastered Appears Briefly on XBOX Store").
+3. **Rules v12: on a corroborated event, a tier 2 report tells only from a headline that states an act.** Written after
+   set C's two failures, both tier 2 tellers of real events ("GTA 6 Recaptures What Made GTA's Best DLC So Great", "You
+   Can Play WoW: Forever For Free Next Week (But There's A Catch)").
+
+Frozen: v11 at 19:21 UTC (`standards.mjs` 8abd75a5…, `measure.mjs` 1eb9495c…, `outlets.json` 35cf5136…), v12 at 19:38
+(`measure.mjs`; the source count moved into `independentSources` afterwards with an identical selection, 838a8a33…).
+v11's definitions were fixed before any held-out set was scored with them. v12's act rule came after v11's scores, from
+set C, and its effect on set H (two sound stories dropped) was seen before it froze: on D–H it is held out only in the
+sense that no failure there suggested it. Independence by publisher and by outlet gave the same counts on every day
+compared (10, 11 and 14–16 Oct).
+
+**Held out, with and without.** Every held-out set was judged once, under the rules frozen before it was read. Applying
+corroboration to those same labelled reports (an event counts as corroborated in the events of the frozen v11 code, and
+a report kept off corroborates nothing) gives the side-by-side the reviewer asked for:
+
+| Set (rules it was judged under) | Without corroboration | With corroboration (v11) | With the tier 2 act rule (v12) |
+|---|---|---|---|
+| D, the paged archives (v3) | 39 of 61 (63.9 %) | 5 of 5 | 5 of 5 |
+| E, before 5 Oct (v6) | 42 of 55 (76.4 %) | 3 of 3 | 3 of 3 |
+| F, Siliconera's September (v7) | 39 of 44 (88.6 %) | 1 of 1 | 1 of 1 |
+| G, Siliconera's August (v8) | 41 of 52 (78.8 %) | none airs | none airs |
+| H, 5–11 Oct (v9) | 24 of 28 (85.7 %) | 10 of 10 | 8 of 8 |
+| C, after 17:30 UTC (v10) | 1 of 4 | 0 of 2 | (tuned on: the rule was written from it) |
+| **Held out in all** | **186 of 244 (76.2 %)** | **19 of 21 (90.5 %)** | **17 of 17 (100 %)** |
+
+**Every leak, rumour and column that got through, and whether corroboration stops it** (held-out sets):
+
+| Kind | Reports | Stopped by corroboration | Stopped by v12 |
+|---|---|---|---|
+| Leak (Shrek 2's store listing told as "official", C) | 1 | 1 (the listing rule) | 1 |
+| Rumour or hedge (Wolverine's sales "Estimated To Be Surprisingly High", D; Terranigma "Might Appear", G; Ninja Theory "according to employee posts" and Supermassive "seem to have left", H) | 4 | 4 | 4 |
+| Column, verdict or teaser (three tier 3 reports in D: "…is no Soulslike", "…shine on Nintendo Switch 2", "The Internet Loves…"; "Remains a Game…, but Gets Buggy", F; "Offers Valuable Answers", G; "More Cox in video games…", H; Polygon's GTA 6 column and GameSpot's free-play promo, C) | 8 | 6 | 8 |
+| A private person's words (a YouTuber's ban, D; Overwatch fans, H) | 2 | 2 | 2 |
+| Merchandise, anime, cafés, exhibitions, tech, guides, promotion (D–G) | 41 | 41 | 41 |
+
+The two that corroboration alone let through were real events told by a tier 2 desk's column or promotion; the first
+of them was also a wrong join (Polygon's column and GamesRadar+'s "GTA 6 might finally fix a graphical bug" share only
+"GTA 6").
+
+**The whole pipeline on every window judged** (12–16 Oct to 19:06 UTC and the older days, every would-air report judged,
+the reports no label covered judged now): without corroboration 166 of 182 pass (91.2 %), with v12 64 of 66 (97.0 %).
+The two v12 misses: "Gears of War boss says the next game won't take seven years to make as he dances around the
+question" (Eurogamer, 8 Oct, three sources: a voice tail) and Nintendo Life's "'Peak' … Scales October's Stacked Switch
+2 Release Schedule" on 16 Oct, a repeat of Peak's console dates told on 15 Oct. These windows were tuned on; they are
+not held out.
+
+**Fresh held out after the freeze**: from 19:06 to the last reading at 19:45 UTC the 30 outlets filed one item, and none
+would air. The weekend of 17–18 Oct has not happened. **No fresh held-out report exists for v12.**
+
+**Supply, with and without** (would-air events a London day; for each schedule, the events that became tellable since
+the edition before: under corroboration an event can air only once its second source has filed):
+
+| Day | Without | With (v12) | One edition at 19:00, without / with | Two (13:00, 19:00), with | Three (12, 17, 21), with |
+|---|---|---|---|---|---|
+| Sat 10 Oct (12 outlets read whole) | 1 | 1 | 1 / 2 | 2, 0 | 0, 1, 0 |
+| Sun 11 Oct | 3 | 1 | 3 / 1 | 0, 1 | 0, 0, 1 |
+| Mon 12 Oct (long feeds only) | 9 | 3 | 7 / 2 | 1, 1 | 1, 1, 0 |
+| Tue 13 Oct | 8 | 1 | 8 / 1 | 1, 0 | 1, 0, 1 |
+| Wed 14 Oct | 20 | 11 | 16 / 5 | 2, 3 | 0, 2, 6 |
+| Thu 15 Oct (the full desk) | 32 | 19 | 29 / 19 | 10, 9 | 6, 9, 3 |
+| Fri 16 Oct (to 20:45 London) | 39 | 12 | 45 / 19 | 13, 6 | 9, 6, 1 |
+
+**Supply decides one edition a weekday, at about 19:00 London**, airing only with eight or more tellable events since
+the day before: on the two full-desk days, 19 and 19. A second edition would leave the evening one with 9 and 6. On the
+partial-desk days (12–14 Oct) no edition would air. Corroborated segments on the full-desk days: PATCH NOTES 7 and 3
+lines, ACHIEVEMENT 2 and 1, serious stories 0 and 1. **UNLOCKS nearly disappears**: on 16 Oct two independent sources
+state one date in the next fourteen days and two in the next thirty (Modern Warfare 4 on 23 Oct, Zero Parades on 3 Nov).
+**Weekends**: SAVE FILE once a day from the week's archive, with the one fresh corroborated story each weekend day gave.
+
+**The weekend read**: the platform desks' feeds give no older pages (page 2 is page 1 for Nintendo Life, Push Square,
+Pure Xbox, GameSpot, Polygon and IGN; The Verge answers 404; VGC's and Gematsu's older pages answered 403 at 17:22), and
+the long feeds' page 2 is their page 1 too. The last weekend cannot be read whole; the next one has not happened.
+
+**The grave test on the full sample**: `isGrave` flags 191 of the 1,546 games items of complete days (12.4 %). Nine are
+harm, a death, a disaster or a conflict (a death told by three outlets, a voice actress's death, a hack of Discord's
+users, a DDoS attack, an anecdote about 9/11, a war, an earthquake relief donation); the other 182 are game titles and
+figures of speech. It misses six the programme's own tests catch (a data breach, an arrest, a fraud allegation, a
+conviction, a crypto pump-and-dump, a death told as "passes away"). The programme's own harm test raised five false
+alarms, four kept off by an earlier rule anyway and one a games story lost ("Xenoblade Chronicles 2 Switch 2 Edition
+Prioritizes Blades").
+
+Faults:
+
+1. **Seventeen held-out reports cannot show 97 %.** 17 of 17 is the bar's level, but one more miss would make it 94 %;
+   with no misses, about a hundred held-out reports are needed before 97 % is the lower bound. At 19 corroborated events
+   a full weekday that is five weekdays of readings under the frozen v12, which the session cannot wait for. (Producer,
+   standards editor.)
+2. **The tier 2 act rule was written after set C**; its held-out evidence is post hoc on D–H, where it also dropped two
+   sound stories ("Blizzard is changing the appearance of WoW: Forever's new Skyborne race…", "Dave the Diver and
+   Subnautica 2 team up…"). On the tuned windows, seven of the ten tier 2 tellers it removes were sound. (Games
+   journalist.)
+3. **A voice tail and a cross-platform repeat still pass** on the tuned windows: "…as he dances around the question",
+   and Peak on PS5 then on Switch 2. (Standards editor, director.)
+4. **One edition a weekday, not three, and none on a partial-desk day.** (Producer.)
+5. **UNLOCKS becomes occasional** (one corroborated date in the next fourteen days on 16 Oct). (Producer, first-time
+   viewer.)
+6. **The weekend's platform desks are unread**: no older pages, two 403s. (Producer.)
+7. **The publisher groups are public knowledge, not measured**: they need the owner's or the build's check. (Standards
+   editor.)
+8. **The programme's harm test dropped a games story** ("…Prioritizes Blades"). (Games journalist.)
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial truth | 9.5 | Every story on air is carried by two independent sources and told from a trade, platform or general desk's report of an act; a voice tail and a cross-platform repeat remain on the tuned windows |
+| Standards | 9.3 | Held out: 76.2 % without corroboration, 90.5 % with it, 17 of 17 with v12; no story from an excluded kind on held-out copy under v12. Seventeen is too few to show 97 %, and the v12 act rule was fitted to set C |
+| Entertainment and repertoire | 9.0 | One edition a weekday with room to choose (19 tellable events on a full-desk day); UNLOCKS rare; nothing recorded yet; THE PLAYER COUNT waits on the Steam key |
+| Data viability | 9.0 | One weekday edition on full-desk days; none on partial-desk days; weekends one fresh story a day and the archive; the platform desks' weekends unread |
+| Craft | 9.0 | Designed and placed, none rendered or heard |
+| Consistency | 9.5 | The bible matches the code and the tools' outputs, the grave figure re-measured on the full sample; the publisher groups rest on public knowledge |
+
+**Round score: 9.0.**
+
+---
+
+## Where the design stands: not passed, and what would pass it
+
+**The final score is 9.0, under 9.7.** The corroboration rule is the lever: it took held-out precision from 76.2 % to
+90.5 %, and with the tier 2 act rule to 17 of 17, on what the station has (feeds, word lists, publisher groups, no model).
+The price is supply: one edition each weekday evening, SAVE FILE at weekends, UNLOCKS seldom. What keeps the design
+under the bar is evidence, not a fault the panel can fix on paper:
+
+1. **About a hundred fresh held-out reports under the frozen v12** (five weekdays of readings), judged by hand, at 97 %
+   or better with no excluded kind on air. This is build step 1's gate (bible §10), and it can start the day the desk
+   reads the feeds every 20 minutes.
+2. **A whole weekend read with the platform desks**, to set SAVE FILE's fresh-story minimum on measured supply.
+3. **The publisher groups checked** by the owner or the build.
+
+Round 11's standing (7.5) is superseded; its findings stay above as the record.
+
 ## Readings
 
-All on 16 Oct 2026 (UTC), through the environment's proxy: 16:22, 16:36, 16:42, 16:48, 16:57, 17:13, 17:19, 17:22
-(the five archives in pages, back to 5–7 Oct), 17:50, 17:56, 17:59, 18:10, 18:17, 18:26, 18:28, 18:32 (Siliconera to
-20 Sep), 18:38 (to 31 Aug), 18:42 (to 31 Jul), 18:50, 19:02, 19:04, 19:06: 22 readings over 2.7 hours. Steam's Web API
-and store endpoints at 16:22, 16:36, 16:57, 17:19, 17:50, 19:02 and 19:06. Every reading is saved raw under
+All on 16 Oct 2026 (UTC), through the environment's proxy: 16:22, 16:36, 16:42, 16:48, 16:57, 17:13, 17:19, 17:22 (the
+five archives in pages, back to 5–7 Oct), 17:50, 17:56, 17:59, 18:10, 18:17, 18:26, 18:28, 18:32 (Siliconera to 20 Sep),
+18:38 (to 31 Aug), 18:42 (to 31 Jul), 18:50, 19:02, 19:04, 19:06, and for round 12 19:27 and 19:45: 24 readings over 3.4
+hours. Steam's Web API and store endpoints at 16:22, 16:36, 16:57, 17:19, 17:50, 19:02 and 19:06. Older pages probed at
+19:17 and 19:40 (status, item counts and dates only, so the pages stayed unseen). Every reading is saved raw under
 `data/play-measure/snapshots/` and `data/play-measure/data/` (gitignored); every hand label under
 `data/play-measure/handcheck-*.json`; every rule set as frozen beside them.

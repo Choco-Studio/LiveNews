@@ -9,21 +9,23 @@ measurements logged there (`tools/play/`, readings saved under `data/play-measur
 **The title is a working title for the owner** (§2.4): PRESS START, chosen over the study's PLAY in the critique's first
 round; PLAY and HIGH SCORE are the alternatives.
 
-**Status: step 2 not passed.** The critique's eleventh round scores 7.5 against the owner's 9.7. Supply, sources, shape,
-look and repertoire hold; the desk's precision on copy it never saw does not (64–89 % on five held-out sets, §4.10), and
-the critique's last section says what would pass it.
+**Status: step 2 not passed.** The critique's twelfth round scores 9.0 against the owner's 9.7. The corroboration rule
+(§4.12: two independent sources for every story) took precision on held-out copy from 76.2 % to 17 of 17, with supply
+for one edition each weekday evening (§7). Seventeen held-out reports cannot show 97 %; about a hundred fresh ones,
+five weekdays of readings, can (§10, step 1).
 
 ## 1. The idea in one paragraph
 
 Six minutes on what happened in video games today, for the viewer who plays a little or not at all as much as for the
 player who wants the dates, the numbers and the news without the noise. Two presenters, in an arcade after closing time,
-tell the day's games news from the trade and news desks: the launches, the delays, the deals between companies, the
-studios in trouble. Every game named gets its **cartridge**, a card that says what it is, who makes it and where it plays,
-so nobody is lost. The day's small changes arrive as **PATCH NOTES**; the week's release dates **UNLOCK** one by one; what
-the critics said is quoted and credited, never ours; a live **PLAYER COUNT** says how many are playing right now; and the
-day's milestone pops up as an **ACHIEVEMENT**. A viewer stays for the rituals, the pace, the pixel art at home in its own
-subject and two people who enjoy it. **Nothing on screen is the channel's opinion, a leak or a guess**: the stories pass
-standards measured on the live feeds (§4), and the programme does not air on a day too thin to fill it (§7).
+tell the day's games news from the trade and news desks, each weekday evening, and only what two independent sources
+carry: the launches, the delays, the deals between companies, the studios in trouble. Every game named gets its
+**cartridge**, a card that says what it is, who makes it and where it plays, so nobody is lost. The day's small changes
+arrive as **PATCH NOTES**; the confirmed release dates **UNLOCK** one by one; what the critics said is quoted and credited,
+never ours; a live **PLAYER COUNT** says how many are playing right now; and the day's milestone pops up as an
+**ACHIEVEMENT**. A viewer stays for the rituals, the pace, the pixel art at home in its own subject and two people who
+enjoy it. **Nothing on screen is the channel's opinion, a leak or a guess**: the stories pass standards measured on the
+live feeds (§4), and the programme does not air on a day too thin to fill it (§7).
 
 ## 2. Cast
 
@@ -80,8 +82,8 @@ The owner may prefer an existing face. Max is the channel's gamer type ("always 
   eras, never about a real game, company or person: "In my day a patch came on a magazine disc." / "In my day it came
   while I slept." Each has a bank of twenty fictional memories (the co-host's lost high score; the host's backlog) that
   name **no real game, company, console or person** (FULL TIME's rule for Rosa's past, `full-time.md` §2): one an
-  edition, none again within seven days, since a regular viewer sees about twenty editions a week and a memory heard
-  twice is a rerun. The teases are twelve each, none again within six hours station-wide.
+  edition, none again within twenty editions (about three weeks), since a regular viewer sees all seven a week and a
+  memory heard twice is a rerun. The teases are twelve each, none again within six hours station-wide.
 - **The fiction is spoken, never shown.** No board, number or caption carries a presenter's fictional past.
 - **Nobody judges a game, a studio or a person** (§4.7): no "brilliant", "a mess" or "worth it". A verdict airs only in
   THE REVIEWS, as the outlet's own words, with its name.
@@ -114,24 +116,28 @@ session (the critique's final round lists every reading). Twenty-eight of the th
   Nintendo Life answered 403 on three readings of 22 (two of them two minutes apart, at 19:04 and 19:06) and Pure Xbox
   on two (the same publisher's sites): a desk that reads them every 20 minutes must back off on a 403 and read the next
   time, never retry at once.
-- **Siliconera never tells an event it carries alone** (`"alone": false` in the desk's feed list). It files Japanese
-  pop culture beside its games news (anime, figures, model kits, cafés, exhibitions, collaborations), and three
-  held-out sets in a row showed the words chasing it: each round's off-topic words fixed the last set and missed the next
-  (§4.10). It tells an event another outlet carries ("New Epic Games Launcher 'Vibe Coded' Because 'Programming Is
-  Hard'", seven outlets) and confirms others'. The cost: about one and a half sound reports a day over the 77 days of
-  its archive read, 1–3 a weekday on 13–16 Oct. Gematsu (tier 1) covers that beat.
+- **Independent sources** (§4.12): sister sites of one publisher count as one source, in the desk's feed list
+  (`group`): Nintendo Life, Push Square and Pure Xbox (Hookshot Media); PC Gamer and GamesRadar+ (Future); IGN,
+  Eurogamer, GamesIndustry.biz and Rock Paper Shotgun (IGN Entertainment); TheGamer and Polygon (Valnet); The Verge's
+  two feeds; Ars Technica's two. The groups are public knowledge, not a measurement: the owner or the build checks them.
+  Counted by publisher or by outlet, the days compared (10, 11 and 14–16 Oct) gave the same supply.
+- **Siliconera files Japanese pop culture beside its games news** (anime, figures, model kits, cafés, exhibitions,
+  collaborations); three held-out sets in a row showed the words chasing it. Under the corroboration rule it tells only
+  events another source carries ("New Epic Games Launcher 'Vibe Coded' Because 'Programming Is Hard'", seven outlets),
+  like every desk.
 - **The tiers are editorial**, from the hand check (§4.10), and live in the desk's feed list. A tier changes only with a
   new hand check.
 - **Short feeds**: Polygon's ten items span about 1.5 hours, TheGamer's 2.7, Insider Gaming's 6.5, IGN's 15. The desk
   reads them every 20 minutes or loses items. **Archives in pages**: Siliconera, Kotaku, Destructoid, Insider Gaming and
   Shacknews publish older items in feed pages, read back to 5–7 Oct for the measurement (Siliconera to 31 Jul); VGC's
   and Gematsu's second pages answer 403.
-- **How much was measured, exactly**: 22 readings on 16 Oct, from 16:22 to 19:06 UTC (2.7 hours of
-  reading; `tools/play/snapshot.mjs`, raw under `data/play-measure/snapshots/`, gitignored). A feed carries its own
-  past, so the readings cover each outlet back to its oldest item: the long feeds and the archives in pages whole
-  London days (Game Developer 27, Siliconera's archive 76), the short feeds only hours. Items a day are counted on an outlet's complete days only; for a
-  short feed, the rate over the hours its readings cover. 16 Oct itself is complete for no outlet (its evening was still
-  being filed). The table, from the last reading (`tools/play/measure.mjs`; Siliconera's archive read back to 31 Jul):
+- **How much was measured, exactly**: 24 readings on 16 Oct, from 16:22 to 19:45 UTC (3.4 hours of reading;
+  `tools/play/snapshot.mjs`, raw under `data/play-measure/snapshots/`, gitignored). A feed carries its own past, so the
+  readings cover each outlet back to its oldest item: the long feeds and the archives in pages whole London days (Game
+  Developer 27, Siliconera's archive 76), the short feeds only hours. Items a day are counted on an outlet's complete
+  days only; for a short feed, the rate over the hours its readings cover. 16 Oct itself is complete for no outlet (its
+  evening was still being filed). The table, from the reading at 19:06 (`tools/play/measure.mjs`; Siliconera's archive
+  read back to 31 Jul):
 
 | Outlet | Tier | Read | Hours covered | Complete days | Items a day | Kept a day | Items a day, short feeds (rate over hours read) | Usable events | Also carried by another outlet |
 |---|---|---|---|---|---|---|---|---|---|
@@ -209,7 +215,9 @@ one report; four of them judge the whole event** (§4.9).
 
 - **A leak is never told**, nor its pictures shown: leaked footage, a leaker's video, a datamine, a store page or a
   rating that appears before an announcement. The whole event stays off, whichever outlet tells it (16 Oct: the cancelled
-  Assassin's Creed footage, in four outlets).
+  Assassin's Creed footage, in four outlets). **One report of a store listing or an early rating is enough** to put the
+  event off, whatever the other reports call it (16 Oct: "Shrek 2 Remastered Appears Briefly on XBOX Store", while Pure
+  Xbox called the remaster "Officially Being Remastered").
 - **A rumour is never told as fact**: "reportedly", "allegedly", "according to sources", "insiders", an analyst's or a
   bank's forecast, "people on Reddit", and the outlet's own hedge on its headline ("seemingly", "it seems", "might be",
   "might appear").
@@ -324,8 +332,20 @@ one report; four of them judge the whole event** (§4.9).
   | Every set before C that still airs, tuned on | 155 | 95.5 % (6 repeats in words that share no run, 1 pun) | v10 |
 
   Each held-out set was judged once, under the rules frozen before it was read; its failures then became the next
-  rules (the critique's log, rounds 4–11). **The held-out scores have not converged above 90 %**: each round's words fix
-  the last set and miss some of the next.
+  rules (the critique's log, rounds 4–11). **The word lists alone did not converge above 90 %**: each round's words fixed
+  the last set and missed some of the next.
+
+  **With the corroboration rule** (§4.12), applied to the same held-out reports:
+
+  | Held-out sets | Without corroboration | With corroboration (v11) | With the tier 2 act rule (v12) |
+  |---|---|---|---|
+  | D, E, F, G, H and C | 186 of 244 (76.2 %) | 19 of 21 (90.5 %) | 17 of 17 (D–H; C was tuned on) |
+
+  Every held-out leak, rumour, private person's words and piece of merchandise was single-source or a tier 3 report,
+  and corroboration stops all of them; of eight columns and teasers it stops six, and the tier 2 act rule the other
+  two. On every window judged (tuned on), the whole pipeline passes 166 of 182 without corroboration (91.2 %) and 64 of
+  66 with v12 (97.0 %). No fresh report came after the freeze (one item in 40 minutes of Friday evening), so 17 is the
+  held-out count: the bar's level, too few to show it.
 
 - **What the words cannot catch**, and the gate that does (build step 1): a pun or a tease ("More Cox in video games
   as Daredevil and Clair Obscur star says he's in an unannounced Sega title"); a feature with a headline that states an
@@ -337,16 +357,17 @@ one report; four of them judge the whole event** (§4.9).
 ### 4.11 The channel's grave test does not read games copy
 
 The channel's `isGrave` (`server/facts.js`) flagged **160 of the 1,083 games items of the complete days read by 18:00
-UTC (14.8 %)**. Seven of them were harm, a death or a conflict (a death told by three outlets, a hack of Discord's
-users, a DDoS attack, an anecdote about 9/11, a war); the other 153 were game titles and figures of speech: "Fire
-Emblem", "Gears of War", "server crashes", a mode "killed in January", "Trivia Murder Party". It also missed five the
-programme's own tests catch (a data breach, an arrest, a fraud allegation, a crypto pump-and-dump, a death told as
-"passes away"). The quiz's excluded kinds (`server/quiz/desk.js` `excludedKind`) flag crime in 98 and conflict in 114.
-PRESS START therefore has its own grave and harm tests (§4.4, §4.5), which mask game titles and in-game words first
-(`TITLE_LOOKALIKES`: "Grand Theft Auto" is no theft, "Act 1" no law, a puzzle game no newspaper puzzle, "The Last of Us"
-no first person). The station's grave mode (music off, no chat) follows the programme's own verdict, not `isGrave`'s,
-inside PRESS START: a build step 2 change in the producer and the cue sheet, with a test that "Gears of War" leaves the
-bed on and a tribute takes it off.
+UTC (14.8 %)**, and on the full sample (Siliconera's archive included) **191 of 1,546 (12.4 %)**, nine of them real: the
+three below, a voice actress's death and an earthquake relief donation; it missed a conviction too. Seven of them were
+harm, a death or a conflict (a death told by three outlets, a hack of Discord's users, a DDoS attack, an anecdote about
+9/11, a war); the other 153 were game titles and figures of speech: "Fire Emblem", "Gears of War", "server crashes", a
+mode "killed in January", "Trivia Murder Party". It also missed five the programme's own tests catch (a data breach, an
+arrest, a fraud allegation, a crypto pump-and-dump, a death told as "passes away"). The quiz's excluded kinds
+(`server/quiz/desk.js` `excludedKind`) flag crime in 98 and conflict in 114. PRESS START therefore has its own grave and
+harm tests (§4.4, §4.5), which mask game titles and in-game words first (`TITLE_LOOKALIKES`: "Grand Theft Auto" is no
+theft, "Act 1" no law, a puzzle game no newspaper puzzle, "The Last of Us" no first person). The station's grave mode
+(music off, no chat) follows the programme's own verdict, not `isGrave`'s, inside PRESS START: a build step 2 change in
+the producer and the cue sheet, with a test that "Gears of War" leaves the bed on and a tribute takes it off.
 
 **Esports** results did not appear in the measured outlets. If a games outlet reports one, it is told as news with FULL
 TIME's rule on judging players (`full-time.md` §3.4), never with odds; FULL TIME does not take esports.
@@ -392,14 +413,18 @@ TIME's rule on judging players (`full-time.md` §3.4), never with odds; FULL TIM
     12 Oct Nintendo's "no plans to ditch physical games". It also held back one different story, "The Witcher 3
     Remastered Arrives Ahead of Songs of the Past DLC" a day after "Witcher 3 Expansion Will Be at Gamescom" (one name,
     one kind of act). A looser check, on one shared name, removed seven stories wrongly in 14–16 Oct and was dropped.
+    Under the corroboration rule five of the six never arise, since their first telling was single-source; one remains
+    (Peak on PS5 on 15 Oct, then on Switch 2 on 16 Oct, one announcement told twice).
+- **The corroboration rule** (rules v11, `independentSources`): **a story is told only when two independent sources
+  carry its event in reports that pass every rule**, sister sites counting once (§3.1). A report kept off (a column, a
+  leak, a deal) corroborates nothing. Guides, columns, merchandise, cafés, promotions, private people's words and most
+  leaks are single-source by nature, and the held-out failures were (§4.10).
 - **The report told**: tier 1, then tier 2; within a tier, the report with no evaluative word, then the first filed.
-  Siliconera tells an event only when another outlet carries it (§3.1).
-  **Tier 3 and tier 4 never tell an event**: a tier 3 report counts as a second outlet for an event a tier 1 or 2 report
-  tells.
-- **An event one outlet carries airs only from a headline that states an act** (a launch, a date, a delay, a deal, a
-  closure, a statement): a feature, a profile, an interview or a preview states none ("The happiest man in gaming hates
-  generative AI").
-- Measured supply: §7.2.
+  **Tier 3 and tier 4 never tell an event**; they corroborate. **A tier 2 report tells only from a headline that states
+  an act** (rules v12: "Modern Warfare 4 on Switch 2 Is Not The Disaster You'd Imagine" and "You Can Play WoW: Forever
+  For Free Next Week (But There's A Catch)" were tier 2 tellers of real events); a trade or platform desk (tier 1)
+  always may.
+- **What it costs**: one weekday edition, not three (§7.2), and UNLOCKS seldom (§5.4).
 
 ### 4.13 Pictures
 
@@ -475,14 +500,15 @@ TIME's rule on judging players (`full-time.md` §3.4), never with odds; FULL TIM
 
 ### 5.4 UNLOCKS
 
-- **What**: the release dates the stories of the last 30 days stated, the nearest three to five in the next fourteen
+- **What**: the release dates the stories of the last 30 days stated, the nearest three to five in the next thirty
   days; OUT TODAY on the day. Read by `tools/play/dates.mjs` from headlines and opening sentences: a day and a month, a
-  release verb, the date ahead of the day it was filed. The platforms' blogs count here, and only here (§3.1). A date
-  from a tier 3 outlet airs only when another outlet or the maker states it too. Fewer than three dates, no segment.
-- **Measured**: 5–9 dated releases filed a weekday when Gematsu is read (15 and 16 Oct). On 16 Oct, with two days of
-  Gematsu in hand, the next fourteen days held five dates (three in the next seven), the next 31 days eight (two DLC
-  packs dated by tier 3 outlets left out). The desk's 30 days of memory will hold more; the reader misses some forms
-  ("climbs its way onto PS5 October 22", "next week"), a step 1 task.
+  release verb, the date ahead of the day it was filed. **A date airs only when two independent sources state it**
+  (§4.12); the maker's own blog counts as one (§3.1). Fewer than three dates, no segment.
+- **Measured**: 5–9 dated releases filed a weekday when Gematsu is read (15 and 16 Oct), most of them by Gematsu alone.
+  On 16 Oct two independent sources stated one date in the next fourteen days and two in the next thirty (Modern Warfare
+  4 on 23 Oct, Zero Parades: Director's Cut on 3 Nov): **UNLOCKS airs seldom**, on the weeks the big dates gather, and
+  SAVE FILE carries the corroborated dates of the weeks ahead. The desk's 30 days of memory will hold more; the reader
+  misses some forms ("climbs its way onto PS5 October 22", "next week"), a step 1 task.
 - **The board**: a row of locked tiles, one a date; each unlocks as it is read (the padlock opens, the tile lights in the
   accent): the day, the game, its platforms as stated.
 - **A date changed by a later story** (a delay) replaces the earlier one; the board says DELAYED beside the old date for
@@ -586,9 +612,9 @@ never a chart the story does not print.
 
 | Situation | What airs |
 |---|---|
-| A weekday with eight or more fresh would-air events since the last edition | The WEEKDAY or LAUNCH DAY shape |
+| A weekday with eight or more events tellable since the day before's edition (their second source has filed) | The WEEKDAY or LAUNCH DAY shape |
 | Fewer than eight fresh events, or under 40 % of the edition's stories new since its last edition | The edition does not air; the station plays the next programme |
-| A weekend | SAVE FILE, with at least three of the week's events and one fresh; otherwise it does not air |
+| A weekend day | SAVE FILE, with at least three of the week's events; a fresh corroborated story when there is one (10–11 Oct: one each day) |
 | Fewer than six outlets answered in the last six hours | The edition does not air (a desk of two outlets is two outlets' opinions of the day) |
 | An outlet's newest item is more than 48 hours old (it stopped, or its feed broke) | It counts as down |
 | Steam down, slow (over 3 s) or its reading older than 15 minutes at air | No PLAYER COUNT; nothing else changes |
@@ -599,25 +625,34 @@ never a chart the story does not print.
 
 ### 7.2 Supply (measured)
 
-- **Weekdays** (rules v10, events v7, the repeat check; `tools/play/supply.mjs`): 15 Oct, 32 would-air events (20
-  outlets read whole that day, the rest in part); 16 Oct, 40 by 20:06 London. PATCH NOTES lines 13–19 a day,
-  ACHIEVEMENT milestones 2–3, dated releases filed 5–8, serious stories 0–5. On 12–14 Oct, before the short feeds were
-  read, 8–20.
-- **Editions**: by the hour each event was first filed (London), an edition at 12:00 found 6 fresh events on 15 Oct (it
-  would not have aired) and 18 on 16 Oct; at 17:00, 17 and 14; at 21:00, 10 on 15 Oct and 9 by 20:06 on 16 Oct. On 14
-  Oct, with only the long feeds read that morning, 2, 8 and 8. Mornings are thin: before 09:00 London the outlets file
-  little. The full desk is what feeds three editions, and the noon edition is the one that sometimes does not air.
-- **Weekends** (measured, partly): with 12 outlets read whole over 10–11 Oct, six of them tier 1–2 (Eurogamer,
-  GamesIndustry.biz, Game Developer, Siliconera, Guardian Games, Game Informer), Saturday gave one would-air event and
-  Sunday three; Saturday's other 27 usable reports were all tier 3. The platform desks' weekends (Nintendo Life, Push
-  Square, Pure Xbox, VGC, Gematsu, IGN) are unread: their feeds hold a day or two, and VGC's and Gematsu's older pages
-  answer 403. SAVE FILE is built for that thinness (§5.2); the step 1 gate reads a whole weekend.
+Under the corroboration rule an event can air only once its second source has filed, so each event is timed at that
+moment. Would-air events a London day, and for each schedule the events that became tellable since the edition before
+(`tools/play/measure.mjs`; rules v12 with corroboration, v10 without):
+
+| Day | Without | With | One edition at 19:00, without / with | Two (13:00, 19:00), with | Three (12, 17, 21), with |
+|---|---|---|---|---|---|
+| Sat 10 Oct (12 outlets read whole) | 1 | 1 | 1 / 2 | 2, 0 | 0, 1, 0 |
+| Sun 11 Oct | 3 | 1 | 3 / 1 | 0, 1 | 0, 0, 1 |
+| Mon 12 Oct (long feeds only) | 9 | 3 | 7 / 2 | 1, 1 | 1, 1, 0 |
+| Tue 13 Oct | 8 | 1 | 8 / 1 | 1, 0 | 1, 0, 1 |
+| Wed 14 Oct | 20 | 11 | 16 / 5 | 2, 3 | 0, 2, 6 |
+| Thu 15 Oct (the full desk) | 32 | 19 | 29 / 19 | 10, 9 | 6, 9, 3 |
+| Fri 16 Oct (to 20:45 London) | 39 | 12 | 45 / 19 | 13, 6 | 9, 6, 1 |
+
+- **One weekday edition**, at about 19:00 London: 19 tellable events on each full-desk day, room to choose a lead, 3–6
+  stories, PATCH NOTES (7 and 3 corroborated lines), the ACHIEVEMENT (2 and 1) and THE REVIEWS. On the days only the long
+  feeds were read (12–14 Oct) no edition would air: the full desk is the precondition.
+- **Weekends** (measured, partly): with 12 outlets read whole over 10–11 Oct, six of them tier 1–2, one corroborated
+  story each day. The platform desks' weekends (Nintendo Life, Push Square, Pure Xbox, VGC, Gematsu, IGN) are unread:
+  their feeds give no older pages, and VGC's and Gematsu's older pages answer 403. SAVE FILE is built for that: the
+  week's own archive, with the weekend's corroborated stories (§5.2); the step 1 gate reads a whole weekend.
 
 ### 7.3 Schedule
 
-- **Three editions a weekday**, about 12:00, 17:00 and 21:00 London: a daypart skips it from 23:00 to 11:00
-  (`{ "from": 23, "to": 11, "skip": ["press-start"] }` in `config/channel.json` `clock.dayparts`) and `minGapHours: 4`
-  spaces the editions. **At weekends, SAVE FILE twice**, about 12:00 and 18:00.
+- **One edition each weekday, at about 19:00 London**: the corroborated supply decides it (§7.2). By evening the day's
+  events have their second sources; a second edition at 13:00 would have left the evening one 9 and 6 events on the
+  full-desk days. **SAVE FILE once on Saturday and once on Sunday**, about 12:00. The clock's entries for that
+  (dayparts and gaps in `config/channel.json`) are written at build step 7.
 - **The slot**: after the second NEWS IN 60 and before SEVEN DAYS: … WORLD NOW → MONEY MINUTE → NEWS IN 60 → **PRESS
   START** → SEVEN DAYS. Never beside TECH BYTES (its neighbour on the border, §3.3).
 - Never at :00 or :30 (NEWS IN 60 is pinned); 6–7 minutes fits between the pins.
@@ -721,23 +756,21 @@ No fireworks, no particles, no stacked text moves (`ART_DIRECTION.md`). The flat
   and 4 plain ones).
 - **No catchphrase**; the genre's own words ("patch", "unlock", "achievement") as banks of variants.
 
-### 9.2 A week (the evening edition of each day, from the measured material of 12–16 Oct)
+### 9.2 A week (the evening edition, from the measured material of 12–16 Oct)
 
-Monday to Friday are built from the events the measurement would air by 21:00 London (`tools/play/measure.mjs`, rules
-v10, events v7); the weekend from the shape. Before 15 Oct only the long feeds had been read: on that material Monday
-and Tuesday never reach the eight fresh events an edition needs (§7.1), and Wednesday only from 17:00. Those rows show
-the shape with the stories the long feeds had; a full desk would add the platform desks' (15–16 Oct: 32 and 37
-would-air events).
+Built from the events the measurement would air under the corroboration rule (`tools/play/measure.mjs`, rules v12), at
+19:00 London. Before 15 Oct only the long feeds had been read, and on that material Monday to Wednesday reach 2, 1 and
+5 tellable events: no edition (§7.1). Thursday and Friday had the full desk.
 
-| Day | Shape | Lead (an event the desk would air) | Segments | What differs |
+| Day | Shape | Lead | Segments | What differs |
 |---|---|---|---|---|
-| Mon 12 | WEEKDAY | Dragon Quest's Yuji Horii releases a game he says he made with AI in 30 minutes (GamesIndustry.biz; three outlets). Epic's "AI first" plan, reported and hedged, stays off (§4.2) | PATCH NOTES (DMZ arrives early in Modern Warfare 4; P.T. comes to PC), ACHIEVEMENT (Steam's second concurrent-user record of the year), REVIEWS (Valor Mortis: Rock Paper Shotgun, Destructoid) | The context is a quote; no UNLOCKS (no date in fourteen days measured). Nintendo's "no plans to ditch physical games" would air twice, from two outlets (§4.12's residue) |
-| Tue 13 | WEEKDAY | Xbox announces Xbox Labs (GamesIndustry.biz; six outlets) | PATCH NOTES (Sifu on Android and iOS; The Blood of Dawnwalker's soundtrack on streaming services), the news (Outcast Tales dated for 26 October; Square Enix Collective publishes Vaultbreakers; Xbox's indie showcase), REVIEWS (Castlevania: Belmont's Curse: Guardian Games, Rock Paper Shotgun, Shacknews) | The context is what the company said |
-| Wed 14 | WEEKDAY, serious | Ubisoft closes RedLynx and cuts jobs in Singapore (GamesIndustry.biz; five outlets) | TRIBUTE (Richard "Levelord" Gray) among the news, Funcom's layoffs, PATCH NOTES after them with no bed (Gears of War: E-Day's first major update; Guild Wars 2's add-ons bundled) | A serious edition: no context, no chat after the lead or the tribute, the plain sign-off |
-| Thu 15 | WEEKDAY, the big story | The GTA 6 launch trailer, told from a clean report (Push Square; nine outlets), on its cartridge before 21:00 | PATCH NOTES (Fire Emblem: Fortune's Weave's DLC wave; Monster Hunter Wilds's demo on Switch 2), ACHIEVEMENT (Control Resonant's million copies) | The framed reports of the trailer and Big Walk's boycott story (twelve outlets) stay off; The Game Awards' eligibility is another GTA 6 story, not a repeat |
-| Fri 16 | WEEKDAY | Nintendo's new trailers for the Ocarina of Time remake show Dark Link (Polygon; six outlets) | UNLOCKS (Dementium II 20 Oct; Vixen 357 and Modern Warfare 4 23 Oct; Brave Dungeon 24 Oct; Outcast Tales 26 Oct), PATCH NOTES (The Blood of Dawnwalker 1.1), REVIEWS (Penguin Colony: Guardian Games, Rock Paper Shotgun) | UNLOCKS's first airing; the context is a date ahead |
-| Sat 17 | SAVE FILE | The week in games: its five most-carried events | UNLOCKS (the fortnight ahead), the week's ACHIEVEMENT | A different shape and pace |
-| Sun 18 | SAVE FILE | The weekend's own news first if any, then the week | UNLOCKS, ACHIEVEMENT | Never Saturday's order or lines |
+| Mon 12 | — | (2 tellable: No Man's Sky on iPhone and iPad; DMZ early in Modern Warfare 4) | — | The edition does not air; the station plays its next programme |
+| Tue 13 | — | (1 tellable: Xbox Labs) | — | Does not air |
+| Wed 14 | — | (5 tellable by 19:00, among them Ubisoft's RedLynx closure and Richard "Levelord" Gray's death) | — | Does not air; with the full desk this would be the serious edition (no context, no chat, the plain sign-off) |
+| Thu 15 | WEEKDAY, the big story | The GTA 6 launch trailer, told from a clean report (Push Square; eleven outlets), on its cartridge before 21:00 | The news (Sega pulls Total War: Shogun 2's remaster; GTA 6 makes The Game Awards' cut; 007 First Light dated for Switch 2; Riot ends League of Legends Classic), PATCH NOTES (Fire Emblem: Fortune's Weave's expansion pass; Monster Hunter Wilds's demo on Switch 2; The Witcher 3's update on Series S; El Paso, Elsewhere 2's demo; Edge of Memories delayed to 3 Dec), ACHIEVEMENT (Control Resonant's million copies) | The trailer's framed reports and Big Walk's boycott story (twelve outlets) stay off |
+| Fri 16 | WEEKDAY | Nintendo's new trailers for the Ocarina of Time remake show Dark Link (Polygon; six outlets) | The news (Jagex cancels RuneScape Reignited; Rep. Ritchie Torres's bill on owning digital games; Ken Kutaragi on discs; Steam's achievement sets), PATCH NOTES (The Blood of Dawnwalker 1.1; Castlevania: Belmont's Curse out; Beast of Reincarnation's updates end), REVIEWS (Penguin Colony: Guardian Games, Rock Paper Shotgun) | No UNLOCKS (one corroborated date in fourteen days); the context is a quote |
+| Sat 17 | SAVE FILE | The week in games: its five most-carried events | The corroborated dates ahead (Modern Warfare 4 on 23 Oct, Zero Parades on 3 Nov), the week's ACHIEVEMENT | A different shape and pace |
+| Sun 18 | SAVE FILE | The weekend's corroborated news first if any, then the week | The dates ahead, ACHIEVEMENT | Never Saturday's order or lines |
 
 LAUNCH DAY would first come on Friday 23 Oct, Modern Warfare 4's date, if three outlets carry the launch.
 
@@ -762,14 +795,11 @@ round's score its lowest category).
    (`tools/play/standards.mjs` made the server's), the games event test, the repeat check and the selection (§4.12),
    the release-date reader, the review verdicts (Siliconera's "Review: X Is Y" form), the time words, the TECH BYTES
    border (§3.3) and the harm hand-off (§4.4). *Gate*:
-   - three real days and one whole weekend read every 20 minutes;
-   - every report the desk would air checked by hand: none from a kept-off kind, none in an outlet's voice, every date
-     and figure as the source states it (100 % after fixes);
-   - then a fourth day the fixes never saw: at least 97 % pass by hand, every miss logged and fixed. The word lists
-     alone have not reached that on held-out copy (§4.10: 76–89 %), so step 1 measures them together with a second
-     reading: the writer's prompt carries the standards of §4, and the writer may decline a story it reads as
-     merchandise, a rumour, a private person's words or the outlet's column, with its reason, which the validator
-     logs. The gate counts what the two let through. Until they pass it together, the programme stays a draft;
+   - five weekdays and one whole weekend read every 20 minutes under the rules frozen at the design (v12, the
+     corroboration rule), never changed while they are read;
+   - every report the desk would air judged by hand: about a hundred, at least 97 % passing, no story from an excluded
+     kind on air, every date and figure as the source states it. The design's held-out count was 17 of 17 (§4.10): the
+     bar's level, too few to show it. Misses are logged, fixed, and judged again on days the fixes never saw;
    - TECH BYTES's own critique round for the border.
 2. **The writers**: both writers write the programme (the shapes, the segments, the banks, the context's kinds, the
    serious and tribute rules, the evaluative-word filter in the validator). *Gate*: twenty editions from the step 1
@@ -796,5 +826,6 @@ round's score its lowest category).
 - **TECH BYTES**: games stories move to the new programme; TECH BYTES keeps the technology ones (§3.3).
 - **Siliconera**: it tells only stories another outlet also carries; alone, it filed toys and cafés as often as games
   news (§3.1).
-- **Whether to go on**: the design scored 7.5, not 9.7. The automatic desk lets through about one wrong story in five to
-  seven on copy it has not seen. The next step would test a second check by the writer before anything is built (§10).
+- **Whether to go on**: the design scored 9.0, not 9.7. With two independent sources required for every story, the desk
+  passed all 17 held-out stories, but that is too few to prove the standard. Five weekdays of readings would show
+  whether it holds at 97 %, before anything is built (§10).
