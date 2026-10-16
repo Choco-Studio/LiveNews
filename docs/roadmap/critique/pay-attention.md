@@ -914,9 +914,337 @@ The reviewer's note on round 14, verbatim:
 > option; politics and grave items on the ticker under the game; afternoon length; TODAY's silent wides; DOUBLE OR
 > NOTHING's repeated PICTURE THIS
 
+## Round 15 — the reviewer's six faults, then the same hard panel on the final takes
+
+The reviewer's verdict on round 14 (above) named six faults. The round fixed them first, with tests, then made the three
+editions again from an empty `data/quiz` (E0, then E1 on E0's history, then E2 on both) and recorded them. Recording
+brought more faults to light; each was fixed and recorded again (takes 1 to 3, then the final recordings). No test was
+loosened, skipped or disabled, and every bound stands, the boards' 65 % included. The session stopped on 14 Oct at
+21:40 UTC (the account's usage limit) and resumed on 16 Oct; the final recordings (`r20/`) were made on 16 Oct, with the
+archive copied afresh at 15:38 London.
+
+### The reviewer's faults, and their fixes
+
+1. **The table line contradicted its board** (round 14's E2, about 6:10: the board showed PACO 1, SAM 1, UNIT-8 1; the
+   host said "Paco and Sam share the lead on one win"). The writer named only the first two leaders. `writer.js`
+   `tableLine` now takes the leaders from the standings the board shows, after this edition's result. That is every row
+   the board ranks first: the same wins from the same games, as `tableRows` ranks them. All of them are named ("Max,
+   Paco and Sam share the lead on one win, from one game each", heard on take 1's E2). Past four, the line gives the
+   count; the counts are said as words ("one and a half wins"). Tests: "the table line names every player the board ranks
+   first, a three-way tie said as one", and "the edition's table line and its board read the same standings, this
+   edition's result in them".
+
+   **The fact-check script now checks every spoken score and table fact against the board under it.** That covers the
+   half-time scores, DOUBLE OR NOTHING's standing ("you're behind", "we're level"), TODAY OR NOT TODAY's tally, the result
+   and the table line. Each is checked three ways: against the reveals' running points (DOUBLE OR NOTHING doubled for the
+   player behind), against the desks' scores at the moment it is said, and against the board on air (the final score, the
+   table). Run on round 14's E2 it finds the table line, and a second fault the panel had missed. After the sudden-death
+   headline the desks read 16–19 for 7 s, then the final board read 16–16. **The sudden-death headline now wins the game
+   and adds nothing to the desks** (`quizplay.js` `revealPlan`); who scored still lights the lamps and plays the sting.
+   Test: "the desks' scores only climb and end on the final score the host says…". The final E2 ends on a tie-break, and
+   the desks hold 12–12 through it.
+2. **A person's failure as an option** ("Bayern's Michael Olise sent off for 'super dumb' yellows within seconds"),
+   hardship ("Hundreds of Royal Mail staff quitting each week under efficiency plans", in TODAY OR NOT TODAY) and an
+   incident ("BA flight forced to turn back", the tie-break). The `desk.js` lists now cover:
+   - a sending-off, red cards, booing, "dumb", blunders, a missed penalty;
+   - staff quitting, efficiency plans, a firm losing its workers;
+   - a flight forced to turn back, an emergency landing, a diversion, an engine failure.
+
+   Tests on the real headlines. **Round 14's three editions re-run** (52 headlines, questions and options, against the
+   lists as committed, on the airings up to each edition's moment): 5 are now refused. They are Olise (a person's
+   failure), Royal Mail (hardship), the BA flight (an incident), and two found by this round's own reading (below): "Taiwan
+   plans to buy liquefied natural gas from Alaska pipeline project" (politics) and "China's trade surplus hits $938bn for
+   Jan-Sep" (politics).
+3. **Politics and grave items on the ticker under the game.** While PAY ATTENTION airs, the band now carries nothing the
+   quiz itself would refuse. The station marks each feed item with the kind the desk would refuse it as (`desk.js`
+   `quizRefuses`, the desk's own lists, `quizOut` on the item). The band leaves those items out (`graphics`
+   `quizAvoided`), as well as the edition's own stories; it shows fewer items rather than one the game would not ask.
+   Round 14's bands re-read under the rule: 15 of their 25 distinct items would now be held back. They include the White
+   House briefing, Burnham, the midterms, the Paris protesters, Pakistan's emergency rule, Charlie Kirk's legacy and
+   China's lonely. Tests: "nothing the quiz would refuse scrolls under the game…" (the station's mark is the desk's own
+   judgement, and the band drops those items only while the edition airs), and the station's ticker contract (`quizOut`).
+   This is removed from the owner's pending choices, as decided.
+4. **The afternoon's length.** The writer's estimate is now calibrated on the recorded voices (`writer.js`
+   `estimateSeconds`):
+   - each player's lines at their own voice's measured rate (UNIT-8's is a third slower than the host's);
+   - LETTER BY LETTER's clock to the winning buzz, past a stall;
+   - a TODAY OR NOT TODAY headline at 12.5 s in a round and 14.5 s in DOUBLE OR NOTHING, measured on the four afternoon
+     recordings (10.9–15.3 s and 11.7–18.0 s). The ~16 s in the brief was round 14's DOUBLE OR NOTHING with UNIT-8
+     alone. Counted at 16 s, take 2's six-headline round came out 17.7 s over its air;
+   - PICTURE THIS at 4.5 s and WHERE at 1.2 s a question over their speech.
+
+   On 26 recorded editions the estimate is 0.6 s off on average, with a spread of 5.5 s; on the afternoon it had run
+   16.6 s short. **The hard guard** (`writeEpisode`) shortens before air any edition estimated over its bound (345 s, or
+   360 s with a tie-break) less 5 s:
+   - by one or two optional lines (the latest reactions to a reveal), when that is enough;
+   - else by whole TODAY OR NOT TODAY headlines: a round keeps four, DOUBLE OR NOTHING two, the dropped story leaves the
+     asked list, and the round's lines say the count;
+   - then by optional lines.
+
+   The game is played again on what is left, and no question is cut mid-way. Tests: the calibration; the guard on an
+   afternoon edition, where long headlines force it (every edition within its bound, whole headlines, both answers kept,
+   the count said); `withoutTodayHeadline`'s floors. Take 1's E2 was estimated at 360 s and cut (a headline and two lines)
+   to 318.6 s on air. That estimate counted a stalled LETTER BY LETTER clock whole and 16 s a TODAY headline. Both were
+   corrected, and the final E2 (estimate 348 s, a tie-break) aired 351.6 s, cut by nothing.
+5. **TODAY's silent wides** (2.1–3.1 s on the lamps and the ticks). The lamps now light on the board beside the headline,
+   and the wide comes at most 1.6 s before the verdict's first word (`quizdirector.js` `TODAY_WIDE`; 1.54 s on each of
+   the final E2's six). Test: "TODAY's wide… never standing silent past 2 s before its verdict". The takes showed the same
+   fault elsewhere, and it is fixed everywhere:
+   - **PICTURE THIS's wide stood 2.10 and 2.17 s on the ticks after the recap** (take 1's E1). Once the faces have held
+     the network's minimum, they stand at most 1.8 s with only the ticks under them; then the board comes back with its
+     clock (`FACE_QUIET`). Test: "never more than 1.8 s of ticks on the faces with nothing said".
+   - **"There it is." left the winner's single 2.6 s silent before the final score** (take 3's E2, after the
+     sudden-death verdict). A reaction opened in the reveal's last words that would leave its face more than 1.8 s
+     silent before a board now stays on the reveal's board. The fake clock does not reproduce that moment's timing, so
+     the fixture test checks the property on every edition ("a reaction's face opened in the reveal's last words never
+     stands more than 1.8 s after its last word before a board"). The final E2 shows the fix: the reply sits on the
+     verdict's board.
+
+   **No studio shot in the final recordings stands silent for more than 1.80 s.**
+6. **DOUBLE OR NOTHING's repeated PICTURE THIS.** When neither type left can be filled, DOUBLE OR NOTHING now falls back
+   to a type already played that offers two desks, LETTER BY LETTER or WHERE, and only then to PICTURE THIS (`planner.js`
+   `DON_REPLAY`; the bible's §4 and §7). E0 now plays DOUBLE OR NOTHING on LETTER BY LETTER (technology or science). Its
+   round types have no alternative. On 12 Oct at 22:00 no pairing's pool can fill HOW MANY? (too few figures) or TODAY OR
+   NOT TODAY (no earlier days), so E0's three rounds are the board-heaviest types. Its share was 68.2 % in round 14 and is
+   now 64.6–66.7 % across the takes (65.8 % on the final recording).
+
+### This round's own reading: faults found and fixed between the takes
+
+Making the editions again under the new lists brought new stories to the screen and to the band, and the panel read every
+one. Each was fixed in `desk.js`, `planner.js` or `rounds.js`, with tests:
+
+- **one story asked twice in an edition.** "Facebook will let you customize your feed algorithm using AI" (PICTURE THIS)
+  and "Facebook is giving users more control" (LETTER BY LETTER) are both Meta's "Your Algorithm" (in a first making of
+  E1, stopped before its recording). Two headlines that open on the same name are now one story when their sources'
+  openings share another name, or when both use a coined compound.
+- **one story on two days.** "Google makes it easier to launch your vibe-coded apps" was asked on the 13th, and "Google
+  wants to host your personal vibe-coded apps" was planned for the 14th. Asked once in seven days now goes by story.
+- **one story under two pictures.** "Citroën's iconic 2CV returns as all-electric model" and "Revival of classic:
+  Citroën unveils electric version of its 2CV" appeared as wrong options of two questions.
+- **a state's deal as a WHERE question.** "Taiwan plans to buy liquefied natural gas from Alaska pipeline project"; its
+  aired text says "This is what Donald Trump, the U.S. President, said", behind a presenter's "Thanks, Lola." Now a head
+  of state named anywhere in a story makes it politics, a country that plans, agrees, pledges or signs stands for its
+  government, and a story's subject skips a presenter's handoff.
+- **trade frictions, loneliness and price rises.** "China's trade surplus hits $938bn… as pressure ramps up to rebalance
+  trade"; "'I'd talk to the TV': The paid companions bringing warmth to China's lonely"; "Skydance's Discovery+ prices
+  increase by up to 20%".
+- **what the bands carried under the game.** On take 1's E0 and E1 (14 Oct's feeds), "Netflix to cut 1,000 jobs as
+  subscriptions slow" and the Taiwan deal scrolled under the game. A check of the live feeds then found:
+  - "Espada not returning as Astros manager" and "College Football Bottom 10: Texas takes major fall";
+  - "NFL suspends Rams' Jackson for striking Bills' Chubb in face" and "another damaging Man Utd fallout";
+  - "Matchup rankings for Week 6: Upgrade Tony Pollard, fade Trevor Lawrence" and "the labor battle";
+  - "Prismm helps banks keep inherited money in-house" and "$15 gets you Psychonauts 2…";
+  - "the slumping Eagles" and "Pakistan has locked down Imran Khan's stronghold".
+
+  On the next recordings' bands (14 Oct, evening feeds) came "Sir Trevor Phillips encouraged CBS News colleagues to tell
+  critics to '…'", with a quoted obscenity, and "The Archers cast 'angry' at BBC decision to scrap new Birmingham studio".
+  16 Oct's feeds brought "Darnold owns up to mistakes in OT loss", "Eagles QB Hurts ruled out vs. Panthers with blood
+  clot in calf" and "Tough loss for Sabalenka…". All are refused now: a firm's job cuts however phrased; a person's exit,
+  anger, error or disgrace; fantasy tips; a labour dispute; an inheritance; a deal; a slump; an emergency rule; a player's
+  injury; and a new kind, offensive language, anywhere in a story. The final recordings' bands carry none of these: 0 refused items under the game in all three.
+
+Known and left as they are:
+
+- "F1 in Singapore: There's new fastest car now" is refused because of a later airing whose text says "the floodlit
+  streets" (the disaster list's "flood…"). A false refusal errs on the safe side; the story aired in E0 because the desk
+  judges the airings up to the edition's moment.
+- The band's items come from the live feeds at recording time (16 Oct), under the editions' own clocks (12–14 Oct), as in
+  every round.
+
+### The final recordings
+
+The final recordings (`r20/`, 16 Oct) play the editions as made. E0 and E1 come from take 2 (`r17/`, made with commit
+e44529c), and E2 from take 3 (`r18/`, made after the TODAY estimate's calibration). E2 has the same questions as take
+2, fresh play, and a sudden-death tie-break. They were recorded on a fresh station, so its band is today's feeds through
+the desk's lists. E1 and E2 were recorded with commit 3448cf5. E0's first recording there (kept in `r20/e0-band1/`) had
+"UK's 'incoherent' approach to China plagued by lack of expertise, report says" as the only news on its band. That is a
+state's foreign policy, which the lists then missed. The lists now refuse it (a state's dealings with another; a damning
+verdict), and E0 was recorded again on a fresh station with them (the round's closing commit). The director's code is
+the same as the 14 Oct recordings (`r19/`), and the shots match them. The takes before are kept for the faults above:
+take 1 `r16/` (commit b720574), take 2 `r17/`, take 3 E2 `r18/`, and `r19/`.
+
+| Measure | E0 (evening) | E1 (evening) | E2 (afternoon) |
+|---|---|---|---|
+| Rounds | WHERE / LETTER BY LETTER / PICTURE THIS; DOUBLE OR NOTHING on **LETTER BY LETTER** (technology or science) | LETTER BY LETTER / HOW MANY? / PICTURE THIS; DOUBLE OR NOTHING on WHERE | **TODAY OR NOT TODAY (six headlines)** / LETTER BY LETTER / PICTURE THIS; DOUBLE OR NOTHING on HOW MANY?; a sudden-death tie-break |
+| Pair; result | Penny Sterling v Sam Night; Sam 17–15 | Paco Pixel v Penny Sterling; Paco 16–13 | Lola Byte v Sam Night; 12–12, Sam on the tie-break |
+| The table line (its board ranks the same) | "Sam leads with one win from one game" | "Paco and Sam share the lead on one win, from one game each" | "Sam leads with two wins from two games" |
+| Voices | 75 of 75 heard, 0 browser sentences | 69 of 69, 0 | 74 of 74, 0 |
+| Facts: questions, options, answers, credits; every score, tally and table line against the board under it | 51, 0 wrong | 50, 0 wrong | 53, 0 wrong |
+| Headlines against the desk's lists | 16, 0 refused | 16, 0 refused | 20, 0 refused |
+| Band under the game: items the quiz refuses | 0 (only the station's WORLD WEATHER card: every news item of the hour refused) | 0 (seven sports items and the station's cards) | 0 (seven sports items and a programme card) |
+| PICTURE THIS pictures on screen | 3 of 3 | 3 of 3 | 3 of 3 |
+| Length (bound 290–345 s, 360 s with a tie-break); the writer's estimate | 303.4 s; 302 | 321.5 s; 323 | 351.6 s; 348 |
+| Shots | 45 (20 studio); 8.9 a minute; busiest 13; median 5.22 s; longest studio 6.66 s | 48 (23); 9.0; 12; 5.03 s; 8.12 s | 50 (22); 8.5; 12; 5.28 s; 8.10 s |
+| Boards' share; longest run | **65.8 %** (no alternative, below); 28.9 s | 62.0 %; 23.4 s | **67.9 %** (no alternative, below); 31.4 s |
+| What the boards carry, as shares of the air | the host reading 42.4 %; the clocks 11.8 %; the players 4.2 %; nothing said otherwise 6.1 % | 43.2 %; 10.2 %; 3.2 %; 4.5 % | 43.0 %; 16.8 % (TODAY's lamps 4.9 %); 1.4 %; 5.4 % |
+| Cuts to a buzz | 132 ms before the first word, all three | both | all three |
+| Cuts inside a word | 0 | 0 | 0 |
+| Studio shots silent 1.5 s or more; longest | 3; 1.71 s | 3; 1.73 s | 10; 1.80 s (TODAY's six wides 1.54 s each) |
+| The prompt or the pins to the first tick | all six | all four | all three |
+| The drumroll | LETTER BY LETTER: from the buzz, under the answer, to the reveal | WHERE's last four ticks, ending on the reveal | HOW MANY?'s last four ticks, ending on the reveal |
+| Captions | 0…+32 ms | −1…+33 ms | −1…+33 ms |
+| Ticks with an onset (≥ 3 dB, high band, −40…+80 ms) | 44 of 58, median +9 ms | 41 of 57, +9 ms | 61 of 69, +9 ms |
+| Loudness | −15.7 LUFS, LRA 4.9 LU, −4.9 dBTP; open −18.0 | −15.6, 4.9, −4.8; −18.0 | −15.6, **8.5**, −4.7; −18.0 |
+| Voice over the music (median; lowest) | 22.3 dB; 18.5 dB | 22.9 dB; 19.2 dB | 24.2 dB; 19.7 dB |
+| Music between voices | −36.2 dBFS (10–90 % −39.0 to −33.6) | −36.8 (−38.5 to −32.9) | −36.2 (−38.0 to −33.7) |
+
+**The boards' share, against the reviewer's rule.** The rule: 65 % for every edition; only an edition with no
+alternative may exceed it, capped at 70 %, and the log must say so. This round has two such editions, both under the cap:
+
+- **E0, 65.8 %.** On 12 Oct at 22:00 no pairing can fill HOW MANY? or TODAY OR NOT TODAY (checked for every pairing the
+  planner could choose), so its three rounds are WHERE, LETTER BY LETTER and PICTURE THIS, the board-heaviest types.
+  DOUBLE OR NOTHING now takes LETTER BY LETTER, not a fourth PICTURE THIS. Take 2 of the same edition measured 64.6 %. The
+  1.2 points between take 2 and the final come from the cap on a reaction's silent face: DOUBLE OR NOTHING's reply now
+  sits on its verdict's board, not 1.8 s silent on the single.
+- **E2, 67.9 %.** Its pairing's pool (Lola Byte v Sam Night on 14 Oct at 15:20, with the week's asked stories out) fills
+  only PICTURE THIS, LETTER BY LETTER and TODAY OR NOT TODAY, so the planner had no other set of rounds. Two things push
+  it up:
+  - the sudden-death tie-break, a LETTER BY LETTER headline on its board (take 2 of the same plan, without one, measured
+    64.7 %);
+  - TODAY's lamps, now seen on the board for 4.9 % of the air instead of on a silent wide.
+
+  One lever is left untried: a host line under TODAY's lamps on the wide (the brief's other option) would move about
+  15 s from the board to the studio, about 63–64 % on this edition. It needs a new writer line for each headline, and it
+  adds about 1.5 s a headline: about 9 s on this edition, which with its tie-break already runs 351.6 s of its 360.
+
+### The panel
+
+Every member watched the three final recordings from the open to the end card, with sound, against the 1 s contact
+sheets and the 2x stills.
+
+- **Quiz producer.** The afternoon is now a real afternoon. It opens on TODAY OR NOT TODAY's six headlines (three from
+  Monday's edition, which the week's regular viewer will remember), goes through a level LETTER BY LETTER and PICTURE
+  THIS, and comes to a 12–12 tie. The sudden-death verdict holds the desks level, and the final board says what the host
+  says. The table line names every leader in all three editions. On the 13th, DOUBLE OR NOTHING on LETTER BY LETTER
+  (E0) is a better climax than a second picture: the drumroll runs under the player's answer. One note: the archive's
+  small first days bring the same option headlines back across the week's editions ("New injection makes fat cells
+  self-destruct" is asked on Monday and an option on Tuesday and Wednesday). The rules allow it, and the pool is the
+  archive's.
+- **Standards and legal editor.** 52 headlines across the three editions, every question and option, run against the
+  lists: none refused. Every fact checked: 154, none wrong. The band under the game carries nothing the quiz would refuse
+  (0 refused items in all three). The desk now errs towards refusing: F1's "floodlit streets", "Britain's Kartal upsets Svitolina to
+  storm into Wuhan Open semi-finals" (harm) and Brighton's "Conference League" (politics) are all refused when they need
+  not be. A false refusal
+  costs a story, never a standards fault.
+- **Director.** No studio shot stands silent for more than 1.80 s. TODAY's verdict wide comes 1.54 s before its words,
+  and PICTURE THIS's faces give way to the board with its clock. The reply to the sudden-death verdict stays on the
+  verdict's board. No cut lands inside a word, and every buzz cut lands 132 ms before the first word. The boards'
+  share is the open point. E0 (65.8 %) and E2 (67.9 %) exceed 65 % under the rule's exemption, and E2's longest run of
+  boards is 31.4 s. Under the rule as written, both are allowed.
+- **Lead pixel artist.** The pictures are on screen in every PICTURE THIS question (9 of 9). The TODAY board shows
+  "HEADLINE 1 OF 6" and its lamps, the final board shows a level 12–12 with the winner in gold, and the table shows the
+  ranks. Nothing is clipped, and the strip and captions stay clear.
+- **Sound designer.** The loudness and the voice over the bed are as in round 14. Every drumroll ends on its reveal; E0's
+  runs under the buzzed answer, as LETTER BY LETTER's ticks stop at the buzz. E2's loudness range is 8.5 LU against
+  4.9 on the evenings. TODAY's six silent clocks, now on the board with the ticks alone, and the tie-break widen it. It is
+  within broadcast practice, and the ticks carry those moments (61 of 69 with an onset).
+- **First-time viewer.** It is clear who leads and why, and the tie-break is understood without explanation ("First to
+  name this headline wins"). The TODAY round is quick, and the board says which headline of six it is.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Editorial accuracy and standards | 9.8 | every headline and fact checked (52 headlines, 154 facts, 0 wrong); the band clean under the game; the lists err towards refusing |
+| Entertainment and repertoire | 9.8 | the archive's small pool brings the same option headlines back across the week's editions |
+| Game legibility and tension | 9.8 | TODAY's lamps are seen on the board, its verdict on the wide; nothing open |
+| Format clarity and rhythm | 9.8 | 303.4, 321.5 and 351.6 s within their bounds; the estimate within 3.6 s on all three |
+| Picture | 9.8 | the boards' share: E0 65.8 % and E2 67.9 % under the rule's exemption (no alternative round set), the 31.4 s run of boards in E2 |
+| Sound | 9.8 | E2's loudness range 8.5 LU |
+| Data robustness | 9.8 | the estimate's spread (5.5 s against a 5 s margin); one face-silence fix measured on air but not reproduced on the fake clock |
+
+**Round score: 9.8 (lowest category). Passed, on one condition: the reviewer's exemption for E0 and E2.** The Picture
+score rests on the rule as the reviewer set it. Both editions over 65 % have no alternative set of rounds and stay under
+70 %. If the reviewer does not accept E2's exemption (its tie-break, and TODAY's lamps on the board), the Picture score is
+9.6 and the round is not passed. The lever is above.
+
+### Every headline the three editions show, against the desk's lists
+
+Each headline is checked on the airings up to its edition's moment, against the lists as committed. AI products' names
+are written as [name], per the project's rule. "ok" means no kind refuses it.
+
+- **r17/e0** (16 headlines):
+  - ok: where question — "NASA spots patch of Moon-like rock on Earth"
+  - ok: where question — "Smart ring maker Ultrahuman to roll out biological-age model across UAE"
+  - ok: where question — "F1 in Singapore: There's new fastest car now" (a later airing: disaster)
+  - ok: letters question — "Antarctic Sea Ice Grows to Its 2026 Maximum"
+  - ok: letters question — "Just 10 minutes of daily exercise could unlock deeper sleep"
+  - ok: letters question — "Honeyjar offers AI tools to improve PR and comms"
+  - ok: picture question; picture option B (answer); picture answer — "New injection makes fat cells self-destruct"
+  - ok: picture option A — "Fitbit Edge is Google’s middle ground between Fitbit Air and Pixel Watch"
+  - ok: picture option C — "These execs think voice AI hasn’t reached its [name] moment yet"
+  - ok: picture question; picture option C (answer); picture answer — "Inside mini factory where GM builds its EV future"
+  - ok: picture option A — "Meta has some Wonder Full new AI models"
+  - ok: picture option B — "Revival of classic: Citroën unveils electric version of its 2CV"
+  - ok: picture question; picture option A (answer); picture answer — "This AI startup says it can generate permit-ready blueprints in minutes"
+  - ok: picture option B — "Former Plaud exec raises $26M for AI app that listens to you"
+  - ok: picture option C — "Stinky 'skunk' plant cleared from river"
+  - ok: letters question — "Scientists find vanilla’s hidden healing potential"
+
+- **r17/e1** (16 headlines):
+  - ok: letters question — "This tiny jurassic predator helped pave way"
+  - ok: letters question — "Red squirrel project opens £250k community grant"
+  - ok: letters question — "Scientists find a hidden map of the brain"
+  - ok: howmany question — "Owls ringed to measure benefits of wildlife farming"
+  - ok: howmany question — "Apple refreshes its HomePod mini"
+  - ok: howmany question — "SpaceXSI bundles X Premium, [name], and Cursor into one subscription"
+  - ok: picture question; picture option A (answer); picture answer — "Shopify opens catalog up to more AI agents"
+  - ok: picture option B — "Facebook is giving users more control"
+  - ok: picture option C — "New injection makes fat cells self-destruct"
+  - ok: picture question; picture option B (answer); picture answer — "Google makes it easier to launch your vibe-coded apps"
+  - ok: picture option A — "NASA spots patch of Moon-like rock on Earth"
+  - ok: picture option C — "Former Plaud exec raises $26M for AI app that listens to you"
+  - ok: picture question; picture option B (answer); picture answer — "Paris Auto Show is full of interesting cars Americans can’t have"
+  - ok: picture option A — "Long-lost horror gaming cult classic P.T. gets much-needed PC port"
+  - ok: picture option C — "Scientists find hidden factor that can make or break chemical reactions"
+  - ok: where question — "'Jellyfish' effect lights up US sky"
+
+- **r17/e2** (19 headlines):
+  - ok: today headline (TODAY) — "Scientists find how harmful “zombie cells” hide"
+  - ok: today headline (EARLIER) — "These execs think voice AI hasn’t reached its [name] moment yet"
+  - ok: today headline (EARLIER) — "Former Plaud exec raises $26M for AI app that listens to you"
+  - ok: today headline (EARLIER) — "Meta has some Wonder Full new AI models"
+  - ok: today headline (TODAY) — "Fairphone’s repairable earbuds are smaller"
+  - ok: today headline (TODAY) — "Anthropic warns AI models could self-replicate"
+  - ok: letters question — "Facebook is giving users more control"
+  - ok: letters question — "Tesla Roadster could have stayed vaporware"
+  - ok: letters question — "CMF’s first wireless speakers look like musical milk cartons"
+  - ok: picture question; picture option C (answer); picture answer — "Xbox is officially embracing chaos of AI-powered game ports"
+  - ok: picture option A — "Antarctic Sea Ice Grows to Its 2026 Maximum"
+  - ok: picture option B — "Scientists reveal why some workout recovery tricks can backfire"
+  - ok: picture question; picture option C (answer); picture answer — "Scientists may have finally solved mystery of Moon’s two faces"
+  - ok: picture option A — "Google makes it easier to launch your vibe-coded apps"
+  - ok: picture option B — "'Jellyfish' effect lights up US sky"
+  - ok: picture question; picture option B (answer); picture answer — "Mars moon lander set to launch on 19 October"
+  - ok: picture option A — "NASA Science, Cargo Launch on 35th SpaceX Resupply Mission to Station"
+  - ok: picture option C — "Niobia takes guesswork out of some of tech’s most expensive mistakes"
+  - ok: howmany question — "Planet 320 light-years away confirms what scientists long suspected"
+
+- **r18/e2** (20 headlines):
+  - ok: today headline (TODAY) — "Scientists find how harmful “zombie cells” hide"
+  - ok: today headline (EARLIER) — "These execs think voice AI hasn’t reached its [name] moment yet"
+  - ok: today headline (EARLIER) — "Former Plaud exec raises $26M for AI app that listens to you"
+  - ok: today headline (EARLIER) — "Meta has some Wonder Full new AI models"
+  - ok: today headline (TODAY) — "Fairphone’s repairable earbuds are smaller"
+  - ok: today headline (TODAY) — "Anthropic warns AI models could self-replicate"
+  - ok: letters question — "Facebook is giving users more control"
+  - ok: letters question — "Tesla Roadster could have stayed vaporware"
+  - ok: letters question — "CMF’s first wireless speakers look like musical milk cartons"
+  - ok: picture question; picture option C (answer); picture answer — "Xbox is officially embracing chaos of AI-powered game ports"
+  - ok: picture option A — "Antarctic Sea Ice Grows to Its 2026 Maximum"
+  - ok: picture option B — "Scientists reveal why some workout recovery tricks can backfire"
+  - ok: picture question; picture option C (answer); picture answer — "Scientists may have finally solved mystery of Moon’s two faces"
+  - ok: picture option A — "Google makes it easier to launch your vibe-coded apps"
+  - ok: picture option B — "'Jellyfish' effect lights up US sky"
+  - ok: picture question; picture option B (answer); picture answer — "Mars moon lander set to launch on 19 October"
+  - ok: picture option A — "NASA Science, Cargo Launch on 35th SpaceX Resupply Mission to Station"
+  - ok: picture option C — "Niobia takes guesswork out of some of tech’s most expensive mistakes"
+  - ok: howmany question — "Planet 320 light-years away confirms what scientists long suspected"
+  - ok: letters question — "Microsoft’s AI chip makes it less reliant on Nvidia’s GPUs"
+
 ## The owner's pending choices
 
-These are not faults of the build:
+These are not faults of the build. (Two earlier entries were decided by the reviewer in round 15 and are no longer
+pending: the boards' share keeps its 65 % bound for every edition, an edition with no alternative capped at 70 %; and the
+band under the game carries nothing the quiz would refuse.)
 
 1. **The host.** Every recording uses the provisional candidate A: the name Quinn Query, face A, voice A. The owner
    chooses:
@@ -927,14 +1255,7 @@ These are not faults of the build:
 2. **Leaving the drafts.** PAY ATTENTION is still a draft (`"drafts"` in `config/channel.json`), aired here by
    `DRAFTS_ON_AIR=pay-attention@cosmos` and `QUIZ_VIEW=1`. Once step 7 passes and the host is chosen, the owner moves it
    to `programs` and into the rotation after COSMOS. The desk then wants its three days of archive, which the station's
-   archive will have from 15 Oct, 14:25 London.
-3. **The boards' share against the step-4 reviewer's 65 %.** With the recorded voices the boards run 61–69 % of the
-   air: E0, the fallback edition with four PICTURE THIS questions, 65.4–69.1 % over eleven rounds; E1 61.0–65.7 %; E2,
-   the afternoon edition, as measured in round 14. The reading rule (§4) and the host's pace drive it: the host reads the
-   board's own text for 42–45 % of the air. The share is reported here, not argued. Holding 65 % on air is the
-   reviewer's and the owner's decision, and its levers are the reading rule or the pace.
-4. **The ticker under the game** carries hard politics (emergency rule in Pakistan, a White House briefing, the midterm
-   elections). The bible keeps only tragedy and grave stories off the band while the quiz airs, so this is allowed. A
-   lighter band beside a game is the owner's choice.
-5. **The sign-off names no next edition.** The rotation does not know its next slot. The writer says the time when the
+   archive has had since 15 Oct, 14:25 London (the desk counts from the oldest airing). Its week has a gap, though: the
+   station's recorder was down from 14 Oct's evening to 16 Oct's afternoon, so the pool for the next days is thinner.
+3. **The sign-off names no next edition.** The rotation does not know its next slot. The writer says the time when the
    station passes one (`nextAt`); the producer does not yet.

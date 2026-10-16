@@ -480,16 +480,28 @@ Measured on the development archive, with a model of the planner that counts sto
    - *Open: the faces are seen on a placeholder stage until step 5's set exists; no person has heard the voices yet.*
 7. **On air**: two recorded editions with sound (an afternoon and an evening); the whole programme critiqued above 9.7
    (`docs/roadmap/critique/pay-attention.md`).
-   *Built, not yet passed: 14 rounds on the station's real archive (12–14 Oct). The evening editions of 12 Oct 22:00 and
-   13 Oct 22:40, and the afternoon edition of 14 Oct 15:20 with TODAY OR NOT TODAY, were recorded with sound and the
-   Kokoro voices. The final round scored 9.5 (lowest category).*
+   *Built; 15 rounds on the station's real archive (12–14 Oct). The evening editions of 12 Oct 22:00 and 13 Oct 22:40,
+   and the afternoon edition of 14 Oct 15:20 with TODAY OR NOT TODAY and a sudden-death tie-break, were recorded with
+   sound and the Kokoro voices. Round 14 scored 9.5 and the reviewer did not pass it; round 15 scored 9.8 (lowest
+   category), on the reviewer's exemption for the two editions over the boards' 65 % (65.8 % and 67.9 %, each with no
+   alternative set of rounds). Without it, 9.6 and not passed.*
    - *How: `tools/quiz/onair.mjs` (the real server under a frozen clock, the draft on air, the archive read only, the
      edition saved once every voice is ready) and `tools/record.mjs --trace` (the director's cues, countdowns and cuts,
      and the ticker's items, in the report).*
    - *Changed on air:*
      - *the voice service speaks the quiz, with its own prosody;*
-     - *the desk keeps executions, a state's acts, a firm's hardship and fatalities out, and the band drops grave stories
-       while the quiz airs;*
+     - *the desk keeps executions, a state's acts, a firm's hardship and fatalities out; round 15 added a person's failure,
+       exit, anger or injury, an incident, staff quitting, a politician named anywhere, trade frictions, loneliness, price
+       rises, deals, fantasy tips and offensive language, and one story is asked once a week by story and never shown
+       under two questions;*
+     - *the band under the game carries nothing the quiz would refuse (the station marks each item with the desk's own
+       verdict);*
+     - *the table line names every player its board ranks first; the sudden-death headline adds nothing to the desks;*
+     - *the writer's estimate is calibrated on the recorded voices, and an edition over its bound is shortened before air
+       by optional lines or whole TODAY OR NOT TODAY headlines;*
+     - *DOUBLE OR NOTHING falls back to a played LETTER BY LETTER or WHERE with two desks before PICTURE THIS;*
+     - *no studio shot stands silent more than 1.8 s: TODAY's lamps on the board and its verdict's wide 1.6 s before its
+       words, the faces back to the board with its clock, a short reply kept on the verdict's board;*
      - *the banks speak as people do (UNIT-8 aside), with the afternoon's words before 17:00 and nothing read twice;*
      - *the host recaps the lock-ins on the clock; equally close guesses score two each; a sum of money is said with its
        rate;*
@@ -502,9 +514,7 @@ Measured on the development archive, with a model of the planner that counts sto
        aired with an empty frame);*
      - *the drumroll ducked under the voice; the open's plate names that fit.*
    - *Open:*
-     - *the afternoon edition runs long (378.6 s with a tie-break): the writer's estimate for TODAY OR NOT TODAY is about
-       9 s a headline, against 16 s on air;*
-     - *TODAY's wide waits up to 3.1 s on the silent lamps;*
-     - *the boards' share runs 61–69 % against the step-4 reviewer's 65 %, highest on the fallback edition with four
-       PICTURE THIS questions;*
+     - *the boards' share: 62.0 % on 13 Oct's edition; 65.8 % and 67.9 % on the two editions with no alternative set of
+       rounds (the reviewer's exemption, capped at 70 %); a host line under TODAY's lamps on the wide would take the
+       afternoon edition to about 64 %;*
      - *the owner's host choice and leaving the drafts.*

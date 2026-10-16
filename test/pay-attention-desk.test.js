@@ -82,6 +82,7 @@ describe('what is never asked (§3.1)', () => {
       "Darnold owns up to mistakes in OT loss: Late picks 'not fair' to Seahawks": 'failure of a person',
       'Eagles QB Hurts ruled out vs. Panthers with blood clot in calf': 'health',
       "Tough loss for Sabalenka as Britain's Kartal earns big win over Bencic in Wuhan": 'failure of a person',
+      'UK’s ‘incoherent’ approach to China plagued by lack of expertise, report says': 'politics',
     };
     for (const [title, kind] of Object.entries(refused)) assert.equal(quizRefuses({ title, summary: '' }), kind, title);
     for (const title of ['Mattingly stays on as Phillies manager, reaching 2-year deal', 'Now you can call anyone with WhatsApp, even if they don’t have WhatsApp', 'Peralta stars as Rays even series against Guardians']) assert.equal(quizRefuses({ title, summary: '' }), null, title);
