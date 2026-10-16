@@ -31,8 +31,29 @@ const SAYS = /\b(?:said|says|say|told|warned|warns|added|according to|argued|arg
 const LEANS = /^(?:It|Its|They|Their|Them|He|She|His|Her|This|These|Those|That|Such)\b(?!\s+(?:is|was)\s+(?:expected|thought|believed|understood|reported|unclear|not clear|likely)\b)/;
 const STRANGER_REF = /^(?:The\s+(?:child|boy|girl|man|woman|men|women|suspect|victim|victims|couple|pair|group|move|decision|deal|plan|attack|incident|announcement|measure|move|bill|law|report|study|ruling)\b)/;
 
-/** The faults of one edition: [{ cls, seg, text }]. `src(id)` is the story's source { title, summary, body }. */
-export function lintEdition(ep, src = () => null) {
+// The sentences inside a source's quotations of several sentences (after the first): the speaker's words, never the
+// outlet's. A paragraph starts outside any quotation. As keys: lower case, letters and digits.
+const keyOf = (t) => String(t).toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+export function quoteInterior(text) {
+  const out = [];
+  for (const para of String(text || '').split(/\n+/)) {
+    let curly = 0;
+    let straight = false;
+    for (const t of para.match(/[^.!?…]+(?:[.!?…]+["”’]*|$)/g) || []) {
+      const s = t.trim();
+      if ((curly > 0 || straight) && keyOf(s).length > 25) out.push(keyOf(s));
+      curly = Math.max(0, curly + (s.match(/“/g) || []).length - (s.match(/”/g) || []).length);
+      if ((s.match(/"/g) || []).length % 2) straight = !straight;
+    }
+  }
+  return out;
+}
+
+/**
+ * The faults of one edition: [{ cls, seg, text }]. `src(id)` is the story's source { title, summary, body };
+ * `inside`, the edition's sources' quotation interiors (quoteInterior), for the speaker's words told as ours.
+ */
+export function lintEdition(ep, src = () => null, inside = []) {
   const out = [];
   const segs = ep?.segments || [];
   const pid = ep?.program?.id;
@@ -72,6 +93,14 @@ export function lintEdition(ep, src = () => null) {
       if (opener && kind !== 'in-their-words' && !heard && (LEANS.test(body) || STRANGER_REF.test(body))) add('leans', i, p);
       if (s.type === 'cross' && s.kind === 'restage' && /^(?:I agree|Yes|No|That|This|It|They|He|She|We did|Absolutely)\b/.test(p)) add('quote-context', i, p);
     });
+    // a speaker's words in a presenter's voice: a sentence from inside a quotation, its quotation marks gone
+    // ("It’s one of the biggest commitments in history for anything, ABC News reports.", Trump's words, 14 Oct); judged on
+    // the whole segment, so a quotation of two sentences the presenter reads with its marks ("As Trump put it: “…. …”")
+    // is no flag
+    if (kind !== 'in-their-words' && kind !== 'intro' && kind !== 'outro' && !(s.type === 'cross' && s.kind === 'restage') && inside.length) {
+      const said = keyOf(plain(s.text).replace(/“[^”]*”|"[^"]*"/g, ' | '));
+      for (const x of inside) if (said.includes(x.slice(0, 60))) add('speaker-words', i, x);
+    }
     // the lead told in one sentence, with no link to carry it
     if (kind === 'lead' && lines.length < 2 && !s.link) add('thin-lead', i, plain(s.text));
     // a story's own headline read out as its first sentence when the headline is no sentence (no verb said as one)
@@ -123,11 +152,12 @@ async function cli() {
     if (fs.existsSync(srcFile)) {
       for (const block of fs.readFileSync(srcFile, 'utf8').split(/^## /m).slice(1)) {
         const id = block.split(' ')[0];
-        srcs.set(id, { title: (block.match(/^TITLE: (.*)$/m) || [])[1] || '', summary: (block.match(/^SUMMARY: (.*)$/m) || [])[1] || '' });
+        srcs.set(id, { title: (block.match(/^TITLE: (.*)$/m) || [])[1] || '', summary: (block.match(/^SUMMARY: (.*)$/m) || [])[1] || '', body: (block.match(/^BODY \([^)]*\):\n([\s\S]*)$/m) || [])[1] || '' });
       }
     }
     editions++;
-    for (const x of lintEdition(ep, (id) => srcs.get(id))) {
+    const inside = [...srcs.values()].flatMap((x) => quoteInterior(`${x.summary}\n${x.body}`));
+    for (const x of lintEdition(ep, (id) => srcs.get(id), inside)) {
       counts[x.cls] = (counts[x.cls] || 0) + 1;
       if (show && x.cls === show && shown.length < maxShow) shown.push(`${f} [${x.seg}] ${x.text}`);
     }

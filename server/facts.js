@@ -591,7 +591,7 @@ export function quotationsGrounded(text, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath within without despite amid among beyond toward towards under upon via inside outside along'.split(
+  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath within without despite amid among beyond toward towards under upon via inside outside along not no never'.split(
     ' '
   )
 );
@@ -702,6 +702,8 @@ export function extractFigures(text, max = 3) {
     // on a card (NASA 9 Oct); "Apollo 11", "Falcon 9", "Windows 11" (a capitalised word before it mid-sentence)
     const head = s.slice(0, n.index);
     if (!n.percent && !n.currency && !n.unit && (/\p{L}[-‐‑]$/u.test(head) || /[\p{Ll},;]\s+\p{Lu}[\p{L}’'-]*\s$/u.test(head))) continue;
+    // (the count a ratio is out of is no figure: "One in 10 scams reported to Citizens Advice…" put "10 SCAMS" on a card, 14 Oct)
+    if (/\b(?:one|1|two|2|three|3|four|4|nine|9)\s+(?:in|out of)\s+$/i.test(head.slice(-20))) continue;
     const tokens = (rest.match(/^[\s-]*([^.;:!?()]*)/)?.[1] || '').split(/\s+/).filter(Boolean);
     if (tokens[0] && MONTHS.test(tokens[0]) && n.value <= 31) continue; // "12 March"
     const label = [];
@@ -730,6 +732,8 @@ export function extractFigures(text, max = 3) {
         break;
       }
       if (LABEL_STOP.has(lw)) break;
+      // (a name after the first word ends the label: "42-year-old Hassan Jihad Ibn Kariem" once made "42-YEAR-OLD HASSAN JIHAD")
+      if (label.length && /^\p{Lu}\p{Ll}/u.test(word)) break;
       if (label.length && (/[a-z]ed$/.test(lw) || IRREGULAR_PAST.has(lw))) break; // "160 million passengers used the network": stop at the verb
       label.push(word);
       if (label.length >= 3 || /[,]$/.test(w)) break;

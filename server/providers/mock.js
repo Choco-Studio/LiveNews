@@ -101,9 +101,14 @@ export function sentenceCase(title, info) {
 // jungle' of wallabies, porcupines and parrots must move after neighbours complain", BBC 10 Oct)
 // A feature's headline: a label and the long read behind it ("…: the fight to kill…", "– how charity shops became…",
 // "Inside…", "Meet the…", "Why…?", "The big read")
-const FEATURE_TITLE = /^["“‘'][^"“”‘’']{8,}["”’']\s*(?:[:,–—-]\s+.*)?$|(?:^|[:–—]\s+|\s[–—-]\s+)(?:the (?:fight|battle|race|rise|fall|story|truth|secret|inside story|making|people|women|men|cost|price|toll|human cost|scale|lives) (?:to|of|behind|who|for)|how (?:\w+\s+){0,6}(?:became|turned|lost|won|changed|built|took|went)|why (?:\w+\s+){1,8}(?:is|are|was|were|has|have|does|do|can|can't|won't)|inside (?:the|a)\b|meet the\b|what (?:it'?s|it is) like)\b|^(?:Inside|Meet|Why|How|What)\b[^:]*\?$|\bthe big read\b|\b(?:long read|analysis|explainer|opinion|comment)\s*:|\b(?:fantasy|fantasies|folly|myth|delusion|sham|farce|madness|nonsense|fiasco|hypocrisy|charade|absurdity)\b|\bbest and worst\b|\bmost interesting\b|\bis the (?:best|worst)\b|\bhands-on\b|\breview:|\bis as (?:awesome|good|great|cool|bad|weird)\b|\s[–—-]\s+(?:can|will|could|should|is|are|does|do|did|why|how|what|who)\s+(?:\w+\s+){0,2}\w+/i;
+// (and a podcast's title, "Trump rewards Putin and betrays Ukraine with Russia diesel deal - The Latest", Guardian 14 Oct,
+// and a headline's own verdict, "Hegseth’s dubious low-T screening…", Ars Technica 13 Oct: features, after the news;
+// and a teaser, "They war-gamed dimming the Sun. It went even worse than you think.", Ars Technica 15 Oct)
+const FEATURE_TITLE = /^["“‘'][^"“”‘’']{8,}["”’']\s*(?:[:,–—-]\s+.*)?$|(?:^|[:–—]\s+|\s[–—-]\s+)(?:the (?:fight|battle|race|rise|fall|story|truth|secret|inside story|making|people|women|men|cost|price|toll|human cost|scale|lives) (?:to|of|behind|who|for)|how (?:\w+\s+){0,6}(?:became|turned|lost|won|changed|built|took|went)|why (?:\w+\s+){1,8}(?:is|are|was|were|has|have|does|do|can|can't|won't)|inside (?:the|a)\b|meet the\b|what (?:it'?s|it is) like)\b|^(?:Inside|Meet|Why|How|What)\b[^:]*\?$|\bthe big read\b|\b(?:long read|analysis|explainer|opinion|comment)\s*:|\b(?:fantasy|fantasies|folly|myth|delusion|sham|farce|madness|nonsense|fiasco|hypocrisy|charade|absurdity)\b|\bbest and worst\b|\bmost interesting\b|\bis the (?:best|worst)\b|\bhands-on\b|\breview:|\bis as (?:awesome|good|great|cool|bad|weird)\b|\s[–—-]\s+(?:can|will|could|should|is|are|does|do|did|why|how|what|who)\s+(?:\w+\s+){0,2}\w+|\s[–—-]\s+The Latest\s*$|\b(?:dubious|shameful|disgraceful|absurd|ridiculous|misguided|cynical)\b|\bthan you (?:think|might think|(?:would|['’]d) (?:expect|think))\b|\bwhat you need to know\b/i;
 // An outlet's promotion of its own event, offer or newsletter: no story
-const PROMO_TITLE = /\b(?:final chance|last chance|save up to|ticket savings|tickets? (?:on sale|go on sale|now available)|register now|early[- ]bird|promo code|discount code|deal of the day|best deals?|sponsored|subscribe (?:now|today)|sign up (?:now|today|for our))\b/i;
+// (nor a deals post: "$15 gets you Psychonauts 2…" and "Save 50% on your TechCrunch Disrupt 2026 ticket" aired once a
+// headline's "you" no longer made it a column, TECH BYTES 15 Oct)
+const PROMO_TITLE = /\b(?:final chance|last chance|save up to|ticket savings|tickets? (?:on sale|go on sale|now available)|register now|early[- ]bird|promo code|discount code|deal of the day|best deals?|sponsored|subscribe (?:now|today)|sign up (?:now|today|for our))\b|\bsave (?:up to )?[$£€]?\d|\b(?:half|\d+%) off\b|\bgets you\b|\bon sale\b|\blowest price\b|\bcheapest (?:price|ever)\b/i;
 export const LABEL_TITLE = /^(?:["“‘'][^"“”‘’']{1,120}["”’'](?=\s*(?:[:,–—-]|says\b|said\b|$))|["“][^"“”]{1,160}["”](?=\s*(?:[:,–—-]|says\b|said\b|$))|(?:\p{Lu}[\p{L}’'.&-]*\s+){1,3}on\s+\p{Lu}|(?:Watch|Video|Listen|In pictures|Explained|Analysis|Live)\s*:|R\.?I\.?P\.?\s)/u;
 export function spokenTitle(title, info) {
   let t = sentenceCase(String(title || '').trim(), info).replace(/[.!]+$/, '');
@@ -214,7 +219,10 @@ function headlineFuture(t, words, info) {
   const at = SET_TO.test(words[k - 1]) ? k - 1 : k;
   // (a verb of its own before "to": "US Supreme Court agrees to hear…", Al Jazeera 14 Oct, once aired "…agrees are to hear…")
   // (anywhere before it: "UK asks Interpol to reject…" once aired as "UK asks Interpol is to reject…", Guardian 15 Oct)
-  if (at === k && words.slice(1, k).some((w) => /^(?:agrees|plans|wants|vows|refuses|threatens|seeks|aims|hopes|votes|moves|decides|promises|pledges|fails|tries|offers|prepares|expects|intends|asks|urges|calls|says|declines|chooses|tells|orders|forces|helps|lets|allows|invites|agreed|planned|voted|vowed|refused|threatened|sought|decided|promised|pledged|failed|tried|offered|asked|urged|told|ordered|forced|helped|allowed|invited)$/i.test(w))) return null;
+  // (and an auxiliary or a question word: "What ice cream has to do with this year's Nobel Prize" once aired as "…has are
+  // to do…", NPR 15 Oct)
+  if (/^(?:What|How|Why|Who|When|Where|Which)$/i.test(words[0] || '')) return null;
+  if (at === k && words.slice(1, k).some((w) => /^(?:has|have|had|is|are|was|were|needs|need|got|gets|used|going|ought|agrees|plans|wants|vows|refuses|threatens|seeks|aims|hopes|votes|moves|decides|promises|pledges|fails|tries|offers|prepares|expects|intends|asks|urges|calls|says|declines|chooses|tells|orders|forces|helps|lets|allows|invites|agreed|planned|voted|vowed|refused|threatened|sought|decided|promised|pledged|failed|tried|offered|asked|urged|told|ordered|forced|helped|allowed|invited)$/i.test(w))) return null;
   // (a verb after "as", "while" or "after" is that clause's own: "UK to strengthen cyber defences as minister calls…")
   const sub = words.findIndex((w, j) => j > k + 1 && /^(?:as|while|after|amid|because|when|until|before)$/i.test(w));
   if (at < 1 || words.slice(0, at).some((w) => /[,:;]$/.test(w)) || laterVerb(words.slice(k + 2, sub > 0 ? sub : undefined))) return null;
@@ -259,6 +267,14 @@ function headlinePassive(t, words, info) {
 // ("Let’s break down exactly what happened", "Learn more about...": the outlet talking to its reader, TechCrunch 12 Oct)
 const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me|[Yy]ou(?:['’](?:re|ve|ll|d))?|[Yy]our|[Ll]et['’]s)\b|(?:^|[^\w.])I (?=[a-z])|^(?:Learn|Find out|Read|Discover|Watch|Subscribe|Sign up|Click|Join us|Don['’]t miss|Check out|Here['’]s)\b/;
 export const ownVoice = (t) => FIRST_PERSON.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
+// A headline in a columnist's own voice: "I don’t miss the camera on the Ray-Ban Meta Audio glasses", "We tried…", "Here’s
+// why…". A headline that addresses its reader is news told to them ("Google wants to host your personal vibe-coded apps",
+// "…an AI app that listens to you in the background"), and a "we" after "says" is the speaker's ("Cerebras CEO says we’re
+// nearing…"): TECH BYTES of 14 Oct 00:00 held back seven such stories as columns and aired five. A promotion is PROMO_TITLE's.
+export const columnVoice = (title) => {
+  const t = String(title).replace(/“[^”]*”|"[^"]*"|‘[^’]*’/g, ' ').replace(/\b(?:says?|said|warns?|claims?|tells?|told)\b[\s\S]*$/i, ' ');
+  return /\b(?:[Mm]y|me|[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll))\b|(?:^|[^\w.])I (?=[a-z])|^I\s/.test(t) || /^(?:Learn|Find out|Read|Discover|Watch|Subscribe|Sign up|Click|Join us|Don['’]t miss|Check out|Here['’]s)\b/.test(t);
+};
 // Any verb at all, a sentence's least: an auxiliary, a past form (regular or a common irregular one), a present in -s
 // after the first word
 const IRREGULAR_PAST = /^(?:said|told|spoke|won|lost|beat|drew|shot|sank|stole|swore|tore|woke|bled|dealt|lit|sped|split|made|took|gave|came|went|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|held|met|led|sent|wrote|fought|caught|thought|sought|stood|chose|froze|got|knew|meant|felt|heard|left|began|rose|fell|grew|hit|cut|shut|spread|hurt|cost|let|quit|struck|stuck|swept|fled|dug|hung|threw|wore|broke|ate|bought|taught|withdrew|arose)$/i;
@@ -693,8 +709,32 @@ const FRAGMENT = /^(?:\d[\d,.]*\s+(?:from|of|to|in|at|on|by|for|and|or|with|than
 // (a gallery's caption has no verb: "From a flat in a new urban village in London to a family-sized home in a rural village
 // in Norfolk.", Guardian 9 Oct)
 const VERBLESS = (t) => /^(?:From|Between|Among|Like|Unlike|Beyond)\b/.test(t) && !hasFiniteVerb(t);
+// A text's sentences that stand outside any quotation. A quotation of several sentences: the ones after its first are the
+// speaker's words, never the outlet's. '\u201CThat guarantees success. It\u2019s one of the biggest commitments in history for
+// anything. It\u2019s one of the biggest deals ever made.\u201D' aired as "It\u2019s one of the biggest commitments in history for
+// anything, ABC News reports"; a victim's "My other child was screaming\u2026" and a manager's "We started the second half
+// well\u2026" aired in the presenter's own voice (replays of 12-16 Oct). A paragraph starts outside any quotation, and one
+// left open past five sentences is a lost mark, not a speech.
+const outsideQuotes = (text) => {
+  const out = [];
+  let curly = 0;
+  let straight = false;
+  let run = 0;
+  let at = 0;
+  for (const t of sentencesIn(text)) {
+    const i = text.indexOf(t, at);
+    if (i < 0 || text.slice(at, i).includes('\n')) curly = 0, straight = false, run = 0;
+    if (i >= 0) at = i + t.length;
+    if (!(curly > 0 || straight)) out.push(t);
+    curly = Math.max(0, curly + (t.match(/\u201C/g) || []).length - (t.match(/\u201D/g) || []).length);
+    if ((t.match(/"/g) || []).length % 2) straight = !straight;
+    run = curly > 0 || straight ? run + 1 : 0;
+    if (run > 5) curly = 0, straight = false, run = 0;
+  }
+  return out;
+};
 const sentencesOf = (s) =>
-  sentencesIn(String(s || '').replace(/[\u00AD\u200B-\u200D\u2060\uFEFF]/g, ''))
+  outsideQuotes(String(s || '').replace(/[\u00AD\u200B-\u200D\u2060\uFEFF]/g, ''))
     .filter(Boolean)
     .map((t) => t.replace(/\s*\((?=[A-Za-z&]*[A-Z][A-Za-z&]*[A-Z])[A-Za-z&]{2,8}\)(?=[\s,.;:!?]|$)/g, '').replace(/\s*\([a-z][a-z-]{2,20}\)(?=[\s,.;:!?]|$)/g, ''))
     // (a blockquote's ">" is page furniture: "> The outputs of this opt-in vulnerability scanner...", The Verge 9 Oct)
@@ -1226,7 +1266,7 @@ export function study(story, { cap = 9 } = {}) {
     light,
     curious: light && (LIGHTER.test(title) || CURIOUS.test(title) || !!story.moment),
     // a reader's letter, a column or a feature's label: after the news, never its lead (writeEpisode, bestMain)
-    column: ownVoice(story.title) || FEATURE_TITLE.test(String(story.title)),
+    column: columnVoice(story.title) || FEATURE_TITLE.test(String(story.title)),
     loc: precise,
     country: precise ? precise.entry.country || precise.entry.name : null,
     places: placesIn(text),
@@ -1635,7 +1675,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   // consumer column 14 Oct, is no news report: only when the desk has nothing else)
   // (and a feature's headline, a label and its long read, "Lobbying, lawyers and a media blitz: the fight to kill…", "‘People
   // sell their best stuff on Vinted’ – how charity shops became a dumping ground…", Guardian 14 Oct: no news line to tell)
-  const plain = (i) => !ownVoice(i.s.title) && !FEATURE_TITLE.test(i.s.title);
+  const plain = (i) => !columnVoice(i.s.title) && !FEATURE_TITLE.test(i.s.title);
   // (and an outlet's promotion is no story at all: "TechCrunch Disrupt 2026 starts tomorrow: Your final chance to secure up
   // to $100 ticket savings", TechCrunch 12 Oct, aired as TECH BYTES' eleventh story)
   const news = found.filter((i) => !PROMO_TITLE.test(i.s.title));

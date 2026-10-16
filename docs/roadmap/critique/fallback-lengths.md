@@ -361,3 +361,340 @@ Fixes made after round 3 (the fourth reading's tests in `test/fallback-lengths.t
 - **Fault 15**: the depth loop's aim.
 - **Fault 16**: up to three warnings; the strongest gusts in their own zone when there is no sky.
 - **Not fixed: faults 12, 13 and 14.**
+
+## Round 4 (final): after the fixes from reading r5, r6 and the first final replay
+
+More was found in the r5 and r6 replays and the first two attempts at a final replay, and fixed before the last one. The tests are in `test/fallback-lengths.test.js`, "what the fourth reading showed", "what the last reading showed" and "a quotation is said by whoever the source says said it".
+
+- **A quotation given to the wrong person (truth).**
+  - The source read: "…the Times quoted a government source as saying: “Andrew Bailey needs to focus on doing his job.” Miller said the Treasury…".
+  - The words were credited to the IFS director, Helen Miller, on the quote card, and re-staged as hers in IN THEIR WORDS. The fault was already there in the baseline.
+  - A quotation that ends its sentence with a full stop now never takes the next sentence's speaker (`server/facts.js`).
+- **Columns, reviews and features no longer air as news when the desk has enough plain stories** ("So far, success feels a lot further away than failure"). The programme is a story shorter instead.
+- **The number of the day.**
+  - It is a figure that one of the story's sentences can say: at the programme's length, or shortened around the figure. It is never the unit of a ratio ("for every $1").
+  - That sentence is said.
+  - A number story's broken headline gives way to a sentence of the article.
+  - "Our number of the day: £9bn." had once aired with nothing after it.
+- **IN THEIR WORDS names the speaker cleanly.** These once aired:
+  - "Stella Li, the According to vice-president";
+  - "Mark Rutte, the to secretary general";
+  - "the Dr Hausfather";
+  - "the Force General";
+  - "the Cruz professor".
+
+  A toss to the co-presenter no longer comes before the hand-over.
+- **Writing:**
+  - a lead phrase is never kept alone ("By combining machine learning…");
+  - a headline that has its verb is never given another ("Father was have been asked…");
+  - a title-case headline is never made a future ("NASA develops batteries are to power…");
+  - a place is never given a first name ("Resources Wales has seen…");
+  - a sentence's first words are no one's name ("As Friends Malcolm put it");
+  - "All three are…" and "Though it remained offshore, the storm…" never open;
+  - a subordinate clause with a dashed list in it is no sentence;
+  - page entities are characters ("A&beta;").
+- **WHAT WE KNOW**: a point has its own subject ("Have started preparing / Had started preparing" filled a board).
+- **Kickers**:
+  - SOFTWARE, TRANSPORT and CONFLICT from stray words;
+  - HISTORY on Roman Abramovich;
+  - GADGETS on "TV networks";
+  - ACCIDENTS on an ancient shipwreck;
+  - EDUCATION on research at a university;
+  - RESCUE on released orangutans.
+- **WORLD WEATHER.**
+  - Up to three GDACS warnings are read.
+  - Without the moving sky, the day's strongest gusts are said in their own zone.
+  - On the live forecast of 16 Oct 21:20 UTC: 239 s and 0 of 24 with the old writer; 286 s and 24 of 24 now.
+
+More faults turned up while reading the replays meant to be final (`final9` to `final13`), and were fixed before the last one (`final14`):
+- **A speaker's words in the presenter's voice (truth).** This was the worst fault of the four rounds, and every earlier reading missed it.
+  - In a quotation of several sentences, only the first sentence carries the opening mark. The writer took each later sentence for the outlet's own. Read against the script alone, such a sentence sounds like plain reporting.
+  - What aired:
+    - Trump's boast became ABC News's report: "It’s one of the biggest commitments in history for anything, ABC News reports."
+    - A victim's words aired in the presenter's voice: "My other child was screaming as he rained punches on any area of my body he could get at."
+    - So did a politician's accusation: "They have actually aided and abetted criminality in absolutely every way."
+    - And a football manager's account: "We started the second half well and fought our way back."
+  - Counted with `innerquote.py`: 66 such sentences in the baseline's editions, 67 in `final9`, 5 in `final14`.
+  - The fix: a sentence that starts inside an open quotation is never studied. A paragraph starts outside any quotation, so a lost closing mark costs one paragraph at most (`server/providers/mock.js`).
+  - The lint now has a class for it (`speaker-words`, `tools/lengths/lint.mjs`).
+  - The same fault came back by another route. When IN THEIR WORDS re-stages a quotation of two sentences, the producer took only the first out of the presenter's text. Zelensky's "Russia is targeting yet another power plant and the lives of our people.”" was left in the presenter's voice. The whole quotation now goes, to its closing mark (`server/producer.js`).
+- **An outlet's promotion opened a story.** "Get our breaking news email, free app or daily news podcast." opened a story on violence against Australian children in three editions, with SOFTWARE as its kicker.
+  - The writer's repair of a leaning opener took the summary's sentences unfiltered.
+  - Such a line is now page furniture at the desk (`server/transcript.js`), and the repair never takes a line in the outlet's own voice (`server/writer.js`).
+  - The replay's summaries are the archive's, cleaned by the desk as it was on 12–16 Oct. The desk fix does not show in the replay; the writer's does.
+- **A podcast's title and a headline's verdict read as news.**
+  - MONEY MINUTE teased "Trump rewards Putin and betrays Ukraine". It was the title of a Guardian podcast, "… - The Latest".
+  - TECH BYTES teased "Hegseth’s dubious low-T screening…", the outlet's own verdict.
+  - Both are now features, which air only when the desk has too few plain stories.
+- **News held back as columns.** A headline that addresses its reader was taken for a column.
+  - The words "you" and "your" were enough: "Google wants to host your personal vibe-coded apps in the Play Store", "Former Plaud exec raises $26M for AI app that listens to you in the background".
+  - A "we" after "says" counted too ("Cerebras CEO says we’re nearing a future…").
+  - Since round 4 a column no longer airs while the desk has enough plain stories. TECH BYTES of 14 Oct 00:00 therefore held back seven news stories and aired five, at 171 s.
+  - A column is now a headline in the outlet's own voice: "I", "my", "we", "our", outside a quotation and before any "says". Promotions are caught by their own rule.
+- **Cards that misled.**
+  - "One in 10 scams…" put "10 SCAMS" on a card.
+  - "Maia 300 not only…" and "Porsche 911 not…" gave "300 NOT" and "911 NOT".
+  - "42-year-old Hassan Jihad Ibn Kariem" gave "42-YEAR-OLD HASSAN JIHAD".
+  - The count of a ratio is no figure now, a label stops at "not" and at a name after its first word (`server/facts.js`).
+- **Kickers from stray words** (`server/topics.js`):
+  - "hospitality" made HEALTH;
+  - "operations" made CULTURE, through "opera";
+  - a takeover's "rescue bid" made RESCUE;
+  - a "US military" archbishop's protest at an execution made CONFLICT;
+  - a diesel deal made MOTORING;
+  - sexual violence against children made WORLD.
+
+  Whole words now, and an execution is JUSTICE, fuel ENERGY, sexual violence CRIME.
+- **What the column fix let through** (found reading `final13`):
+  - two deals posts aired as news: "$15 gets you Psychonauts 2…" and TechCrunch's "Save 50% on your TechCrunch Disrupt 2026 ticket";
+  - a teaser read in the outlet's voice: "They war-gamed dimming the Sun. It went even worse than you think."
+
+  Deals and offers are promotions now, and "than you think" makes a feature. "I Am Artemis: Allison Mjoen", NASA's profile, is a column too.
+- **"What ice cream has are to do with this year's Nobel Prize"**: a headline with its own verb made a future. A question word or an auxiliary before "to" now keeps it as written.
+- **An ask with no answer**: "Walk me through how it works." led into the next story, its answer never written. An ask that is not a question now goes with its answer, as a question did already.
+- **A clause's words taken for a speaker** ("…described it as a threat but said: “…”" aired as "As a threat but put it").
+- **A headline with its verb before "to" made a future** ("UK asks Interpol is to reject…").
+- **A live page read in the presenter's voice.**
+  - On a thin desk, a Guardian live page aired: "Zia Yusuf… is speaking now… This is a moral outrage, and it is a direct result of decisions made by Tory and Labour governments."
+  - A live page now airs only to keep a programme at its fewest stories. "Follow the day's news live" is page furniture.
+- **A sentence about orangutans read as if about people.**
+  - WORLD NOW's lead on an Indonesian wildfire opened on "How many have been killed is unclear, but experts have warned the toll is likely to be huge." In the article, that is the orangutans' toll.
+  - A sentence that asks about what the sentence before it told ("How many… is unclear") never opens a story and is never told without that sentence.
+  - The same edition closed on war drones as "And finally", followed by Paco's "Quietly encouraging." Drones on a battlefield are now CONFLICT, which can never be "And finally".
+
+### Lengths (`final14`, the code as committed)
+
+| Programme | Target | Before: voiced avg / median / min–max | In range | After | In range |
+|---|---|---|---|---|---|
+| WORLD NOW | 540–600 s | 377 / 370 / 255–502 | 0 of 116 | 512 / 544 / 130–626 | 52 of 113 |
+| COSMOS | 360–480 s | 394 / 406 / 252–450 | 33 of 38 | 397 / 406 / 224–479 | 31 of 38 |
+| TECH BYTES | 360–480 s | 439 / 455 / 230–503 | 25 of 41 | 395 / 410 / 127–470 | 35 of 41 |
+| MONEY MINUTE | 240–360 s | 263 / 260 / 200–323 | 18 of 25 | 266 / 277 / 196–310 | 18 of 24 |
+| NEWS IN 60 | 55–70 s | 74 / 74 / 61–85 | 13 of 55 | 64 / 63 / 55–77 | 51 of 56 |
+| WORLD WEATHER (live forecast of 16 Oct 21:20, same data) | 270–480 s | 239 / 239 / 234–246 | 0 of 24 | 286 / 286 / 280–293 | 24 of 24 |
+| WORLD WEATHER (offline demo data) | 270–480 s | 244 / 244 / 239–250 | 0 of 24 | 271 / 271 / 265–277 | 14 of 24 |
+
+| Programme | Full desk: editions, voiced avg, in range | Thin desk: editions, voiced avg, in range |
+|---|---|---|
+| WORLD NOW | 62, 570 s, 46 in range | 51, 442 s, 6 in range |
+| COSMOS | 14, 417 s, 14 in range | 24, 385 s, 17 in range |
+| TECH BYTES | 22, 422 s, 22 in range | 19, 364 s, 13 in range |
+| MONEY MINUTE | 21, 269 s, 17 in range | 3, 244 s, 1 in range |
+| NEWS IN 60 | 55, 64 s, 50 in range | 1, 59 s, 1 in range |
+
+**Edition by edition** (`pairs.py`: each edition against the same edition in the baseline):
+- WORLD NOW: longer by 30 s or more in 97 of 112 paired editions, shorter in 7 (all of them under the range in the baseline too).
+- COSMOS: longer in 11 of 38, shorter in 9. Three editions that were in range are under it now.
+- TECH BYTES: longer in 3 of 40, shorter in 24, most of them from over or near the top of the range (11 of 41 baseline editions ran past 480 s). Three editions that were in range are under it now.
+- MONEY MINUTE: longer in 6 of 24, shorter in 9. Five editions that were in range are under it now.
+- NEWS IN 60: within 30 s of the baseline in all 55, as its fit times it to the minute.
+
+The averages hide the shortest editions:
+- WORLD NOW `059`: 130 s. Its desk held 7 stories, against 21 in the baseline (330 s): the programmes before it had taken the rest.
+- TECH BYTES `022`: 127 s, from a desk of 5 stories. The baseline replay made no edition there at all.
+- MONEY MINUTE `233`: 196 s, from a desk of 14 (287 s in the baseline, from a different 14).
+- COSMOS `291`: 224 s, from a desk of 5 (252 s from 6 in the baseline).
+
+There are three reasons, and the replay cannot separate them:
+- **The replay's rotation.** A programme that tells five more stories takes them from the programmes after it. The replay's desk holds only the stories that aired, so this costs it far more than the live desk, which holds every story the feeds carry.
+- **Columns, reviews and features no longer air** while the desk has plain stories. In the baseline, TECH BYTES ran past its 480 s in 11 of 41 editions, with reviews and features among its stories.
+- **Stricter sentence rules.** Each article gives fewer sentences that stand on their own.
+
+**The clock with these lengths** (`tools/lengths/clock.mjs`, 24 h): NEWS IN 60 aired at every one of the day's 48 marks (49 airings, the last at the window's end), none doubled. It landed a median 30 s off its mark, 90% within 123 s; the worst was 271 s late, and the earliest 154 s early. The baseline: a median of 46 s and a worst of 192 s. The longer programmes push the worst bulletin later.
+
+**Lint** (counts over all editions, compared with round 1): WORLD NOW long sentences 401 → 100, fragments 71 → 35, views 55 → 43, leaning first sentences 20 → 12, a speaker's words told as ours 50 → 4 (all four the Euronews paragraph whose page lost its closing mark), headlines read word for word 14 → 81. COSMOS long 90 → 28, speaker's words 8 → 0. TECH BYTES fragments 85 → 31, long 84 → 11, views 37 → 22. MONEY MINUTE long 46 → 11, speaker's words 6 → 1. NEWS IN 60 long 71 → 10, headlines read word for word 6 → 20. The headlines are what replaces a leaning or broken first sentence (see round 2); about half are clean sentences, the rest headlinese (fault 10).
+
+**Spoken sentences against their sources** (`prov.py`: every sentence of a story, a piece or an exchange, framing set aside):
+- 10624 checked;
+- 1618 share less than 80% of their words with any single source sentence.
+
+Read by hand, those are almost all of these kinds:
+- headlines said as sentences ("Iran has called…");
+- compressions that drop an aside;
+- an attribution moved to the end;
+- the writer's framing ("In BBC News's report, here is how…", explainers).
+
+No spoken figure or name was found that the sources lack (`facts.py` on every edition read). That check sees figures and names only. It could not see the quotation fault above, and neither could the prov check: those sentences were the sources' own words.
+
+### Recording
+
+- **File:** `lengths/recordings/world-now-028.mp4`.
+  - 600 s, 1920 × 1080, 30 fps, AAC; recorded with `tools/record.mjs --progressive`.
+  - The edition: WORLD NOW of 12 Oct 18:42, voiced with the station's Kokoro voices (34 of 34 clips, 541 s of speech) through `tools/lengths/replay.mjs --voice-at`.
+  - Played by a separate server on port 8801.
+  - Report: `world-now-028-report.json`. Contact sheet: `recordings/frames/contact.png`.
+- **What a viewer sees:**
+  - the open at 0.9 s;
+  - the programme to its end card at 574.0 s (573 s on air, inside 540–600; `voicedAir` said 579 s);
+  - three correspondent two-ways (Poland, Havana, Ho Chi Minh City), each on its map and its two-box;
+  - pictures on 13 stories, the quote card, the round-up on the map, the globe;
+  - all 100 sentences of the programme in its recorded voices.
+- **Measurements:**
+  - captions within −10 ms (median) and 62 ms (worst) of their voices;
+  - −15.4 LUFS integrated, true peak −5 dBTP.
+- **Not the programme's:**
+  - the 4 browser-voice lines at 588–599 s belong to the next programme the recording server queued after the end card;
+  - the LATEST ticker shows the fixture desk of the recording server ("Pixelburg United beat Bitport Athletic 3-1"), a recording artefact. On air it shows the live desk.
+- The recording was made from the code of round 4's middle. Its text differs from `final14/028-world-now.txt` where round 4's last fixes touched that edition (one kicker: the Inman Grant story's REGULATION is JUSTICE now).
+- A second recording (COSMOS) was not made: voicing and recording one edition took about 70 minutes on the shared machine.
+
+### Faults found reading the final editions (who found them)
+
+Read in full, with every figure checked against the source:
+- WORLD NOW `028`, `050`, `133`, `135`, `178`, `219` (and `028` recorded);
+- COSMOS `004`, `027`, `145`, `170`, `243`, `291`;
+- TECH BYTES `017`, `088`, `118`, `122`, `188`, `248`, `288`;
+- MONEY MINUTE `025`, `070`, `167`, `173`, `215`, `252`, `287`;
+- NEWS IN 60 `001`, `044`, `081`, `158`, `218`, `271`;
+- WORLD WEATHER seeds `001`, `003`, `007`, `012`, `018`, `024`.
+
+Notes per edition: `lengths/read/NOTES.md`. The editions were read in `final9` to `final13` as each was made. Every fault below was checked again in `final14`.
+
+1. **A thin desk still leaves WORLD NOW short.** About 20 stories for 14 to 19 places, many with no article page: 442 s on average, and as little as 130 s. The extra-story rule keeps the desk's last stories for the programmes after it (director).
+2. **Editions shorter than before** (director). Some editions were in range in the baseline and are under it now: COSMOS 3 of 38, TECH BYTES 3 of 40, MONEY MINUTE 5 of 24 (see "Edition by edition"). COSMOS is in range in 31 of 38 editions, against 33 of 38 in the baseline.
+3. **Cards that mislead** (standards editor, director):
+   - "30 PEOPLE" on an Ethiopia item, a figure from a South Africa item glued to it;
+   - "ABOUT 2.3-BILLION YEAR-OLD MYSTERY": the "about" of another sentence glued to a headline's figure;
+   - "20 OTHERS", a card that says nothing;
+   - a WHO card that names one man twice, once with his name cut: "Prince Abdulaziz bin Salman (SAUDI ENERGY MINISTER) / Abdulaziz bin Salman Al (SAUDI ENERGY MINISTER PRINCE)";
+   - a quote card signed "NASA Administrator Jared";
+   - Joseph Kabila's coalition (Congo) on a map of Rwanda, taken from another item of the same France 24 blurb.
+4. **Page furniture read as news** (standards editor):
+   - a France 24 programme blurb ("In tonight's edition…", twice);
+   - a video hand-over ("Claire Paccalin has the latest");
+   - "Coverage begins at 9:15 a.m. EDT";
+   - picture descriptions: "This nighttime image… shows atmospheric gravity waves" led a hurricane story, and "Opaque white areas indicate…";
+   - a NASA job listing ("Job opportunities: NASA office of the general counsel");
+   - TechCrunch's own event: Startup Battlefield pitches, "Disrupt 2026 officially kicks off today";
+   - a podcast's list as "And finally" ("this week in science: sea monsters, long COVID patients' microbiome, elephant carcasses").
+5. **Views in the outlet's voice** (standards editor):
+   - reviews and features the column rule does not recognise: "this commercial is chaos", "Nintendo might have nailed the best thing…", "The hardware itself certainly isn’t a limitation", "The visitable world is shrinking";
+   - a headline's characterisation: "Ken Paxton stirs vaccines skpeticism to ingratiate himself with Maha movement", the outlet's own typo included;
+   - unattributed claims and quotations: "is proving especially effective", "'Frankly shocking' risk-taking by motorists…";
+   - a headline's quotation teased without its speaker: "British and Irish governments ‘should negotiate paramilitary disbandment’". The quotation marks cannot be heard, and "according to a report" comes only in the story.
+6. **News never told** (senior news editor):
+   - the lead says the background or a side detail before, or instead of, the news: "Gun violence… is rare in France", "Three large stone anchors were found", "Locals and preservationists have long opposed…";
+   - a story told with another's facts: "Report: FTC probes Anthropic" told with OpenAI's lawsuits; Starlink's disruption told with Zelensky's words on a missile launch;
+   - the Nobel economics story never names the winners;
+   - a strap and its only line disagree ("The surprising psychology of morbid curiosity" over a sentence on an execution stream).
+7. **Questions and answers that do not meet** (first-time viewer):
+   - THE CATCH answered by a price;
+   - "Who is this for, exactly?" answered by revenue;
+   - "Max, what will all this cost?" answered by what open models offer;
+   - "And the significance, Dr Reyes?" answered by the story again;
+   - "Clara, what comes next?" answered with a quotation;
+   - "when will we know more?" answered with no date.
+8. **Leaning sentences inside a story** (first-time viewer):
+   - "Mohsen Rezaei added that…", "Bruno Rodrigues added that…";
+   - "the girl's body", "the witness added", "Ibn Kariem" never introduced;
+   - "Two years later, another woman…";
+   - "The Kenyan American engineer…", "Like the Muse partnership…", "Since the switchover all their steps…";
+   - "In that time the 1,500-acre farm…", "In 2024 that same measure…", "Most were female…";
+   - "Honeyjar is her answer to that question." as a story's first sentence;
+   - a WHAT WE KNOW board of two leaning points: "The last stint was in 2018 / The two were unharmed in the incident".
+9. **Broken sentences** (writing):
+   - "The home secretary said former MPs, party leaders who are not MPs, peers, former members of devolved parliaments.";
+   - "When the Covid-19 pandemic devastated his business, as it did with so many restaurants.";
+   - "From taxes and wages to pensions, housing and tuition fees, Euronews Business reports.";
+   - "…but much of England.";
+   - "NASA's space X CRS-35 have launched jellyfish" (a title-case headline's noun made a verb);
+   - "In the United Kingdom, the UK economy's stronger than expected performance…";
+   - shortenings that drop the point: "Its goal is to restore the site museum, and more than 1,000 gentoo penguins." (it dropped "which has the world's southernmost Post Office", so the penguins are restored); "The upset also guaranteed French Open and US Open champion Zverev." (…the year-end number one ranking); "Last month, Donald Trump hosted tech leaders of companies." (…at the White House to discuss AI safety); "…select the “Interested”."
+10. **Headlinese**: "UK is to strengthen…", "IEA has warned…", "Thousands of Indians have marched to Supreme Court…", "NATO commander issues warning as…", "Defence announcement comes after…" (writing).
+11. **One event twice**:
+    - two Netflix lay-off stories, two US inflation stories, two Facebook feed stories, two stories on one cyber announcement;
+    - the India protest story and its own round-up item;
+    - one fact said twice or three times in a story: Bumble's sale, Deezer's end-of-year date, Amazon's Bee devices, the protein that fuels cancer (senior news editor).
+12. **Kickers still from a stray word** (director):
+    - CONFLICT on the IFS budget, a cancer study, a billionaire tax and a cyber-attack on supermarket fridges;
+    - CULTURE on Iran's Hormuz threats;
+    - TECHNOLOGY on a WHO disease report;
+    - TRADE on game ports;
+    - RESCUE on the Black Sea strikes;
+    - WILDLIFE on Amazon's Bee;
+    - ELECTIONS on US inflation, POLITICS on restaurants after Covid;
+    - HISTORY on octopus intelligence.
+13. **Lower case where a name is** (on screen; the voice is unaffected): "a saudi employee", "britons", "cerebras CEO", "faisal Islam", "blueprints AI" (writing).
+14. **Formulae again** (director, first-time viewer):
+    - the correspondents' hand-overs and thanks still repeat lines from the previous edition (0.5 presenter lines an edition on average);
+    - two explainers in one edition, each "For anyone wondering…";
+    - "Over to you, UNIT-8." left before the hand-over to a re-staged quotation;
+    - COSMOS's UNIT-8 exchanges ("Logged, Dr Reyes." / "Well put, UNIT-8.") are in the programme's format, but to a first-time viewer they sound like filler.
+15. **A quote overtaken by events; the same attribution again** ("Tusk said on Sunday" twice). These were left from round 3 (standards editor, writing).
+16. **NEWS IN 60 over its minute** in 5 of 56 editions (by up to 7 s). Its fit cannot drop below five items (director).
+
+### Scores
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Truth | 5.5 | misleading cards (3); furniture read as news (4); views in the outlet's voice (5); a story's news never said (6); shortenings that change the meaning (9). The quotation fault is fixed, but it ran unseen through every earlier round |
+| Writing | 5.5 | broken sentences (9); leaning sentences (8); headlinese (10); lower-cased names (13) |
+| Length | 5.5 | WORLD NOW 52 of 113 in range (46 of 62 on a full desk, 6 of 51 on a thin one); editions as short as 127 s; some editions shorter than before (2); NEWS IN 60 over in 5 |
+| Rhythm and variety | 5.5 | one event twice (11), more often now that news addressed to its reader airs; answers that miss their questions (7); formulae (14) |
+| Robustness | 5.5 | a thin desk (1); feature pages and live pages recognised only by their headlines; title-case headlines; the faults' own detectors were written after the faults were found |
+| Tests | 8.0 | 55 tests in `test/fallback-lengths.test.js` cover the ruler, the depth loop and every fixed fault; faults 3–14 above have none |
+
+**Round score: 5.5** (truth, writing, length, rhythm and variety, robustness). The target was above 9.7. It was not reached: see "What was not done".
+
+## Before and after
+
+Lengths are voiced: the open, every line at its voice's measured rate, the pauses and the end card. Before is the baseline replay at `6b56d02`; after is the final replay (`final14`), with the same archive, desk and article pages.
+
+| Programme | Target | Before: voiced avg / median / min–max | In range | After | In range |
+|---|---|---|---|---|---|
+| WORLD NOW | 540–600 s | 377 / 370 / 255–502 | 0 of 116 | 512 / 544 / 130–626 | 52 of 113 |
+| COSMOS | 360–480 s | 394 / 406 / 252–450 | 33 of 38 | 397 / 406 / 224–479 | 31 of 38 |
+| TECH BYTES | 360–480 s | 439 / 455 / 230–503 | 25 of 41 | 395 / 410 / 127–470 | 35 of 41 |
+| MONEY MINUTE | 240–360 s | 263 / 260 / 200–323 | 18 of 25 | 266 / 277 / 196–310 | 18 of 24 |
+| NEWS IN 60 | 55–70 s | 74 / 74 / 61–85 | 13 of 55 | 64 / 63 / 55–77 | 51 of 56 |
+| WORLD WEATHER (live forecast of 16 Oct 21:20, same data) | 270–480 s | 239 / 239 / 234–246 | 0 of 24 | 286 / 286 / 280–293 | 24 of 24 |
+| WORLD WEATHER (offline demo data) | 270–480 s | 244 / 244 / 239–250 | 0 of 24 | 271 / 271 / 265–277 | 14 of 24 |
+
+Where the length comes from, in WORLD NOW:
+- each depth tells more of each read article (up to 14 sentences studied, 720 characters a story, 960 at depth 3);
+- up to five more stories when the desk offers one and a half times what the programme can use;
+- three correspondent crosses and two expert analyses (the bible's numbers raised from 2 and 1);
+- two re-staged quotations;
+- three map items instead of five at the deepest telling;
+- the producer's depth loop, which tells an edition again deeper while it is short, and with fewer stories while it is long, aimed a little inside the range.
+
+Every added line is a sentence of the story's own source, or one of the programme's existing formats (a cross's hand-over, an expert's question, a board).
+
+## What was not done
+
+- **The target of 9.7 was not reached.** The final round scores 5.5. What keeps it there is the final round's list:
+  - misleading cards;
+  - furniture and features recognised only by their headlines;
+  - answers that miss their questions;
+  - broken sentences, headlinese and kickers;
+  - editions shorter than before.
+- **The quotation fault went unseen for three rounds.**
+  - Sentences from inside a source's quotation aired as the outlet's own words, in the baseline and in every round.
+  - It was found only in round 4, by checking spoken sentences against the sources' quotation marks.
+  - The earlier rounds' truth scores were too high. The lengths of rounds 2 and 3 include those sentences.
+- **WORLD NOW on a thin desk stays near 442 s** (seven minutes), and one edition aired 130 s. On a full desk it lands in range in 46 of 62 editions.
+  - The replay's desk holds only the stories that aired, so it is thinner than the live desk. The full-desk figures are the better guide to the live station.
+  - That is a claim about the live desk, not a measurement of it.
+- **Some editions are shorter than before.** In COSMOS (3 of 38), TECH BYTES (3 of 40) and MONEY MINUTE (5 of 24), editions that were in range in the baseline are under it now.
+  - The replay cannot separate the three reasons: its rotation, columns held back, and stricter sentences.
+  - COSMOS is in range a little less often than in the baseline.
+- **The brief's playout figures disagree with the replay's baseline.** The brief measured WORLD NOW at 319 s on the live playout log; the replay's baseline is 377 s.
+  - The replay reads the article pages that were fetched afterwards (35 Sky News pages answered 403); the live desk had six seconds to read them.
+  - Timing from the voices' measured rates is not the playout log either.
+  - The difference is not explained here.
+- **WORLD WEATHER was measured on one live forecast.** Open-Meteo answered HTTP 429 to three of five requests through the proxy, and the moving sky (the heat-map batches) never came through. The world segment, which the sky makes, is measured only on the offline demo data.
+- **One recording, not two.** It was made from the code of round 4's middle (see "Recording").
+- **Not touched:** `docs/programmes/play.md`, `tools/play/`, port 8711, and the main checkout's processes and data.
+
+## Files
+
+The editions, the recording and the scripts are in the session's scratchpad, under `lengths/`:
+- `before/` — the baseline replay;
+- `r2/`, `r3/`, `r4/`, `r5/`, `r6/` — the rounds' replays;
+- `final14/` — the final replay;
+- `read/NOTES.md` — the final readings, with copies of the editions read;
+- `recordings/` — the recording;
+- `rec/` — the voiced edition;
+- `weather-before-live/` and `weather-after-final/` — WORLD WEATHER on the same forecast.
+
+The tools are in the repository, under `tools/lengths/`. The checks used only for reading are scripts in the scratchpad: `prov.py`, `facts.py`, `innerquote.py`, `pairs.py`.

@@ -1973,6 +1973,8 @@ function openerIndex(parts) {
  * buildings."), or when the writer opened on such a sentence, the outlet's own first sentence opens the
  * story instead (it is the source itself, still checked). Without one that stands, the story goes ('').
  */
+// A line in the outlet's own voice (its readers addressed, its products offered): never a story's sentence.
+const OUTLET_OWN = /\b(?:[Oo]ur|[Ww]e|[Yy]ou|[Yy]our)\b|^(?:Get|Sign up|Subscribe|Download|Read|Watch|Listen|Follow|Click)\b/;
 function keepOpener(tagged, written, story, check, max = null) {
   const parts = sentencesOf(tagged);
   const at = openerIndex(parts);
@@ -1994,7 +1996,10 @@ function keepOpener(tagged, written, story, check, max = null) {
     const parts = compressSentence(t, max, { min: 8 });
     return parts ? parts.join(' ') : null;
   };
-  const standing = sentencesOf(String(story.summary || '')).filter((t, i) => (i === 0 ? !pointsBack(t) : !leansOnPrevious(t))).map(fits).filter(Boolean);
+  // (nor a line in the outlet's own voice: "Get our breaking news email, free app or daily news podcast." opened a story on
+  // violence against children three times, Guardian Australia 13 Oct)
+  const outletOwn = (t) => OUTLET_OWN.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
+  const standing = sentencesOf(String(story.summary || '')).filter((t, i) => !outletOwn(t) && (i === 0 ? !pointsBack(t) : !leansOnPrevious(t))).map(fits).filter(Boolean);
   const own = standing.find(tells) || (leans ? standing[0] : null);
   const fixed = own ? check(own) : '';
   // nothing to stand on: a sentence pointing at nothing never airs; a story that merely lost its news stays
@@ -2289,7 +2294,11 @@ export function normalizeBulletin(
     // reply gone as aired lately (TECH BYTES 12 Oct)
     u.chats.forEach((c, k) => {
       const next = u.chats[k + 1];
-      if (/\?\s*$/.test(stripTags(c.tagged || '')) && next && !stripTags(next.tagged || '')) c.tagged = '';
+      // (an ask that is no question mark counts: "Walk me through how it works." once led into the next story, its answer
+      // never written, TECH BYTES 14 Oct)
+      const t = stripTags(c.tagged || '');
+      const empty = next && !stripTags(next.tagged || '');
+      if ((/\?\s*$/.test(t) && empty) || (/^(?:Walk me through|Talk me through|Tell me more|Explain)\b/i.test(t) && (!next || empty))) c.tagged = '';
     });
   }
 

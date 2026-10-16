@@ -585,9 +585,23 @@ export class Producer {
       // the presenter no longer reads the words the person is about to say: that sentence (never the story's first)
       // goes, and the hand-over ends the story
       const sentences = String(seg.text).split(/(?<=[.!?…]["”’]?)\s+(?=["“‘]?[A-Z0-9])/);
-      const head = squashWords(seg.quote.text).split(' ').slice(0, 5).join(' ');
+      // (its first five words, or fewer when its first sentence is shorter: "As Trump put it: “She went to Greece. She was
+      // doing a good job…”" was read by the presenter and then again by the recreation, NPR 14 Oct)
+      const head = squashWords(String(seg.quote.text).split(/(?<=[.!?…])\s+/)[0]).split(' ').slice(0, 5).join(' ');
       const k = sentences.findIndex((t, j) => j > 0 && head.length >= 12 && squashWords(t).includes(head));
-      if (k > 0) sentences.splice(k, 1);
+      // (all of a quotation of several sentences goes, to its closing mark: "Russia is targeting yet another power plant and
+      // the lives of our people.”" was left in the presenter's voice when only Zelensky's first sentence went, 14 Oct)
+      if (k > 0) {
+        let end = k - 1;
+        let curly = 0;
+        let straight = 0;
+        do {
+          end++;
+          curly += (sentences[end].match(/“/g) || []).length - (sentences[end].match(/”/g) || []).length;
+          straight ^= (sentences[end].match(/"/g) || []).length % 2;
+        } while ((curly > 0 || straight) && end + 1 < sentences.length && end - k < 5);
+        sentences.splice(k, end - k + 1);
+      }
       // (and a toss to the co-presenter goes: the recreation follows, not them; "…becomes. Nova? This is what Jevgenij
       // Raskatov… said", COSMOS 14 Oct)
       while (sentences.length > 1 && /^(?:\[[^\]]*\]\s*)*\p{Lu}[\p{L}-]+[?.]$/u.test(sentences.at(-1).trim())) sentences.pop();
