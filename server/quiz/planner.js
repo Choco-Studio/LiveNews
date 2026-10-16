@@ -76,6 +76,9 @@ function roundOrder(types, history, rnd) {
   return types;
 }
 
+// DOUBLE OR NOTHING's fallbacks among the types already played, before PICTURE THIS (§4, §7)
+const DON_REPLAY = ['letters', 'where'];
+
 /** Try to fill a plan for one pairing and one set of types. Returns the plan or null. */
 function fill(types, pool, all, ctx, rnd) {
   const askedKeys = new Set();
@@ -95,10 +98,14 @@ function fill(types, pool, all, ctx, rnd) {
     ask(got);
     chosen[t] = got;
   }
-  // DOUBLE OR NOTHING: the type not played tonight, for two desks if the pool allows, else PICTURE THIS
+  // DOUBLE OR NOTHING: a type not played tonight, for two desks if the pool allows; else a type already played that
+  // offers two desks, LETTER BY LETTER or WHERE (a second PICTURE THIS keeps the board up longest: on air 12 Oct, 68 % of
+  // the air on the boards); only then PICTURE THIS; and last, LETTER BY LETTER or WHERE for one desk
   const rest = ROUND_TYPES.filter((t) => !types.includes(t));
+  const replay = DON_REPLAY.filter((t) => types.includes(t));
+  const order = [...rest.map((t) => [t, 1]), ...replay.map((t) => [t, 2]), ...(rest.includes('picture') ? [] : [['picture', 1]]), ...replay.map((t) => [t, 1])];
   let don = null;
-  for (const t of [...rest, 'picture']) {
+  for (const [t, need] of order) {
     const desks = [...new Set(free(pool).map((ev) => ev.category).filter(Boolean))];
     const offers = [];
     for (const desk of shuffle(desks, rnd)) {
@@ -106,7 +113,7 @@ function fill(types, pool, all, ctx, rnd) {
       const got = pickAsked(t, free(pool).filter((ev) => !offers.some((o) => o.asked.some((x) => x.key === ev.key || shareName(x, ev)))), { ...ctx, n: t === 'today' ? 3 : 1, desk });
       if (got) offers.push({ desk, asked: got });
     }
-    if (offers.length) {
+    if (offers.length >= need) {
       don = { type: t, offers };
       offers.forEach((o) => ask(o.asked));
       break;
@@ -158,6 +165,11 @@ export function planEdition({ events, entries, now = Date.now(), contestants, hi
   const dayStart = londonDayStart(now);
   const ctx = { now, todayStart: dayStart + 6 * 3600_000, earlierBefore: dayStart - DAY_MS, history, extraPlaces: neutralPlaces(avoid) };
   const askedWeek = new Set(history.filter((h) => h.at > now - 7 * DAY_MS).flatMap((h) => h.asked || []));
+  // (asked once in seven days goes by story: another source's take on a story asked this week is out too; round 15's
+  // reading: "Google makes it easier to launch your vibe-coded apps" asked on the 13th, "Google wants to host your
+  // personal vibe-coded apps" planned for the 14th)
+  const askedStories = events.filter((ev) => askedWeek.has(ev.key));
+  const askedThisWeek = (ev) => askedWeek.has(ev.key) || askedStories.some((a) => shareName(a, ev));
   // recent stories first, in a seeded order within each day
   const ordered = (list) => shuffle(list, rnd).sort((a, b) => Math.floor((now - a.first) / DAY_MS) - Math.floor((now - b.first) / DAY_MS));
   const tried = [];
@@ -165,7 +177,7 @@ export function planEdition({ events, entries, now = Date.now(), contestants, hi
     for (const p of pairings(contestants, history, now, rnd, { twiceToday })) {
       const own = new Set([...p.a.own, ...p.b.own]);
       const mine = events.filter((ev) => !ev.programmes.some((x) => own.has(x)));
-      const pool = ordered(mine.filter((ev) => !askedWeek.has(ev.key)));
+      const pool = ordered(mine.filter((ev) => !askedThisWeek(ev)));
       tried.push(`${p.a.id}+${p.b.id}:${pool.length}`);
       for (const types of typeSets(history, rnd)) {
         const plan = fill(types, pool, mine, ctx, rnd);

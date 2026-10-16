@@ -241,9 +241,11 @@ export function answerSchedule(unit, segments, cast, { half = HALF_NOTE, speech 
 export const scheduleNeed = (sched) => sched.reduce((m, x) => Math.max(m, x.at + x.dur), 0);
 
 /**
- * A question's reveal: { right: anyone scored (the right sting) or not (the wrong one), points: { A, B } (the seats'
- * points as the writer gives them, doubled for the player behind on DOUBLE OR NOTHING), winner (LETTER BY LETTER: the
- * seat that named it) }. TODAY: per headline (`item`).
+ * A question's reveal: { right: anyone scored (the right sting) or not (the wrong one), scored: { A, B } (each seat
+ * right or not: its lamp gold), points: { A, B } (the seats' points as the writer gives them, doubled for the player
+ * behind on DOUBLE OR NOTHING: what the desks add), winner (LETTER BY LETTER: the
+ * seat that named it) }. TODAY: per headline (`item`). SUDDEN DEATH's headline wins the game and adds nothing to the
+ * desks: the scores stay level, as the result line and the final board say them ("level at 16 after the rounds").
  */
 export function revealPlan(unit, segments, cast, { item = null, double = null } = {}) {
   const segs = segments || [];
@@ -251,12 +253,15 @@ export function revealPlan(unit, segments, cast, { item = null, double = null } 
   const reveal = segs[ri];
   const pts = reveal?.quiz?.points || {};
   const points = { A: 0, B: 0 };
+  const scored = { A: false, B: false };
   for (const [id, p] of Object.entries(pts)) {
     const seat = seatOf(cast, id);
-    if (seat) points[seat] += (Number(p) || 0) * (double && double === seat ? 2 : 1);
+    if (!seat) continue;
+    if ((Number(p) || 0) > 0) scored[seat] = true;
+    if (!unit.sudden) points[seat] += (Number(p) || 0) * (double && double === seat ? 2 : 1);
   }
   const buzz = unit.type === 'letters' ? (unit.parts.buzz || []).map((i) => segs[i]).find((s) => s?.quiz?.buzz?.right) : null;
-  return { index: ri, right: points.A > 0 || points.B > 0, points, winner: buzz ? buzz.anchor : null };
+  return { index: ri, right: scored.A || scored.B, scored, points, winner: buzz ? buzz.anchor : null };
 }
 
 // ---------------------------------------------------------------------------------------------- the shot plan

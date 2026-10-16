@@ -1,9 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Archive } from '../server/archive.js';
-import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK } from '../server/quiz/desk.js';
+import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK, shareName, quizRefuses } from '../server/quiz/desk.js';
 import { graveDay } from '../server/quiz/grave.js';
-import { letterReveal, seeded, londonDayStart, ROUND_TYPES } from '../server/quiz/rounds.js';
+import { letterReveal, seeded, londonDayStart, ROUND_TYPES, buildQuestions } from '../server/quiz/rounds.js';
 import { planEdition, contestantsFrom, historyOf, pairings } from '../server/quiz/planner.js';
 import { loadChannel } from '../server/channel.js';
 
@@ -48,6 +48,46 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(out('France to tax private jet flights'), 'politics');
     assert.equal(entryOut(entry({ title: 'Bumble agrees to a $1.3B acquisition deal as online dating faces a reset', headline: 'Bumble agrees to a $1.3B acquisition deal', summary: 'After years of declining subscriber numbers and falling revenue, Bumble just agreed to a $1.3 billion acquisition.', text: 'Our number of the day: $1.3 billion. After years of declining subscriber numbers and falling revenue, Bumble just agreed to a $1.3 billion acquisition.' })), 'hardship');
     assert.equal(out('LVMH sales miss growth forecasts as China luxury demand slows'), 'hardship');
+    // found on air (step 7, round 14, 14 Oct): a player's sending-off with a mocking quote shown as an option, staff
+    // quitting under a firm's cuts asked in TODAY OR NOT TODAY, a flight's incident as the tie-break
+    assert.equal(out('Bayern’s Michael Olise sent off for ‘super dumb’ yellows within seconds'), 'failure of a person');
+    assert.equal(out('Striker booed off after penalty miss'), 'failure of a person');
+    assert.equal(out('Hundreds of Royal Mail staff quitting each week under new efficiency plans'), 'hardship');
+    assert.equal(out('Royal Mail losing 400 postal workers a week, says union'), 'hardship');
+    assert.equal(out('BA flight forced to turn back over cracked window'), 'disaster');
+    assert.equal(out('Plane makes emergency landing after engine failure'), 'disaster');
+    // found in round 15's reading (14 Oct): a state's deal its aired text puts in a president's mouth, behind a
+    // presenter's handoff; trade frictions
+    const taiwan = entry({ title: 'Taiwan plans to buy liquefied natural gas from Alaska pipeline project', headline: 'Taiwan plans to buy liquefied natural gas', summary: 'Taiwan planned to buy liquefied natural gas from a U.S. project after extraction and could invest up to $4.4 billion in it', text: 'Thanks, Lola. Taiwan planned to buy liquefied natural gas from a U.S. project, according to ABC News. Under the current plan, the annual purchase and participation in the Alaska project development. This is what Donald Trump, the U.S. President, said, as reported by ABC News.' });
+    assert.equal(entryOut(taiwan), 'politics'); // (a country that plans to buy is its government)
+    assert.equal(entryOut(entry({ title: 'Shipyard wins an order for liquefied gas carriers', summary: 'The yard will build four carriers.', text: 'Thanks, Lola. The yard will build four carriers, according to ABC News. This is what Donald Trump, the U.S. President, said, as reported by ABC News.' })), 'politics (a politician named)');
+    assert.equal(out('China’s trade surplus hits $938 billion for Jan-Sep as pressure ramps up to rebalance trade'), 'politics');
+    assert.equal(out("'I'd talk to the TV': The paid companions bringing warmth to China's lonely"), 'hardship');
+    assert.equal(out('Skydance’s Discovery+ prices increase by up to 20%'), 'hardship');
+    // under the game on round 15's recordings (14 Oct's feeds): what the quiz refuses, by title alone as the ticker has it
+    const refused = {
+      'Taiwan plans to buy liquefied natural gas from Alaska pipeline project': 'politics',
+      'Netflix to cut 1,000 jobs as subscriptions slow': 'hardship',
+      "What this year's final four says about the labor battle -- and the game's future": 'politics',
+      'Prismm helps banks keep inherited money in-house': 'money of people',
+      'Matchup rankings for Week 6: Upgrade Tony Pollard, fade Trevor Lawrence': 'betting',
+      'Espada not returning as Astros manager after winning AL West': 'failure of a person',
+      'College Football Bottom 10: Texas takes major fall': 'failure of a person',
+      "NFL suspends Rams' Jackson for striking Bills' Chubb in face after game": 'failure of a person',
+      'Wilcox the target again in another damaging Man Utd fallout': 'failure of a person',
+      'Pakistan has locked down Imran Khan\'s stronghold - but it could backfire': 'politics',
+      // (round 15's final bands, 14 Oct, and 16 Oct's feeds)
+      'Sir Trevor Phillips encouraged CBS News colleagues to tell critics to ‘fuck off’': 'offensive language',
+      'The Archers cast ‘angry’ at BBC decision to scrap new Birmingham studio': 'failure of a person',
+      "Darnold owns up to mistakes in OT loss: Late picks 'not fair' to Seahawks": 'failure of a person',
+      'Eagles QB Hurts ruled out vs. Panthers with blood clot in calf': 'health',
+      "Tough loss for Sabalenka as Britain's Kartal earns big win over Bencic in Wuhan": 'failure of a person',
+      'UK’s ‘incoherent’ approach to China plagued by lack of expertise, report says': 'politics',
+    };
+    for (const [title, kind] of Object.entries(refused)) assert.equal(quizRefuses({ title, summary: '' }), kind, title);
+    for (const title of ['Mattingly stays on as Phillies manager, reaching 2-year deal', 'Now you can call anyone with WhatsApp, even if they don’t have WhatsApp', 'Peralta stars as Rays even series against Guardians']) assert.equal(quizRefuses({ title, summary: '' }), null, title);
+    // the opening sentence is the story's, never the handoff before it
+    assert.equal(entryOut(entry({ title: 'Lisbon opens a riverside tram line', summary: '', text: 'Thanks, Lola. The government opens a riverside tram line in Lisbon. It runs every ten minutes.' })), 'politics');
   });
   test('senses that only look excluded', () => {
     assert.equal(out('Roman fort found in Wales could prove myth of emperor’s camp is real', 'The Roman emperor led his troops against the Picts and set up a military camp, folklore says.'), null);
@@ -69,6 +109,37 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(realEntry({ link: 'pages/world-3.html' }), false);
     assert.equal(realEntry({ link: 'http://127.0.0.1:8080/x' }), false);
     assert.equal(realEntry({ link: 'https://www.theverge.com/x' }), true);
+  });
+});
+
+describe('one story once an edition', () => {
+  test('two headlines opening on one name are one story when their sources open on a shared name (on air, 13 Oct: Facebook\'s "Your Algorithm" asked twice)', () => {
+    const ev = (words, title, summary) => ({ words, latest: { title, summary } });
+    const verge = ev('Facebook will let you customize your feed algorithm using AI', 'Facebook will let you customize your feed algorithm using AI', 'Facebook\'s new "Your Algorithm" feature will let you directly add and manage topics you want to see in your feed and Facebook Reels. Meta says your recommendations will update.');
+    const tc = ev('Facebook is giving users more control', 'Facebook is giving users more control over their algorithm', 'Meta announced the launch of its new AI-powered feature, “Your Algorithm,” a feature it first launched on Instagram.');
+    assert.equal(shareName(verge, tc), true);
+    assert.equal(shareName(tc, verge), true);
+    // the same opening word alone is not one story: two museums, two programmes' fixtures with no summary
+    const m1 = ev('Museum reopens its glass hall', 'Museum reopens its glass hall', 'The hall was closed for two years.');
+    const m2 = ev('Museum finds a lost Turner sketch', 'Museum finds a lost Turner sketch', 'The sketch was in a drawer.');
+    assert.equal(shareName(m1, m2), false);
+    assert.equal(shareName(ev('Telescope opens a quiet new wing number 1', 'Telescope opens a quiet new wing number 1', ''), ev('Telescope opens a quiet new wing number 13', 'Telescope opens a quiet new wing number 13', '')), false);
+    // or a coined compound both use, from one opening name (13 and 14 Oct: two sources' takes, asked on two days)
+    assert.equal(shareName(ev('Google makes it easier to launch your vibe-coded apps', '', ''), ev('Google wants to host your personal vibe-coded apps', '', '')), true);
+    assert.equal(shareName(ev('Google makes it easier to launch your vibe-coded apps', '', ''), ev('Apple ships vibe-coded apps', '', '')), false);
+    // a name inside both headlines, as before
+    assert.equal(shareName(ev('Citroën unveils electric version of its 2CV', '', ''), ev('Citroën’s iconic 2CV returns as all-electric model', '', '')), true);
+  });
+  test('one story never shows as a wrong option in two questions (round 15\'s reading, 14 Oct: Citroën\'s 2CV under two pictures)', () => {
+    const mk = (key, words, category) => ({ key, words, category, image: 'https://x/y.jpg', imageId: key, programmes: ['world-now'], first: NOW - H, last: NOW - H, source: 'BBC News', latest: { programId: 'world-now', title: words, summary: '' } });
+    const asked = [mk('a1', 'Lufthansa to buy a stake in TAP Air Portugal', 'business'), mk('a2', 'Energy bills through roof', 'business')];
+    const options = [mk('o1', 'Citroën’s iconic 2CV returns as all-electric model', 'world'), mk('o2', 'Revival of classic: Citroën unveils electric version of its 2CV', 'world'), mk('o3', 'Pollinating insects flock to plants gardeners call weeds', 'science'), mk('o4', 'Driving test waits fall to a two-year low', 'world'), mk('o5', 'Owls ringed to measure benefits of wildlife farming', 'science')];
+    for (let i = 0; i < 40; i++) {
+      const qs = buildQuestions('picture', asked, options, seeded(`c${i}`), {});
+      if (!qs) continue;
+      const shown = qs.flatMap((q) => q.options.map((o) => o.key));
+      assert.ok(!(shown.includes('o1') && shown.includes('o2')), `seed c${i}: the 2CV twice`);
+    }
   });
 });
 

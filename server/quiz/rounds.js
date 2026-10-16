@@ -150,10 +150,14 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
       return mapAll(asked, (ev) => {
         // three real headlines, at most two from one desk (13 Oct's pool was 20 tech, 13 science and 2 world stories: three
         // desks a question could not be found), none telling the same story as the answer or each other
+        // (nor one telling a story another question already showed as an option: on air, 14 Oct, round 15's reading,
+        // "Citroën's iconic 2CV returns as all-electric model" and "Revival of classic: Citroën unveils electric version
+        // of its 2CV" as wrong options of two pictures)
+        const shown = options.filter((x) => taken.has(x.key));
         const picks = [];
         for (const o of shuffle(options.filter((x) => !taken.has(x.key)), rnd)) {
           if (picks.length >= 2) break;
-          if (shareName(o, ev) || picks.some((p) => shareName(p, o)) || !fitsTile(o.words)) continue;
+          if (shareName(o, ev) || picks.some((p) => shareName(p, o)) || shown.some((x) => shareName(x, o)) || !fitsTile(o.words)) continue;
           if ([ev, ...picks, o].filter((x) => x.category === o.category).length > 2) continue;
           picks.push(o);
         }

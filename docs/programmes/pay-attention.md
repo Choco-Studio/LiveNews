@@ -72,7 +72,8 @@ air.
   One airing out puts the whole event out: a launch that later failed, a story that later turned to a death.
 - **Never asked about, never shown as an option**:
   - deaths, injuries, casualties;
-  - disasters and accidents of any kind, with or without victims (a fire, a flood, a storm, a crash);
+  - disasters, accidents and incidents of any kind, with or without victims (a fire, a flood, a storm, a crash, a
+    flight forced to turn back);
   - crime, fraud, scams, tax evasion, courts, police, investigations;
   - war, armed forces, weapons (drones in a war included), terrorism;
   - illness, surgery or the health of a named person, and health tragedies;
@@ -82,8 +83,9 @@ air.
     sanctions, protests, migration;
   - people's money: salaries, earnings, fines, damages, compensation;
   - betting, odds, tips and match predictions;
-  - hardship: closures, job losses, shortages, a struggling club or firm;
-  - a named person's failure or embarrassment: a flop, a bad review, a gaffe (a game never laughs at a real person);
+  - hardship: closures, job losses, shortages, staff quitting under a firm's cuts, a struggling club or firm;
+  - a named person's failure or embarrassment: a flop, a bad review, a gaffe, a sending-off (a game never laughs at a
+    real person);
   - reviews and first-person pieces ("as awesome as I hoped");
   - notices, job adverts, countdowns and promotions ("Job opportunities: NASA office of general counsel", "48 hours to…");
   - anything that is not a headline: a headline says what happened, so a picture caption with no verb ("Transporter-18
@@ -171,13 +173,20 @@ The host never calls the game live and never suggests a real contest.
 | **Round one** | All | One round type (§4.1), three questions | 65–83 s |
 | **Round two** | All | Another type, three questions | 65–83 s |
 | Scores | Host | The scores on the board; a line of banter each | 15 s |
-| **Round three** | All | Another type, three questions (TODAY OR NOT TODAY: six headlines) | 60–83 s |
-| **DOUBLE OR NOTHING** | Trailing player | The round type not played tonight. The trailing player picks the desk (one of two offered). One question at double points (TODAY OR NOT TODAY: three headlines); the leader may answer too, for single points | 35 s |
+| **Round three** | All | Another type, three questions (TODAY OR NOT TODAY: six headlines, four or five when the edition would run long) | 60–83 s |
+| **DOUBLE OR NOTHING** | Trailing player | A round type not played tonight, else one played (below). The trailing player picks the desk (one of two offered). One question at double points (TODAY OR NOT TODAY: three headlines, two when the edition would run long); the leader may answer too, for single points | 35 s |
 | Result and the table | Host | The winner; the week's table (persisted, §5) | 22 s |
 | Sign-off | Host | "That's PAY ATTENTION…" and when the next edition airs | 8 s |
 
 - **Length: 300–345 s** at the voices' 15 characters a second, and up to 360 s with a tie-break (`targetSeconds [290,
   360]`). Measured on twenty editions written from the real archive (step 2): 308–343 s, and 360 s with a tie-break.
+  **The writer's estimate is calibrated on the recorded voices** (step 7, `writer.js` `estimateSeconds`): each
+  player's lines at their own voice's rate (UNIT-8's a third slower than the host's), LETTER BY LETTER's clock to the
+  winning buzz, a TODAY OR NOT TODAY headline at least 16 s on air, PICTURE THIS 4.5 s and WHERE 1.2 s a question over
+  their speech; on twenty recorded editions it is 1.1 s short on average (spread 4.7 s). **An edition estimated over
+  its bound less 5 s is shortened before air** (`writeEpisode`): by one or two optional lines (the latest reactions to
+  a reveal) when that is enough, else by TODAY OR NOT TODAY's headlines one at a time (a round keeps four, DOUBLE OR
+  NOTHING two), then by optional lines. A headline goes whole, before the game is played; never a question cut mid-way.
 - **The reveal is short.** The source and the airing are always on the screen. The host says them at every third reveal
   and always for a figure, so the game keeps moving; a spoken credit on every reveal cost about 25 s an edition.
 - **The reading rule.** The options stay on screen from when the host starts reading them to the last lock-in, for at
@@ -187,8 +196,10 @@ The host never calls the game live and never suggests a real contest.
   - TODAY OR NOT TODAY?: one headline needs 5.7 s and is on screen 7.5 s.
 - **Rounds rotate.** Each edition plays three of the round types the plan can fill, never the same three as the edition
   before, in a different order. **Data comes first**: a type the plan cannot fill is not chosen.
-- **DOUBLE OR NOTHING** falls back to PICTURE THIS when the type not played cannot be filled (pictures: 30 of 30 usable
-  stories on 12 Oct).
+- **DOUBLE OR NOTHING** plays a type not played tonight. When neither can be filled it falls back to a type already
+  played that offers two desks, LETTER BY LETTER or WHERE, and only then to PICTURE THIS (pictures: 30 of 30 usable
+  stories on 12 Oct). A second PICTURE THIS keeps the boards up longest: on air, the fallback edition of 12 Oct ran
+  65–69 % of its air on the boards with it (step 7), against the 65 % bound every edition keeps (§9, step 4).
 - **Ties** are broken by a sudden-death LETTER BY LETTER headline, never a coin toss. If neither player names it, the
   game is drawn, and counts half a win to each in the table (1.6 % of simulated editions).
 
@@ -199,7 +210,7 @@ The host never calls the game live and never suggests a real contest.
 | **PICTURE THIS** | A story's picture, beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines, at most two from one desk (13 Oct's pool: 20 technology, 13 science, 2 world), none sharing a name with another | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with pictures; 6 more headlines |
 | **LETTER BY LETTER** | A real headline as letter tiles. Every word's first letter, the digits and the punctuation show at once; then a quarter, a half and three quarters of the other letters, on the beat, in a seeded order that never leaves a word unrevealed past the second stage. The first to buzz says the headline | None | 3 / 2 / 1 by stage; a stall locks that player out for the headline | ~20 s | 3 stories |
 | **WHERE IN THE WORLD?** | The headline in its frame, its place masked if it names it; three pins on the world map (`scenes/worldmap.js`); the zoom to the right one | Three countries in three regions (§3.2). An answer is never another question's wrong pin, and no wrong pin shows more than twice in a round | 2 points | ~21 s | 3 stories with a usable place, 6 more places |
-| **TODAY OR NOT TODAY?** | A quickfire of six real headlines. The players answer on their lamps, not aloud; the host names a player only when the two differ, and closes with the round's tally | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline | 3 for TODAY, 3 for EARLIER |
+| **TODAY OR NOT TODAY?** | A quickfire of six real headlines (four or five when the edition would run long, §4). The players answer on their lamps, not aloud; the host names a player only when the two differ, and closes with the round's tally | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline (on air with the recorded voices: about 16 s) | 3 for TODAY, 3 for EARLIER |
 | **HOW MANY?** (when the week allows) | The aired sentence with its figure masked (§3.2) | None: each player says a guess, shown as GUESS | Closest 2 points; exactly right 3, but only for a figure that aired without "about", "around", "nearly" or "up to" | ~19 s | 3 usable figures |
 
 - **A usable place** is a story's place, named in its aired words where the story happens: after "in", "at", "off"…, as
@@ -317,6 +328,8 @@ programme, not asked in the last seven days.
 |---|---|
 | The pool holds a full plan for an allowed pairing | The full shape |
 | A round type cannot be filled (few figures; few usable places) | That type is not chosen; the others rotate |
+| Neither type left for DOUBLE OR NOTHING can be filled | A played type with two desks (LETTER BY LETTER or WHERE), then PICTURE THIS, then LETTER BY LETTER or WHERE for one desk |
+| The edition would run over its length (§4) | One or two optional lines out, else TODAY OR NOT TODAY's headlines (down to four, or two on DOUBLE OR NOTHING), then optional lines |
 | Fewer than three types can be filled for any allowed pairing | The quiz does not air |
 | Fewer than five questions from the last 24 hours | The quiz does not air |
 | A grave news day (§3.3) | The quiz does not air |
@@ -398,7 +411,11 @@ Measured on the development archive, with a model of the planner that counts sto
      - *no edition is made whose PICTURE THIS picture the station cannot fetch, and the director preloads each through
        `/api/img`;*
      - *while the edition airs the ticker carries no story it uses (asked, options, pins, DOUBLE OR NOTHING's offers,
-       the tie-break): matched by id, by `sameStory` or by its words, fewer items rather than an answer.*
+       the tie-break): matched by id, by `sameStory` or by its words, fewer items rather than an answer;*
+     - *and nothing the quiz itself would refuse (step 7, round 15): the station marks each feed item with the kind
+       the desk would refuse it as (`quizOut`: grave, politics, conflict, crime, harm, hardship and the rest of §3.1,
+       `desk.js` `quizRefuses`), and the band leaves those out while the edition airs; fewer items, never one the
+       game would not ask.*
    - *Open for step 7: every timing was measured on a stub voice. A face can stand silent up to 2.7 s with the bed
      under it.*
 5. **Set, open, theme, bed and stings.** *Gate: renders and recordings critiqued above 9.7.*
@@ -463,16 +480,28 @@ Measured on the development archive, with a model of the planner that counts sto
    - *Open: the faces are seen on a placeholder stage until step 5's set exists; no person has heard the voices yet.*
 7. **On air**: two recorded editions with sound (an afternoon and an evening); the whole programme critiqued above 9.7
    (`docs/roadmap/critique/pay-attention.md`).
-   *Built, not yet passed: 14 rounds on the station's real archive (12–14 Oct). The evening editions of 12 Oct 22:00 and
-   13 Oct 22:40, and the afternoon edition of 14 Oct 15:20 with TODAY OR NOT TODAY, were recorded with sound and the
-   Kokoro voices. The final round scored 9.5 (lowest category).*
+   *Built; 15 rounds on the station's real archive (12–14 Oct). The evening editions of 12 Oct 22:00 and 13 Oct 22:40,
+   and the afternoon edition of 14 Oct 15:20 with TODAY OR NOT TODAY and a sudden-death tie-break, were recorded with
+   sound and the Kokoro voices. Round 14 scored 9.5 and the reviewer did not pass it; round 15 scored 9.8 (lowest
+   category), on the reviewer's exemption for the two editions over the boards' 65 % (65.8 % and 67.9 %, each with no
+   alternative set of rounds). Without it, 9.6 and not passed.*
    - *How: `tools/quiz/onair.mjs` (the real server under a frozen clock, the draft on air, the archive read only, the
      edition saved once every voice is ready) and `tools/record.mjs --trace` (the director's cues, countdowns and cuts,
      and the ticker's items, in the report).*
    - *Changed on air:*
      - *the voice service speaks the quiz, with its own prosody;*
-     - *the desk keeps executions, a state's acts, a firm's hardship and fatalities out, and the band drops grave stories
-       while the quiz airs;*
+     - *the desk keeps executions, a state's acts, a firm's hardship and fatalities out; round 15 added a person's failure,
+       exit, anger or injury, an incident, staff quitting, a politician named anywhere, trade frictions, loneliness, price
+       rises, deals, fantasy tips and offensive language, and one story is asked once a week by story and never shown
+       under two questions;*
+     - *the band under the game carries nothing the quiz would refuse (the station marks each item with the desk's own
+       verdict);*
+     - *the table line names every player its board ranks first; the sudden-death headline adds nothing to the desks;*
+     - *the writer's estimate is calibrated on the recorded voices, and an edition over its bound is shortened before air
+       by optional lines or whole TODAY OR NOT TODAY headlines;*
+     - *DOUBLE OR NOTHING falls back to a played LETTER BY LETTER or WHERE with two desks before PICTURE THIS;*
+     - *no studio shot stands silent more than 1.8 s: TODAY's lamps on the board and its verdict's wide 1.6 s before its
+       words, the faces back to the board with its clock, a short reply kept on the verdict's board;*
      - *the banks speak as people do (UNIT-8 aside), with the afternoon's words before 17:00 and nothing read twice;*
      - *the host recaps the lock-ins on the clock; equally close guesses score two each; a sum of money is said with its
        rate;*
@@ -485,9 +514,7 @@ Measured on the development archive, with a model of the planner that counts sto
        aired with an empty frame);*
      - *the drumroll ducked under the voice; the open's plate names that fit.*
    - *Open:*
-     - *the afternoon edition runs long (378.6 s with a tie-break): the writer's estimate for TODAY OR NOT TODAY is about
-       9 s a headline, against 16 s on air;*
-     - *TODAY's wide waits up to 3.1 s on the silent lamps;*
-     - *the boards' share runs 61–69 % against the step-4 reviewer's 65 %, highest on the fallback edition with four
-       PICTURE THIS questions;*
+     - *the boards' share: 62.0 % on 13 Oct's edition; 65.8 % and 67.9 % on the two editions with no alternative set of
+       rounds (the reviewer's exemption, capped at 70 %); a host line under TODAY's lamps on the wide would take the
+       afternoon edition to about 64 %;*
      - *the owner's host choice and leaving the drafts.*

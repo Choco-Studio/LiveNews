@@ -15,6 +15,65 @@ export const SPEECH_CPS = 15; // the voices' characters a second
 // the parts of a question that are not speech (seconds): the countdowns, the picture's steps, the letters' stages
 export const BEATS = Object.freeze({ picture: 7.5, letters: 10, where: 6.4, today: 3.2, howmany: 4.3, reveal: 1.2 });
 
+// The length as the recorded voices air it (step 7: the estimate against the air of the editions recorded in rounds
+// 1–15). Speech at the voices' rate; the countdowns, with the lock-ins and the recap said inside them; a beat on each
+// reveal. Calibrated on the air: LETTER BY LETTER's clock stops at the winning buzz (a stage's third of the clock, the
+// buzz a second into it); a TODAY OR NOT TODAY headline airs at least TODAY_HEADLINE s from its headline to what follows
+// its reveal: a round's 12.5 s, DOUBLE OR NOTHING's 14.5 s, its last stretched for the drumroll (measured on the four
+// afternoon recordings of 14 Oct: round headlines 10.9–15.3 s, DOUBLE OR NOTHING's 11.7–18.0 s; the writer had counted
+// 11.5); a PICTURE THIS question PICTURE_EXTRA s over its speech
+// and steps (the picture's last step on the board, its lock-ins on the wide), a WHERE question WHERE_EXTRA s (the pins);
+// each player's lines at their own voice's rate against the host's (VOICE_RATE: measured on the recordings of rounds
+// 10–15, characters a second with the clip's edges; UNIT-8's voice is the slowest, a third slower than the host's).
+export const TODAY_HEADLINE = Object.freeze({ round: 12.5, don: 14.5 });
+export const PICTURE_EXTRA = 4.5;
+export const WHERE_EXTRA = 1.2;
+const VOICE_RATE = Object.freeze({ host: 14.2, unit8: 10.1, ada: 12.5, paco: 12.8, penny: 12.6, sam: 14.3, lola: 16.1 });
+/**
+ * Seconds the LETTER BY LETTER clock from frame `i` runs on air: to the winning buzz's stage (a stall before it lets the
+ * clock run on to it), else the whole clock.
+ */
+function lettersClock(segs, i, clock) {
+  for (let j = i + 1; j < segs.length && segs[j].part !== 'reveal' && segs[j].part !== 'frame'; j++) {
+    const b = segs[j].quiz?.buzz;
+    if (segs[j].part === 'buzz' && b?.right) return Math.min(clock, ((b.stage || 3) - 1) * (clock / 3) + 1);
+  }
+  return clock;
+}
+/** An episode's estimated air in seconds, from its segments and its cast ({ A, B }: the players' ids) (see above). */
+export function estimateSeconds(segs, cast = {}) {
+  const cps = (anchor) => SPEECH_CPS * ((anchor === 'H' ? null : VOICE_RATE[cast?.[anchor]]) || VOICE_RATE.host) / VOICE_RATE.host;
+  let est = 8;
+  let countdown = 0;
+  let today = null;
+  let don = false;
+  for (const [i, s] of segs.entries()) {
+    if (s.part === 'don') don = true;
+    else if (s.part === 'round' || s.part === 'tie') don = false;
+    const talk = String(s.text || '').length / cps(s.anchor) + 0.4;
+    let add;
+    if (s.part === 'lock' || s.part === 'recap') {
+      const inside = Math.min(countdown, talk);
+      countdown -= inside;
+      add = talk - inside;
+    } else {
+      let clock = s.countdown || 0;
+      if (s.part === 'frame' && s.quiz?.round === 'letters' && clock) clock = lettersClock(segs, i, clock);
+      const extra = s.part !== 'frame' ? 0 : s.quiz?.round === 'picture' ? PICTURE_EXTRA : s.quiz?.round === 'where' ? WHERE_EXTRA : 0;
+      add = talk + clock + (s.part === 'reveal' ? BEATS.reveal : 0) + extra;
+      countdown = clock;
+    }
+    est += add;
+    if (s.part === 'frame' && s.quiz?.round === 'today') today = 0;
+    if (today !== null) today += add;
+    if (s.part === 'reveal' && today !== null) {
+      est += Math.max(0, (don ? TODAY_HEADLINE.don : TODAY_HEADLINE.round) - today);
+      today = null;
+    }
+  }
+  return Math.round(est);
+}
+
 const ORDINAL = ['one', 'two', 'three'];
 const BEHIND = /\b(?:behind|trail\w*)\b/i; // DOUBLE OR NOTHING's lines for the player behind (never said when level)
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -113,12 +172,128 @@ export function figureSaid(q) {
   return [value, ...follow].join(' ');
 }
 
+const COUNT = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+/** A count of wins or games as said: "one win", "two and a half wins", "half a win". */
+function counted(n, one, many) {
+  const whole = Math.floor(n);
+  const half = n - whole >= 0.5;
+  if (half && !whole) return `half ${one === 'win' ? 'a win' : `a ${one}`}`;
+  const word = COUNT[whole] ?? String(whole);
+  return half ? `${word} and a half ${many}` : `${word} ${whole === 1 ? one : many}`;
+}
+/**
+ * The week's table as the host says it, from the standings the board shows under it (table.js order): the leaders are
+ * the rows the board ranks first — the same wins from the same games — every one of them named ("Paco, Sam and UNIT-8
+ * share the lead on one win"), or one leader with the record that puts them there. `first` gives a player's spoken
+ * name. Null with no standings.
+ */
+export function tableLine(standings, first) {
+  const [top] = standings || [];
+  if (!top) return null;
+  const leaders = standings.filter((r) => r.wins === top.wins && r.played === top.played);
+  if (leaders.length === 1) return `In the week's table, ${first(top.id)} leads with ${counted(top.wins, 'win', 'wins')} from ${counted(top.played, 'game', 'games')}.`;
+  const names = leaders.map((r) => first(r.id));
+  const who = names.length > 4 ? `${COUNT[names.length] ?? names.length} players` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  const each = top.played === 1 ? 'one game each' : `${counted(top.played, 'game', 'games')} each`;
+  return `In the week's table, ${who} share the lead on ${counted(top.wins, 'win', 'wins')}, from ${each}.`;
+}
+
+// The length guard (pay-attention.md §4): 300–345 s, up to 360 s with a tie-break. An edition the calibrated estimate puts
+// over its bound, less the estimate's spread on the recordings (LENGTH_MARGIN), is shortened before air: by the fewest
+// optional lines (two at most: the latest reactions to a reveal) when that is enough, else by TODAY OR NOT TODAY's
+// headlines, one at a time (a round keeps four of its six, DOUBLE OR NOTHING two of its three), then optional lines.
+// Never a question cut mid-way: a headline goes whole, before the game is played, and the game is played again on what
+// is left. On air, 14 Oct: the afternoon edition ran 378.6 s, estimated at 362.
+export const LENGTH_BOUND = Object.freeze({ plain: 345, tie: 360 });
+export const LENGTH_MARGIN = 5;
+const TODAY_KEEP = Object.freeze({ round: 4, don: 2 });
+const MAX_DROPPED_LINES = 4;
+
+/** A reaction to a round's reveal (or to DOUBLE OR NOTHING's), the one kind of line the length guard may leave out. */
+function optionalReaction(segs, i) {
+  let j = i - 1;
+  while (j >= 0 && segs[j].part === 'react') j--;
+  return j >= 0 && segs[j].part === 'reveal' && !segs.slice(0, j).some((x) => x.part === 'tie');
+}
+
+/**
+ * The plan with one TODAY OR NOT TODAY headline fewer (the round's, else every DOUBLE OR NOTHING offer's), or null when
+ * none can go. The headline dropped is the last of the answer the headlines hold more of, so both answers stay; its story
+ * leaves the plan's asked list.
+ */
+export function withoutTodayHeadline(plan) {
+  const shorten = (items, keep) => {
+    if (!items || items.length <= keep) return null;
+    const today = items.filter((x) => x.answer === 'TODAY').length;
+    const more = today * 2 >= items.length ? 'TODAY' : 'EARLIER';
+    const k = items.map((x, i) => [x, i]).reverse().find(([x]) => x.answer === more)?.[1] ?? items.length - 1;
+    return { items: items.filter((_, i) => i !== k), gone: items[k] };
+  };
+  const gone = [];
+  let rounds = plan.rounds;
+  let don = plan.don;
+  const ri = plan.rounds.findIndex((x) => x.type === 'today');
+  if (ri >= 0) {
+    const cut = shorten(plan.rounds[ri].questions[0]?.items, TODAY_KEEP.round);
+    if (!cut) return null;
+    gone.push(cut.gone);
+    rounds = plan.rounds.map((x, i) => (i === ri ? { ...x, questions: [{ ...x.questions[0], items: cut.items }] } : x));
+  } else if (plan.don?.type === 'today') {
+    const offers = [];
+    for (const o of plan.don.offers) {
+      const cut = shorten(o.question.items, TODAY_KEEP.don);
+      if (!cut) return null;
+      gone.push(cut.gone);
+      offers.push({ ...o, question: { ...o.question, items: cut.items } });
+    }
+    don = { ...plan.don, offers };
+  } else return null;
+  const keys = new Set(gone.map((x) => x.key));
+  return { ...plan, rounds, don, asked: (plan.asked || []).filter((k) => !keys.has(k)), shortened: [...(plan.shortened || []), ...gone.map((x) => x.words)] };
+}
+
+/**
+ * The whole episode (see compose below), within its length: returns { episode, game, plan } — `plan` the plan as aired
+ * (the length guard may have dropped TODAY OR NOT TODAY headlines from it). Trials write into a copy of the table; the
+ * edition aired is recorded once.
+ */
+export function writeEpisode(plan, opts = {}) {
+  const shadow = opts.table ? Object.assign(Object.create(Object.getPrototypeOf(opts.table)), opts.table, { file: null, results: [...opts.table.results] }) : null;
+  const trial = (p, dropLines = 0) => compose(p, { ...opts, table: shadow && Object.assign(Object.create(Object.getPrototypeOf(shadow)), shadow, { results: [...shadow.results] }), dropLines });
+  const limit = (o) => (o.game.tie ? LENGTH_BOUND.tie : LENGTH_BOUND.plain) - LENGTH_MARGIN;
+  const fits = (o) => o.episode.estSeconds <= limit(o);
+  let aired = plan;
+  let lines = 0;
+  let out = trial(aired);
+  if (!fits(out)) {
+    // the fewest optional lines, when two or fewer are enough
+    let best = null;
+    for (let k = 1; k <= 2 && !best; k++) {
+      const o = trial(aired, k);
+      if (fits(o)) best = { o, k };
+    }
+    if (best) {
+      out = best.o;
+      lines = best.k;
+    } else {
+      for (let shorter = withoutTodayHeadline(aired); shorter && !fits(out); shorter = withoutTodayHeadline(aired)) {
+        aired = shorter;
+        out = trial(aired);
+      }
+      while (!fits(out) && lines < MAX_DROPPED_LINES) out = trial(aired, ++lines);
+    }
+  }
+  const final = opts.table ? compose(aired, { ...opts, dropLines: lines }) : out;
+  if (aired !== plan || lines) final.episode.shortened = { headlines: aired.shortened || [], lines, from: trial(plan).episode.estSeconds };
+  return { ...final, plan: aired };
+}
+
 /**
  * The whole episode. `channel` gives the players' names and the programmes' titles; `table` (QuizTable) the week's
  * standings and the pair's last meeting; `recentLines` the station's lines of the last hours (none is used again);
  * `nextAt` the next edition's time (ms), if the station knows it.
  */
-export function writeEpisode(plan, { channel, now = plan.at, table = null, recentLines = [], nextAt = null, hostName = 'the host' } = {}) {
+function compose(plan, { channel, now = plan.at, table = null, recentLines = [], nextAt = null, hostName = 'the host', dropLines = 0 } = {}) {
   const rnd = seeded(`${plan.at}:${plan.pair.join('+')}:game`);
   const game = playEdition(plan, rnd);
   const [a, b] = plan.pair;
@@ -240,7 +415,8 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
       });
       if (played.items.length > 3) {
         const tally = (id) => played.items.filter((x) => x.plays[id].right).length;
-        host('tally', scoreSafe(pick(HOST.frame.todayTally, `${key}:t`, { a: first(a), b: first(b), sa: tally(a), sb: tally(b) })), { quiz: { ...data, tally: { [a]: tally(a), [b]: tally(b) } } });
+        const n = COUNT[played.items.length] || String(played.items.length);
+        host('tally', scoreSafe(pick(HOST.frame.todayTally, `${key}:t`, { a: first(a), b: first(b), sa: tally(a), sb: tally(b), n, N: n.replace(/^./, (c) => c.toUpperCase()) })), { quiz: { ...data, tally: { [a]: tally(a), [b]: tally(b) } } });
       }
     }
     // one reaction: the player the question mattered to (right alone, or wrong alone), else none
@@ -261,7 +437,8 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
   const roundKey = (key) => key.replace(/q\d+$/, '');
 
   game.rounds.forEach((r, i) => {
-    host('round', pick(HOST.roundIntro[r.type], `round:${r.type}`, { k: ORDINAL[i] }), { quiz: { round: r.type, title: ROUND_TITLES[r.type], k: i + 1 } });
+    const n = r.type === 'today' ? r.played[0]?.items?.length || 0 : 0;
+    host('round', pick(HOST.roundIntro[r.type], `round:${r.type}`, { k: ORDINAL[i], n: COUNT[n] || String(n), N: (COUNT[n] || String(n)).replace(/^./, (c) => c.toUpperCase()) }), { quiz: { round: r.type, title: ROUND_TITLES[r.type], k: i + 1 } });
     r.played.forEach((p, j) => playOut(p.q, p, `r${i}q${j}`, { firstOfRound: j === 0 }));
     if (i === 1) {
       host('scores', scoreSafe(pick(HOST.scores, 'scores', { a: first(a), b: first(b), sa: game.half[a], sb: game.half[b] })), { quiz: { scores: game.half } });
@@ -305,32 +482,19 @@ export function writeEpisode(plan, { channel, now = plan.at, table = null, recen
     host('result', timed(`Nobody named it, so tonight's game is drawn, ${scores[a]} all.`), { quiz: { scores, winner: null } });
   }
   table?.record({ at: plan.at, pair: plan.pair, scores, winner });
+  // the line and the board read the same standings, this edition's result in them
   const standings = table?.standings(now) || [];
-  if (standings.length) {
-    const [top, next] = standings;
-    const wins = (n) => (n === 1 ? 'one win' : `${Number.isInteger(n) ? n : n.toFixed(1)} wins`);
-    const line = next && next.wins === top.wins
-      ? `In the week's table, ${first(top.id)} and ${first(next.id)} share the lead on ${wins(top.wins)}.`
-      : `In the week's table, ${first(top.id)} leads with ${wins(top.wins)} from ${top.played === 1 ? 'one game' : `${top.played} games`}.`;
-    host('table', line, { quiz: { standings } });
-  }
+  const line = tableLine(standings, first);
+  if (line) host('table', line, { quiz: { standings } });
   host('signoff', nextAt ? pick(HOST.signoff, 'signoff', { next: spokenTime(nextAt, now) }) : pick(['That\'s PAY ATTENTION. Keep watching, and keep paying attention.', 'That\'s PAY ATTENTION. Thank you for playing along.'], 'signoff'));
 
-  // the length: speech at the voices' rate, the countdowns (the lock-ins are said during them), a beat on each reveal
-  let estSeconds = 8;
-  let countdown = 0;
-  for (const s of segs) {
-    const talk = s.text.length / SPEECH_CPS + 0.4;
-    if (s.part === 'lock' || s.part === 'recap') {
-      const inside = Math.min(countdown, talk);
-      countdown -= inside;
-      estSeconds += talk - inside;
-      continue;
-    }
-    estSeconds += talk + (s.countdown || 0) + (s.part === 'reveal' ? BEATS.reveal : 0);
-    countdown = s.countdown || 0;
+  // (the length guard's optional lines: the latest reactions to a round's reveal, never the result's nor a question's part)
+  if (dropLines > 0) {
+    const optional = segs.map((x, i) => [x, i]).filter(([x, i]) => x.part === 'react' && optionalReaction(segs, i)).map(([, i]) => i);
+    const gone = new Set(optional.slice(-dropLines));
+    for (let i = segs.length - 1; i >= 0; i--) if (gone.has(i)) segs.splice(i, 1);
   }
-  estSeconds = Math.round(estSeconds);
+  const estSeconds = estimateSeconds(segs, { A: a, B: b });
   const episode = {
     kind: 'episode',
     program: { ...PROGRAM },

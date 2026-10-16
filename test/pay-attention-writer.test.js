@@ -6,7 +6,8 @@ import path from 'node:path';
 import { Archive } from '../server/archive.js';
 import { quizEvents } from '../server/quiz/desk.js';
 import { planEdition, contestantsFrom } from '../server/quiz/planner.js';
-import { writeEpisode, airedWhen, spokenTime, placeSaid, figureSaid } from '../server/quiz/writer.js';
+import { writeEpisode, airedWhen, spokenTime, placeSaid, figureSaid, tableLine, estimateSeconds, withoutTodayHeadline, LENGTH_BOUND, LENGTH_MARGIN, TODAY_HEADLINE } from '../server/quiz/writer.js';
+import { tableRows } from '../public/js/scenes/cards-quiz.js';
 import { playEdition, playHowMany, decidedBeforeDon, SKILL } from '../server/quiz/players.js';
 import { QuizTable, weekOf } from '../server/quiz/table.js';
 import { HOST, ANSWERS, PLAYERS } from '../server/quiz/banks.js';
@@ -134,6 +135,82 @@ describe('the episode (§4, §5)', () => {
       const { episode: e } = edition(seed);
       assert.ok(e.estSeconds >= 260 && e.estSeconds <= 360, `${seed}: ${e.estSeconds} s`);
     }
+  });
+  // on air, 14 Oct (round 14): the afternoon edition ran 378.6 s, the writer had estimated 362 (TODAY OR NOT TODAY's
+  // headlines 12.6–18.0 s each on air, counted 11.5; UNIT-8's voice a third slower than the host's)
+  test('the estimate is calibrated on the recorded voices: a TODAY OR NOT TODAY headline 12.5 s in a round, 14.5 s in DOUBLE OR NOTHING, UNIT-8 slower than the host', () => {
+    const today = [
+      { type: 'quiz', part: 'frame', anchor: 'H', text: 'First: Lufthansa to buy 44.9% of TAP Air Portugal in €1.2B deal.', countdown: 3.2, quiz: { round: 'today' } },
+      { type: 'quiz', part: 'reveal', anchor: 'H', text: 'Today: NEWS IN 60 this afternoon. UNIT-8 has it.', quiz: { round: 'today', reveal: true } },
+    ];
+    assert.ok(estimateSeconds(today) - estimateSeconds([]) >= TODAY_HEADLINE.round, 'a TODAY headline');
+    const donToday = [{ type: 'quiz', part: 'don', anchor: 'H', text: 'DOUBLE OR NOTHING, from the world desk.' }, ...today];
+    assert.ok(estimateSeconds(donToday) - estimateSeconds(donToday.slice(0, 1)) >= TODAY_HEADLINE.don, 'a DOUBLE OR NOTHING headline');
+    assert.ok(TODAY_HEADLINE.round >= 12 && TODAY_HEADLINE.don > TODAY_HEADLINE.round, 'calibrated on the recordings');
+    const line = [{ type: 'quiz', part: 'react', anchor: 'B', text: 'A calculated result, within expected parameters.' }];
+    assert.ok(estimateSeconds(line, { A: 'ada', B: 'unit8' }) > estimateSeconds([{ ...line[0], anchor: 'H' }], { A: 'ada', B: 'unit8' }), 'UNIT-8 slower than the host');
+    // LETTER BY LETTER's clock runs to the winning buzz, past a stall (on air, 14 Oct, round 15: counted whole, 10 s)
+    const letters = (stall) => [
+      { type: 'quiz', part: 'frame', anchor: 'H', text: 'From the world desk. Fill it in.', countdown: 10, quiz: { round: 'letters' } },
+      ...(stall ? [{ type: 'quiz', part: 'stall', anchor: 'A', text: 'Buffering.', quiz: { round: 'letters', buzz: { buzzed: true, right: false, stall: true, stage: 1 } } }] : []),
+      { type: 'quiz', part: 'buzz', anchor: 'B', text: 'Bear with taste for honey: Winnie Pooh turns 100.', quiz: { round: 'letters', buzz: { buzzed: true, right: true, stage: 2 } } },
+      { type: 'quiz', part: 'reveal', anchor: 'H', text: 'Yes, Penny.', quiz: { round: 'letters', reveal: true } },
+    ];
+    const talk = 'Buffering.'.length / 15 + 0.4;
+    assert.ok(Math.abs(estimateSeconds(letters(true)) - estimateSeconds(letters(false)) - talk) <= 1, 'a stall adds its line, not the rest of the clock');
+    assert.ok(estimateSeconds(letters(false)) - estimateSeconds([]) < 10 + 6, 'the clock to the stage-two buzz, not the whole 10 s');
+  });
+  test('an afternoon edition estimated over its bound is shortened before air: whole TODAY OR NOT TODAY headlines first, never a question cut mid-way', () => {
+    // a plan with TODAY OR NOT TODAY whose headlines run long (the 72 characters the desk allows)
+    const long = ['Museum reopens its restored glass hall to visitors after a long renovation', 'Orchestra records a new symphony inside a disused railway tunnel in Wales', 'Scientists map the floor of a deep lake using a fleet of small robot boats', 'Library returns a rare map of the coastline to the town it was drawn in', 'Festival lights the old harbour with lanterns made by local glass makers', 'Ferry company launches an electric boat on its shortest island crossing'];
+    let checked = 0;
+    let byHeadline = 0;
+    for (const seed of ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9', 'g10', 'g11', 'g12']) {
+      const archive = week(NOW);
+      const { events, avoid } = quizEvents(archive, { now: NOW, days: 7 });
+      const plan = planEdition({ events, entries: archive.entries, now: NOW, contestants: CONTESTANTS, history: [], avoid, seed });
+      const ri = plan.rounds.findIndex((x) => x.type === 'today');
+      if (ri < 0) continue;
+      const items = plan.rounds[ri].questions[0].items.map((it, i) => ({ ...it, words: long[i % long.length] }));
+      // (and every other headline as long: options read, headlines buzzed)
+      const lengthen = (q, k) => ({ ...q, words: q.words ? long[(k + 1) % long.length] : q.words, options: q.options?.map((o, j) => (o.words ? { ...o, words: long[(k + j + 2) % long.length] } : o)) });
+      const big = { ...plan, rounds: plan.rounds.map((x, i) => (i === ri ? { ...x, questions: [{ ...x.questions[0], items }] } : { ...x, questions: x.questions.map((q, k) => (q.type === 'letters' || q.type === 'picture' ? lengthen(q, k) : q)) })) };
+      const whole = writeEpisode(big, { channel, now: NOW, nextAt: NOW + 4.5 * H });
+      const { episode, game, plan: aired } = whole;
+      const limit = (game.tie ? LENGTH_BOUND.tie : LENGTH_BOUND.plain) - LENGTH_MARGIN;
+      assert.ok(episode.estSeconds <= limit, `${seed}: ${episode.estSeconds} s over ${limit}`);
+      if (!episode.shortened) continue;
+      checked++;
+      if (episode.shortened.headlines.length) byHeadline++;
+      const kept = aired.rounds.find((x) => x.type === 'today').questions[0].items;
+      assert.ok(kept.length >= 4 && kept.length <= 6, `${seed}: ${kept.length} headlines kept`);
+      assert.equal(kept.length + episode.shortened.headlines.length, 6, seed);
+      // both answers stay; the dropped stories leave the asked list
+      assert.ok(kept.some((x) => x.answer === 'TODAY') && kept.some((x) => x.answer === 'EARLIER'), seed);
+      for (const w of episode.shortened.headlines) assert.ok(!aired.asked.includes(items.find((x) => x.words === w).key), seed);
+      // every question whole: each frame has its reveal; the TODAY frames are the headlines kept, the round says their count
+      const segs = episode.segments;
+      assert.equal(segs.filter((x) => x.part === 'frame').length, segs.filter((x) => x.part === 'reveal').length, seed);
+      const todayFrames = segs.filter((x) => x.part === 'frame' && x.quiz?.round === 'today');
+      assert.equal(todayFrames.length, kept.length, seed);
+      assert.deepEqual(todayFrames.map((x) => x.quiz.item.key), kept.map((x) => x.key), seed);
+      const intro = segs.find((x) => x.part === 'round' && x.quiz.round === 'today').text;
+      assert.ok(!/\bsix (?:headlines|quick)/i.test(intro) || kept.length === 6, `${seed}: ${intro}`);
+      const tally = segs.find((x) => x.part === 'tally');
+      if (tally) assert.ok(!/\b(?:of six|six headlines)\b/i.test(tally.text) || kept.length === 6, `${seed}: ${tally.text}`);
+      // the game is the one played on the headlines kept: the result's scores are its scores
+      assert.deepEqual(segs.find((x) => x.part === 'result').quiz.scores, game.scores, seed);
+    }
+    assert.ok(checked >= 2 && byHeadline >= 1, `${checked} editions shortened, ${byHeadline} by headlines`);
+    // a headline never goes from a round down to three, nor from DOUBLE OR NOTHING down to one
+    const p = { rounds: [{ type: 'today', questions: [{ type: 'today', items: ['TODAY', 'EARLIER', 'TODAY', 'EARLIER'].map((answer, i) => ({ key: `k${i}`, words: `w${i}`, answer })) }] }], don: { type: 'picture', offers: [] }, asked: ['k0', 'k1', 'k2', 'k3'] };
+    assert.equal(withoutTodayHeadline(p), null);
+    const d = { rounds: [{ type: 'picture', questions: [] }], don: { type: 'today', offers: [{ desk: 'world', question: { type: 'today', items: ['TODAY', 'EARLIER', 'TODAY'].map((answer, i) => ({ key: `d${i}`, words: `v${i}`, answer })) } }] }, asked: ['d0', 'd1', 'd2'] };
+    const d2 = withoutTodayHeadline(d);
+    assert.equal(d2.don.offers[0].question.items.length, 2);
+    assert.deepEqual(d2.don.offers[0].question.items.map((x) => x.answer).sort(), ['EARLIER', 'TODAY']);
+    assert.equal(d2.asked.length, 2);
+    assert.equal(withoutTodayHeadline(d2), null);
   });
   test('no line of the station’s last hours is used again', () => {
     const used = segs.find((s) => s.part === 'welcome').text;
@@ -313,5 +390,38 @@ describe('the weekly table (§5)', () => {
     const again = new QuizTable({ file, now: () => NOW });
     assert.equal(again.results.length, 3);
     assert.equal(weekOf(NOW), '2026-10-12'); // the Monday
+  });
+  // on air 14 Oct (round 14): the board showed PACO 1, SAM 1, UNIT-8 1 and the host said "Paco and Sam share the lead"
+  const first = (id) => ({ unit8: 'UNIT-8', paco: 'Paco', sam: 'Sam', ada: 'Ada', max: 'Max', nova: 'Nova', lola: 'Lola', penny: 'Penny' })[id];
+  test('the table line names every player the board ranks first, a three-way tie said as one', () => {
+    assert.equal(tableLine([{ id: 'paco', played: 1, wins: 1 }, { id: 'sam', played: 1, wins: 1 }, { id: 'unit8', played: 1, wins: 1 }, { id: 'ada', played: 1, wins: 0 }], first),
+      "In the week's table, Paco, Sam and UNIT-8 share the lead on one win, from one game each.");
+    assert.equal(tableLine([{ id: 'penny', played: 2, wins: 1.5 }, { id: 'max', played: 2, wins: 1.5 }, { id: 'nova', played: 1, wins: 0.5 }], first),
+      "In the week's table, Penny and Max share the lead on one and a half wins, from two games each.");
+    // the same wins from more games is second on the board (table.js order), so one leader
+    assert.equal(tableLine([{ id: 'ada', played: 1, wins: 1 }, { id: 'lola', played: 2, wins: 1 }], first), "In the week's table, Ada leads with one win from one game.");
+    assert.equal(tableLine([{ id: 'nova', played: 1, wins: 0.5 }, { id: 'sam', played: 1, wins: 0.5 }, { id: 'max', played: 1, wins: 0.5 }, { id: 'ada', played: 1, wins: 0.5 }, { id: 'lola', played: 1, wins: 0.5 }], first),
+      "In the week's table, five players share the lead on half a win, from one game each.");
+    assert.equal(tableLine([], first), null);
+  });
+  test("the edition's table line and its board read the same standings, this edition's result in them", () => {
+    const archive = week(NOW);
+    const { events, avoid } = quizEvents(archive, { now: NOW, days: 7 });
+    for (const seed of ['t1', 't2', 't3', 't4']) {
+      const plan = planEdition({ events, entries: archive.entries, now: NOW, contestants: CONTESTANTS, history: [], avoid, seed });
+      const others = CONTESTANTS.map((c) => c.id).filter((id) => !plan.pair.includes(id));
+      const t = new QuizTable({ now: () => NOW });
+      // two of the week's games already played: two winners on one win from one game each
+      t.record({ at: NOW - DAY, pair: [others[0], others[1]], scores: { [others[0]]: 12, [others[1]]: 8 }, winner: others[0] });
+      t.record({ at: NOW - 2 * DAY, pair: [others[2], others[3]], scores: { [others[2]]: 11, [others[3]]: 9 }, winner: others[2] });
+      const { episode, game } = writeEpisode(plan, { channel, now: NOW, table: t });
+      const seg = episode.segments.find((x) => x.part === 'table');
+      const board = tableRows(seg.quiz.standings).filter((r) => r.rank === 1).map((r) => r.id);
+      // tonight's result is in the board's standings
+      for (const id of plan.pair) assert.equal(seg.quiz.standings.find((r) => r.id === id)?.played, 1, seed);
+      assert.equal(board.length, game.winner ? 3 : 2, seed);
+      const nameOf = (id) => (id === 'unit8' ? 'UNIT-8' : channel.presenters?.[id]?.name?.replace(/^Dr\s+/, '').split(/\s+/)[0] || id);
+      for (const id of CONTESTANTS.map((c) => c.id)) assert.equal(new RegExp(`\\b${nameOf(id)}\\b`).test(seg.text), board.includes(id), `${seed}: ${seg.text}`);
+    }
   });
 });

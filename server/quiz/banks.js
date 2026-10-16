@@ -52,10 +52,10 @@ export const HOST = {
       'Round {k}: WHERE IN THE WORLD? A hidden name on the board is the answer.',
     ],
     today: [
-      'Round {k}: TODAY OR NOT TODAY? Six headlines: today, or earlier in the week?',
+      'Round {k}: TODAY OR NOT TODAY? {N} headlines: today, or earlier in the week?',
       'Quickfire for round {k}: TODAY OR NOT TODAY? One point a headline.',
       'Round {k} is TODAY OR NOT TODAY. Today means since six this morning. Earlier means before yesterday.',
-      'TODAY OR NOT TODAY for round {k}. Six headlines, six quick answers.',
+      'TODAY OR NOT TODAY for round {k}. {N} headlines, {n} quick answers.',
     ],
     howmany: [
       'Round {k}: HOW MANY? Closest guess takes two points; spot on takes three.',
@@ -112,7 +112,7 @@ export const HOST = {
       'This one: {words}',
       '{words} Today, or earlier?',
     ],
-    todayTally: ['That round: {a} {sa}, {b} {sb}.', 'Quickfire over. {a} got {sa} of six, {b} {sb}.', 'Six headlines done: {a} {sa}, {b} {sb}.', 'The quickfire count: {a} {sa}, {b} {sb}.'],
+    todayTally: ['That round: {a} {sa}, {b} {sb}.', 'Quickfire over. {a} got {sa} of {n}, {b} {sb}.', '{N} headlines done: {a} {sa}, {b} {sb}.', 'The quickfire count: {a} {sa}, {b} {sb}.'],
     howmany: [
       '{ask}? Here\'s the sentence as it aired: {masked}',
       '{masked} {ask}?',

@@ -28,6 +28,8 @@ const REACT_BEAT = 2.0; // s a reaction's face may hold after its words before t
 const LINK_SLACK = 0.6; // s of silence at most on the wide before LETTER BY LETTER's tiles (a link: playLine)
 const KEEP_BEAT = 0.4; // s a reaction and LETTER BY LETTER's (or PICTURE THIS's) frame may fall short of the wide's minimum and still ride it, the frame waiting that beat (playLine, playQuestion)
 const TICK_GAP = 0.2; // s at least between the options or the headline and the line said on the first tick (the prompt, the pins)
+const FACE_QUIET = 1.8; // s at most the players' faces stand with nothing said once their lines are done, the clock ticking under them, before the board is back (on air, 14 Oct, round 15: PICTURE THIS's wide 2.1-2.2 s on the ticks after the recap)
+const TODAY_WIDE = 1.6; // s at most TODAY OR NOT TODAY's wide stands before its verdict is heard (the lamps lit on the board first: on air, 14 Oct, the wide waited 2.1-3.1 s silent on the lamps and the clock)
 const CARD_WAIT = 1.8; // ... the first line after a board (the final score's 2 s line leaves its card 1.3-1.7 s short of the minimum: on air, 13 Oct, a winner's reply 0.04 s past 1.6 s stayed on the card)
 const BOARD_MIN = 3.0; // s a reveal stays on the board before a studio shot may take over (the gold, the credit up for 2.75 s)
 const BOARD_MIN_SAID = 2.0; // ... when the host says the credit in the reveal (heard, it need not be read on the board)
@@ -580,7 +582,7 @@ function reveal(d, b, plan, wrongSeats = []) {
   for (const seat of wrongSeats) lamps[seat] = false;
   const scores = { A: q.scores.A + plan.points.A, B: q.scores.B + plan.points.B };
   setState(d, { lamps, scores });
-  d.quizTrace?.push({ k: 'reveal', t: now(), board: b.card.board, right: plan.right, points: { ...plan.points } });
+  d.quizTrace?.push({ k: 'reveal', t: now(), board: b.card.board, right: plan.right, scored: { ...plan.scored }, points: { ...plan.points } });
 }
 
 /** Lamp on (a lock-in, a buzz, a guess). */
@@ -698,9 +700,10 @@ async function playQuestion(d, u, k) {
     // the faces hold to the reveal's BACK_BEAT (the countdown's last ticks on the players, the host's recap with them),
     // but PICTURE THIS's picture still has a step to take after they came in: then the board is back once they have held
     // the network's minimum and said their lines, and the step is seen (on air, 12 Oct: a wide after a step-2 lock-in held
-    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air)
+    // 5.6 s, 4.5 s of it silent, the picture's last two steps off air); and never more than FACE_QUIET s of ticks on the
+    // faces with nothing said: the board is back with its clock
     const step = u.type === 'picture' && cd && away.since < cd.T0 + PICTURE_STEPS[4] * cd.half;
-    await sleepUntil(Math.max(away.since + min + 0.02, step ? Math.min(held(t) - BACK_BEAT, spoken + 0.35) : held(t) - BACK_BEAT));
+    await sleepUntil(Math.max(away.since + min + 0.02, Math.min(held(t) - BACK_BEAT, spoken + (step ? 0.35 : FACE_QUIET))));
     cutTo(d, spec, { card });
     d.quizTrace?.push({ k: 'back', t: now(), board: card.board });
     away = null;
@@ -1000,12 +1003,18 @@ function revealCut(d, u, ri, b, nx) {
   if (next && next.shot !== 'quiz' && next.shot !== 'open') {
     // the next shot's own length: its lines (speech and pauses) until the plan cuts away from it
     let len = pause(d, ri);
-    for (let j = nx; j < segs.length && sameShot(q.shots[j], next); j++) len += speechOf(segs[j]) + pause(d, j);
-    const need = paceFor(d.scene.program?.id).shots.min + 0.1 - len;
+    let j = nx;
+    for (; j < segs.length && sameShot(q.shots[j], next); j++) len += speechOf(segs[j]) + pause(d, j);
+    const min = paceFor(d.scene.program?.id).shots.min;
+    const need = min + 0.1 - len;
     if (need <= 0) return null;
     // (a tail held back past its time would leave the reaction's face silent more than a beat: then the board keeps it)
     const at = Math.max(earliest, end - need);
     if (at > end - need + REACT_BEAT) return null;
+    // (nor a face that would stand more than FACE_QUIET s after its last word before a board: the reveal's board keeps the
+    // reply; on air, 14 Oct, round 15: "There it is." on the winner's single after the sudden-death verdict, 2.6 s silent
+    // before the final score)
+    if (q.shots[j]?.shot === 'quiz' && at + min - (end + len - pause(d, j - 1)) > FACE_QUIET) return null;
     return { k: 'tail', spec: plannedSpec(q, nx), at, min: earliest, end, slack: 0.3 };
   }
   if (next?.shot === 'quiz' && u.kind === 'question' && u.type !== 'today') {
@@ -1107,11 +1116,13 @@ async function playToday(d, u, k) {
     const drum = last ? drumroll(d, cd.end) : null;
     const answer = segs[item.frame]?.quiz?.item?.answer;
     const reveal0 = segs[item.reveal];
-    // the lock-ins on the wide once the headline has been read and the board has held its minimum (two known options:
-    // the desks' lamps say it all), and the verdict there with the host
+    // the lock-ins on the board (the lamps beside the headline: two known options, the desks' lamps say it all), then
+    // the wide for the clock's last moment and the verdict there with the host: the wide at most TODAY_WIDE s before the
+    // verdict's first word, once the board has held its minimum
     const min = paceFor(d.scene.program?.id).shots.min;
     const toWide = item.reveal !== null && q.shots[item.reveal] && q.shots[item.reveal].shot !== 'quiz';
-    const awayT = toWide && sched.length ? Math.max(cd.T0 + sched[0].at, b.since + min + 0.05) : Infinity;
+    const heard = Math.max(cd.end, drum ? drum.end : 0) + REVEAL_BEAT + (d.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0);
+    const awayT = toWide && sched.length ? Math.max(cd.T0 + sched[0].at, b.since + min + 0.05, heard - TODAY_WIDE) : Infinity;
     let away = false;
     const goWide = async () => {
       if (away || awayT > cd.end + 0.3) return;

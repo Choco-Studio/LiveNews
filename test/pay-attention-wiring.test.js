@@ -24,7 +24,7 @@ import { Producer } from '../server/producer.js';
 import { QuizDesk, editionStories } from '../server/quiz/edition.js';
 import { Graphics, quizAvoided } from '../public/js/graphics/index.js';
 import { quizAvoidOf } from '../public/js/quizplay.js';
-import { quizEvents } from '../server/quiz/desk.js';
+import { quizEvents, quizRefuses } from '../server/quiz/desk.js';
 import { Station } from '../server/station.js';
 import { HOST } from '../server/quiz/banks.js';
 import { quizEdition, quizWeek, NOW, H } from './fixtures/quiz-week.js';
@@ -171,16 +171,20 @@ describe('PAY ATTENTION: the pace profile', () => {
 });
 
 describe('PAY ATTENTION: the running order and the plan of the shots', () => {
-  test('units: the open, three rounds of three questions (TODAY OR NOT TODAY: six headlines), DOUBLE OR NOTHING, the result', () => {
+  test('units: the open, three rounds of three questions (TODAY OR NOT TODAY: six headlines, four or five when the writer\'s length guard drops some), DOUBLE OR NOTHING, the result', () => {
     for (const seed of Object.values(SEEDS)) {
-      const { episode, game } = edition(seed);
+      const { episode, game, plan } = edition(seed);
       const units = quizUnits(episode.segments);
       assert.equal(units[0].kind, 'open');
       const rounds = units.filter((u) => u.kind === 'card' && u.board === 'round' && !u.sudden);
       assert.equal(rounds.length, 3, seed);
       const questions = units.filter((u) => u.kind === 'question' && !u.double && !u.sudden);
       assert.equal(questions.length, game.rounds.reduce((n, r) => n + (r.type === 'today' ? 1 : r.played.length), 0), seed);
-      for (const u of questions.filter((x) => x.type === 'today')) assert.equal(u.items.length, 6, seed);
+      for (const u of questions.filter((x) => x.type === 'today')) {
+        assert.equal(u.items.length, 6 - (episode.shortened?.headlines.length || 0), seed);
+        assert.equal(u.items.length, plan.rounds.find((r) => r.type === 'today').questions[0].items.length, seed);
+        assert.ok(u.items.length >= 4, seed);
+      }
       assert.equal(units.filter((u) => u.kind === 'question' && u.double).length, 1, `${seed}: one DOUBLE OR NOTHING`);
       assert.equal(units.filter((u) => u.kind === 'question' && u.sudden).length, game.tie ? 1 : 0, `${seed}: the tie-break`);
       // every segment belongs to exactly one unit
@@ -424,15 +428,16 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         }
         // the reveal on the clock's last beat: the countdown long enough for the faces (never a stopped clock before it)
         assert.ok(Math.abs(rv.t - cd.end) < 0.05, `${seed} ${u.type}: the reveal ${(rv.t - cd.end).toFixed(2)} s from the clock's end`);
-        // the faces hold to 0.4 s before the reveal; when PICTURE THIS's picture still has a step to take after they came
-        // in, the board is back once they have held the minimum and said their lines, and the step is seen
+        // the faces hold to 0.4 s before the reveal, but never more than 1.8 s of ticks with nothing said once they have held
+        // the minimum (round 15); when PICTURE THIS's picture still has a step to take after they came in, the board is back
+        // once they have held the minimum and said their lines, and the step is seen
         const away = log.trace.find((x) => x.k === 'away' && x.t >= cd.T0 - 0.01 && x.t < rv.t);
         const back = log.trace.find((x) => x.k === 'back' && x.t >= cd.T0 && x.t < rv.t + 0.01);
         if (away && back) {
           const lines = [...(u.parts.lock || []), ...(u.parts.guess || []), ...(u.parts.recap || [])].map((i) => said.get(i)).filter(Boolean);
           const spoken = Math.max(...lines.map((l) => l.off));
           const step = u.type === 'picture' && away.t < cd.T0 + 4 * cd.half;
-          const due = Math.max(away.t + 4, step ? Math.min(rv.t - 0.4, spoken + 0.35) : rv.t - 0.4);
+          const due = Math.max(away.t + 4, Math.min(rv.t - 0.4, spoken + (step ? 0.35 : 1.8)));
           assert.ok(Math.abs(back.t - due) <= 0.08, `${seed} ${u.type}: the board back ${(back.t - due).toFixed(2)} s from its time`);
           if (step) assert.ok(back.t <= cd.T0 + 4 * cd.half + 4 + 0.1, `${seed}: the picture's last step on the board`);
           backs++;
@@ -616,7 +621,10 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       for (const r of reveals) {
         const sting = log.music.find((m) => (m.moment === 'right' || m.moment === 'wrong') && Math.abs(m.t - r.t) < 1e-6);
         assert.ok(sting, `${seed}: a sting on the reveal`);
-        assert.equal(sting.moment, r.points.A > 0 || r.points.B > 0 ? 'right' : 'wrong');
+        assert.equal(sting.moment, r.scored.A || r.scored.B ? 'right' : 'wrong');
+        // (the desks add what the seats scored, SUDDEN DEATH nothing)
+        const sudden = seed === SEEDS.tie && r === reveals.at(-1);
+        for (const seat of ['A', 'B']) assert.equal(r.points[seat] > 0, r.scored[seat] && !sudden, `${seed}: ${seat}'s points at a reveal`);
       }
       assert.equal(log.music.filter((m) => m.moment === 'right' || m.moment === 'wrong').length, reveals.length, `${seed}: one sting a reveal`);
     }
@@ -646,6 +654,27 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
     }
   });
 
+  test('the desks\' scores only climb and end on the final score the host says: the sudden-death headline wins the game and adds nothing (on air 14 Oct: 16-19 on the desks, then 16-16 on the final board)', async () => {
+    for (const seed of all) {
+      const { episode, game } = edition(seed);
+      const log = await played(seed);
+      const states = log.trace.filter((x) => x.k === 'state');
+      const final = { A: game.scores[episode.cast.A], B: game.scores[episode.cast.B] };
+      for (const [i, st] of states.entries()) {
+        for (const seat of ['A', 'B']) {
+          assert.ok(st.scores[seat] <= final[seat], `${seed}: ${seat} at ${st.scores[seat]} on the desks, past the final ${final[seat]}`);
+          if (i) assert.ok(st.scores[seat] >= states[i - 1].scores[seat] || st.scores[seat] === 0, `${seed}: ${seat}'s desk went down`);
+        }
+      }
+      assert.deepEqual(states.at(-1).scores, final, seed);
+      if (seed === SEEDS.tie) {
+        const last = log.trace.filter((x) => x.k === 'reveal').at(-1);
+        assert.ok(last.right && (last.scored.A || last.scored.B), `${seed}: the tie-break named`);
+        assert.deepEqual(last.points, { A: 0, B: 0 }, `${seed}: the tie-break adds nothing`);
+      }
+    }
+  });
+
   test('the set: the question flag on from each frame to its reveal\'s last word, off between questions and outside them; the lamps lit on a lock-in, the wrong ones out at the reveal', async () => {
     for (const seed of all) {
       const { episode } = edition(seed);
@@ -667,7 +696,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       // at a reveal, a lamp beside a wrong answer goes out (gold only ever means right)
       for (const r of log.trace.filter((x) => x.k === 'reveal')) {
         const st = stateAt(r.t);
-        for (const seat of ['A', 'B']) if (st.lamps[seat]) assert.ok(r.points[seat] > 0, `${seed}: ${seat}'s lamp lit after a wrong answer`);
+        for (const seat of ['A', 'B']) if (st.lamps[seat]) assert.ok(r.scored[seat], `${seed}: ${seat}'s lamp lit after a wrong answer`);
       }
       assert.equal(log.trace.filter((x) => x.k === 'state').at(-1).question, false);
     }
@@ -694,6 +723,14 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const on = shotAt(log, said.get(i).on + 0.01);
         const kept = on.shot === 'quiz' && log.trace.some((x) => x.k === 'keep' && x.i === i) && speechOfLine(said.get(i)) < 2;
         assert.ok(on.shot === 'wide' || (on.shot === 'close' && on.focus === seg.anchor) || kept, `${seed}: ${seg.anchor}'s reaction on ${on.shot}/${on.focus}`);
+        // a reaction's face opened in the reveal's last words never stands more than 1.8 s after its last word before a
+        // board (on air, 14 Oct, round 15: "There it is." 2.6 s silent on the winner's single before the final score)
+        if (on.shot !== 'quiz' && log.trace.some((x) => x.k === 'tail' && x.i === i - 1)) {
+          const after = log.shots.find((x) => x.t > on.t + 1e-6);
+          // (the last word heard on the face: the reaction's, or the next frame's lead-in said on it before its board)
+          const lastOff = Math.max(...log.says.filter((x) => x.on < after.t - 1e-6 && x.off !== null).map((x) => x.off));
+          if (after?.shot === 'quiz') assert.ok(after.t - lastOff <= 1.8 + 0.1, `${seed}: ${seg.anchor}'s reaction face ${(after.t - lastOff).toFixed(2)} s silent before the board`);
+        }
       });
       const scores = episode.segments.findIndex((s) => s.part === 'scores');
       const on = shotAt(log, said.get(scores).on + 0.01);
@@ -746,9 +783,12 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         assert.equal(prev.shot, 'quiz');
         assert.ok(cut.t - prev.t >= min - 0.01, `${seed}: the board held its minimum`);
         if (seg.part === 'reveal') {
-          // TODAY OR NOT TODAY: the silent lock-ins and the verdict on the wide
+          // TODAY OR NOT TODAY: the silent lock-ins on the board, then the verdict on the wide, the wide never standing
+          // silent past 2 s before it (on air, 14 Oct: 2.1-3.1 s on the lamps and the clock, nothing said)
           assert.equal(cut.framing, 'quiz-wide');
           assert.equal(shotAt(log, said.get(w.i).on + 0.01), cut, `${seed}: TODAY's verdict on the wide`);
+          assert.ok(said.get(w.i).on - w.t <= 2.0, `${seed}: TODAY's wide ${(said.get(w.i).on - w.t).toFixed(2)} s silent before its verdict`);
+          assert.ok(!log.says.some((x) => x.on > w.t && x.on < said.get(w.i).on - 1e-6), `${seed}: nothing else said on TODAY's wide before its verdict`);
           continue;
         }
         assert.ok(['buzz', 'guess', 'lock'].includes(seg.part), `${seed}: away for a ${seg.part}`);
@@ -773,6 +813,10 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         const board = shotAt(log, back.t + 1e-3);
         assert.equal(board.card, prev.card);
         assert.ok(board.t - cut.t >= min - 0.01, `${seed}: the face held its minimum`);
+        // never more than 1.8 s of ticks on the faces with nothing said, once they have held the minimum (on air, 14 Oct,
+        // round 15: PICTURE THIS's wide 2.1-2.2 s silent after the recap, waiting for the reveal's beat)
+        const lastOff = Math.max(...log.says.filter((x) => x.off !== null && x.off <= back.t + 1e-6).map((x) => x.off));
+        assert.ok(back.t - lastOff <= 1.8 + 0.01 || board.t - cut.t <= min + 0.05, `${seed}: the faces ${(back.t - lastOff).toFixed(2)} s silent before the board is back`);
         const first = log.shots.find((x) => x.card === board.card);
         assert.equal(board.card.epoch, first.t, `${seed}: the board's clock runs from its first cut`);
         const r = log.trace.find((x) => x.k === 'reveal' && x.t > back.t - 1e-6);
@@ -1066,19 +1110,27 @@ describe('PAY ATTENTION and the LATEST ticker: never a story the edition uses', 
     assert.equal(g.tickerList.length, 0);
   });
 
-  test('no tragedy scrolls under the game: the station marks grave items, the band leaves them out only while the edition airs', async () => {
-    // (step 7 on air, 12–13 Oct: an execution, a murder, a fatal ride, a war and a named person's cancer scrolled under the quiz)
-    const grave = ['Watch: Emergency calls from botched Christa Pike execution released', 'Tupac Shakur killer sentenced to 40 years in prison', 'Horrified witnesses recount fatal rollercoaster incident at Six Flags', 'Funeral for Egyptian flight attendant killed in Houthi attack on Riyadh', 'Pope Leo diagnosed with lung cancer as growth removed during surgery', 'Hurricane Simon and Tropical Storm Rachel kill five people on Mexico’s Pacific coast'];
-    const light = ['Bank of Canada holds interest rates at 3.5 percent', 'Lisbon opens a new riverside tram line', 'England beat Greece in World Cup play-off'];
-    const news = { stories: new Map([...grave, ...light].map((title, i) => [`g${i}`, { id: `g${i}`, source: 'BBC News', title, summary: '', published: 1000 - i, category: 'world' }])) };
-    const station = new Station({ config: { queueSize: 1 }, newsDesk: news, producer: {}, chain: {}, channel: () => loadChannel() });
-    const items = station.ticker();
-    for (const t of grave) assert.equal(items.find((x) => x.text === t)?.grave, true, `marked: ${t}`);
-    for (const t of light) assert.ok(!items.find((x) => x.text === t)?.grave, `not marked: ${t}`);
+  test('nothing the quiz would refuse scrolls under the game: the station marks each such item with its kind, the band leaves them out only while the edition airs', async () => {
+    // (step 7 on air, 12–13 Oct: an execution, a murder, a fatal ride, a war and a named person's cancer scrolled under
+    // the quiz; round 14, 13–14 Oct: a state's emergency rule, party politics, an election, protests, a person's denial)
+    const grave = ['Watch: Emergency calls from botched Christa Pike execution released', 'Tupac Shakur killer sentenced to 40 years in prison', 'Horrified witnesses recount fatal rollercoaster incident at Six Flags', 'Funeral for Egyptian flight attendant killed in Houthi attack on Riyadh', 'Pope Leo diagnosed with lung cancer as growth removed during surgery', 'Hurricane Simon and Tropical Storm Rachel kill five people on Mexico’s Pacific coast',
+      'Pakistan imposes emergency rule in former prime minister\'s stronghold', 'Burnham rules out deal with Greens as he condemns ‘Zionism is racism’ policy as ‘antisemitic’– UK politics live', 'US inflation rises more than expected ahead of midterm elections', "Inside Katie Zacharia's very brief White House briefing", "'If we don't scream, they won't listen to us': Student protesters speak to BBC in Paris", 'Zimbabwean author denies using AI to write award-winning story', 'In Phoenix, young ultra-conservatives look to carry on Charlie Kirk’s legacy', 'Bank of Canada holds interest rates at 3.5 percent', 'Bayern’s Michael Olise sent off for ‘super dumb’ yellows within seconds', 'BA flight forced to turn back over cracked window', "Pakistan has locked down Imran Khan's stronghold - but it could backfire", '$15 gets you Psychonauts 2, the latest Like a Dragon game, and more', "Week 6 buzz: What we're hearing on the slumping Eagles, three undefeateds, more", "'I'd talk to the TV': The paid companions bringing warmth to China's lonely"];
+    const light = ['Lisbon opens a new riverside tram line', 'England beat Greece in World Cup play-off', 'Formula One to return to Africa for first time in 30 years', 'NASA Develops Batteries to Power Humanity’s Return to Moon'];
+    // (the station's band holds eighteen items: two feeds' worth, each read by the real station)
+    const tickerOf = (titles, from) => {
+      const news = { stories: new Map(titles.map((title, i) => [`g${from + i}`, { id: `g${from + i}`, source: 'BBC News', title, summary: '', published: 1000 - i, category: 'world' }])) };
+      return new Station({ config: { queueSize: 1 }, newsDesk: news, producer: {}, chain: {}, channel: () => loadChannel() }).ticker();
+    };
+    const items = [...tickerOf([...grave.slice(0, 12), ...light], 0), ...tickerOf(grave.slice(12), 100)];
+    assert.equal(items.length, grave.length + light.length);
+    for (const t of grave) assert.ok(items.find((x) => x.text === t)?.quizOut, `marked: ${t}`);
+    for (const t of light) assert.ok(!items.find((x) => x.text === t)?.quizOut, `not marked: ${t}`);
+    // the station's mark is the desk's own judgement: every marked item is one the quiz refuses
+    for (const it of items) assert.equal(it.quizOut || null, quizRefuses({ title: it.text, summary: '' }), it.text);
     const log = await played(SEEDS.lettersDon);
     const during = shown({ ticker: items, quizAvoid: log.avoidDuring });
     for (const t of grave) assert.ok(!during.includes(t.toUpperCase()) && !during.includes(t), `not under the game: ${t}`);
-    assert.ok(during.includes('Bank of Canada') || during.includes('BANK OF CANADA'), 'the light news still runs');
+    assert.ok(during.includes('Lisbon') || during.includes('LISBON'), 'the light news still runs');
     const after = shown({ ticker: items, quizAvoid: log.avoidAfter });
     assert.ok(grave.some((t) => after.includes(t) || after.includes(t.toUpperCase())), 'the channel carries them again after the game');
   });
