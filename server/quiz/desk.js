@@ -43,9 +43,9 @@ export const EXCLUDED = [
   ['health', /\b(?:cancer\w*|tumou?rs?|diseases?|diagnos\w*|hospital\w*|patients?|surger(?:y|ies)|operation on|illness\w*|ill\b|sick\w*|virus\w*|outbreaks?|pandemic|epidemic|dementia|alzheimer\w*|stroke\b|heart attack|overdos\w*|suicid\w*|mental health|nhs|medicines? (?:grow )?scarce|nodule|blood clots?|ruled out (?:for|of|vs\.?|against|with)|sidelined|concussion\w*|hamstring|torn (?:acl|ligament\w*|muscle)|fractur\w*)\b/i],
   ['money of people', /\b(?:salar(?:y|ies)|wages?|pay ?(?:rise|cut|deal)|earn(?:s|ed|ing)?\s+(?:up to\s+|over\s+|more than\s+|about\s+|around\s+)?[£$€]|i earn|income|pensions?|fined|fines?\b|damages|compensation|payouts?|net worth|fortune|wealth\w*|billionaires?|millionaires?|inheritance|inherit\w*|tax(?:es)? (?:bill|affairs))\b/i],
   ['betting', /\b(?:bet(?:s|ting)?|bookmakers?|bookies|odds|tips?\b|tipster\w*|predictions?|predicted line-?ups?|gambl\w*|casino\w*|lotter(?:y|ies)|jackpot|fantasy (?:football|baseball|basketball|hockey|sports?|league)|matchup rankings|start(?:\/| or | and |-)sit|fade)\b/i],
-  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|(?:cut|cuts|cutting|slash\w*|axe\w*|shed\w*) (?:up to |more than |about |around |some |nearly )?(?:\d[\d,.]*k? |hundreds of |thousands of |dozens of )?(?:\w+ )?jobs|subscriptions? (?:slow|fall|drop|declin)\w*|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making|price (?:increase|hike|rise)s?|prices? (?:increas|hik|ris|jump|soar|go(?:es)? up)\w*|slumping|winless|losing streak|lonel\w*|social isolation|quitting|losing (?:\d[\d,]* |hundreds of |thousands of |dozens of )?(?:\w+ )?(?:workers|staff|employees|jobs)|(?:staff|workers|employees|drivers|nurses|teachers|posties)\s+(?:are\s+)?(?:quit\w*|leav\w*|walk\w* out)|exodus|efficiency (?:plans?|drives?|savings?|programmes?|cuts?)|cost[- ]cutting|cuts? (?:to|in) (?:staff|jobs|services|deliveries|routes)|under (?:pressure|strain)|overstretched|understaffed|staff shortages?)\b/i],
+  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|lay(?:s|ing)? off|(?:cut|cuts|cutting|slash\w*|axe\w*|shed\w*) (?:up to |more than |about |around |some |nearly )?(?:\d[\d,.]*k? |hundreds of |thousands of |dozens of )?(?:\w+ )?jobs|subscriptions? (?:slow|fall|drop|declin)\w*|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making|price (?:increase|hike|rise)s?|prices? (?:increas|hik|ris|jump|soar|go(?:es)? up)\w*|slumping|winless|losing streak|lonel\w*|social isolation|quitting|losing (?:\d[\d,]* |hundreds of |thousands of |dozens of )?(?:\w+ )?(?:workers|staff|employees|jobs)|(?:staff|workers|employees|drivers|nurses|teachers|posties)\s+(?:are\s+)?(?:quit\w*|leav\w*|walk\w* out)|exodus|efficiency (?:plans?|drives?|savings?|programmes?|cuts?)|cost[- ]cutting|cuts? (?:to|in) (?:staff|jobs|services|deliveries|routes)|under (?:pressure|strain)|overstretched|understaffed|staff shortages?)\b/i],
   ['offensive language', /\b(?:f[\*u]+c?k\w*|f\*+|sh[\*i]t\w*|bollocks|bastard\w*|wank\w*|arse(?:hole)?s?|piss(?:ed|ing)?|bloody hell|crap)\b/i],
-  ['promotion', /\b(?:\d+ (?:hours|days) (?:to|until|left)|job opportunit\w*|vacanc(?:y|ies)|we(?:'re| are) hiring|apply now|careers? at|your final chance|tickets?|ticket savings|discount\w*|promo codes?|deals? of the day|on sale|buy now|sponsored|giveaway|\d+ gets you|gets you .{0,60} for|price drops?|lowest price|bargains?|\d+% off|save \$?\d+)\b/i],
+  ['promotion', /(?:[–—|-]\s*(?:podcast|video|audio|live|quiz|gallery|in pictures)\s*(?=\.(?:\s|$)|$)|(?:^|\.\s+)(?:podcast|video|watch|listen|quiz)\s*[:|]|\bthe \w+ podcast\b)|\b(?:\d+ (?:hours|days) (?:to|until|left)|job opportunit\w*|vacanc(?:y|ies)|we(?:'re| are) hiring|apply now|careers? at|your final chance|tickets?|ticket savings|discount\w*|promo codes?|deals? of the day|on sale|buy now|sponsored|giveaway|\d+ gets you|gets you .{0,60} for|price drops?|lowest price|bargains?|\d+% off|save \$?\d+)\b/i],
   ['failure of a person', /\b(?:flop(?:s|ped|ping)?|box[- ]office (?:bomb|disaster)|weak start|panned|slammed|mock\w*|ridicul\w*|gaffes?|embarrass\w*|humiliat\w*|backlash|push ?back|pushed back|outrage|rows? (?:over|with|between)|feud|criticis\w*|criticiz\w*|apologi[sz]\w*|resign\w*|sacked|fired\b|ousted|quits?\b|wavered|controvers\w*|accus\w*|allegation\w*|alleged\w*|denies|denied|not returning as|parts? ways|steps? down|stepping down|let go|relieved of|dismiss(?:ed|al|es)|bottom (?:10|ten|five|three)|major fall|fallout|under fire|damaging|suspend(?:s|ed|ing)? \S+(?: \S+)? for|punch\w*|brawl\w*|in (?:the )?face|owns? up|incoherent|shambolic|plagued by|lack of (?:expertise|experience|leadership|transparency|accountability)|critics|angry|anger(?:ed)?|furious|fury|livid|fum(?:e|es|ing)\b|tough (?:loss|defeat|night|day|weekend) for|sent off|sending[- ]offs?|red cards?|second yellow|yellows|booed|boos|jeered|heckl\w*|dumb|stupid|idiot\w*|daft|blunder\w*|howlers?|own goals?|miss(?:es|ed)? (?:a |the )?penalt\w*|penalty miss\w*|yellow cards?|blames?|blamed|dropped from|axed|benched)\b/i],
 ];
 
@@ -111,14 +111,34 @@ export function labelLike(words) {
   return !tokens.some(verbish);
 }
 
+// Where the aired headline stops inside the source's title: the title's words in order, the aired one allowed to have
+// dropped its articles ("This tiny jurassic predator helped pave the way for the human brain" aired as "…helped pave
+// way", 16 Oct). Returns the title's text after the aired headline's last word, or null when the aired headline is not
+// such a cut (a rewrite, or the whole title).
+const ARTICLES = new Set(['a', 'an', 'the']);
+function cutRest(aired, title) {
+  const words = (t) => [...String(t).matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’$£€%.,-]*/gu)].map((m) => ({ w: m[0].toLowerCase().replace(/[.,]+$/, ''), end: m.index + m[0].replace(/[.,]+$/, '').length }));
+  const a = words(aired);
+  const t = words(title);
+  if (!a.length || a.length >= t.length) return null;
+  let j = 0;
+  for (const { w } of a) {
+    while (j < t.length && t[j].w !== w && ARTICLES.has(t[j].w)) j++;
+    if (j >= t.length || t[j].w !== w) return null;
+    j++;
+  }
+  const rest = title.slice(t[j - 1].end);
+  return /[\p{L}\p{N}]/u.test(rest) ? rest : null;
+}
+
 /** The headline the quiz may show for an archive entry: the aired one when whole, else the source's title (≤ 72), else null. */
 export function quizWords(e) {
   const aired = String(e?.headline || '').replace(/\s+/g, ' ').trim();
   const title = String(e?.title || '').replace(/\s+/g, ' ').replace(/^(?:BREAKING|LIVE|WATCH|VIDEO|EXCLUSIVE)\s*[:|-]\s*/i, '').trim();
   const titleOk = title && title.length <= MAX_WORDS_CHARS && !OPEN_END.test(title.replace(/[.!?]+$/, ''));
   if (!aired) return titleOk ? title : null;
-  const cut = title.length > aired.length && title.toLowerCase().startsWith(aired.toLowerCase());
-  if (cut && !CLEAN_REST.test(title.slice(aired.length))) return titleOk ? title : null;
+  const rest = cutRest(aired, title);
+  if (rest !== null && !CLEAN_REST.test(rest)) return titleOk ? title : null;
   if (OPEN_END.test(aired.replace(/[.!?]+$/, ''))) return titleOk ? title : null;
   return aired.length <= MAX_WORDS_CHARS ? aired : titleOk ? title : null;
 }
@@ -154,7 +174,7 @@ export function countryOf(location) {
 const LOCATIVE = /\b(?:in|at|near|off|across|outside|around|over|throughout|inside|on the coast of|the coast of|to western|to eastern|to northern|to southern)\s+(?:the\s+)?$/i;
 // "available in the US", "users in Japan", "a new feature in the US" (The Verge, 13 Oct): where a product is sold, not
 // where a story happened
-const AVAILABILITY = /\b(?:available|availability|users?|customers?|subscribers?|buyers?|shoppers?|owners?|players?|sold|sells?|selling|ships?|shipping|features?|services?|rolls? out|rolling out|rollout|expands?|expanding|expansion|subscriptions?|apps?|launch(?:es|ed|ing)? (?:first )?(?:only )?)\s+(?:only\s+)?(?:in|across|to)\s+(?:the\s+)?$/i;
+const AVAILABILITY = /\b(?:available|availability|users?|customers?|subscribers?|buyers?|shoppers?|owners?|players?|sold|sells?|selling|ships?|shipping|features?|services?|rolls? out|rolling out|rollout|expands?|expanding|expansion|subscriptions?|apps?|launch(?:es|ed|ing)?(?: first)?(?: only)?)\s+(?:only\s+)?(?:in|across|to)\s+(?:the\s+)?$/i;
 const insideOf = (e, country, placeEntry) => e === country || e === placeEntry || e.country === country.name;
 function happensIn(texts, country, place) {
   const placeEntry = lookupPlace(String(place).split(',')[0]);

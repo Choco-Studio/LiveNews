@@ -91,7 +91,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 37. 🟡 **Nuevo programa FULL TIME (deportes, 5-7 min, Kai y Rosa).** Hecho de punta a punta. Aún no está en la parrilla: falta tu visto bueno y el paso 2.
     - ✅ Paso 1, la mesa de deportes: lee los medios de deportes y descarta rumores, apuestas, columnas de opinión y vídeos. Solo lee resultados y fechas cuando son seguros.
-    - 🟡 Paso 2, el guion: 9,0. Le faltan noticias de un fin de semana (hay comprobaciones programadas para el 17, 18 y 19 de octubre) y el redactor con IA (falta tu clave).
+    - ✅ Paso 2, el guion (9,75): leído en antena con titulares reales de "¿hoy o no hoy?", y Max y Ada ya juegan.
     - ✅ Paso 3, los gráficos: 9,8. Marcador del partido, tablero de resultados del estadio, calendario «COMING UP», pizarra con la distancia del gol y 11 iconos de deporte.
     - ✅ Paso 4, la dirección: 9,8. El tablero de resultados crece al ritmo de la voz y nunca se repite el mismo tipo de tablero dos veces seguidas.
     - ✅ Paso 5, el plató junto al campo (9,8), la cabecera con focos y silbato (9,8) y la música (9,8).
@@ -114,7 +114,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
       - "¿cuántos?", solo cuando hay cifras.
     - Nunca pregunta por muertes, sucesos, guerras ni política. Los días de noticias graves no se emite.
     - **Falta de ti, más adelante:** la cara, la voz y el nombre del presentador nuevo, y el nombre del programa.
-    - 🟡 Paso 1, la mesa de preguntas: hecha. Elige solo noticias ya emitidas y monta cada edición entera. La nota final llega el 16 oct, tras revisar a mano tres días reales de preguntas.
+    - 🟡 Paso 1, la mesa de preguntas: revisada a mano el 16 oct con las noticias reales. Encontré cuatro fugas (despidos en Netflix, un "¿dónde?" que era un lanzamiento de producto, un titular cortado y un pódcast) y las arreglé; aún no pasa (9,6): falta un día más leído a mano sin ninguna fuga (17 oct).
     - 🟡 Paso 2, el guion: hecho (9,7, hace falta más de 9,7). Lo que falta (la ronda "¿hoy o no hoy?" con titulares reales y partidas de Max y Ada) también depende de esos tres días. Las partidas están igualadas: el favorito claro pierde un 28 % de las veces y hay remontadas.
     - Ya conectado al canal como programa de tipo concurso; aún no está en la parrilla.
     - ✅ Paso 3, los gráficos (9,75). ✅ Paso 6, los tres candidatos a presentador (9,75): falta que elijas uno.

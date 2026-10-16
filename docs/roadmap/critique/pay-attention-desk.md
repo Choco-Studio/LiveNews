@@ -157,3 +157,45 @@ is mostly text can give its answer away at the last step; that makes an easy que
   3`, and every question and option of every edition checked by hand.
 - **The grave-day rule on a grave day built from the archive's own grave stories.** It must not air.
 - **Editions per day and seats per presenter**, reported here.
+
+## The gate (16 Oct): read by the reviewer
+
+**The archive.** Real days 12 and 13 Oct, 14 Oct to 17:32 London time, then a gap to 16 Oct 15:25 (the recorder was
+down: the account's usage limit, then a container restart). Not three continuous days, and said so. Planned with
+`tools/quiz/desk.mjs` at 15:30 and 20:30 London on 14, 15 and 16 Oct:
+- 14 Oct: no edition (the archive held 2.0 and 2.1 days; the quiz needs 3). Right.
+- 15 Oct: no edition (no airings in the six hours before: too little to judge). Right.
+- 16 Oct: both editions air (Lola v UNIT-8, Penny v Sam).
+
+**Every question and option read by hand. Four leaks, all fixed with tests:**
+1. "Netflix is laying off around 1,000 employees" as a tie-break and as an option: the hardship list had "layoffs" and
+   "laid off" but not "laying off" / "lays off".
+2. "Google’s Universal Cart shopping tool launches in ▮▮▮▮▮" as WHERE: the availability rule's "launches in" needed
+   two spaces before "in", so it never matched.
+3. "This tiny jurassic predator helped pave way" as an option: the channel's headline cut the title and dropped its
+   articles, so the cut was not recognised. A cut that drops articles is now a cut (the whole title is used).
+4. "Is your boss watching you? The rise of AI surveillance at work – podcast" as PICTURE THIS's answer and a TODAY
+   headline: a programme's episode, not a story. Episode titles ("– podcast", "– video", "Podcast:") are promotions.
+
+Re-planned and read again after each fix: the two editions are clean.
+
+**The grave-day rule on the archive's own grave stories** (254 airings read grave): 37.5 % grave in six hours does not
+air; 27.5 % does not; 25 % airs (the rule is "more than"); 12.5 % airs; a story with people harmed leading WORLD NOW
+four times stops it.
+
+**Seats.** Eight editions planned in a row on 16 Oct's archive: every presenter plays (Paco 3, Nova 1, the others 2);
+Max plays twice (step 2's gate asked for it). Every set of rounds differs from the edition before.
+
+**What stays weak.** The questions lean on technology and science: 16 Oct 15:30 had 12 of 15 from technology (an hour
+after the recorder restarted, today's pool was mostly TECH BYTES); 20:30 was mixed. The pool is what it is: the
+exclusions take most world news.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Standards (nothing excluded asked) | 9.6 | four leaks in two editions on the gate day, each a new pattern; fixed, but a day's new headlines may bring new ones |
+| Truth (the words and facts on screen) | 9.8 | the aired words, cuts recognised; "SpaceXSI…" is the source's own headline |
+| Robustness (when it airs, when not) | 9.8 | young archive, thin hours and grave days all refuse correctly |
+| Fairness and variety | 9.7 | every presenter seated; the technology lean |
+
+**Gate not yet passed: 9.6.** The rule for passing: one more day's editions (17 Oct, on a continuous archive) read by
+hand with no leak.

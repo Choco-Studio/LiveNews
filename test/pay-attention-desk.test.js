@@ -43,6 +43,13 @@ describe('what is never asked (§3.1)', () => {
     assert.equal(out('Emergency calls from botched Christa Pike execution released', 'A series of calls, obtained by the Associated Press, reveal emergency services were delayed in reaching Pike.'), 'crime');
     assert.ok(out('Inmate on death row granted a new hearing')); // (grave by text first)
     assert.equal(excludedKind('Inmate granted a new hearing before execution date'), 'crime');
+    // a layoff in any form (the step-1 gate, 16 Oct: "Netflix is laying off around 1,000 employees" as a tie-break)
+    for (const h of ['Netflix is laying off around 1,000 employees', 'Studio lays off half its staff']) assert.equal(excludedKind(h), 'hardship', h);
+    // a programme's episode is no story (the step-1 gate, 16 Oct: a Guardian podcast as PICTURE THIS's answer)
+    for (const h of ['Is your boss watching you? The rise of AI surveillance at work – podcast', 'Podcast: the week in science', 'Volcano erupts again – video']) assert.equal(excludedKind(h), 'promotion', h);
+    for (const h of ['Live music venues close at record rate', 'Video game sales rise again', 'Scientists map ocean floor']) assert.notEqual(excludedKind(h), 'promotion', h);
+    // judged as an archive entry too, where the title is followed by its headline and summary
+    assert.equal(entryOut(entry({ title: 'Is your boss watching you? The rise of AI surveillance at work – podcast', headline: 'Is your boss watching you', text: 'A conversation about workplace monitoring.' })), 'promotion');
     assert.equal(out('India delays digital payments fee rollout', 'India has delayed digital payments fee rollout, TechCrunch reports.'), 'politics');
     assert.equal(entryOut(entry({ title: 'India delays digital payments fee rollout amid retailer pushback', headline: 'India delays digital payments fee rollout', text: 'The NPCI said it was postponing the rollout.' })), 'politics');
     assert.equal(out('France to tax private jet flights'), 'politics');
@@ -152,6 +159,10 @@ describe('the words on screen are the channel’s own (§3.2)', () => {
     // a comma between two adjectives is no clause boundary (TechCrunch, 13 Oct)
     assert.equal(quizWords({ headline: 'Google Play now lets anyone build private', title: 'Google Play now lets anyone build private, vibe-coded apps that run on Android' }), null);
     assert.equal(quizWords({ headline: 'Scientists turn to', title: 'Scientists turn to bees to map pollution in the parks and gardens of every city in the whole of Denmark' }), null);
+    // a cut that also dropped the title's articles is still a cut (the step-1 gate, 16 Oct): the whole title, not the
+    // broken "…helped pave way"
+    assert.equal(quizWords({ headline: 'This tiny jurassic predator helped pave way', title: 'This tiny jurassic predator helped pave the way for the human brain' }), 'This tiny jurassic predator helped pave the way for the human brain');
+    assert.equal(quizWords({ headline: 'Museum finds lost Turner sketch', title: 'Museum finds a lost Turner sketch' }), 'Museum finds lost Turner sketch');
   });
 });
 
@@ -174,6 +185,9 @@ describe('places and figures (§4.1)', () => {
     // where a product is sold is no "where" either
     const google = entry({ title: 'Google makes it easier to launch your vibe-coded apps', text: 'The feature is available in the US from today.', location: { place: 'USA', lat: 39.8, lon: -98.6 } });
     assert.equal(usablePlace(google, google.title), null);
+    // "launches in US" said in the headline itself (the step-1 gate, 16 Oct: a WHERE question on a product's launch)
+    const cart = entry({ title: 'Google’s Universal Cart shopping tool launches in US', text: 'The shopping tool launches in US today.', location: { place: 'USA', lat: 39.8, lon: -98.6 } });
+    assert.equal(usablePlace(cart, cart.title), null);
     // a company's home country is no "where"
     const cmf = entry({ title: 'CMF’s first wireless speakers look like musical milk cartons', text: 'Indian brand CMF has unveiled its first wireless speakers.', location: { place: 'INDIA', lat: 22, lon: 79 } });
     assert.equal(usablePlace(cmf, cmf.title), null);

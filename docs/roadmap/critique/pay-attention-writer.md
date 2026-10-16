@@ -180,3 +180,15 @@ not by the writer:
   least.
 
 Both are read on the three real days due on 16 Oct, with step 1's gate (the check-in is scheduled).
+
+## The gate (16 Oct): read by the reviewer
+
+The two things round 3 owed are now read:
+- **TODAY OR NOT TODAY on real headlines:** in step 7's afternoon edition (14 Oct 15:20, six headlines, and DOUBLE OR
+  NOTHING on it) with the recorded voices, and in 16 Oct's 15:30 plan. The verdicts and the day stamps are the
+  archive's airings.
+- **Max and Ada:** Ada played Lola and UNIT-8 in step 7's recordings; Max is seated twice in eight planned editions on
+  16 Oct's archive (Max v Sam, a 305 s and a 320 s edition).
+
+Step 7's on-air rounds also fixed the writer's faults the recordings found (the table line, contractions, deeper banks,
+afternoon wording, the estimate and its guard). **Round score: 9.75. Passed.**
