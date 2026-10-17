@@ -71,19 +71,21 @@ air.
   
   One airing out puts the whole event out: a launch that later failed, a story that later turned to a death.
 - **Never asked about, never shown as an option**:
-  - deaths, injuries, casualties;
+  - deaths, injuries, casualties, and dangerous work ("they face unsafe working conditions");
   - disasters, accidents and incidents of any kind, with or without victims (a fire, a flood, a storm, a crash, a
-    flight forced to turn back);
+    flight forced to turn back, air traffic cut by a technical "issue", an outage);
   - crime, fraud, scams, tax evasion, courts, police, investigations;
   - war, armed forces, weapons (drones in a war included), terrorism;
   - illness, surgery or the health of a named person, and health tragedies;
   - children in any news role;
-  - private people, their earnings and their homes;
-  - politics in every form: elections, parties, governments, ministers, mayors, policy, trade disputes, tariffs,
+  - private people, their earnings, their spending and their homes;
+  - politics in every form: elections, candidates, parties, governments, ministers and secretaries of state (by name,
+    office or initials), mayors, policy, privatisation, a state's grip on an industry, trade disputes, tariffs,
     sanctions, protests, migration;
-  - people's money: salaries, earnings, fines, damages, compensation;
+  - people's money: salaries, earnings, the prize a person wins, fines, damages, compensation;
   - betting, odds, tips and match predictions;
-  - hardship: closures, job losses, shortages, staff quitting under a firm's cuts, a struggling club or firm;
+  - hardship: closures, job losses, shortages, staff quitting under a firm's cuts, a struggling club or firm, squeezed
+    margins or households, low incomes, bills through the roof, a market's plunge, artisanal mining;
   - a named person's failure or embarrassment: a flop, a bad review, a gaffe, a sending-off (a game never laughs at a
     real person);
   - reviews and first-person pieces ("as awesome as I hoped");
@@ -125,7 +127,10 @@ air.
   on 12 Oct). It is used only when it stops at a clause boundary: the title goes on after a comma, a dash or a colon, or
   with a phrase opener from a checked list ("after", "ahead of", "at", "during", "over", "this week"…). Otherwise the
   quiz uses the source's title when it fits 72 characters, or does not use the story at all. Never "Chinese carmakers
-  increasingly rely" (12 Oct; the title goes on "on overseas markets as September exports surge").
+  increasingly rely" (12 Oct; the title goes on "on overseas markets as September exports surge"). A cut that also
+  dropped a word on the way ("Meta may use sweeping[ new] commercial TOS", 17 Oct) or an article inside a name
+  ("Winnie[ the] Pooh") shows the source's title when it fits; a quoted phrase must be the source's own words
+  ("‘self-driving firm’" for the CEO's "‘self-driving company’", 17 Oct).
 - **HOW MANY? has no options.** It shows the aired sentence with its figure masked; the qualifier stays visible ("UP TO
   ▮▮ MORE"). The players guess aloud and the screen labels each guess **GUESS** beside the player's name. The reveal
   shows the figure exactly as it aired, with its label, its source and when it aired ("AS REPORTED ON MONEY MINUTE,
@@ -198,8 +203,9 @@ The host never calls the game live and never suggests a real contest.
   before, in a different order. **Data comes first**: a type the plan cannot fill is not chosen.
 - **DOUBLE OR NOTHING** plays a type not played tonight. When neither can be filled it falls back to a type already
   played that offers two desks, LETTER BY LETTER or WHERE, and only then to PICTURE THIS (pictures: 30 of 30 usable
-  stories on 12 Oct). A second PICTURE THIS keeps the boards up longest: on air, the fallback edition of 12 Oct ran
-  65–69 % of its air on the boards with it (step 7), against the 65 % bound every edition keeps (§9, step 4).
+  stories on 12 Oct, when the outlets' photos still aired; with cleared pictures only, none on 16–17 Oct). A second
+  PICTURE THIS keeps the boards up longest: on air, the fallback edition of 12 Oct ran 65–69 % of its air on the
+  boards with it (step 7), against the 65 % bound every edition keeps (§9, step 4).
 - **Ties** are broken by a sudden-death LETTER BY LETTER headline, never a coin toss. If neither player names it, the
   game is drawn, and counts half a win to each in the table (1.6 % of simulated editions).
 
@@ -207,7 +213,7 @@ The host never calls the game live and never suggests a real contest.
 
 | Round | How it plays | Options | Scoring | Each question | The plan needs (in the pairing's pool) |
 |---|---|---|---|---|---|
-| **PICTURE THIS** | A story's picture, beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines, at most two from one desk (13 Oct's pool: 20 technology, 13 science, 2 world), none sharing a name with another | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with pictures; 6 more headlines |
+| **PICTURE THIS** | A story's picture (only one with a cleared rights record for that very picture, `server/rights.js`; an outlet's photo only in a private preview, `PICTURE_RIGHTS=preview`), beside the three tiles, sharpens in four steps (8, 16, 32, 64 blocks across, the channel's own pixelation). The host reads the three headlines during the first step; lock-ins open at the second | Three real headlines, at most two from one desk (13 Oct's pool: 20 technology, 13 science, 2 world), none sharing a name with another, none that fits the picture as well (no people under a portrait or an unknown picture, nothing of the picture's kind) | 3 / 2 / 1 points for a lock-in at step 2 / 3 / 4; a wrong lock-in is out for that picture | ~26 s | 3 stories with cleared pictures; 6 more headlines |
 | **LETTER BY LETTER** | A real headline as letter tiles. Every word's first letter, the digits and the punctuation show at once; then a quarter, a half and three quarters of the other letters, on the beat, in a seeded order that never leaves a word unrevealed past the second stage. The first to buzz says the headline | None | 3 / 2 / 1 by stage; a stall locks that player out for the headline | ~20 s | 3 stories |
 | **WHERE IN THE WORLD?** | The headline in its frame, its place masked if it names it; three pins on the world map (`scenes/worldmap.js`); the zoom to the right one | Three countries in three regions (§3.2). An answer is never another question's wrong pin, and no wrong pin shows more than twice in a round | 2 points | ~21 s | 3 stories with a usable place, 6 more places |
 | **TODAY OR NOT TODAY?** | A quickfire of six real headlines (four or five when the edition would run long, §4). The players answer on their lamps, not aloud; the host names a player only when the two differ, and closes with the round's tally | TODAY: first aired since 06:00 London today. EARLIER: last aired two to seven days ago. Never yesterday's stories, which no viewer could place | 1 point each; the reveal stamps the day and programme it aired | ~9 s a headline (on air with the recorded voices: about 16 s) | 3 for TODAY, 3 for EARLIER |

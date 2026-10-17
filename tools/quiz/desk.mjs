@@ -5,11 +5,15 @@
 //
 //   node tools/quiz/desk.mjs --from 2026-10-16 --days 3 [--dir data/archive] [--at 15:30,20:30] [--out data/quiz-run/plans.md]
 //   (--min-days 0 plans on a younger archive than the station would: a dry run, never the gate)
+//   (--pictures preview lets PICTURE THIS use the outlets' own photos, as a private preview would; the default is the
+//   station's own, PICTURE_RIGHTS, else 'cleared': only pictures with a cleared rights record)
 import fs from 'node:fs';
 import path from 'node:path';
 import { Archive } from '../../server/archive.js';
 import { NewsDesk } from '../../server/news.js';
-import { quizEvents, realEntry } from '../../server/quiz/desk.js';
+import { quizEvents, realEntry, pictureCleared, shareName } from '../../server/quiz/desk.js';
+import { pictureMode } from '../../server/rights.js';
+import { fitsTile } from '../../public/js/scenes/quiz-fit.js';
 import { planEdition, contestantsFrom, historyOf } from '../../server/quiz/planner.js';
 import { ROUND_TITLES } from '../../server/quiz/rounds.js';
 
@@ -18,6 +22,7 @@ const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i += 2) if (argv[i]?.startsWith('--')) opts[argv[i].slice(2)] = argv[i + 1];
 const channel = JSON.parse(fs.readFileSync(path.resolve('config/channel.json'), 'utf8'));
 const contestants = contestantsFrom(channel, String(opts.contestants).split(','));
+const pictures = pictureMode(opts.pictures ?? process.env.PICTURE_RIGHTS);
 const desk = new NewsDesk({ log: { info() {}, warn() {}, error() {} } });
 const same = (a, b) => desk.sameStory(a, b);
 
@@ -44,12 +49,14 @@ for (let d = 0; d < Number(opts.days); d++) {
     const archive = new Archive({ dir: path.resolve(opts.dir), days: 14, now: () => now, log: { warn() {} } });
     archive.entries = archive.entries.filter((e) => e.at <= now);
     const entries = archive.entries.filter(realEntry);
-    const { events, out, avoid } = quizEvents(archive, { now, days: 7, same });
-    const plan = planEdition({ events, entries, now, contestants, history, same, avoid, ...(opts['min-days'] !== undefined ? { minArchiveDays: Number(opts['min-days']) } : {}) });
+    const { events, out, avoid } = quizEvents(archive, { now, days: 7, same, pictures });
+    const plan = planEdition({ events, entries, now, contestants, history, same, avoid, pictures, ...(opts['min-days'] !== undefined ? { minArchiveDays: Number(opts['min-days']) } : {}) });
+    // PICTURE THIS's candidates: eligible stories whose picture the channel may show and whose words fit a tile
+    const pictured = events.filter((e) => pictureCleared(e, { pictures }) && fitsTile(e.words));
     tally.editions++;
     say(`## ${day} ${hhmm} London — ${plan.air ? `ON AIR: ${plan.pair.join(' v ')}` : `does not air: ${plan.reason}`}`);
     say();
-    say(`Eligible events in the window: ${events.length} (pictures ${events.filter((e) => e.image).length}, usable places ${events.filter((e) => e.place).length}, usable figures ${events.filter((e) => e.figure).length}). Left out: ${Object.entries(out).map(([k, v]) => `${k} ${v}`).join(', ')}.`);
+    say(`Eligible events in the window: ${events.length} (pictures ${events.filter((e) => e.image).length} ${pictures === 'preview' ? '(a private preview: outlet photos allowed)' : 'cleared'}, PICTURE THIS candidates ${pictured.length}, usable places ${events.filter((e) => e.place).length}, usable figures ${events.filter((e) => e.figure).length}). Left out: ${Object.entries(out).map(([k, v]) => `${k} ${v}`).join(', ')}.`);
     if (plan.grave) say(`Grave-day check: ${plan.grave.airings} airings in six hours, ${plan.grave.share} % read grave, top harmful lead ×${plan.grave.leads}.`);
     if (!plan.air) {
       if (plan.tried) say(`Pairings tried (pool): ${plan.tried.join(', ')}`);
@@ -58,7 +65,12 @@ for (let d = 0; d < Number(opts.days); d++) {
     }
     tally.aired++;
     for (const id of plan.pair) tally.seats[id] = (tally.seats[id] || 0) + 1;
-    say(`Pool ${plan.pool} · ${plan.recent} questions from the last 24 h · rounds: ${plan.types.map((t) => ROUND_TITLES[t]).join(' / ')}${plan.twiceToday ? ' · (a player\'s second seat today)' : ''}`);
+    const own = new Set(plan.pair.flatMap((id) => contestants.find((c) => c.id === id)?.own || []));
+    // (as the planner's pool: not from either player's programme, no story asked this week, by key or by a shared name)
+    const asked = new Set(history.filter((h) => h.at > now - 7 * 86400_000).flatMap((h) => h.asked || []));
+    const askedStories = events.filter((e) => asked.has(e.key));
+    const pairPictured = pictured.filter((e) => !e.programmes.some((p) => own.has(p)) && !asked.has(e.key) && !askedStories.some((a) => shareName(a, e))).length;
+    say(`Pool ${plan.pool} · PICTURE THIS candidates in the pairing's pool ${pairPictured} · ${plan.recent} questions from the last 24 h · rounds: ${plan.types.map((t) => ROUND_TITLES[t]).join(' / ')}${plan.twiceToday ? ' · (a player\'s second seat today)' : ''}`);
     say();
     const aired = (a) => `${a.programme} ${clock(a.at)}${a.source ? `, ${a.source}` : ''}`;
     const show = (q, n) => {

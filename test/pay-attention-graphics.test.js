@@ -170,7 +170,8 @@ describe('PAY ATTENTION graphics', () => {
 
   test('the desk refuses by the boards\' own measure: a headline that would not fit is never asked nor offered', async () => {
     const R = await import('../server/quiz/rounds.js');
-    const ev = (key, words, extra = {}) => ({ key, words, image: 'x.jpg', category: 'tech', programmes: ['tech-bytes'], last: NOW, source: 'Lab', ...extra });
+    // (each picture with a cleared rights record: PICTURE THIS asks no other by default)
+    const ev = (key, words, extra = {}) => ({ key, words, image: 'x.jpg', imageRights: { url: 'x.jpg', cleared: true }, category: 'tech', programmes: ['tech-bytes'], last: NOW, source: 'Lab', ...extra });
     const tooLong = ev('k0', 'International space station crew completes record-breaking spacewalk today');
     const ok = [ev('k1', 'apple refreshes its smart speaker line'), ev('k2', 'robot vacuum learns to climb stairs'), ev('k3', 'tiny satellite maps ocean plastic', { category: 'science' })];
     const asked = R.pickAsked('picture', [tooLong, ...ok], { n: 3 });

@@ -15,6 +15,8 @@ const H = 3600_000;
 const DAY = 24 * H;
 const NOW = Date.parse('2026-10-15T15:00:00Z'); // Thursday 16:00 London
 const silent = { info() {}, warn() {}, error() {} };
+// (every picture with a cleared rights record: by default PICTURE THIS shows no other)
+const CLEARED = { source: 'wikimedia-commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url: 'https://x/y.jpg', credit: 'FILE · JANE DOE · CC BY 4.0 · PIXELATED', label: 'FILE', cleared: true };
 const COUNTRIES = [['France', 46.6, 2.2], ['Japan', 36.2, 138.3], ['Brazil', -10.8, -52.9], ['Kenya', 0.2, 37.9], ['Canada', 56.1, -106.3], ['Australia', -25.3, 133.8], ['Morocco', 31.8, -7.1], ['Peru', -9.2, -75], ['Jordan', 30.6, 36.2]];
 const PROGRAMMES = [['world-now', 'world'], ['tech-bytes', 'tech'], ['cosmos', 'science'], ['money-minute', 'business'], ['news-60', 'world']];
 const NOUNS = ['Telescope', 'Museum', 'Garden', 'Robot', 'Orchestra', 'Library', 'Bridge', 'Satellite', 'Festival', 'Glacier', 'Ferry', 'Observatory'];
@@ -27,7 +29,7 @@ function archive() {
       const title = `${NOUNS[n % NOUNS.length]} opens a quiet new wing number ${n + 1}`;
       const [country, lat, lon] = COUNTRIES[n % COUNTRIES.length];
       const placed = n % 3 === 0;
-      a.keep({ id: `e${n}`, at: NOW - d * DAY - (k + 1) * 50 * 60_000, programId, category, rank: k % 6, title, headline: title, link: 'https://www.bbc.co.uk/x', source: 'BBC News', image: 'https://x/y.jpg', summary: '',
+      a.keep({ id: `e${n}`, at: NOW - d * DAY - (k + 1) * 50 * 60_000, programId, category, rank: k % 6, title, headline: title, link: 'https://www.bbc.co.uk/x', source: 'BBC News', image: 'https://x/y.jpg', imageRights: CLEARED, summary: '',
         text: `${title}${placed ? ` in ${country}` : ''}. The work took months, its makers say.`, ...(placed ? { location: { place: country.toUpperCase(), lat, lon } } : {}) });
       n++;
     }

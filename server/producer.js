@@ -13,6 +13,7 @@ import { rightsGate } from './compliance/credits.js';
 import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
+import { pictureCleared } from './quiz/desk.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
@@ -154,7 +155,7 @@ export class Producer {
     this.quizPictures = new Map();
     // PAY ATTENTION (kind 'quiz'): the quiz desk plans each edition from the archive and keeps its history and weekly
     // table in data/quiz (server/quiz/edition.js)
-    this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log, view: !!config?.quizView }) : null;
+    this.quiz = archive ? new QuizDesk({ archive, same: newsDesk?.sameStory ? (a, b) => newsDesk.sameStory(a, b) : null, dir: config?.dataDir ? path.join(config.dataDir, 'quiz') : null, log, view: !!config?.quizView, pictures: this.pictureMode }) : null;
     // FULL TIME (kind 'sport'): when it last aired, the stories it told then, and its leads lately (a lead that led in
     // the last three hours does not lead again; an edition airs at least 40 % new stories)
     this.lastSportAt = 0;
@@ -459,7 +460,7 @@ export class Producer {
     const missing = await this.quizPicturesMissing(plan0);
     if (missing) {
       this.quiz.drop();
-      this.log.warn?.(`[producer] ${program.title}: a picture could not be fetched (${missing}); no edition this time`);
+      this.log.warn?.(`[producer] ${program.title}: a picture is not cleared or could not be fetched (${missing}); no edition this time`);
       return null;
     }
     const made = this.quiz.make(program, channel, { recentLines: this.recentText(), plan: plan0 });
@@ -485,6 +486,8 @@ export class Producer {
       cast,
       provider: 'quiz',
       pipeline: ctx.pipeline,
+      // a private preview may show an outlet's photo in PICTURE THIS: such an episode says so, and is never published
+      ...(this.pictureMode === 'preview' ? { picturePreview: true } : {}),
     };
     this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - t0) / 1000).toFixed(1)} s: ${plan.pair.join(' v ')}, ${plan.types.join(' / ')}`);
     return episode;
@@ -496,8 +499,11 @@ export class Producer {
    * the first that failed, or null (also without a picture cache: tests).
    */
   async quizPicturesMissing(plan) {
-    if (!this.images || typeof this.images.get !== 'function') return null;
     const questions = [...(plan.rounds || []).flatMap((r) => r.questions || []), ...(plan.don?.offers || []).map((o) => o.question)].filter((q) => q?.type === 'picture');
+    // never a picture the channel may not show (an outlet's photo outside a private preview): the desk plans none, and
+    // an edition that carries one is not made (server/rights.js, PICTURE_RIGHTS)
+    for (const q of questions) if (!pictureCleared(q, { pictures: this.pictureMode })) return q.imageId || q.key || 'picture';
+    if (!this.images || typeof this.images.get !== 'function') return null;
     for (const q of questions) {
       const id = q.imageId || q.key;
       try {

@@ -11,7 +11,7 @@
 //   prepareQuiz(d, episode)   → d.quiz (null for any other programme)
 //   playQuiz(d, episode)      the edition after the open, to its end card
 //   quizMusic(d, seg)         the bed's moment for a quiz segment that starts speaking (director.js musicSegment)
-import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
+import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, quizPictureAirable, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
 
@@ -103,7 +103,8 @@ function loadPictures(d, q) {
   for (const u of q.units) {
     if (u.kind !== 'question' || u.type !== 'picture') continue;
     const question = q.episode.segments[u.from]?.quiz?.question;
-    if (!question) continue;
+    // (only a picture the channel may show: never an outlet's photo outside a private preview)
+    if (!question || !quizPictureAirable(question, q.episode)) continue;
     const id = question.imageId || question.key;
     if (!id || q.pics.has(id)) continue;
     const entry = { img: null, ready: null };

@@ -2,7 +2,7 @@
 // eligible events (server/quiz/desk.js). The asked stories are chosen first; options come after, from the events no
 // question of the edition uses, so no option shows a headline the edition asks about later. Every option is a real
 // headline or a real place from an eligible event; nothing here writes a word.
-import { DAY_WORDS, shareName } from './desk.js';
+import { DAY_WORDS, shareName, pictureCleared, countriesIn } from './desk.js';
 // the boards' own measure (public/js/scenes/quiz-fit.js, pay-attention.md §6): a text that would not fit its box on
 // screen is never asked nor offered, since the boards never cut or shrink a headline
 import { fitsTile, fitsLetters, fitsWhere, fitsSentence, fitsToday } from '../../public/js/scenes/quiz-fit.js';
@@ -94,6 +94,31 @@ export function letterReveal(words, rnd) {
   return { shown, order, stages: [Math.min(Math.ceil(n * 0.25), second), second, Math.max(second, Math.ceil(n * 0.75))] };
 }
 
+// PICTURE THIS's wrong options never fit the picture (the 17 Oct gate: under a portrait of Ramp's chief executive, the
+// answer "Ramp reaches $60B valuation…" beside the wrong option "These execs think voice AI hasn't reached its …
+// moment yet", which fits a portrait of an executive just as well). What a picture shows, as far as the desk knows:
+// the picture desk's subject for a cleared picture ('person' for a portrait, 'place', 'event', 'thing:craft'…), else
+// 'unknown' (an outlet's photo in a private preview could show anyone, so it is treated as a possible portrait).
+export function pictureKind(ev) {
+  return ev?.imageSubject?.kind ? String(ev.imageSubject.kind) : 'unknown';
+}
+// a headline about people: a person's role or a group of people, or a person's full name ("Joni Mitchell", "Isabel
+// Allende"; a two-word proper name that is a product, "Prime Video", is refused with them: fewer options, never a fit)
+const PEOPLE = /\b(?:execs?|executives?|ceos?|cfos?|ctos?|chief executives?|bosses|boss|founders?|co-founders?|co-creators?|creators?|chair(?:man|men|woman|women|person|people)?|investors?|insiders?|vcs?|entrepreneurs?|billionaires?|tycoons?|scientists?|researchers?|astronomers?|astronauts?|physicists?|engineers?|doctors?|experts?|economists?|historians?|authors?|writers?|novelists?|poets?|singers?|songwriters?|musicians?|rappers?|actors?|actress(?:es)?|celebrit(?:y|ies)|artists?|designers?|chefs?|players?|athletes?|footballers?|coach(?:es)?|presenters?|hosts?|people|man|men|woman|women|couples?|famil(?:y|ies)|parents?|mother|father|wife|husband|workers?|employees?|staff|volunteers?|residents?|locals|farmers?|miners?|students?|gardeners?|fans|crowds?|leaders?|officials?|masters?|americans|britons|new yorkers)\b/i;
+const FULL_NAME = /(?:^|[\s‘'"“(])\p{Lu}\p{Ll}+(?:[-’']\p{Lu}?\p{Ll}+)?\s+\p{Lu}\p{Ll}+/u;
+const SPACE_KINDS = new Set(['thing:sky', 'thing:craft', 'thing:mission', 'nasa']);
+const SPACE = /\b(?:space|nasa|esa|rockets?|spacecraft|probes?|landers?|rovers?|satellites?|telescopes?|astronauts?|moons?|lunar|mars|martian|asteroids?|comets?|galax\w*|stars?|planets?|orbit\w*|launch\w*)\b/i;
+export const peopleShaped = (o) => pictureKind(o) === 'person' || PEOPLE.test(o.words) || FULL_NAME.test(o.words);
+/** Would a wrong option `o` fit a picture of this kind (pictureKind) as well as the answer does? */
+export function fitsPicture(o, kind) {
+  if (kind === 'person' || kind === 'unknown') return peopleShaped(o);
+  const own = pictureKind(o);
+  if (own !== 'unknown' && own === kind) return true;
+  if (kind === 'place') return countriesIn(o.words).size > 0;
+  if (SPACE_KINDS.has(kind)) return SPACE.test(o.words);
+  return false;
+}
+
 const lettersOk = (ev) => ev.words.length <= LETTERS_MAX && ev.words.split(/\s+/).length >= 3 && ev.words.split(/\s+/).length <= 10 && (ev.words.match(/\p{L}/gu) || []).length >= 12 && fitsLetters(ev.words);
 const todayOk = (ev) => !DAY_WORDS.test(ev.words) && fitsToday(ev.words);
 
@@ -101,8 +126,9 @@ const todayOk = (ev) => !DAY_WORDS.test(ev.words) && fitsToday(ev.words);
  * The stories a round asks about (not yet its options): `pool` is the pairing's eligible events not yet asked, in
  * preference order. Returns the chosen events or null when the round cannot be filled. TODAY OR NOT TODAY takes
  * `half` TODAY and `half` EARLIER headlines (`todayStart`: 06:00 London today; `earlierBefore`: the start of yesterday).
+ * PICTURE THIS asks only a story whose picture the channel may show (`pictures`: 'cleared', the default, or 'preview').
  */
-export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore, now, desk = null } = {}) {
+export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore, now, desk = null, pictures = 'cleared' } = {}) {
   const fit = pool.filter((ev) => !desk || ev.category === desk);
   const take = (list, k) => {
     const out = [];
@@ -115,7 +141,7 @@ export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore
   };
   switch (type) {
     case 'picture':
-      return take(fit.filter((ev) => ev.image && fitsTile(ev.words)), n);
+      return take(fit.filter((ev) => pictureCleared(ev, { pictures }) && fitsTile(ev.words)), n);
     case 'letters':
       return take(fit.filter(lettersOk), n);
     case 'where': {
@@ -144,10 +170,13 @@ export function pickAsked(type, pool, { n = QUESTIONS, todayStart, earlierBefore
  * Turn a round's asked events into its questions, with options drawn from `options` (events no question of the edition
  * uses). Returns the questions or null when the options cannot be found. `taken` collects the option events used.
  */
-export function buildQuestions(type, asked, options, rnd, { todayStart, taken = new Set(), extraPlaces = [] } = {}) {
+export function buildQuestions(type, asked, options, rnd, { todayStart, taken = new Set(), extraPlaces = [], pictures = 'cleared' } = {}) {
   switch (type) {
     case 'picture':
       return mapAll(asked, (ev) => {
+        // (never a picture the channel may not show, whoever chose the story)
+        if (!pictureCleared(ev, { pictures })) return null;
+        const kind = pictureKind(ev);
         // three real headlines, at most two from one desk (13 Oct's pool was 20 tech, 13 science and 2 world stories: three
         // desks a question could not be found), none telling the same story as the answer or each other
         // (nor one telling a story another question already showed as an option: on air, 14 Oct, round 15's reading,
@@ -157,7 +186,7 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
         const picks = [];
         for (const o of shuffle(options.filter((x) => !taken.has(x.key)), rnd)) {
           if (picks.length >= 2) break;
-          if (shareName(o, ev) || picks.some((p) => shareName(p, o)) || shown.some((x) => shareName(x, o)) || !fitsTile(o.words)) continue;
+          if (shareName(o, ev) || picks.some((p) => shareName(p, o)) || shown.some((x) => shareName(x, o)) || !fitsTile(o.words) || fitsPicture(o, kind)) continue;
           if ([ev, ...picks, o].filter((x) => x.category === o.category).length > 2) continue;
           picks.push(o);
         }

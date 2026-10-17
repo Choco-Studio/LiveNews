@@ -15,6 +15,12 @@ import { compactRights, currentRights } from './rights.js';
 
 const DAY = 86400_000;
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+// the subject of a story's cleared picture (server/picturedesk.js: its rights record's subject, or a person's portrait)
+function pictureSubject(s) {
+  const sub = currentRights(s)?.subject;
+  if (sub?.kind) return { kind: String(sub.kind), label: sub.label ? clip(sub.label, 80) : null };
+  return s.imageFit === 'portrait' ? { kind: 'person', label: s.imageSubject ? clip(s.imageSubject, 80) : null } : null;
+}
 
 export class Archive {
   constructor({ dir = null, days = 14, now = () => Date.now(), log = console, pictures = null, articles = null } = {}) {
@@ -100,6 +106,9 @@ export class Archive {
         ...(Array.isArray(s.images) && s.images.length ? { images: s.images.slice(0, 3) } : {}),
         // the picture's rights record as it aired (its credit, licence, author, page): shown again only if cleared
         ...(s.image && currentRights(s) ? { imageRights: compactRights(currentRights(s)) } : {}),
+        // and what it shows, as the picture desk chose it (a person, a place, an event…): PAY ATTENTION's PICTURE THIS
+        // never offers a wrong headline that fits the same picture (server/quiz/rounds.js)
+        ...(s.image && currentRights(s) && pictureSubject(s) ? { imageSubject: pictureSubject(s) } : {}),
         link: s.link || null,
         ...(Array.isArray(s.kw) ? { kw: s.kw.slice(0, 24) } : {}),
         text: clip(seg.text, 700),

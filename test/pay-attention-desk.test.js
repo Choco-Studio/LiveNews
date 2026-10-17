@@ -1,11 +1,17 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Archive } from '../server/archive.js';
-import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK, shareName, quizRefuses } from '../server/quiz/desk.js';
+import { excludedKind, entryOut, labelLike, quizWords, usablePlace, usableFigure, quizEvents, realEntry, maskPlace, countryOf, regionOf, MASK, shareName, quizRefuses, pictureCleared } from '../server/quiz/desk.js';
 import { graveDay } from '../server/quiz/grave.js';
-import { letterReveal, seeded, londonDayStart, ROUND_TYPES, buildQuestions } from '../server/quiz/rounds.js';
+import { letterReveal, seeded, londonDayStart, ROUND_TYPES, buildQuestions, pickAsked, pictureKind, fitsPicture } from '../server/quiz/rounds.js';
 import { planEdition, contestantsFrom, historyOf, pairings } from '../server/quiz/planner.js';
+import { QuizDesk } from '../server/quiz/edition.js';
+import { Producer } from '../server/producer.js';
+import { outletRecord } from '../server/rights.js';
 import { loadChannel } from '../server/channel.js';
+import { quizPictureAirable } from '../public/js/quizplay.js';
+import { prepareQuiz } from '../public/js/quizdirector.js';
+import { quizEdition } from './fixtures/quiz-week.js';
 
 // PAY ATTENTION's question desk (docs/programmes/pay-attention.md §3, §4, §7; build step 1): what the quiz may use,
 // the grave-day rule, the rounds and the edition planner.
@@ -273,6 +279,9 @@ const SUBJECTS = ['telescope', 'museum', 'garden', 'robot', 'orchestra', 'librar
 const VERBS = ['unveils', 'opens', 'launches', 'celebrates', 'tests', 'restores', 'maps', 'finds', 'builds', 'records'];
 const OBJECTS = ['a new wing', 'its largest dish', 'a rare orchid', 'a quiet engine', 'a floating stage', 'an old map', 'a glass walkway', 'a weather sensor', 'a lantern parade', 'a hidden cave'];
 const PROGRAMMES = [['world-now', 'world'], ['tech-bytes', 'tech'], ['cosmos', 'science'], ['money-minute', 'business'], ['news-60', 'world']];
+// (every picture a cleared Commons file: by default PICTURE THIS shows no other)
+const COMMONS = 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Wing.jpg';
+const CLEARED = { source: 'wikimedia-commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url: COMMONS, credit: 'FILE · JANE DOE · CC BY 4.0 · PIXELATED', label: 'FILE', cleared: true };
 function richWeek() {
   const a = new Archive({ dir: null, days: 14, now: () => NOW });
   let n = 0;
@@ -286,7 +295,7 @@ function richWeek() {
       const [place, lat, lon] = PLACES[n % PLACES.length];
       const fig = n % 4 === 1;
       a.keep(entry({
-        id: `e${n}`, at, programId, category, rank: k % 6, title,
+        id: `e${n}`, at, programId, category, rank: k % 6, title, image: COMMONS, imageRights: CLEARED,
         text: `${title}${placed ? ` in ${COUNTRY_NAMES[place]}` : ''}. The project took ${fig ? `${120 + n} days` : 'many months'} to finish, its makers say.`,
         ...(placed ? { location: { place, lat, lon } } : {}),
         ...(fig ? { numbers: [{ value: String(120 + n), label: 'DAYS' }] } : {}),
@@ -413,5 +422,238 @@ describe('the edition planner (§2, §4, §7)', () => {
   test('a thin week does not air rather than air a poor edition', () => {
     const thin = events.slice(0, 8);
     assert.equal(planEdition({ events: thin, entries, now: NOW, contestants: CONTESTANTS }).air, false);
+  });
+});
+
+// The step-1 gate's second day (17 Oct, read by hand; then 16–17 Oct re-planned and read again): every leak and fault
+// found, each as it aired. The words are the archive's own.
+describe('the 17 Oct gate: what the lists missed, as it aired', () => {
+  const out = (o) => entryOut(entry(o));
+
+  test('politics by office, initials or a race: a culture secretary, AOC and her candidate', () => {
+    assert.equal(out({ title: 'Lisa Nandy ‘minded to intervene’ in Sky’s £1.6bn purchase of ITV', headline: 'Lisa Nandy ‘minded to intervene’', summary: 'The culture secretary, Lisa Nandy, has said she is “minded to intervene” in Sky’s £1.6bn purchase of ITV, in a move that paves the way for deeper scrutiny of a deal.', text: 'In the United Kingdom, the culture secretary, Lisa Nandy, has said she is “minded to intervene” in Sky’s £1.6bn purchase of ITV.' }), 'politics');
+    assert.equal(out({ title: "Nandy 'minded to intervene' in Sky-ITV deal", summary: 'The culture secretary has warned she is "minded" to intervene in Sky\'s £1.6bn deal to buy ITV\'s broadcast and streaming operations.' }), 'politics');
+    assert.equal(out({ title: 'AOC transfers $1m to Michigan candidate El-Sayed in progressive push', headline: 'AOC transfers $1m to Michigan candidate El-Sayed', summary: "Progressive stalwart, who is seen as potential 2028 candidate, says she wants to combat 'smears' against El-Sayed.", text: 'AOC transfers $1m to Michigan candidate El-Sayed in progressive push, Al Jazeera reports. Ocasio-Cortez confirmed the donation in a statement on Friday.' }), 'politics');
+    for (const t of ['Home secretary unveils new border plan', 'Secretary of State visits the region', 'Shadow chancellor sets out tax plans', 'Senate candidate leads in new poll']) assert.equal(excludedKind(t), 'politics', t);
+    // a state's act told as done (16 Oct): a proposal, a privatisation; and a state's grip on an industry
+    assert.equal(out({ title: "Toxic algorithms wouldn't let them go - now Australia wants an off switch", headline: "Toxic algorithms wouldn't let them go - now Australia wants off switch", summary: 'Australia has proposed a switch to force social media platforms to let users turn off recommended content.' }), 'politics');
+    assert.equal(out({ title: 'Lufthansa beats Air France-KLM to €1.2bn stake in TAP Air Portugal', summary: 'Portugal has chosen Lufthansa to buy a 44.9% stake in TAP, completing the first phase of the airline’s privatisation.' }), 'politics');
+    assert.equal(out({ title: "China's influence in the gaming industry is growing", headline: "China's influence in gaming industry is growing", summary: "Home to more than 700 million gamers, China is the world's largest gaming market — but it's also one of the most tightly regulated." }), 'politics');
+    // senses that only look like a race or a politician
+    for (const t of ['Uganda trials a new vaccine candidate', 'Astronomers confirm a candidate planet around a nearby star', 'Recruiters say candidates for the role want remote work', "AOC's new gaming monitor runs at 500Hz", 'Progressive web apps come to the desktop']) assert.notEqual(excludedKind(t), 'politics', t);
+  });
+
+  test('an incident worded mildly: an air traffic "issue", "network problems", "delays and cancellations"', () => {
+    const italy = entry({ title: 'Italy cuts air traffic in half amid data transmission issue', headline: 'Italy cuts air traffic in half', summary: 'Citing problems with the data transmission network, Italian authorities have drastically reduced the volume of flights in their airspace. The ENAV authority ruled out malicious activity and said flights remained safe.', text: 'Air travelers across Italy faced delays and cancellations on Friday, according to DW. The ENAV authority ruled out malicious activity and said flights remained safe.' });
+    assert.equal(entryOut(italy), 'disaster');
+    assert.equal(quizRefuses({ title: 'Italy cuts air traffic in half amid data transmission issue', summary: '' }), 'disaster');
+    assert.equal(excludedKind('Italy cuts air traffic in half'), 'disaster'); // the aired cut alone
+    assert.equal(quizRefuses({ title: "Italy's air traffic cut 50% after network problems as delays spread nationwide", summary: 'Italy has halved the number of aircraft in its airspace after overnight issues hit the data transmission network for air traffic control' }), 'disaster');
+    for (const t of ['Bank suffers IT outage', 'A software glitch grounds the fleet', 'Rail disruption across the north', 'Flights cancelled at the airport']) assert.equal(excludedKind(t), 'disaster', t);
+    // the business sense of disruption, and an issue that is a verb or a subject
+    for (const t of ['Startup wants to disrupt the travel booking market', 'Museum issues a call for old photographs', 'Netflix tackles the issue of password sharing with a new plan', 'AI disruption reshapes the newsroom']) assert.equal(excludedKind(t), null, t);
+  });
+
+  test('people\'s money: a prize a person wins, private spending, low incomes', () => {
+    const allende = entry({ title: 'Isabel Allende wins €1m Spanish literary prize under pseudonym', headline: 'Isabel Allende wins €1m Spanish literary prize', summary: 'The Chilean-American author Isabel Allende has won Spain’s €1m (£843,000) Premio Planeta, one of the world’s most lucrative literary prizes, under a pseudonym.', text: 'Thanks, Lola. Our number of the day: €1m. The Chilean-American author Isabel Allende has won Spain’s €1m Premio Planeta, according to The Guardian.', numbers: [{ value: '€1M', label: 'PREMIO' }] });
+    assert.equal(entryOut(allende), 'money of people'); // (never HOW MANY?'s figure: the story is out whole)
+    assert.ok(out({ title: "'I'd spend $1,000 on a wedding present'", summary: 'New Yorkers share how much they spend on a wedding gift - and how they decide.' }));
+    assert.ok(out({ title: 'Low-cost clinic helps pet owners with vet bills', headline: 'Low-cost clinic helps pet owners', summary: 'RSPCA Medway West launches its clinic for the pets of people with low incomes.', text: 'RSPCA Medway West launches its clinic for the pets of people with low incomes, according to BBC Business.' }));
+    // a grant is no one's earnings, a Nobel without a sum no money
+    assert.equal(excludedKind('Red squirrel project opens £250k community grant'), null);
+    assert.equal(excludedKind('Chemists share the Nobel Prize for faster batteries'), null);
+  });
+
+  test('hardship: squeezed firms, bills through the roof, a market\'s plunge; a squeezy toy is no squeeze', () => {
+    assert.equal(out({ title: 'Fuel costs squeezing margins for some businesses', headline: 'Fuel costs squeezing margins', summary: 'Diesel recently topped £2 per litre and there is concern that a duty freeze will not go far enough.', text: 'Our number of the day: £2. Diesel recently topped £2 per litre and there is concern that a duty freeze will not go far enough.', numbers: [{ value: '£2', label: 'PER LITRE' }] }), 'hardship');
+    assert.equal(excludedKind('Energy bills through the roof? Five signs your house is leaking heat'), 'hardship');
+    assert.equal(excludedKind('Indonesian stocks plunge 11% as MSCI proposes emerging market downgrade'), 'hardship');
+    assert.equal(excludedKind('Households feel the squeeze as rents climb'), 'hardship');
+    assert.equal(excludedKind('Merry squishmas: £10 squeezy banana on list of top festive season toys'), null);
+    assert.equal(excludedKind('Stocks hit a record high as chip demand surges'), null);
+  });
+
+  test('"Artisanal miners behind Nigeria\'s lithium boom": out, by its third airing\'s words and by its subject', () => {
+    const base = { id: 's44aedcf4da', title: 'The artisanal miners behind Nigeria’s lithium boom', headline: 'Artisanal miners behind Nigeria’s lithium boom', summary: 'Nasarawa is at the heart of Nigeria’s lithium boom, where artisanal miners hope to benefit from the clean energy race.', source: 'Al Jazeera', link: 'https://www.aljazeera.com/video/newsfeed/2026/10/16/the-artisanal-miners-behind-nigerias-lithium-boom' };
+    const third = entry({ ...base, at: NOW - H, text: 'Nasarawa is at the heart of Nigeria’s lithium boom, where artisanal miners hope to benefit from the clean energy race. But as investment grows, they say they face unsafe working conditions.' });
+    assert.equal(excludedKind('But as investment grows, they say they face unsafe working conditions.'), 'harm'); // dangerous work counts anywhere
+    // the first two airings said only that the miners "hope to benefit": artisanal mining is the subject's hardship
+    const first = entry({ ...base, at: NOW - 5 * H, text: 'Now to Nigeria. Nasarawa is at the heart of Nigeria’s lithium boom, where artisanal miners hope to benefit from the clean energy race.' });
+    assert.equal(entryOut(first), 'hardship');
+    assert.ok(entryOut(third));
+    const a = new Archive({ dir: null, days: 14, now: () => NOW });
+    a.keep(first);
+    a.keep(third);
+    assert.equal(quizEvents(a, { now: NOW }).events.length, 0);
+    assert.equal(excludedKind('Children work in artisanal cobalt pits'), 'children');
+  });
+
+  test('the rest of the class on 16–17 Oct: a lawsuit in passing, a breach, a weapon, a review, notices', () => {
+    assert.equal(out({ title: 'Websites are closing their doors to AI agents', summary: 'Autonomous agents are the hottest thing in AI.', text: 'And finally: autonomous agents are the hottest thing in AI. Amazon was already fighting off AI agents last year. Amazon has since filed an amended complaint, The Verge reports.' }), 'crime');
+    assert.equal(out({ title: 'India becomes the latest country to report rogue AI agent activity', summary: 'The agents got in through credentials and connection settings left exposed in app configurations.' }), 'crime');
+    assert.equal(out({ title: 'Jad Abumrad loves a butterfly knife and a good springy pillow', summary: "It's hard to overstate Jad Abumrad's impact on the podcasting world." }), 'conflict');
+    assert.equal(out({ title: 'Bose’s new wired earbuds are simple in the best way', headline: 'Bose’s new wired earbuds are simple' }), 'opinion');
+    assert.equal(out({ title: 'NASA to Discuss Artemis Acceleration, Status of Upcoming Moon Missions', summary: 'NASA will provide an update on its plans to return American astronauts to the surface of the Moon by 2028 at 2 p.m. EDT, Friday, Oct. 23, at the agency’s Kennedy Space Center in Florida.' }), 'promotion');
+    assert.equal(out({ title: 'NASA Welcomes All Ages, Experience Levels for Space Apps Challenge', summary: 'Registration is open for the 2026 NASA Space Apps Challenge, a two-day global event.' }), 'promotion');
+    // what stays: a launch, a delivery, a meeting
+    for (const t of ['NASA launches a probe to the outer planets', 'SpaceX just delivered some very strange cargo to the International Space Station', 'Leaders met to agree a new climate fund']) assert.notEqual(excludedKind(t), 'promotion', t);
+  });
+
+  test('the words: a cut that dropped a word is still a cut; a name or a quote the cut changed takes the title', () => {
+    // "Meta may use sweeping commercial TOS": "new" dropped and the title's "to avoid millions…" cut off; the title is too
+    // long, so the story is not used
+    assert.equal(quizWords({ headline: 'Meta may use sweeping commercial TOS', title: 'Meta may use sweeping new commercial TOS to avoid millions in AI licensing fees' }), null);
+    assert.equal(quizWords({ headline: 'Meta may use sweeping new commercial TOS', title: 'Meta may use sweeping new commercial TOS to avoid millions in AI licensing fees' }), null);
+    assert.equal(quizWords({ headline: 'Apple’s HomeView is just threat to online recipe writers', title: 'Apple’s HomeView is just the latest threat to online recipe writers' }), 'Apple’s HomeView is just the latest threat to online recipe writers');
+    assert.equal(quizWords({ headline: 'India becomes country to report rogue AI agent activity', title: 'India becomes the latest country to report rogue AI agent activity' }), 'India becomes the latest country to report rogue AI agent activity');
+    assert.equal(quizWords({ headline: 'Bear with taste for honey: Winnie Pooh turns 100', title: 'A bear with a taste for honey: Winnie the Pooh turns 100' }), 'A bear with a taste for honey: Winnie the Pooh turns 100');
+    assert.equal(quizWords({ headline: 'Replit’s CEO says future of work is ‘self-driving firm’', title: 'Replit’s CEO says the future of work is the ‘self-driving company’', summary: 'Replit CEO Amjad Masad envisions a future of “self-driving companies.”' }), 'Replit’s CEO says the future of work is the ‘self-driving company’');
+    // a quote the source holds stays; articles alone dropped stay; a kicker cut off the front stays
+    assert.equal(quizWords({ headline: "Nandy 'minded to intervene' in Sky-ITV deal", title: "Nandy 'minded to intervene' in Sky-ITV deal", summary: 'She is "minded" to intervene.' }), "Nandy 'minded to intervene' in Sky-ITV deal");
+    assert.equal(quizWords({ headline: 'Elon Musk reveals ‘world’s first flying car’', title: 'Elon Musk reveals ‘world’s first flying car’ at Tesla event' }), 'Elon Musk reveals ‘world’s first flying car’');
+    assert.equal(quizWords({ headline: 'Museum finds lost Turner sketch', title: 'Museum finds a lost Turner sketch' }), 'Museum finds lost Turner sketch');
+    assert.equal(quizWords({ headline: 'Clifton Suspension Bridge master hails £7.6m renovation', title: '‘A big responsibility’: Clifton Suspension Bridge master hails £7.6m renovation' }), 'Clifton Suspension Bridge master hails £7.6m renovation');
+    // a Title Case picture caption is no headline; a Title Case headline is
+    assert.equal(labelLike('NASA’s Space X CRS-35 Launch Jellyfish'), true);
+    for (const h of ['NASA to Help Unlock Mysteries of Mars’ Moons in Upcoming Mission', 'Scientists Find New Species in Deep Sea', 'NASA Names Astronaut Christina Koch Acting Deputy Chief Engineer']) assert.equal(labelLike(h), false, h);
+  });
+
+  test('WHERE gives nothing away: "US citizen", "Great Britain", and a roll-out is no place', () => {
+    const joni = entry({ title: 'Joni Mitchell becomes US citizen: ‘A journey that began 62 years ago’', summary: 'Joni Mitchell has become a US citizen, after first moving to the country in the mid-1960s.', text: 'In the United States, the Canada-born singer-songwriter, 82, posted footage of her citizenship ceremony on her Instagram account.', location: { place: 'USA', lat: 39.8, lon: -98.6 } });
+    assert.equal(usablePlace(joni, joni.title).masked, `Joni Mitchell becomes ${MASK} citizen: ‘A journey that began 62 years ago’`);
+    const grid = entry({ title: 'Cost of balancing Great Britain’s power grid reaches nearly £50m a day', text: 'The cost of balancing the grid in Britain has soared.', location: { place: 'UK', lat: 54, lon: -2 } });
+    assert.equal(usablePlace(grid, grid.title).masked, `Cost of balancing ${MASK}’s power grid reaches nearly £50m a day`);
+    const ring = entry({ title: 'Smart ring maker Ultrahuman to roll out biological-age model across UAE', text: 'Ultrahuman and Abu Dhabi will spend the next two years working on research.', location: { place: 'UAE', lat: 24, lon: 54 } });
+    assert.equal(usablePlace(ring, ring.title), null);
+    const factory = entry({ title: 'Carmaker opens a battery factory in Spain', text: 'The plant opened in Spain on Monday.', location: { place: 'SPAIN', lat: 40.4, lon: -3.7 } });
+    assert.ok(usablePlace(factory, factory.title), 'a factory that opens is where it happens');
+  });
+
+  test('a headline never sits over another story\'s picture: the words, picture and figure are the latest airing\'s own story', () => {
+    // (12 Oct's "These execs think voice AI…" joined on the 16th with "A Nvidia insider-turned-VC on why robotics…",
+    // whose own headline was too long: the event once showed the first story's words over the second's picture)
+    const a = new Archive({ dir: null, days: 14, now: () => NOW });
+    a.keep(entry({ id: 'voice', at: NOW - 4 * DAY, category: 'tech', title: 'These execs think voice AI hasn’t reached its breakout moment yet', image: null }));
+    a.keep(entry({ id: 'robots', at: NOW - H, category: 'tech', title: 'A Nvidia insider-turned-VC on why robotics hasn’t hit its breakout moment, yet', headline: 'Nvidia insider-turned-VC on why robotics hasn’t hit its breakout moment, yet', image: 'https://techcrunch.com/robots.jpg', imageRights: { url: 'https://techcrunch.com/robots.jpg', cleared: true } }));
+    const joined = quizEvents(a, { now: NOW, same: () => true });
+    assert.equal(joined.events.length, 0, 'the latest story has no whole headline: the event is not used');
+    assert.equal(joined.out['broken headline'], 1);
+    // the same story retold keeps its picture from an earlier airing
+    const b = new Archive({ dir: null, days: 14, now: () => NOW });
+    b.keep(entry({ id: 'cart', at: NOW - 5 * H, category: 'tech', title: 'Google’s Universal Cart shopping tool launches in the US', image: 'https://upload.wikimedia.org/c.jpg', imageRights: { url: 'https://upload.wikimedia.org/c.jpg', cleared: true } }));
+    b.keep(entry({ id: 'cart', at: NOW - H, category: 'tech', title: 'Google’s Universal Cart shopping tool launches in the US', image: null }));
+    assert.equal(quizEvents(b, { now: NOW }).events[0].image, 'https://upload.wikimedia.org/c.jpg');
+  });
+});
+
+describe('PICTURE THIS shows only cleared pictures, and no wrong option fits the picture', () => {
+  const cleared = (url) => ({ source: 'wikimedia-commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url, credit: 'FILE · JANE DOE · CC BY 4.0 · PIXELATED', label: 'FILE', cleared: true });
+  const GETTY = 'https://cdn.arstechnica.net/wp-content/uploads/2026/10/GettyImages-2296621320.jpg';
+  const silent = { info() {}, warn() {}, error() {} };
+
+  test('the desk keeps an outlet\'s photo out by default and lets it through only in a private preview', () => {
+    const a = new Archive({ dir: null, days: 14, now: () => NOW });
+    a.keep(entry({ id: 'tos', title: 'Meta may use sweeping new commercial TOS', image: GETTY, source: 'Ars Technica' }));
+    a.keep(entry({ id: 'own', title: 'Startup ships a quiet robot vacuum', image: 'https://techcrunch.com/x.jpg', imageRights: outletRecord({ image: 'https://techcrunch.com/x.jpg', source: 'TechCrunch' }) }));
+    a.keep(entry({ id: 'file', title: 'Lisbon opens a riverside tram line', image: 'https://upload.wikimedia.org/t.jpg', imageRights: cleared('https://upload.wikimedia.org/t.jpg') }));
+    a.keep(entry({ id: 'other', title: 'Museum opens a glass hall', image: 'https://i.guim.co.uk/m.jpg', imageRights: cleared('https://upload.wikimedia.org/another.jpg') })); // a record for another picture
+    const byId = (evs) => Object.fromEntries(evs.map((e) => [e.key, e.image]));
+    assert.deepEqual(byId(quizEvents(a, { now: NOW }).events), { tos: null, own: null, file: 'https://upload.wikimedia.org/t.jpg', other: null });
+    assert.deepEqual(byId(quizEvents(a, { now: NOW, pictures: 'preview' }).events), { tos: GETTY, own: 'https://techcrunch.com/x.jpg', file: 'https://upload.wikimedia.org/t.jpg', other: 'https://i.guim.co.uk/m.jpg' });
+    assert.equal(pictureCleared({ image: 'file:///srv/feeds/img/canal.png' }), true, 'the operator\'s own local file');
+  });
+
+  test('rounds: an outlet\'s photo is never asked nor built into a question outside a preview', () => {
+    const ev = (key, words, image, extra = {}) => ({ key, words, image, imageId: key, category: 'tech', programmes: ['tech-bytes'], first: NOW - H, last: NOW - H, source: 'Lab', latest: { title: words, summary: '' }, ...extra });
+    const pool = [ev('k1', 'Volvo makes a bigger bet on Nvidia for automated driving', 'https://techcrunch.com/volvo.jpg'), ev('k2', 'Square’s kiosk lets you talk to AI', 'https://techcrunch.com/sq.jpg'), ev('k3', 'Deezer will let you filter out AI music', 'https://techcrunch.com/dz.jpg', { category: 'science' })];
+    assert.equal(pickAsked('picture', pool, { n: 3 }), null);
+    assert.equal(pickAsked('picture', pool, { n: 3, pictures: 'preview' }).length, 3);
+    const options = [ev('o1', 'Owls ringed to measure benefits of wildlife farming', null, { category: 'science' }), ev('o2', 'Lisbon opens a riverside tram line', null, { category: 'world' }), ev('o3', 'Museum opens a glass hall', null, { category: 'world' })];
+    assert.equal(buildQuestions('picture', [pool[0]], options, seeded('x'), {}), null);
+    const q = buildQuestions('picture', [pool[0]], options, seeded('x'), { pictures: 'preview' });
+    assert.ok(q && q[0].image === 'https://techcrunch.com/volvo.jpg');
+  });
+
+  test('the planner and the station: by default no PICTURE THIS from outlet photos; the producer refuses an edition carrying one', async () => {
+    const week = richWeek();
+    for (const e of week.entries) {
+      e.image = 'https://ichef.bbci.co.uk/x.jpg';
+      delete e.imageRights;
+    }
+    const ch = structuredClone(loadChannel());
+    const program = { ...(ch.drafts?.['pay-attention'] || ch.programs['pay-attention']), id: 'pay-attention', minGapHours: 0 };
+    const quiz = new QuizDesk({ archive: week, now: () => NOW, log: silent });
+    const plan = quiz.plan(program, ch, NOW);
+    assert.equal(plan.air, true, plan.reason);
+    const asked = (p) => [...p.rounds.flatMap((r) => r.questions), ...p.don.offers.map((o) => o.question)];
+    assert.ok(!asked(plan).some((q) => q.type === 'picture'), 'no PICTURE THIS from outlet photos');
+    const preview = new QuizDesk({ archive: week, now: () => NOW, log: silent, pictures: 'preview' }).plan(program, ch, NOW);
+    assert.equal(preview.air, true, 'a private preview plans too');
+    // the producer: an edition whose picture is not cleared is not made, whoever planned it
+    const outletQ = { type: 'picture', key: 'k', imageId: 'k', image: GETTY, imageRights: null };
+    const fake = { rounds: [{ type: 'picture', questions: [outletQ] }], don: { offers: [] } };
+    const producer = (config) => new Producer({ config, newsDesk: null, chain: null, archive: null, log: silent });
+    assert.equal(await producer({}).quizPicturesMissing(fake), 'k');
+    assert.equal(await producer({ pictures: { rights: 'preview' } }).quizPicturesMissing(fake), null);
+    const clearQ = { ...outletQ, image: 'https://upload.wikimedia.org/t.jpg', imageRights: cleared('https://upload.wikimedia.org/t.jpg') };
+    assert.equal(await producer({}).quizPicturesMissing({ rounds: [{ type: 'picture', questions: [clearQ] }], don: { offers: [] } }), null);
+  });
+
+  test('on air: the director never loads an outlet\'s photo outside a preview (quizplay quizPictureAirable)', () => {
+    const q = { type: 'picture', image: 'https://upload.wikimedia.org/t.jpg', imageRights: cleared('https://upload.wikimedia.org/t.jpg') };
+    assert.equal(quizPictureAirable(q), true);
+    assert.equal(quizPictureAirable({ ...q, image: GETTY, imageRights: null }), false);
+    assert.equal(quizPictureAirable({ ...q, imageRights: { ...q.imageRights, cleared: false } }), false);
+    assert.equal(quizPictureAirable({ ...q, image: GETTY }), false, 'a record for another picture');
+    assert.equal(quizPictureAirable({ ...q, image: GETTY, imageRights: null }, { picturePreview: true }), true);
+    // the director's own preload, on an edition with PICTURE THIS
+    const ch = loadChannel();
+    const { episode } = quizEdition(ch, 's1');
+    assert.ok(episode.segments.some((s) => s.part === 'frame' && s.quiz?.question?.type === 'picture'), 'the edition asks PICTURE THIS');
+    const load = (ep) => {
+      const loads = [];
+      prepareQuiz({ channel: ch, scene: null, loadQuizPicture: (qq) => (loads.push(qq.imageId), null) }, ep);
+      return loads;
+    };
+    assert.ok(load(structuredClone(episode)).length >= 1, 'cleared pictures are loaded');
+    const outletEp = structuredClone(episode);
+    for (const s of outletEp.segments) if (s.quiz?.question?.type === 'picture') delete s.quiz.question.imageRights;
+    assert.deepEqual(load(outletEp), [], 'no outlet photo is loaded');
+    assert.ok(load({ ...structuredClone(outletEp), picturePreview: true }).length >= 1, 'a private preview may');
+  });
+
+  test('a wrong option never fits the picture: no people under a portrait, nothing of the same kind', () => {
+    const ev = (key, words, category = 'tech', extra = {}) => ({ key, words, category, image: `https://upload.wikimedia.org/${key}.jpg`, imageRights: cleared(`https://upload.wikimedia.org/${key}.jpg`), imageId: key, programmes: ['tech-bytes'], first: NOW - H, last: NOW - H, source: 'Lab', latest: { title: words, summary: '' }, ...extra });
+    // the archive keeps what a cleared picture shows, as the picture desk chose it, and the desk's event carries it
+    const arc = new Archive({ dir: null, days: 14, now: () => NOW });
+    const portrait = 'https://upload.wikimedia.org/glyman.jpg';
+    const story = { id: 'ramp', title: 'Ramp reaches $60B valuation as it pushes deeper into AI', source: 'TechCrunch', category: 'tech', link: 'https://techcrunch.com/ramp', image: portrait, imageRights: { ...cleared(portrait), subject: { kind: 'person', qid: 'Q1', label: 'Eric Glyman' } }, imageFit: 'portrait' };
+    arc.record({ program: { id: 'tech-bytes' }, storyIds: ['ramp'], segments: [{ type: 'story', storyId: 'ramp', headline: 'Ramp reaches $60B valuation', text: 'Ramp reaches a $60 billion valuation.' }] }, { get: () => story, at: NOW - H });
+    assert.deepEqual(arc.entries[0].imageSubject, { kind: 'person', label: 'Eric Glyman' });
+    assert.equal(quizEvents(arc, { now: NOW }).events[0].imageSubject.kind, 'person');
+    // the 17 Oct gate: a portrait of Ramp's chief executive, "These execs think voice AI…" among its wrong options
+    const ramp = ev('ramp', 'Ramp reaches $60B valuation as it pushes deeper into AI', 'tech', { imageSubject: { kind: 'person', label: 'Eric Glyman' } });
+    assert.equal(pictureKind(ramp), 'person');
+    const execs = ev('execs', 'These execs think voice AI hasn’t reached its breakout moment yet');
+    const joni = ev('joni', 'Joni Mitchell becomes US citizen', 'world');
+    const scientists = ev('sci', 'Scientists find a hidden map of the brain', 'science');
+    const plain = [ev('sq', 'Square’s kiosk lets you talk to AI'), ev('owl', 'Owls ringed to measure benefits of wildlife farming', 'science'), ev('ice', 'Antarctica’s sea ice has undergone stunning reversal', 'science')];
+    for (const o of [execs, joni, scientists]) assert.equal(fitsPicture(o, 'person'), true, o.words);
+    for (const o of plain) assert.equal(fitsPicture(o, 'person'), false, o.words);
+    for (let i = 0; i < 30; i++) {
+      const q = buildQuestions('picture', [ramp], [execs, joni, scientists, ...plain], seeded(`p${i}`), {})?.[0];
+      assert.ok(q, `seed p${i}`);
+      assert.ok(!q.options.some((o) => ['execs', 'joni', 'sci'].includes(o.key)), `seed p${i}: ${q.options.map((o) => o.words).join(' | ')}`);
+    }
+    // an outlet's photo in a preview could be anyone: treated as a portrait
+    assert.equal(pictureKind({ image: 'x.jpg' }), 'unknown');
+    assert.equal(fitsPicture(execs, 'unknown'), true);
+    // a place's picture: no wrong option naming a place, nor one whose own picture is a place
+    assert.equal(fitsPicture(ev('w', 'Waymo’s robotaxis are headed to Canada'), 'place'), true);
+    assert.equal(fitsPicture(ev('b', 'Bee launches two personal AI devices', 'tech', { imageSubject: { kind: 'place', label: 'Seattle' } }), 'place'), true);
+    assert.equal(fitsPicture(ev('s', 'Square’s kiosk lets you talk to AI'), 'place'), false);
+    // a spacecraft's picture: no other space headline
+    assert.equal(fitsPicture(ev('m', 'Mars moon lander set to launch on 19 October', 'science'), 'thing:craft'), true);
+    assert.equal(fitsPicture(ev('o', 'Owls ringed to measure benefits of wildlife farming', 'science'), 'thing:craft'), false);
   });
 });

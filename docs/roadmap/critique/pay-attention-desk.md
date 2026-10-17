@@ -24,11 +24,12 @@ Step 1 of `docs/programmes/pay-attention.md` §9, the question desk. It covers:
 - `server/quiz/planner.js`: pairings, rotation, DOUBLE OR NOTHING, the tie-break and the whole plan;
 - `tools/quiz/desk.mjs`: prints every plan of one or more days for the hand check;
 - `tools/quiz/playout.mjs`: plays the channel headless at air pace, so the server records real archive with no browser;
-- `test/pay-attention-desk.test.js`: 22 tests. The whole suite: 2234 of 2234.
+- `test/pay-attention-desk.test.js`: 38 tests (22 at the first build; the 17 Oct gate's cases added).
 
-**Status: built; the gate is pending.** The gate's three days of archive have been recording since 13 Oct, 20:30
-London, from the real feeds through the channel's own programmes. The station itself needs three days of archive before
-the quiz may air (§3.3). The gate falls due on 16 Oct.
+**Status: built; the gate is not passed: day 2 (17 Oct) failed and the gate moves to 18 Oct (the end of this log).**
+The gate's three days of archive have been recording since 13 Oct, 20:30 London, from the real feeds through the
+channel's own programmes. The station itself needs three days of archive before the quiz may air (§3.3). The gate fell
+due on 16 Oct.
 
 ---
 
@@ -199,3 +200,167 @@ exclusions take most world news.
 
 **Gate not yet passed: 9.6.** The rule for passing: one more day's editions (17 Oct, on a continuous archive) read by
 hand with no leak.
+
+## The gate's second day (17 Oct): failed
+
+**The run.** `node tools/quiz/desk.mjs --from 2026-10-17 --days 1 --at 15:30,20:30` on the continuous archive (16 Oct
+15:25 to 17 Oct), every question and option read by hand by the owner's reviewer. Both editions aired (Lola v Penny,
+Ada v Nova). **Seven leaks against §3.1 and three other faults.** Day 2 failed; step 1 has not passed.
+
+**The leaks, each with its root cause and its fix** (all in `server/quiz/desk.js`, a test from each real case in
+`test/pay-attention-desk.test.js`):
+
+1. **"AOC transfers $1m to Michigan candidate El-Sayed in progressive push"** (PICTURE THIS's answer). The politics list
+   knew heads of state, party leaders and offices like "minister", but not a race's words or a politician known by
+   initials. Fixed: candidates (not a vaccine, planet or job candidate), nominees, primaries, "progressives" and a
+   progressive push or caucus, left- and right-wing, populists, Ocasio-Cortez, and "AOC" in capitals (not AOC's
+   monitors).
+2. **"Lisa Nandy 'minded to intervene' in Sky's £1.6bn purchase of ITV"** (DOUBLE OR NOTHING, WHERE). Its source opens
+   "The culture secretary, Lisa Nandy, …", but the list had only "press secretary". Fixed: every secretary of state by
+   office ("culture", "home", "foreign", "shadow …" secretary, "secretary of state for …"), attorneys general, house
+   speakers, first ministers, the shadow cabinet, Whitehall, Capitol Hill, the State Department; and Nandy by name.
+   The story's two other takes ("Nandy 'minded to intervene' in Sky-ITV deal", "…in Sky's £1.6bn takeover of ITV
+   entertainment arm") go out with it.
+3. **LETTER BY LETTER "Italy cuts air traffic in half"**. The source's title goes on "amid data transmission issue", so the
+   clean cut hid the incident, and no list knew a failure worded mildly. Fixed, counted anywhere like every disaster: a
+   technical, network, data transmission, computer, signalling or power issue, problem, fault, failure, glitch, outage
+   or error; issues that hit a network or a control system; glitches and outages; travel, flight, rail or service
+   disruption (not the business sense, "disrupt the market"); delays and cancellations; flights cancelled, grounded,
+   halted; air traffic or flights cut, halved or restricted; malicious activity; an IT failure. The aired cut alone
+   ("Italy cuts air traffic in half") is now out too. The 16 Oct take ("Italy's air traffic cut 50% after network
+   problems as delays spread nationwide") was eligible the same way and goes out the same way.
+4. **HOW MANY? on Isabel Allende's €1m prize**. The money list knew salaries and earnings but not the prize a person
+   wins. Fixed: a sum before a prize, award or purse ("€1m Spanish literary prize"), a prize worth a sum, prize money, a
+   cash prize, a lucrative prize. A grant is no one's earnings and stays ("Red squirrel project opens £250k community
+   grant").
+5. **HOW MANY? from "Fuel costs squeezing margins for some businesses"**. Hardship knew closures and job losses, not a
+   squeeze. Fixed: costs squeezing margins, squeezed households, budgets, firms or families, feeling the squeeze (a
+   "squeezy banana" toy stays), and with it bills, costs, prices or rents through the roof or soaring, and a market's
+   plunge (stocks, indices: "Indonesian stocks plunge 11% …", found in the same archive).
+6. **PICTURE THIS answer "Low-cost clinic helps pet owners with vet bills"**, whose source opens "the pets of people with
+   low incomes". The list had "income" but not "incomes". Fixed: incomes, low and lower incomes, people on low pay, food
+   banks, soup kitchens, being unable to afford, financial hardship.
+7. **"Artisanal miners behind Nigeria's lithium boom"** (LETTER BY LETTER, Al Jazeera). **Ruled out.** By its own text:
+   the event aired three times, and the third airing (17 Oct, 00:18 UTC) went on "But as investment grows, they say
+   they face unsafe working conditions", which is dangerous work; one airing out puts the event out. No list knew
+   dangerous work. Fixed, counted anywhere: unsafe, dangerous or hazardous working conditions, risking their lives,
+   child and forced labour, modern slavery, sweatshops. And since its first two airings said only that "artisanal
+   miners hope to benefit", the event would still have been eligible on 16 Oct: artisanal and informal mining and
+   subsistence farming are now hardship by subject, a story of poor workers' livelihoods. No child labour was in its
+   text; a story that names one is out as children.
+
+**The other faults:**
+
+8. **A broken cut: PICTURE THIS option "Meta may use sweeping commercial TOS"** (the title: "Meta may use sweeping new
+   commercial TOS to avoid millions in AI licensing fees"). The cut detector let a headline skip only articles, so a
+   headline that also dropped "new" was taken for a rewrite and shown as it aired. Fixed: a headline whose words are the
+   title's in order, with any words dropped, is a cut, and its rest must be a clean one ("to avoid…" is not; the title
+   is 78 characters, so the story is not used). A cut that dropped a word that is not an article shows the source's
+   title when it fits, since a dropped word can break the sense; so does an article dropped inside a name. A kicker
+   cut off the front stays clean. The same reading found more of them in the archive: "Apple's HomeView is just[ the
+   latest] threat to online recipe writers", "India becomes[ the latest] country to report…", "… warns[ small] AI models
+   could self-replicate", "Fairphone's[ latest] repairable earbuds are smaller[, lighter…]", "Apple's[ new] smart
+   home lineup includes[ a] smart lock[, thermostat…]", "Veritas expands[ its] anti-counterfeit chip to jewelry[, trophies…]",
+   "Bear with taste for honey: Winnie[ the] Pooh turns 100".
+   **And a quote:** "Replit's CEO says future of work is ‘self-driving firm’" put in quotation marks a word the CEO
+   never said (the source: "the ‘self-driving company’"). A quoted phrase in an aired headline must now be found in the
+   source's title, summary or text, else the title is shown (or the story is not used).
+9. **An unfair wrong option: PICTURE THIS with a portrait of Ramp's chief executive**, the answer "Ramp reaches $60B
+   valuation…", a wrong option "These execs think voice AI hasn't reached its … moment yet". Fixed in
+   `server/quiz/rounds.js`: no wrong option fits the picture. The desk knows what a cleared picture shows from the picture
+   desk's own choice, which the archive now keeps beside the picture's rights record (`imageSubject`: a person, a place,
+   an event, a craft…; `server/archive.js`). Under a portrait no wrong option is about people: a person's role or a
+   group of people ("execs", "scientists", "author", "fans"…), a full name ("Joni Mitchell"), or a story whose own
+   picture is a portrait. Under a picture of a place, no option naming a place; under a spacecraft or the sky, no space
+   headline; under any known kind, no option whose own picture is of that kind. An outlet's photo in a private preview
+   could show anyone and is treated as a possible portrait. That option was itself a second fault: the desk's grouping
+   had joined 12 Oct's "These execs think voice AI…" with 16 Oct's "A Nvidia insider-turned-VC on why robotics hasn't
+   hit its … moment, yet", whose own headline was too long, so the event showed the first story's words over the
+   second story's picture and airing. Fixed: an event's words, picture and figure are its latest airing's own story
+   (its story id); when that story has no whole headline, the event is not used (it costs two real stories on 17 Oct,
+   a Fitbit and a NASA lander, whose latest airing's headline was too long while an earlier feed story's was whole).
+10. **Rights: PICTURE THIS showed outlet photos** (a Getty image from Ars Technica, TechCrunch's and the BBC's own). The
+    station's archive strips an uncleared picture when it runs with `PICTURE_RIGHTS=cleared`, but the desk itself took
+    any picture it was given, the desk tool read the archive without a mode, and the producer and the director took the
+    plan's picture on trust. Fixed along the picture's whole way:
+    - `desk.js` `pictureCleared`: by default an event's picture is one whose rights record is cleared for that very
+      picture (`server/rights.js` `currentRights`), or the operator's own local file; `pictures: 'preview'` also lets an
+      outlet's photo through, for a private preview only;
+    - `rounds.js`: PICTURE THIS asks only such a story (`pickAsked`) and builds no question round any other
+      (`buildQuestions`); `planner.js` and `edition.js` carry the mode (the station's `PICTURE_RIGHTS`, through
+      `producer.js`);
+    - `producer.js`: an edition carrying an uncleared picture outside a preview is not made; a preview's quiz episode
+      says `picturePreview: true`, so it is never published;
+    - `public/js/quizplay.js` `quizPictureAirable` and `quizdirector.js`: the director loads no picture that is not
+      cleared, unless the episode is a private preview, so an outlet's photo never reaches the board on air by default;
+    - `tools/quiz/desk.mjs` plans as the station does (`PICTURE_RIGHTS`, else cleared; `--pictures preview` for a
+      private preview) and prints PICTURE THIS's candidates per edition.
+
+**Found by looking for the same class of miss in the 16–17 Oct archive** (every eligible story of each edition's window
+read, then every story the fixes took out read again to check it deserved it):
+
+- politics by a state's act told as done: "Australia has proposed a switch to force social media platforms…" (under
+  "Toxic algorithms wouldn't let them go - now Australia wants off switch"), "Portugal has chosen Lufthansa … completing
+  the first phase of the airline's privatisation"; a state's grip on an industry: "China's influence in gaming industry
+  is growing", whose source opens "…one of the most tightly regulated" (the 17 Oct HOW MANY? came from it);
+- crime counted anywhere: a lawsuit in passing ("Amazon has since filed an amended complaint", under "Websites are
+  closing their doors to AI agents", a TODAY headline on 17 Oct), a breach ("India becomes the latest country to report
+  rogue AI agent activity");
+- a weapon: "Jad Abumrad loves a butterfly knife and a good springy pillow";
+- a review: "Bose's new wired earbuds are simple[ in the best way]" (a TODAY headline on 17 Oct);
+- private spending in first person: "'I'd spend $1,000 on a wedding present'" ("I'd" was not a first-person word);
+- notices: "NASA to Discuss Artemis Acceleration…" (a media advisory: "will provide an update … at 2 p.m. EDT"), "NASA
+  Welcomes All Ages … for Space Apps Challenge" ("Registration is open");
+- a picture caption in Title Case: "NASA's Space X CRS-35 Launch Jellyfish" (a bare verb in a Title Case caption is a
+  noun unless it follows "to", a modal or a plural subject);
+- give-aways on WHERE: "Joni Mitchell becomes US citizen…" over the pin on the USA (the gazetteer reads "US citizen" as
+  a nationality, so the mask missed it; the answer country's own names are now masked wherever they stand); "Cost of
+  balancing Great ▮▮▮▮▮'s power grid…" (a name's first word now goes under the mask with it); "Smart ring maker Ultrahuman
+  to roll out biological-age model across ▮▮▮▮▮" (a roll-out a few words before its place is where a product is sold,
+  never a place).
+
+**Re-run on 16 and 17 Oct** (`--from 2026-10-16 --days 2 --at 15:30,20:30`, `data/quiz-run/gate-16-17-r2.md`), as the
+station runs, with cleared pictures only:
+
+- 16 Oct 15:30, Lola v UNIT-8: TODAY OR NOT TODAY / LETTER BY LETTER / HOW MANY?, DOUBLE OR NOTHING LETTER BY LETTER;
+- 16 Oct 20:30, Penny v Sam: WHERE / LETTER BY LETTER / TODAY OR NOT TODAY, DOUBLE OR NOTHING HOW MANY?;
+- 17 Oct 15:30 and 20:30: **no edition.** With the 29 stories the two 16 Oct editions asked out for the week, TODAY OR
+  NOT TODAY short of today's stories (two first aired since 06:00 at 15:30), PICTURE THIS without a cleared picture
+  (below) and WHERE short of places, no allowed pairing fills three round types with five questions from the last 24
+  hours (the best holds four such stories at 15:30, three at 20:30). The rule says the quiz does not air; it does not.
+
+The same days were also planned as a private preview would (`--pictures preview`, `gate-16-17-r2-preview.md`), to read
+the desk's other fixes on more material and on PICTURE THIS: three editions (17 Oct 15:30 airs there, Paco v Ada, with
+PICTURE THIS), 20:30 still does not.
+
+**Read again by hand, every question and option of the five editions: no leak against §3.1, no broken words, no
+give-away found.** Judgement calls, noted for the reviewer:
+
+- "Lufthansa to buy 44.9% of TAP Air Portugal in €1.2B deal" (HOW MANY? on 16 Oct): its own airing tells an airline's
+  purchase; another outlet's take of the same deal, told as Portugal's privatisation, is out. Kept by the subject rule;
+- "Cost of balancing Great Britain's power grid reaches nearly £50m a day" (WHERE): a system's cost, no household in its
+  subject;
+- "NASA to Conduct Low-Altitude Flights[ Over Texas Farmland]" (WHERE): research flights announced ahead; read as news,
+  not a notice. "NASA" makes the USA an easy answer, not a false one;
+- HOW MANY? "It comes after a ▮▮▮▮ investment from UK Research and Innovation's…" opens on an "It" the board does not
+  explain; true, but a weak question. And "NEARLY 320 LIGHT-YEARS" reveals the qualifier its programme's figure board
+  aired, which the masked sentence itself does not carry.
+
+**PICTURE THIS under cleared pictures: 0 candidates in every edition of 16 and 17 Oct** (0 in each window, 0 in each
+pairing's pool). Not one of the archive's 5,600 airings carries a rights record: they were all recorded before the
+station archived the rights desk's records, or carried outlets' photos (the airings since the 17 Oct restart carry no
+picture at all). So the planner does not choose PICTURE THIS (data first) and the other four rounds rotate; DOUBLE OR
+NOTHING falls back to LETTER BY LETTER or WHERE. **Too few for the round, and the rule is not lowered.** Proposed:
+
+- PICTURE THIS stays off until a pairing's pool holds three stories with a cleared picture (it needs nothing else: its
+  wrong options are words). As the station archives cleared pictures from now on, that comes with the archive; the
+  desk tool's count shows when;
+- the picture desk could clear pictures for the week's archived stories ahead of an edition (a FILE picture of the
+  subject or the place, with its record), so PICTURE THIS does not wait a week;
+- **open before a cleared picture airs in PICTURE THIS:** the quiz board does not draw the picture's own credit (the
+  "FILE · AUTHOR · CC BY 4.0 · PIXELATED" line every licence asks for while the picture is on screen), nor a private
+  preview's "PREVIEW · NOT CLEARED". That is the graphics' (step 3) and the rights desk's to add; the question already
+  carries its `imageRights`.
+
+**Gate: not passed. Day 2 (17 Oct) failed; the gate moves to the next clean day, 18 Oct**: its two editions planned
+on the continuous archive and read by hand, with no leak.
