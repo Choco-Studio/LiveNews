@@ -127,6 +127,20 @@ el mensaje original del control. Hoy el motivo más frecuente es «Copia palabra
 frases del medio casi literales, y un clip o una publicación con esas frases no sale hasta que el canal la cuente con
 sus propias palabras.
 
+**Lo que espera se vuelve a revisar.** Antes de cada ronda de publicación, el sistema vuelve a pasar el control a todo
+lo que espera (por aprobar, aprobado o programado), porque mientras espera pueden cambiar cosas:
+- puede llegar una reclamación o una retirada;
+- el permiso de una foto puede dejar de valer;
+- puede empezar un periodo electoral.
+
+Lo que ya no pasa queda **retenido**, y su tarjeta dice «Retenido al revisarlo otra vez antes de publicar (algo cambió
+mientras esperaba)» y el motivo en castellano. Si el problema se resuelve, vuelve a «Por aprobar» y lo decides tú otra
+vez: nunca sale solo. Se puede lanzar a mano con `node tools/publish/recheck.mjs`, que no publica nada.
+
+**Fotos.** Un clip que enseña una foto sin permiso de uso confirmado no llega nunca a la página: el sistema ni lo
+prepara para publicar. Tampoco nada de una prueba privada con fotos de los medios (`PICTURE_RIGHTS=preview`). En los
+clips verticales, cada foto lleva su crédito tal como lo pide su licencia («FILE · autor · licencia · PIXELATED»).
+
 **Las tarjetas de TikTok** tienen un recuadro más, porque TikTok exige que elijas tú, publicación por publicación:
 
 - **quién puede verlo**: Todo el mundo, Amigos, Seguidores o Solo yo. No viene ninguna marcada: TikTok no permite un
@@ -154,7 +168,7 @@ Nada sale del ordenador mientras no estén encendidos **los cinco**, a propósit
 
 Y además, cada publicación tiene que estar **aprobada por ti**. Si falta cualquiera de estas cosas, el sistema hace la
 prueba en lugar de publicar, y apunta qué faltaba en `data/publish/outbox.jsonl`. La publicación diaria se lanza con
-`node tools/publish/run.mjs`.
+`node tools/publish/run.mjs`, que primero vuelve a revisar todo lo que espera (apartado 6).
 
 **Consejo:** enciende una sola red al principio (YouTube), mira una semana cómo va y luego añade la siguiente.
 

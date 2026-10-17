@@ -64,7 +64,13 @@ export const RULE_ES = Object.freeze({
   'editorial-contact-missing': 'Falta el contacto editorial (EDITORIAL_CONTACT) en la configuración.',
   'text-disclosure-missing': 'Falta el aviso «AI-generated:» al principio del texto.',
   unmarked: 'El vídeo no lleva la firma de procedencia (C2PA).',
-  'rights-missing': 'Falta el permiso de uso de una foto o un vídeo.',
+  'rights-missing': 'Falta el permiso de uso de una foto o un vídeo, o su permiso ya no lo cubre.',
+  'not-publishable': 'Lleva material de prueba o de demostración: nunca se publica.',
+  blocked: 'Hay un aviso en el registro: una retirada, una historia retirada o una persona que pidió no aparecer.',
+  'file-missing': 'Falta el archivo del vídeo o de la imagen.',
+  'timeline-missing': 'Falta el registro de tiempos del clip: no se puede comprobar qué sale en pantalla.',
+  'provenance-missing': 'Falta la información de procedencia de la recreación.',
+  'mark-out-of-frame': 'La marca de IA no se ve entera en este formato.',
 });
 
 /** TikTok's privacy levels (creator_info's privacy_level_options name them; the owner picks one, no default). */
@@ -95,7 +101,7 @@ export function itemView(it, { tz = 'Europe/London' } = {}) {
     has: { video: !!it.media?.video, thumb: !!it.media?.thumb, contact: !!it.media?.contact, captions: !!it.media?.captions },
     programme: it.source?.programId || null,
     score: it.score ?? null,
-    compliance: { ok: it.compliance?.ok !== false, stub: !!it.compliance?.stub, violations: (it.compliance?.violations || []).map((v) => ({ rule: v.rule, message: v.message, es: RULE_ES[v.rule] || null })), warnings: it.compliance?.warnings || [] },
+    compliance: { ok: it.compliance?.ok !== false, stub: !!it.compliance?.stub, recheck: !!it.compliance?.recheck && it.status === 'held', violations: (it.compliance?.violations || []).map((v) => ({ rule: v.rule, message: v.message, es: RULE_ES[v.rule] || null })), warnings: it.compliance?.warnings || [] },
     disclosure: it.disclosure?.[it.platform] || null,
     sample: !!it.sample,
     schedule: lp ? { at, day: lp.day, time: `${String(lp.h).padStart(2, '0')}:${String(lp.m).padStart(2, '0')}`, tz: it.schedule?.tz || tz } : null,
@@ -469,7 +475,7 @@ function card(i) {
   if (i.links.length) c.append(el('div', { class: 'dim' }, document.createTextNode('Enlaces: '), ...i.links.map((l, n) => el('span', {}, n ? document.createTextNode(' · ') : null, el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', text: l.label })))));
   const comp = el('div', { class: 'comp' + (i.compliance.ok ? '' : ' bad') });
   if (i.compliance.ok) comp.textContent = 'Cumplimiento: correcto' + (i.compliance.stub ? ' (control provisional)' : '') + (i.disclosure ? ' · etiqueta de IA puesta' : '');
-  else comp.append(el('b', { text: 'Retenido por cumplimiento:' }), ...i.compliance.violations.map((v) => el('div', {}, document.createTextNode('· ' + (v.es || v.message)), v.es ? el('div', { class: 'dim', text: v.message }) : null)));
+  else comp.append(el('b', { text: i.compliance.recheck ? 'Retenido al revisarlo otra vez antes de publicar (algo cambió mientras esperaba):' : 'Retenido por cumplimiento:' }), ...i.compliance.violations.map((v) => el('div', {}, document.createTextNode('· ' + (v.es || v.message)), v.es ? el('div', { class: 'dim', text: v.message }) : null)));
   c.append(comp);
   if (i.schedule) c.append(el('div', { class: 'dim', text: 'Saldría el ' + i.schedule.day + ' a las ' + i.schedule.time + ' (' + i.schedule.tz + ')' }));
   const tt = i.tiktok ? tiktokBox(i) : null;

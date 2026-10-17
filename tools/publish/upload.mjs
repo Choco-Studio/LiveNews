@@ -129,12 +129,14 @@ await pb.close();
 
 // ---------------------------------------------------------------- the verdict, the files, the queue
 
-const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), getStory: compliance.archiveGetStory({ dataDir: path.join(root, 'data') }) });
+const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.archiveGetStory({ dataDir: path.join(root, 'data') }) });
 const record = { episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString() }, ...meta, duration: D, thumb, video, compliance: { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub }, frameAt: at };
 fs.writeFileSync(path.join(out, `${prog}.upload.json`), JSON.stringify(record, null, 1));
 fs.writeFileSync(path.join(out, `${prog}.description.txt`), `${meta.title}\n\n${meta.description}\n\nTags: ${meta.tags.join(', ')}\n`);
 const queue = new PublishQueue({ dir: path.resolve(opt('queue', path.join(root, 'data', 'publish'))) });
-if (video && meta.worthy && queue.settings().phase >= 2) {
+// a programme with a picture not cleared for publication (or made as a private preview) is never queued
+const unclearedPictures = episode.picturePreview || (compliance.auditItem(episode).missing || []).some((a) => a.kind === 'picture');
+if (video && meta.worthy && !unclearedPictures && queue.settings().phase >= 2) {
   const it = queue.enqueue({
     kind: 'episode',
     platform: 'youtube',
@@ -154,7 +156,7 @@ if (video && meta.worthy && queue.settings().phase >= 2) {
     dryRun: true,
   });
   say(`queued: ${it?.id} (${it?.status})`);
-} else say(`not queued (${!video ? 'no video' : !meta.worthy ? 'not worth a full upload' : 'full uploads begin in Phase 2'})`);
+} else say(`not queued (${!video ? 'no video' : !meta.worthy ? 'not worth a full upload' : unclearedPictures ? (episode.picturePreview ? 'a private preview (PICTURE_RIGHTS=preview) is never published' : 'a picture is not cleared for publication') : 'full uploads begin in Phase 2'})`);
 if (!opt('master') && master.file) fs.rmSync(master.file, { force: true });
 fs.rmSync(tmpDir, { recursive: true, force: true });
 say(`-> ${out}`);

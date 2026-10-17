@@ -547,6 +547,20 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
    attributed with its link, is free use: a "very short extract", or a quotation (Art. 5(3)(d) InfoSoc; UK CDPA s. 30).
    Confirm the same for the channel's on-screen strap and a clip's hook, which show the aired headline with the source
    credited beneath.
+11. **Keeping the articles' text for the checks** (`server/articlecache.js`, `verbatim.md` §4). For each story the
+   channel airs, the archive keeps the text the news desk already read for the writer:
+   - the article page's first paragraphs (2,400 characters at most), or else the feed's own full text;
+   - text only, at most 6,000 characters, for 14 days;
+   - never published, and used only to check that what the channel publishes does not copy the outlet.
+
+   The news desk's article reader does **not** consult an outlet's robots.txt or terms before reading a page. The
+   cache fetches nothing of its own, but keeps what the reader read. Confirm that keeping these extracts is allowed:
+   - for verifying the channel's own output: the text and data mining exception (Art. 4 DSM, with its opt-out
+     honoured), or the temporary copies exception (Art. 5(1) InfoSoc);
+   - for each outlet whose terms forbid it.
+
+   The switches are `ARTICLE_CACHE=off` (nothing kept) and `"cache": false` on a feed in `config/feeds.json` (that
+   outlet never kept). Whether the reader itself should honour robots.txt is for the news desk and the lawyer.
 
 **What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 

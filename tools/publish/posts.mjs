@@ -2,8 +2,8 @@
 // A day of text posts (server/publish/posts.js; the plan: docs/publishing/plan.md §4): the day's most-told stories
 // from the archive, one post per network each (X, Threads, Bluesky, Facebook, Telegram), every one opening
 // "AI-generated:", in the channel's own words, the outlet's headline cited beside its link (the verbatim rule: an
-// aired sentence only when the compliance desk's article cache proves it the channel's own, data/compliance/articles,
-// filled by tools/compliance/verbatim-audit.mjs). Written to a file to read; with --enqueue, into
+// aired sentence only when the article cache proves it the channel's own, data/compliance/articles, which the archive
+// fills as the channel airs: server/articlecache.js). Written to a file to read; with --enqueue, into
 // the publishing queue as well (dry run), where the scheduler gives each its time within the network's hours and
 // spacing.
 //
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dayStories, postsFor } from '../../server/publish/posts.js';
 import { PLATFORMS, DAILY, xLength, graphemes } from '../../server/publish/platforms.js';
 import { PublishQueue, localParts } from '../../server/publish/queue.js';
-import { preflight, usingStub, archiveGetStory } from '../../server/publish/compliance.js';
+import { preflight, usingStub, archiveGetStory, register } from '../../server/publish/compliance.js';
 import { telegramHtml } from '../../server/publish/adapters/telegram.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 
@@ -51,7 +51,8 @@ for (const f of fs.readdirSync(archiveDir).filter((x) => x.endsWith('.jsonl'))) 
   }
 }
 const stories = dayStories(entries, { day, timeZone: tz, limit });
-// the articles the compliance desk's audit cached (the only proof an aired sentence is not the outlet's own)
+// the article cache (server/articlecache.js: the article the news desk read for each aired story, else its feed's full
+// text; the compliance audit writes the same files): the only proof an aired sentence is not the outlet's own
 const getStory = archiveGetStory({ dataDir: path.join(root, 'data') });
 for (const s of stories) s.articles = [...new Set((s.ids || [s.id]).map((id) => getStory(id)?.body).filter(Boolean))];
 // our clip on a story, when the factory made one (its URL exists only once published: a dry run has none)
@@ -78,7 +79,7 @@ for (const [rank, s] of stories.entries()) {
     const p = posts[net];
     // the gate measures what the network will show (Telegram composes its message from the title and the links)
     const shown = makeAdapter(net, { env: {}, dryRun: true }).postText({ ...p, platform: net });
-    const gate = preflight({ kind: 'text', text: shown, platforms: [net], sourceTexts: p.sourceTexts });
+    const gate = preflight({ kind: 'text', text: shown, platforms: [net], sourceTexts: p.sourceTexts, storyIds: s.ids || [s.id] }, { register: register(path.join(root, 'data')) });
     all.push({ rank: rank + 1, platform: net, story: { id: s.id, ids: s.ids, title: s.title, source: s.source, link: s.link, grave: !!s.grave, airings: s.airings, programmes: s.programmes, articles: s.articles.length }, title: p.title, sourceTexts: p.sourceTexts, text: p.text, links: p.links, grave: !!s.grave, length: net === 'x' ? xLength(p.text) : net === 'bluesky' ? graphemes(p.text) : [...p.text].length, limit: PLATFORMS[net].text.post || PLATFORMS[net].text.message, compliance: { ok: gate.ok, violations: gate.violations || [], stub: usingStub } });
   }
 }

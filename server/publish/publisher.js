@@ -1,4 +1,5 @@
 // The publisher (docs/publishing/pipeline.md §4): every item whose time has come goes through, in order,
+//   0. (each round) the re-check of everything waiting (recheck.js): what no longer passes is held before scheduling
 //   1. the ledger: already published to that network (or the same video, or the same story there today): refused
 //   2. the compliance gate (server/publish/compliance.js preflight): any violation holds the item, nothing is sent
 //   3. the C2PA mark on a video (markFile, into a signed copy beside the clip, which is what is uploaded; the clip
@@ -15,6 +16,7 @@ import path from 'node:path';
 import { makeAdapter } from './adapters/index.js';
 import { redact } from './adapters/base.js';
 import * as compliance from './compliance.js';
+import { recheckQueue } from './recheck.js';
 
 /** Why an item would not go out live (empty: it may). */
 export function liveBlockers(queue, item, { env = process.env, usingStub = compliance.usingStub, adapter = null } = {}) {
@@ -27,6 +29,34 @@ export function liveBlockers(queue, item, { env = process.env, usingStub = compl
   if (!(item.history || []).some((h) => h.action === 'approved')) why.push('nobody approved it');
   if (adapter && !adapter.configured()) why.push(`credentials missing: ${adapter.missing().join(', ')}`);
   return why;
+}
+
+/**
+ * The compliance gate's view of a queued item (the contract's clip fields): its episode and recording as the factory
+ * saved them, its range, its network's flags as the adapter will send them, a post's shown words and sources.
+ */
+export function gateView(item, { now = Date.now() } = {}) {
+  const episode = item.gate?.episodeFile && fs.existsSync(item.gate.episodeFile) ? JSON.parse(fs.readFileSync(item.gate.episodeFile, 'utf8')) : null;
+  const recording = item.gate?.reportFile && fs.existsSync(item.gate.reportFile) ? JSON.parse(fs.readFileSync(item.gate.reportFile, 'utf8')) : null;
+  return {
+    id: item.id,
+    kind: item.kind === 'text' ? 'text' : item.kind === 'episode' ? 'episode' : item.format === 'vertical' ? 'short' : 'clip',
+    episode,
+    recording,
+    range: item.gate?.range || null,
+    // the stories it tells (the register's withdrawn stories hold it: a quiz clip's episode lists none)
+    storyIds: item.source?.storyIds || [],
+    platforms: [item.platform],
+    // the flags the adapter will really send (and an owner's hand-set label on a network with no field)
+    flags: { [item.platform]: { ...(item.disclosure?.[item.platform] || {}), ...makeAdapter(item.platform, { env: {}, dryRun: true }).aiFlags(item), ...(item.manualLabel?.[item.platform] ? { manualLabel: true } : {}) } },
+    // a post: the words its network will show, and its story's sources (the verbatim rule)
+    text: item.kind === 'text' ? makeAdapter(item.platform, { env: {}, dryRun: true }).postText(item) : item.text,
+    sourceTexts: item.sourceTexts || null,
+    labelFrames: item.gate?.labelFrames || null,
+    // the vertical picture is recomposed at 216x384 and scaled 5x (docs/publishing/vertical.md), not a crop
+    frame: item.gate?.frame || (item.format === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null),
+    publishAt: item.schedule?.at ?? now,
+  };
 }
 
 export class Publisher {
@@ -126,25 +156,7 @@ export class Publisher {
 
   /** The compliance gate's view of an item (the contract's clip fields). */
   gateItem(item) {
-    const episode = item.gate?.episodeFile && fs.existsSync(item.gate.episodeFile) ? JSON.parse(fs.readFileSync(item.gate.episodeFile, 'utf8')) : null;
-    const recording = item.gate?.reportFile && fs.existsSync(item.gate.reportFile) ? JSON.parse(fs.readFileSync(item.gate.reportFile, 'utf8')) : null;
-    return {
-      id: item.id,
-      kind: item.kind === 'text' ? 'text' : item.kind === 'episode' ? 'episode' : item.format === 'vertical' ? 'short' : 'clip',
-      episode,
-      recording,
-      range: item.gate?.range || null,
-      platforms: [item.platform],
-      // the flags the adapter will really send (and an owner's hand-set label on a network with no field)
-      flags: { [item.platform]: { ...(item.disclosure?.[item.platform] || {}), ...makeAdapter(item.platform, { env: {}, dryRun: true }).aiFlags(item), ...(item.manualLabel?.[item.platform] ? { manualLabel: true } : {}) } },
-      // a post: the words its network will show, and its story's sources (the verbatim rule)
-      text: item.kind === 'text' ? makeAdapter(item.platform, { env: {}, dryRun: true }).postText(item) : item.text,
-      sourceTexts: item.sourceTexts || null,
-      labelFrames: item.gate?.labelFrames || null,
-      // the vertical picture is recomposed at 216x384 and scaled 5x (docs/publishing/vertical.md), not a crop
-      frame: item.gate?.frame || (item.format === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null),
-      publishAt: item.schedule?.at ?? this.now(),
-    };
+    return gateView(item, { now: this.now() });
   }
 
   /**
@@ -171,11 +183,25 @@ export class Publisher {
     return () => fs.rmSync(file, { force: true });
   }
 
-  /** Schedule what is approved, then publish everything due (refused while another publisher holds the lock). */
+  /**
+   * The gate again on everything waiting (recheck.js): what no longer passes the current rules, the register or the
+   * current rights records is held before anything is scheduled. -> { checked, passed, held, released }
+   */
+  recheck() {
+    // (the archive and its articles as they are now: a long-running publisher never measures against a stale copy)
+    this.sourcesOf = compliance.archiveGetStory({ dataDir: this.dataDir });
+    return recheckQueue({ queue: this.queue, view: (it) => this.gateItem(it), dataDir: this.dataDir, gate: this.gate, now: this.now, getStory: this.sourcesOf, usingStub: this.usingStub });
+  }
+
+  /**
+   * Re-check what waits, schedule what is approved, then publish everything due (refused while another publisher holds
+   * the lock).
+   */
   async run() {
     const release = this.lock();
     if (!release) throw new Error('another publisher is running (data/publish/publisher.lock)');
     try {
+      this.lastRecheck = this.recheck();
       this.queue.schedule(this.now());
       const out = [];
       for (const it of this.queue.due(this.now())) out.push(await this.publishOne(it));

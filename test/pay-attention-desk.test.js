@@ -147,6 +147,11 @@ describe('one story once an edition', () => {
       const shown = qs.flatMap((q) => q.options.map((o) => o.key));
       assert.ok(!(shown.includes('o1') && shown.includes('o2')), `seed c${i}: the 2CV twice`);
     }
+    // the picture's rights record as it aired rides on the question (the publishing gate reads it)
+    const rights = { source: 'commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url: 'https://x/y.jpg', cleared: true };
+    let q = null;
+    for (let i = 0; i < 40 && !q; i++) q = buildQuestions('picture', [{ ...asked[0], imageRights: rights }], options, seeded(`r${i}`), {})?.[0] || null;
+    assert.deepEqual(q.imageRights, rights);
   });
 });
 

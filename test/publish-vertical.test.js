@@ -275,6 +275,71 @@ describe('the vertical picture', () => {
     assert.equal(new Set(highs.map((f) => f.w)).size, 1, `one width: ${highs.map((f) => f.w)}`);
   });
 
+  test('WORLD WEATHER\'s maps are composed for the vertical stage: every word in the safe column, the place named in view', async () => {
+    const { WeatherDesk } = await import('../server/weather.js');
+    const { writeWeather } = await import('../server/weatherwriter.js');
+    const centre = await import('../public/js/scenes/weather/index.js');
+    const { measureText } = await import('../public/js/font.js');
+    (await import('../public/js/scenes/worldmap.js')).warmMapData();
+    const report = await new WeatherDesk({ source: 'fixture', log: { info() {}, warn() {}, error() {} } }).report();
+    const ep = writeWeather(report, { seed: 'vertical' });
+    const STAGE = { x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h };
+    const COLUMN = { x0: L.SAFE.x, x1: L.SAFE.right };
+    const hctx = fakeCanvas(384, 216).getContext('2d');
+    const scene = { weather: null, cast: { A: 'sam' }, channel: { name: 'GLOBIT 24', presenters: {} }, program: { id: 'world-weather' }, shot: 'weather' };
+    const SPEAK = 15;
+    const seen = new Set();
+    let base = 5000;
+    let litInColumn = 0;
+    let mexico = 0;
+    for (const [i, seg] of ep.segments.entries()) {
+      const shot = centre.shotOf(seg);
+      base += 100;
+      scene.weather = { data: ep.weather, seg, index: i, since: base, dur: seg.text.length / SPEAK, hot: null, hotAt: 0, pin: null, pinAt: 0 };
+      const map = ['graphic', 'wall', 'warning'].includes(shot);
+      // (three zones: the tallest, the widest, the most crowded)
+      if (seg.zone && !['north-america', 'europe', 'asia'].includes(seg.zone)) continue;
+      const len = map ? seg.text.length / SPEAK : 1;
+      // the voice at 15 characters a second, the frames at 4 a second, a vertical frame every second
+      for (let k = 0; k <= Math.ceil(len * 4); k++) {
+        const el = k / 4;
+        for (const m of seg.marks || []) if (el >= m.char / SPEAK && scene.weather.hotAt < base + m.char / SPEAK) Object.assign(scene.weather, { hot: m.city, hotAt: base + m.char / SPEAK });
+        for (const p of seg.pins || []) if (el >= p.char / SPEAK && scene.weather.pinAt < base + p.char / SPEAK) Object.assign(scene.weather, { pin: p, pinAt: base + p.char / SPEAK });
+        hctx.fills.length = 0;
+        hctx.images.length = 0;
+        centre.drawWeather(hctx, base + el, scene, null);
+        const ctx = fakeCanvas().getContext('2d');
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, STAGE.y, L.VW, STAGE.h);
+        ctx.clip();
+        const drew = centre.drawWeatherVertical(ctx, base + el, STAGE, COLUMN);
+        ctx.restore();
+        assert.equal(drew, map, `${shot}: composed for the tall frame only for the maps`);
+        if (!drew || k % 4) continue;
+        seen.add(shot);
+        const label = `${seg.kind} ${seg.zone || ''} at ${el}s`;
+        assert.ok(wordsSafe(ctx, label, { bottom: STAGE.y + STAGE.h }) > 0, `${label}: words drawn`);
+        for (const im of ctx.images) if (im.h <= 24) assert.ok(im.y >= STAGE.y - 1, `${label}: a word above the stage ${JSON.stringify(im)}`);
+        // the high or low being named stands lit in the column (the camera brought it in)
+        if (shot === 'graphic' && el - (scene.weather.pinAt - base) > 1.2 && el - (scene.weather.pinAt - base) < 2.7 && scene.weather.pin) {
+          const plate = ctx.fills.find((f) => f.w === 17 && f.h === 24);
+          if (plate) {
+            litInColumn++;
+            assert.ok(plate.x >= COLUMN.x0 && plate.x + plate.w <= COLUMN.x1, `${label}: the named system in the column ${JSON.stringify(plate)}`);
+          }
+        }
+        if (seg.zone === 'north-america' && el > 4) {
+          const w = measureText('MEXICO CITY', 1, 'micro');
+          if (ctx.images.some((im) => Math.abs(im.w - w) <= 1 && im.x >= COLUMN.x0 && im.x + im.w <= COLUMN.x1 + 1)) mexico++;
+        }
+      }
+    }
+    assert.deepEqual([...seen].sort(), ['graphic', 'wall', 'warning'], 'the world, the zones and the warning are all composed');
+    assert.ok(litInColumn > 0, 'a named high or low checked in the column');
+    assert.ok(mexico > 0, 'MEXICO CITY whole in the column');
+  });
+
   test('FULL TIME\'s RESULT card and SCORE CENTRE set for the vertical stage stay inside it', async () => {
     const SP = await import('../public/js/clip/vsport.js');
     const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
@@ -410,6 +475,83 @@ describe('the vertical picture', () => {
     const m = profileOf({ shot: 'montage', program: { id: 'world-now' } });
     assert.equal(m.captions, false);
     assert.equal(m.box.y + m.box.h, L.PLATFORM_SAFE.bottom);
+  });
+
+  test('pictures in the vertical frame: the credit legible in the safe column, wrapped never cut; the locator and topic boards set for the tall backdrop', async () => {
+    const mark = await import('../public/js/clip/mark.js');
+    await mark.markReady;
+    const { VerticalCompositor, profileOf, drawVerticalCredit, creditWords } = await import('../public/js/clip/vertical.js');
+    const { P: PAL } = await import('../public/js/palette.js');
+    const { measureText } = await import('../public/js/font.js');
+    (await import('../public/js/scenes/worldmap.js')).warmMapData();
+    // the credit alone: the tag in body type, the credit in micro type, light on black, every word in the column
+    const long = 'FILE · ALEXANDRA KONSTANTINOPOULOU-WHITTAKER · CC BY-SA 4.0 · PIXELATED';
+    for (const [credit, uncleared] of [['FILE · JANE DOE · CC BY-SA 4.0 · PIXELATED', false], [long, false], ['FILE 2023 · NASA/JOEL KOWSKY', false], ['PHOTO · REUTERS', true]]) {
+      const ctx = fakeCanvas().getContext('2d');
+      const h = drawVerticalCredit(ctx, credit, { x: L.SAFE.x, y: L.V.stage.y + 16, w: L.SAFE.w, uncleared });
+      assert.ok(h >= 11);
+      assert.ok(wordsSafe(ctx, credit) >= 2);
+      for (const f of ctx.fills) assert.ok(f.x >= L.SAFE.x && f.x + f.w <= L.SAFE.right, `${credit}: a plate outside the column ${JSON.stringify(f)}`);
+      assert.ok(ctx.fills.every((f) => f.c === PAL.black && f.h === 11), 'black plates 11 px tall: body type (35 px on 1920), read over any picture');
+      // legible: every line in the body face (7 px glyphs), never the micro face
+      assert.ok(ctx.images.every((im) => im.h >= 7), `${credit}: a line in the micro face ${JSON.stringify(ctx.images.map((im) => im.h))}`);
+      if (uncleared) assert.ok(ctx.images.length >= 3, 'PREVIEW · NOT CLEARED under it');
+    }
+    // never cut: every word of the credit is on a line, a part kept whole where it fits
+    const text = 'ALEXANDRA KONSTANTINOPOULOU-WHITTAKER · CC BY-SA 4.0 · PIXELATED';
+    const squash = (t) => t.replace(/[\s·]+/g, '');
+    for (const [first, rest] of [[141, 172], [100, 100], [60, 60]]) {
+      const lines = creditWords(text, first, rest);
+      assert.equal(squash(lines.join('')), squash(text), `every letter kept at ${first}/${rest}: ${JSON.stringify(lines)}`);
+      lines.forEach((l, i) => assert.ok(measureText(l) <= (i ? rest : first), `${l} fits ${i ? rest : first}`));
+    }
+    assert.deepEqual(creditWords(text, 141, 172), ['ALEXANDRA', 'KONSTANTINOPOULOU-WHITTAKER ·', 'CC BY-SA 4.0 · PIXELATED']);
+    // the compositor: a story's picture full frame carries its credit under the source plate; a link's file footage too
+    const strap = { cur: { headline: 'Storm floods the valley', tag: 'WEATHER', plate: 'BBC', since: 0 }, outAt: null };
+    const canvas = fakeCanvas(216, 384);
+    const comp = new VerticalCompositor({ canvas, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+    const picture = fakeCanvas(400, 240);
+    const scene = { shot: 'full', shotSince: 0, program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, storyId: 's1', images: new Map([['s1', { full: picture, card: picture }]]), pictureCredits: new Map([['s1', { credit: 'FILE · JANE DOE · CC BY-SA 4.0 · PIXELATED', uncleared: false }]]), rundown: [{ storyId: 's1', source: 'BBC', headline: 'Storm floods the valley' }] };
+    comp.profile = profileOf(scene);
+    comp.box = comp.profile.box;
+    comp.drawStage(2, scene);
+    const ctx = canvas.getContext('2d');
+    const tag = ctx.fills.find((f) => f.y === L.V.stage.y + 16 && f.h === 11);
+    assert.ok(tag && tag.x === L.SAFE.x, `the credit's FILE tag under the source plate: ${JSON.stringify(tag)}`);
+    assert.ok(wordsSafe(ctx, 'full picture with its credit', { bottom: L.V.stage.y + L.V.stage.h }) >= 3);
+    const fileCtx = fakeCanvas(216, 384);
+    const comp2 = new VerticalCompositor({ canvas: fileCtx, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+    comp2.profile = comp.profile;
+    comp2.box = comp.box;
+    comp2.drawStage(2, { ...scene, shot: 'broll', card: { footage: 'f1' }, remote: { kind: 'correspondent' }, fileCredit: 'FILE · WIKIMEDIA COMMONS · CC BY 4.0' });
+    assert.ok(fileCtx.getContext('2d').fills.some((f) => f.y === L.V.stage.y + 16 && f.h === 11), "the file footage's credit");
+    // no picture on the stage (the studio single): no credit
+    const c3 = fakeCanvas(216, 384);
+    const comp3 = new VerticalCompositor({ canvas: c3, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+    comp3.profile = comp.profile;
+    comp3.box = comp.box;
+    assert.equal(comp3.pictureCredit({ ...scene, shot: 'close' }), 0);
+    // the headline frame without a picture: the place's locator board, its name in the column; without a place, the
+    // topic board, its name under the glyph in the column
+    for (const item of [{ storyId: 'p1', headline: 'Flooding closes roads across the north of the country', source: 'BBC', location: { lat: 37.2, lon: -119.5, place: 'CALIFORNIA, USA' } }, { storyId: 't1', headline: 'Startup raises money for a new AI chip', source: 'TechCrunch', category: 'tech' }]) {
+      const c = fakeCanvas(216, 384);
+      const cm = new VerticalCompositor({ canvas: c, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+      const sc = { shot: 'montage', shotSince: 0, program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, card: { index: 0 }, rundown: [item], images: new Map() };
+      cm.profile = profileOf(sc);
+      cm.box = cm.profile.box;
+      cm.drawStage(3, sc);
+      const g = c.getContext('2d');
+      assert.ok(wordsSafe(g, `headline frame ${item.storyId}`) >= 2);
+      const backdrop = g.images.find((im) => im.w === L.VW && im.h === cm.box.h && im.y === cm.box.y);
+      assert.ok(backdrop, `${item.storyId}: a board drawn for the tall backdrop`);
+      const accent = g.fills.find((f) => f.w === 2 && f.h >= 13 && f.y < cm.box.y + cm.box.h - 64);
+      assert.ok(accent && accent.x >= L.SAFE.x && accent.x <= L.SAFE.right, `${item.storyId}: the name's plate in the column ${JSON.stringify(accent)}`);
+      // a city's dot is never under its own name (no room either side in 216 px: the name goes under it)
+      const dot = g.fills.find((f) => f.w === 7 && f.h === 7 && f.c === PAL.black);
+      const plate = g.fills.find((f) => f.c === PAL.ink && (f.h === 13 || f.h === 21) && f.x === accent.x);
+      if (dot && plate) assert.ok(dot.y + 7 <= plate.y || dot.y >= plate.y + plate.h || dot.x + 7 <= plate.x || dot.x >= plate.x + plate.w, `the dot under the name: ${JSON.stringify({ dot, plate })}`);
+      if (item.location) assert.ok(dot && plate, 'the locator drew its dot and its name');
+    }
   });
 
   test('the AI mark docks to the bug in every clip (the compliance desk\'s own when it is there)', async () => {

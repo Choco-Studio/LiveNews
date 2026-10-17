@@ -10,16 +10,18 @@
 //   death is never sober): the rings, the grid and the section's name only.
 //
 //   topicOf({ headline, category, grave }) -> { glyph, label }   (glyph null under a grave story)
-//   drawTopicBoard(ctx, item, { accent, dt })                      item: a rundown item (headline, category, grave)
+//   drawTopicBoard(ctx, item, { accent, dt, frame })               item: a rundown item (headline, category, grave)
+// `frame` sets the board in another box (a clip's vertical stage: clip/vertical.js): { x, y, w, h } on the canvas, the
+// glyph's middle (cx, cy) inside it, and the column its name keeps to (x0, x1); the name then goes under the glyph.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 
-const W = 384;
-const H = 216;
+const WIDTH = 384;
+const HEIGHT = 216;
 const SCALE = 4;
 // the glyph's middle: where the locator puts its place (clear of the TOP STORIES tag and of the headline block)
-const CX = Math.round(W * 0.66);
-const CY = Math.round(H * 0.3);
+const GX = Math.round(WIDTH * 0.66);
+const GY = Math.round(HEIGHT * 0.3);
 
 // '#' the glyph's body, '.' its shade, '+' the programme's accent, 'o' a highlight, ' ' nothing
 export const GLYPHS = {
@@ -81,10 +83,11 @@ export function topicOf({ headline = '', category = '', grave = false } = {}) {
   return section ? { glyph: section[1], label: section[2] } : { glyph: 'paper', label: 'NEWS' };
 }
 
-// the field: stepped ink to black, a dot grid, made once
-let FIELD = null;
-function field() {
-  if (FIELD) return FIELD;
+// the field: stepped ink to black, a dot grid, made once per size
+const FIELDS = new Map();
+function field(W = WIDTH, H = HEIGHT, CX = GX, CY = GY) {
+  const key = `${W}x${H}|${CX},${CY}`;
+  if (FIELDS.has(key)) return FIELDS.get(key);
   const c = document.createElement('canvas');
   c.width = W;
   c.height = H;
@@ -103,11 +106,11 @@ function field() {
       if (d < 150 || (x + y) % 16 === 0) g.fillRect(x, y, 1, 1);
     }
   }
-  FIELD = c;
+  FIELDS.set(key, c);
   return c;
 }
 
-function ring(ctx, r, colour, step = 1) {
+function ring(ctx, r, colour, step = 1, CX = GX, CY = GY) {
   ctx.fillStyle = colour;
   const n = Math.max(24, Math.round(r * 6));
   for (let a = 0; a < n; a += step) {
@@ -117,14 +120,22 @@ function ring(ctx, r, colour, step = 1) {
 }
 
 /** Draw the topic board for a rundown item with neither a picture nor a place. */
-export function drawTopicBoard(ctx, item = {}, { accent = P.red, dt = 9 } = {}) {
+export function drawTopicBoard(ctx, item = {}, { accent = P.red, dt = 9, frame = null } = {}) {
   const topic = topicOf({ headline: item.headline || item.title, category: item.category, grave: !!item.grave });
-  ctx.drawImage(field(), 0, 0);
+  const fx = frame?.x ?? 0;
+  const fy = frame?.y ?? 0;
+  const fw = frame?.w ?? WIDTH;
+  const fh = frame?.h ?? HEIGHT;
+  const lx = frame?.cx ?? GX; // the glyph's middle in the board
+  const ly = frame?.cy ?? GY;
+  const CX = fx + lx;
+  const CY = fy + ly;
+  ctx.drawImage(field(fw, fh, lx, ly), fx, fy);
   // two rings around the glyph's place, the outer one grows in once (0.1 to 0.5 s)
   const k = Math.max(0, Math.min(1, (dt - 0.1) / 0.4));
   const ease = 1 - Math.pow(1 - k, 3);
-  ring(ctx, 40, P.slate);
-  if (ease > 0) ring(ctx, Math.round(40 + 14 * ease), topic.glyph ? P.steel : P.slate, 2);
+  ring(ctx, 40, P.slate, 1, CX, CY);
+  if (ease > 0) ring(ctx, Math.round(40 + 14 * ease), topic.glyph ? P.steel : P.slate, 2, CX, CY);
   if (topic.glyph) {
     const rows = GLYPHS[topic.glyph];
     const colours = { '#': P.fog, '.': P.slate, '+': accent, o: P.white, ...(COLOURS[topic.glyph] || {}) };
@@ -156,8 +167,12 @@ export function drawTopicBoard(ctx, item = {}, { accent = P.red, dt = 9 } = {}) 
   const tw = measureText(label, 1, 'body');
   const bw = tw + 12;
   const bh = 13;
-  const x = topic.glyph ? Math.max(13, CX - 8 * SCALE - 10 - bw) : Math.max(13, CX - Math.round(bw / 2));
-  const y = CY - Math.round(bh / 2);
+  // (in a frame of its own the name goes under the glyph's outer ring, centred, inside the frame's column)
+  const under = !!frame && !!topic.glyph;
+  const x0 = fx + (frame?.x0 ?? 13);
+  const x1 = fx + (frame?.x1 ?? fw - 13);
+  const x = under ? Math.max(x0, Math.min(x1 - bw, CX - Math.round(bw / 2))) : topic.glyph ? Math.max(x0, CX - 8 * SCALE - 10 - bw) : Math.max(x0, Math.min(x1 - bw, CX - Math.round(bw / 2)));
+  const y = under ? CY + 58 : CY - Math.round(bh / 2);
   const p = Math.max(0, Math.min(1, (dt - 0.2) / 0.3));
   const shownW = Math.round(bw * (1 - Math.pow(1 - p, 3)));
   if (shownW > 0) {

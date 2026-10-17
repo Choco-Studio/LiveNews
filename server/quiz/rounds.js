@@ -165,7 +165,7 @@ export function buildQuestions(type, asked, options, rnd, { todayStart, taken = 
         picks.forEach((p) => taken.add(p.key));
         const tiles = shuffle([ev, ...picks], rnd);
         return {
-          type, key: ev.key, image: ev.image, imageId: ev.imageId || ev.key, words: ev.words, steps: PICTURE_STEPS, aired: aired(ev),
+          type, key: ev.key, image: ev.image, imageId: ev.imageId || ev.key, ...(ev.imageRights ? { imageRights: ev.imageRights } : {}), words: ev.words, steps: PICTURE_STEPS, aired: aired(ev),
           options: tiles.map((t, i) => ({ letter: letter(i), words: t.words, key: t.key, desk: t.category })),
           answer: letter(tiles.indexOf(ev)),
         };

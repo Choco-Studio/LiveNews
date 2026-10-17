@@ -52,6 +52,7 @@ const BLOCK = '\u0001'; // marks HTML block ends while tags are stripped
 const BLOCK_TAG = /^<(?:br\s*\/?|\/p|\/li|\/h\d)\s*>$/i;
 // Nothing on air needs more than this much of an item's raw HTML.
 export const MAX_RAW_HTML = 20_000;
+const FEED_TEXT_MAX = 6000; // a feed's full text kept on a story (server/articlecache.js ARTICLE_MAX)
 
 /**
  * Strip tags with one left-to-right pass (indexOf, no backtracking regex): a
@@ -358,6 +359,11 @@ function parseItem(item, index, feed, { baseDir, now }) {
     // (a broadcaster's own video script in its summary, "Here's Jennie Shin with more", hands over to no one here)
     // (and page furniture a scraper left in it: a menu, a site's tagline, a teaser cut off with "[…]")
     const summary = dropPageFurniture(dropTranscriptLines(onAirText(stripBoilerplate(cleanHtml(dropStandfirst(rawSummary.slice(0, MAX_RAW_HTML))))))).slice(0, 900);
+    // the feed's own full text when it gives one (content:encoded, an Atom entry's content): the outlet's words the
+    // article cache keeps for an aired story whose page the desk did not read (server/articlecache.js), text only
+    const fullRaw = text(item['content:encoded']) || text(item.content);
+    const full = fullRaw ? stripBoilerplate(cleanHtml(fullRaw.slice(0, MAX_RAW_HTML))).replace(/\s+/g, ' ').trim().slice(0, FEED_TEXT_MAX) : '';
+    const feedText = full.length > summary.length + 200 ? full : '';
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     // Undated items: "now", one second older per position (feeds list the newest first),
     // so the desk ranks them the same way on every run. A date in the future is never later than now (it
@@ -384,6 +390,7 @@ function parseItem(item, index, feed, { baseDir, now }) {
       ...(pictures.length > 1 ? { images: pictures.map((p) => p.url) } : {}),
       ...(credits ? { imageCredits: credits } : {}),
       ...(page ? { page } : {}),
+      ...(feedText ? { feedText } : {}),
       ...(baseDir ? { local: true } : {}),
       ...(isLiveBlog(title) ? { live: true } : {}),
       ...(dated ? {} : { undated: true }),

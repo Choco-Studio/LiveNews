@@ -76,7 +76,7 @@ export function dayStories(entries, { day = null, timeZone = 'Europe/London', li
         kicker: best.kicker || '',
         place: best.location?.place || '',
         // what the story's words are measured against: every grouped outlet's title and summary (the article, when
-        // the compliance desk's audit cached it, is added by the caller: articles)
+        // the article cache holds it, server/articlecache.js, is added by the caller: articles)
         sourceTexts: [...new Set(g.entries.flatMap((e) => [e.title, e.summary]).map(norm).filter(Boolean))],
         articles: [],
         programmes: [...programmes],

@@ -307,6 +307,11 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase, area }) {
       if (a === 0) break;
     }
   }
+  // (no place inside the area at all: the first, kept inside it, so a label never leaves the frame's safe column)
+  if (best === Infinity) {
+    lx = Math.max(area.x0, Math.min(area.x1 - bw, lx));
+    ly = Math.max(area.y0, Math.min(area.y1 - bh, ly));
+  }
   BOX.push([x - 8, y - 7, x + 8, y + 7], [lx, ly, lx + bw, ly + bh]);
   // its symbol, unless that would cover a high or a low: then a dot marks the place (the chip says the weather)
   if (!SYSBOX.some((b) => x - 8 < b[2] && x + 8 > b[0] && y - 7 < b[3] && y + 7 > b[1])) drawIcon(ctx, d.kind, x, y, t, { night, phase });
@@ -329,11 +334,12 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase, area }) {
   return { x, y };
 }
 
+const EDGE = { x: 2, y: 4 }; // how far inside the area a city's spot must be (the vertical frame keeps its symbol in too)
 /**
  * The cities on the wall or the graphic: `proj(lat, lon)` -> screen { x, y } | null. A zone shows all its cities
  * with their names; the world shows the ones the voice has named (and, with `all`, every city that has room).
  */
-function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false, reveal = null }) {
+function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false, reveal = null, edge = EDGE }) {
   const where = new Map();
   const list = [];
   const zoneIds = zone ? new Set(zone.cities.map((c) => c.id)) : null;
@@ -343,7 +349,7 @@ function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avo
     if (!zoneIds && !all && !(named && named.has(c.id)) && c.id !== hotId) continue;
     if (!c.today) continue;
     const p = proj(c.lat, c.lon);
-    if (!p || p.x < area.x0 + 2 || p.x > area.x1 - 2 || p.y < area.y0 + 4 || p.y > area.y1 - 4) continue;
+    if (!p || p.x < area.x0 + edge.x || p.x > area.x1 - edge.x || p.y < area.y0 + edge.y || p.y > area.y1 - edge.y) continue;
     where.set(c.id, p);
     list.push({ c, x: Math.round(p.x), y: Math.round(p.y) });
   }
@@ -899,6 +905,8 @@ export function drawWeather(ctx, t, scene, audio) {
   const hotSince = t - (W8.hotAt || 0);
   const hotId = W8.hot && hotSince >= 0 && hotSince < 2.6 ? W8.hot : null;
   const hotK = hotId ? Math.min(1, hotSince / 0.25) : 0;
+  // what a clip's vertical frame composes again at this t (drawWeatherVertical)
+  ST.frame = { t, data, seg, tgt, mo, layers, hotId, hotK, k, moveAt: ST.moveAt, arrive };
 
   if (shot === 'graphic') drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK);
   else if (shot === 'board') drawBoard(ctx, t, data, seg, since, layers);
@@ -1265,7 +1273,257 @@ function currentHot() {
 export function weatherView(t) {
   if (ST.lastT !== t) return null;
   const v = ST.view8 && ST.view8.t === t ? ST.view8 : null;
-  return { shot: ST.shot?.shot || null, presenterX: Number.isFinite(ST.presenter?.x) ? ST.presenter.x : null, board: v?.board || null, state: v };
+  const who = ST.shot === 'mcu' ? ST.closeup : ST.presenter;
+  return { shot: ST.shot || null, presenterX: Number.isFinite(who?.x) ? who.x : null, board: v?.board || null, state: v };
 }
 
-export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK, beatsFor, closeupTarget };
+// ------------------------------------------------------------------------------------------- the vertical picture
+/**
+ * The map shots composed again for a clip's vertical stage (public/js/clip/vweather.js; docs/publishing/vertical.md
+ * §3.6): not a window on the 384-wide frame but the same drawing at the stage's size, every word inside the platforms'
+ * safe column (`safe`: x 8-188 of the 216-wide frame) and inside the stage, so above their caption band.
+ *   graphic  the world at the horizontal graphic's own pixel scale, half of it in view: the camera opens on the first
+ *            place the voice names and pans to each place, high or low it names next (unless it is already well in
+ *            the column); the clock (or the tab) at the top, the scale and the source at the foot
+ *   wall     the zone fitted to the column (the Americas fill its height), flown in and on to the next zone as on
+ *            air; its cities with their names once the camera has arrived, the one being said in brackets; the tab,
+ *            the clock, the scale, the source
+ *   warning  the storm over the panel, the warnings panel sliding in from the column's edge
+ * The presenter is not in these (the close-up keeps him: vweather.js's window on the horizontal frame).
+ *   drawWeatherVertical(ctx, t, box, safe) -> true when it drew (only for the t the weather centre has just drawn)
+ */
+const VWORLD_ZOOM = 2.2; // 216 px wide at the horizontal graphic's 1.2 px a degree (384 / 360 x 1.12)
+const VWALL_K = 400 / 216; // the wall's pixel scale at the stage's width (the wall's picture is 400 px wide)
+const VPAN = 1.1; // s: the world's camera moving to the next place named
+const VST = { seg: null, shot: null, view: null, from: null, to: null, at: -1e9, focus: null, zone: null, prevZone: null, chipsAt: null };
+const VPICS = new Map(); // 'w x h' -> { buf, img }
+const VSYS = [];
+const CITY_OF = new WeakMap();
+
+function vBuffer(w, h) {
+  const key = `${w}x${h}`;
+  let b = VPICS.get(key);
+  if (!b) VPICS.set(key, (b = { buf: new Uint32Array(w * h), img: null }));
+  return b;
+}
+function putBuffer(ctx, b, w, h, x, y) {
+  if (typeof ImageData === 'function') {
+    b.img ||= new ImageData(new Uint8ClampedArray(b.buf.buffer), w, h);
+    ctx.putImageData(b.img, x, y);
+    return;
+  }
+  const img = ctx.createImageData?.(w, h);
+  if (!img) return;
+  img.data.set(new Uint8ClampedArray(b.buf.buffer));
+  ctx.putImageData(img, x, y);
+}
+function cityOf(data, id) {
+  let m = CITY_OF.get(data);
+  if (!m) CITY_OF.set(data, (m = new Map([...data.zones.flatMap((z) => z.cities), ...(data.extra || [])].map((c) => [c.id, c]))));
+  return m.get(id) || null;
+}
+/** The place the voice named last in this segment: a city, or the high or low (where it stands at the sky's hour). */
+function namedLast(F) {
+  let best = null, at = -Infinity;
+  for (const [id, x] of ST.spoken) {
+    const c = x > at ? cityOf(F.data, id) : null;
+    if (c) [best, at] = [{ key: `c:${id}`, lat: c.lat, lon: c.lon }, x];
+  }
+  if (ST.pinId != null && ST.pinAt > at && ST.sky?.tracks) {
+    const s = systemsAt(ST.sky.tracks, frameOf(ST.sky, systemsHour(F.mo)), VSYS, ST.pinId).find((x) => x.id === ST.pinId);
+    if (s) best = { key: `s:${ST.pinId}`, lat: s.lat, lon: s.lon };
+  }
+  return best;
+}
+/** The first place the segment's script names (a city's mark or a high or low's pin), or null. */
+function namedFirst(seg, data) {
+  const cues = [...(seg.marks || []).map((m) => ({ char: m.char, city: m.city })), ...(seg.pins || []).map((p) => ({ char: p.char, lat: p.lat, lon: p.lon }))].sort((a, b) => a.char - b.char);
+  for (const c of cues) {
+    if (c.city) {
+      const p = cityOf(data, c.city);
+      if (p) return p;
+    } else if (Number.isFinite(c.lat) && Number.isFinite(c.lon)) return c;
+  }
+  return null;
+}
+
+/** The vertical world's camera: { lat, lon, zoom }, the place named at the safe column's middle. */
+function vWorldView(t, F, box, safe) {
+  const s = (box.w / 360) * VWORLD_ZOOM;
+  const mid = (safe.x0 + safe.x1) / 2 - box.x; // the column's middle in the picture
+  const halfLat = (box.h / 2 - 26) / s;
+  const aim = (p, lat0) => {
+    const lat = Math.abs(p.lat - lat0) <= halfLat ? lat0 : p.lat - Math.sign(p.lat - lat0) * halfLat;
+    const kx = Math.min(1, Math.max(0.5, Math.cos(lat * DEG)));
+    return { lat, lon: p.lon - (mid - box.w / 2) / (s * kx) };
+  };
+  if (VST.seg !== F.seg || VST.shot !== 'graphic') {
+    const p = namedFirst(F.seg, F.data);
+    const at = p ? aim(p, WORLD.lat) : { lat: WORLD.lat, lon: WORLD.lon };
+    Object.assign(VST, { seg: F.seg, shot: 'graphic', from: at, to: at, at: -1e9, focus: null });
+  }
+  const k0 = ease((t - VST.at) / VPAN);
+  const cur = { lat: lerp(VST.from.lat, VST.to.lat, k0), lon: VST.from.lon + wrap(VST.to.lon - VST.from.lon) * k0 };
+  const f = namedLast(F);
+  if (f && f.key !== VST.focus) {
+    VST.focus = f.key;
+    // a place already well inside the column stays where it is; one near its edges or beyond them is brought in
+    const kx = Math.min(1, Math.max(0.5, Math.cos(VST.to.lat * DEG)));
+    const x = mid + wrap(f.lon - (VST.to.lon + (mid - box.w / 2) / (s * kx))) * s * kx;
+    const y = box.h / 2 + (VST.to.lat - f.lat) * s;
+    if (x < safe.x0 - box.x + 36 || x > safe.x1 - box.x - 36 || y < 30 || y > box.h - 34) Object.assign(VST, { from: cur, to: aim(f, VST.to.lat), at: t });
+  }
+  const k = ease((t - VST.at) / VPAN);
+  return { lat: lerp(VST.from.lat, VST.to.lat, k), lon: VST.from.lon + wrap(VST.to.lon - VST.from.lon) * k, zoom: VWORLD_ZOOM };
+}
+
+/** A view flown from `from` to `to` (k 0..1), pulling out a little on a long hop, as the wall's camera does. */
+function flown(from, to, k) {
+  const hop = Math.hypot(wrap(to.lon - from.lon) * 0.6, to.lat - from.lat);
+  const dip = Math.min(0.45, hop / 160) * Math.sin(Math.PI * k);
+  const zoom = Math.exp(lerp(Math.log(from.zoom), Math.log(to.zoom), k)) * (1 - dip);
+  return { lat: lerp(from.lat, to.lat, k), lon: from.lon + wrap(to.lon - from.lon) * k, zoom: Math.max(1, zoom) };
+}
+
+const vProj = (box, v) => (lat, lon) => ({ x: box.x + box.w / 2 + wrap(lon - v.clon) * v.s * v.kx, y: box.y + box.h / 2 + (v.clat - lat) * v.s });
+
+/** The scale and the source at the stage's foot, right-aligned on the column's edge (the scale over the source). */
+function vFoot(ctx, data, safe, foot, legend) {
+  const r = [drawSource(ctx, data, safe.x1, foot - 9)];
+  if (legend) r.push(drawLegend(ctx, safe.x1 - RAMP.length * 6 - 1, foot - 26));
+  return r;
+}
+
+function vGraphic(ctx, t, box, safe, F) {
+  const { data, seg, tgt, mo, layers, hotId, hotK } = F;
+  const b = vBuffer(box.w, box.h);
+  const view = vWorldView(t, F, box, safe);
+  const v = wallPicture(b.buf, box.w, box.h, view, fieldFor(data, tgt.day), layers, { tau: ST.tau, isobars: true, isoColor: PK.fog, opacity: 0.9, stormMin: STORM_MIN.graphic }, t);
+  putBuffer(ctx, b, box.w, box.h, box.x, box.y);
+  if (!v) return;
+  const proj = vProj(box, v);
+  BOX.length = 0;
+  SYSBOX.length = 0;
+  const top = box.y + 4, foot = box.y + box.h;
+  const clock = !!(ST.sky && seg.timelapse);
+  // the plates: their places taken first (nothing is set under them), drawn again last (no bracket or ring over them)
+  const plates = () => {
+    const r = [];
+    if (clock) r.push(drawClock(ctx, clockLabel(ST.sky.start + mo.hour * 3600_000), mo.prog, safe.x0, top, (t - ST.cutAt - 0.3) / 0.35, 'THE NEXT 24 HOURS') || [safe.x0 - 1, top - 1, safe.x0 + 70, top + 24]);
+    else {
+      const tab = seg.kind === 'tomorrow' ? ['TOMORROW', 'HIGHS'] : ['WORLD WEATHER', 'TODAY · HIGHS'];
+      r.push(drawTab(ctx, tab[0], tab[1], safe.x0, top));
+    }
+    return [...r, ...vFoot(ctx, data, safe, foot, !clock)];
+  };
+  BOX.push(...plates());
+  const area = { x0: safe.x0, x1: safe.x1, y0: box.y + 2, y1: foot - 11 };
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.graphic);
+  claimStorms(proj, rOf);
+  drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { ...area, x0: area.x0 + 3, x1: area.x1 - 3 });
+  drawCities(ctx, t, data, seg, { proj, zone: null, day: tgt.day, hotId, hotK, area, named: new Set(ST.spoken.keys()), all: !ST.sky, edge: { x: 9, y: 8 } });
+  drawStormTags(ctx, proj, area, rOf);
+  plates();
+}
+
+function vZone(ctx, t, box, safe, F) {
+  const { data, seg, tgt, mo, layers, hotId, hotK, k } = F;
+  const top = box.y + 4, foot = box.y + box.h;
+  if (VST.seg !== seg || VST.shot !== 'wall') {
+    const to = fitView(tgt.zone.cities, safe.x0 - box.x, safe.x1 - box.x, 22, box.h - 28, box.w, box.h, { min: 1.6 * VWALL_K, max: 9 * VWALL_K });
+    // along the wall the camera flies on from the last zone; a cut into the wall flies in from a wider view
+    const along = VST.shot === 'wall' && VST.view;
+    Object.assign(VST, { seg, shot: 'wall', from: along ? VST.view : { lat: to.lat, lon: to.lon, zoom: Math.max(1, to.zoom * 0.55) }, to, prevZone: along ? VST.zone : null, zone: tgt.zone, chipsAt: null });
+  }
+  const view = (VST.view = flown(VST.from, VST.to, k));
+  const b = vBuffer(box.w, box.h);
+  const v = wallPicture(b.buf, box.w, box.h, view, fieldFor(data, tgt.day), layers, { tau: ST.tau, isobars: false, opacity: 0.8, stormMin: STORM_MIN.wall }, t);
+  putBuffer(ctx, b, box.w, box.h, box.x, box.y);
+  if (!v) return;
+  const proj = vProj(box, v);
+  BOX.length = 0;
+  SYSBOX.length = 0;
+  // the last zone's tab holds while the camera leaves it, the new one comes with the new zone; the plates' places are
+  // taken first and they are drawn again last (no bracket over them)
+  const zone = k < 0.5 && VST.prevZone ? VST.prevZone : tgt.zone;
+  const plates = () => {
+    const r = [drawTab(ctx, zone.name, 'TODAY · HIGHS', safe.x0, top)];
+    if (mo.clock && ST.sky) {
+      const c = drawClock(ctx, clockLabel(ST.sky.start + mo.hour * 3600_000), mo.prog, safe.x0, top + 14, (t - F.arrive + 0.2) / 0.35);
+      if (c) r.push(c);
+    }
+    return [...r, ...vFoot(ctx, data, safe, foot, true)];
+  };
+  BOX.push(...plates());
+  const area = { x0: safe.x0, x1: safe.x1, y0: box.y + 2, y1: foot - 11 };
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.wall);
+  if (k < 1) return;
+  // once the camera has arrived: the highs and lows rising in, the zone's cities wiped down from west to east
+  claimStorms(proj, rOf);
+  drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { ...area, x0: area.x0 + 3, x1: area.x1 - 3 }, { reveal: (t - F.arrive) / 0.3 });
+  if (VST.chipsAt == null) VST.chipsAt = t;
+  const t0c = VST.chipsAt;
+  drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area, reveal: (i) => (t - t0c - i * 0.06) / 0.24, edge: { x: 9, y: 8 } });
+  drawStormTags(ctx, proj, area, rOf);
+  plates();
+}
+
+function vWarning(ctx, t, box, safe, F) {
+  const { data, seg, tgt, k, layers } = F;
+  const warn = tgt.warning;
+  const top = box.y + 4, foot = box.y + box.h;
+  const py = foot - PANEL.h - 4; // the panel's top
+  if (VST.seg !== seg || VST.shot !== 'warning') {
+    // the storm in the band over the panel, a little right of the column's middle (the tab is at its left)
+    const zoom = 3.4 * VWALL_K;
+    const s = (box.w / 360) * zoom;
+    const sx = (safe.x0 + safe.x1) / 2 - box.x + 14, sy = (16 + py - box.y) / 2 + 2;
+    const kx = warn ? Math.min(1, Math.max(0.5, Math.cos(warn.lat * DEG))) : 1;
+    const to = warn ? { lat: warn.lat + (sy - box.h / 2) / s, lon: warn.lon - (sx - box.w / 2) / (s * kx), zoom } : { lat: 20, lon: -40, zoom: 1.6 * VWALL_K };
+    Object.assign(VST, { seg, shot: 'warning', from: { lat: to.lat, lon: to.lon, zoom: Math.max(1, to.zoom * 0.55) }, to, prevZone: null, zone: null });
+  }
+  const view = (VST.view = flown(VST.from, VST.to, k));
+  const b = vBuffer(box.w, box.h);
+  const v = wallPicture(b.buf, box.w, box.h, view, fieldFor(data, 'today'), layers, { tau: ST.tau, isobars: false, opacity: 0.8, stormMin: STORM_MIN.wall }, t);
+  putBuffer(ctx, b, box.w, box.h, box.x, box.y);
+  if (!v) return;
+  const proj = vProj(box, v);
+  BOX.length = 0;
+  SYSBOX.length = 0;
+  BOX.push(drawTab(ctx, 'WARNINGS', 'GDACS ALERTS', safe.x0, top, P.orange));
+  if (warn && warn.type !== 'cyclone') {
+    const p = proj(warn.lat, warn.lon);
+    ctx.fillStyle = LEVEL_COLOR[warn.level] || P.orange;
+    ctx.fillRect(Math.round(p.x) - 3, Math.round(p.y) - 3, 7, 7);
+  }
+  // the panel slides in from the column's edge (it is never seen past it)
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.rect(safe.x0 - 3, box.y, safe.x1 - safe.x0 + 6, box.h);
+    ctx.clip();
+    drawWarningPanel(ctx, t, ease((t - F.moveAt - 0.3) / 0.9), warn, data, Math.round((safe.x0 + safe.x1 + PANEL.w) / 2), py);
+  } finally {
+    ctx.restore();
+  }
+}
+
+export function drawWeatherVertical(ctx, t, box, safe = { x0: box.x + 8, x1: box.x + box.w - 8 }) {
+  const F = ST.frame;
+  if (!F || F.t !== t || !F.data?.zones?.length) return false;
+  const shot = F.tgt?.shot;
+  if (!(shot === 'graphic' || shot === 'warning' || (shot === 'wall' && F.tgt.zone))) return false;
+  const picN = ST.picN; // (the horizontal wall redraws its set only for its own new pictures)
+  const t0 = now();
+  try {
+    if (shot === 'graphic') vGraphic(ctx, t, box, safe, F);
+    else if (shot === 'warning') vWarning(ctx, t, box, safe, F);
+    else vZone(ctx, t, box, safe, F);
+  } finally {
+    ST.picN = picN;
+    prof('vertical', t0);
+  }
+  return true;
+}
+
+export const __test = { targetOf, zoneView, ST, VST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK, beatsFor, closeupTarget };

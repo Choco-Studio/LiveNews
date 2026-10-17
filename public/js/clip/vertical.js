@@ -32,6 +32,9 @@ import { VW, VH, V, HW, HH, SAFE, boardBox } from './layout.js';
 import { WordCaptions, CLIP_CAPTION } from './captions.js';
 import { drawVerticalBoard, boardKind, microFit } from './vboards.js';
 import { drawBugOnly, drawProgrammeTag, speechNow, graveNow, boardRepeats } from './graphics.js';
+import { pictureCreditOf } from '../graphics/picture.js';
+import { prepareLocator, drawLocator } from '../graphics/locator.js';
+import { drawTopicBoard } from '../graphics/topicboard.js';
 
 const ST = V.stage;
 const REST_WALL = Object.freeze({ mode: 'rest' });
@@ -180,6 +183,7 @@ export class VerticalCompositor {
       ctx.clip();
       const shot = scene.shot;
       const dt = t - (scene.shotSince || 0);
+      this.shownPicture = null; // the story whose picture this frame's stage shows (its credit is drawn over it)
       if (STUDIO.has(shot)) this.studio(t, scene);
       else if (shot === 'fact') {
         if (!this.board(t, scene, dt)) this.middle(scene);
@@ -203,6 +207,8 @@ export class VerticalCompositor {
       // the story's source and NEWS IN 60's minute, on the stage: in a clip the hook holds the title band and the feeds
       // cover the foot, so the stage is where they are seen (a board, the montage and a recreation carry their own)
       if ((STUDIO.has(shot) || ['map', 'full', 'broll', 'location'].includes(shot)) && this.profile?.name !== 'tall') this.sourcePlate(t, scene);
+      // the picture's credit (or the file footage's) as its licence asks, while it is on the stage
+      this.pictureCredit(scene);
       this.progressRule();
       if (scene.recreation) this.recreationLabel(scene.recreation, scene);
     } finally {
@@ -373,6 +379,30 @@ export class VerticalCompositor {
     if (!pic) return this.middle(scene);
     const { ox, oy } = picturePan(dt, pic.width - VW, pic.height - this.box.h, scene.panDir, scene.program?.id);
     this.ctx.drawImage(pic, -Math.round(ox), this.box.y - Math.round(oy));
+    this.shownPicture = scene.storyId;
+  }
+
+  /**
+   * The credit of what the stage shows that is not the channel's own: the story's picture (full frame, B-roll, the
+   * headline frame) as graphics/picture.js credits it on air, or a link's file footage (scene.fileCredit). Set for the
+   * tall frame: in the safe column under the source plate, wrapped at whole words, never cut (drawVerticalCredit).
+   */
+  pictureCredit(scene) {
+    const shot = scene.shot;
+    let c = this.shownPicture ? pictureCreditOf(scene, this.shownPicture) : null;
+    if (!c?.credit && scene.remote && scene.fileCredit && (shot === 'location' || shot === 'broll')) c = { credit: scene.fileCredit, uncleared: false };
+    if (!c?.credit) return 0;
+    const y = this.box.y + (shot === 'montage' || shot === 'tease' ? 4 : 16);
+    return drawVerticalCredit(this.ctx, c.credit, { x: SAFE.x, y, w: SAFE.w, uncleared: !!c.uncleared });
+  }
+
+  /**
+   * The locator board for a story with a place and no picture (graphics/locator.js), prepared for the headline frame's
+   * tall backdrop: the place at the safe column's middle, its name inside the column and above the headline's plate.
+   * Prepared once per place (the clip's recording waits for it; the channel on air never runs this).
+   */
+  locatorFor(loc, box) {
+    return prepareLocator(loc, { w: VW, h: box.h, anchor: { x: SAFE.cx / VW, y: 0.3 }, frame: { x0: SAFE.x + 4, x1: SAFE.right - 4, y0: 8, y1: box.h - 106 } });
   }
 
   broll(t, scene, dt) {
@@ -418,10 +448,20 @@ export class VerticalCompositor {
     const acc = THEME_ACCENT[scene.program?.theme] || P.red;
     const pic = scene.images?.get?.(item.storyId)?.card || null;
     const loc = item.location;
+    const place = Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
     // (the backdrop fills the box above the plate; a photo is centred on the safe column)
-    if (pic) ctx.drawImage(pic, Math.round(SAFE.cx - pic.width / 2), this.box.y);
-    else if (Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon)) drawWorldMap(ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: acc, programId: scene.program?.id, follow: true });
-    else ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+    if (pic) {
+      ctx.drawImage(pic, Math.round(SAFE.cx - pic.width / 2), this.box.y);
+      this.shownPicture = item.storyId;
+    } else if (place) {
+      // no picture: the place's locator board set for the tall frame (else, while the map data loads, the map shot)
+      const board = this.locatorFor(loc, this.box);
+      if (board) drawLocator(ctx, board, loc, { accent: acc, dt, x: 0, y: this.box.y });
+      else drawWorldMap(ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: acc, programId: scene.program?.id, follow: true });
+    } else if (item.storyId && scene.program?.theme !== 'sport') {
+      // no picture and no place: the topic board, its glyph over the column's middle, its name under it
+      drawTopicBoard(ctx, item, { accent: acc, dt, frame: { x: 0, y: this.box.y, w: VW, h: this.box.h, cx: SAFE.cx, cy: 52, x0: SAFE.x + 4, x1: SAFE.right - 4 } });
+    } else ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
     // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
     const headline = String(item.headline || '').toUpperCase();
     let scale = 2;
@@ -603,6 +643,91 @@ export class VerticalCompositor {
     const lw = measureLogo({ variant: 'full', scale: 2 }).w;
     drawLogo(this.ctx, Math.round((VW - lw) / 2), 30, { variant: 'full', scale: 2, t });
   }
+}
+
+/**
+ * FILE (or FILE 2023, or PHOTO for a picture of the event itself) and a picture's credit as its licence asks
+ * (server/rights.js onAirCredit: "FILE · JANE DOE · CC BY-SA 4.0 · PIXELATED"), set for the tall frame at (x, y) inside
+ * a column `w` wide, all in the body face (7 px at 1x, 35 px on 1920: the size the compliance desk asks of a vertical
+ * label, never the micro face): the tag white on black, the credit silver on black beside it, then under it across
+ * the column, wrapped at whole parts and words (a word too long for a line is broken, never dropped: the licence asks
+ * for all of it); PREVIEW · NOT CLEARED in yellow under it in a private preview. Returns the rows it took.
+ */
+export function drawVerticalCredit(ctx, credit, { x = SAFE.x, y, w = SAFE.w, uncleared = false } = {}) {
+  const raw = String(credit || '').trim();
+  if (!raw) return 0;
+  const m = /^(FILE(?: \d{4})?|PHOTO)\s*·\s*/i.exec(raw);
+  const tag = m ? m[1].toUpperCase() : 'PHOTO';
+  const text = raw.slice(m ? m[0].length : 0).toUpperCase();
+  const tw = measureText(tag) + 8;
+  // the first line beside the tag, the others the column's width under it (each plate 8 px wider than its words)
+  const lines = creditWords(text, w - tw - 1 - 8, w - 8);
+  ctx.fillStyle = P.black;
+  ctx.fillRect(x, y, tw, 11);
+  drawText(ctx, tag, x + 4, y + 2, S.white);
+  lines.forEach((line, i) => {
+    const lw = measureText(line);
+    const lx = i === 0 ? x + tw + 1 : x;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(lx, y + i * 12, lw + 8, 11);
+    drawText(ctx, line, lx + 4, y + 2 + i * 12, S.silver);
+  });
+  let h = Math.max(1, lines.length) * 12 - 1;
+  if (uncleared) {
+    const pt = 'PREVIEW · NOT CLEARED';
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y + h + 1, measureText(pt) + 8, 11);
+    drawText(ctx, pt, x + 4, y + h + 3, { color: P.yellow });
+    h += 12;
+  }
+  return h;
+}
+
+/**
+ * A credit in lines of body type, the first at most `firstPx` wide and the others `restPx` (default: the same): its
+ * parts (the author, the licence, PIXELATED) kept whole and joined with " · " while they fit, a line ending with "·"
+ * before the next part; a part too long for a line wrapped at its words, a word too long for a line broken (never
+ * dropped).
+ */
+export function creditWords(text, firstPx, restPx = firstPx, font = 'body') {
+  const width = (s) => measureText(s, 1, font);
+  const sep = width(' ·'); // (room kept on every line for the separator that may end it)
+  const room = (n) => (n === 0 ? firstPx : restPx) - sep;
+  const fits = (s, n) => width(s) <= room(n);
+  const lines = [];
+  const breakWord = (wd, n) => {
+    if (fits(wd, n)) return [wd];
+    const out = [];
+    let cur = '';
+    for (const ch of wd) {
+      if (cur && !fits(cur + ch, n + out.length)) {
+        out.push(cur);
+        cur = '';
+      }
+      cur += ch;
+    }
+    return cur ? [...out, cur] : out;
+  };
+  for (const part of String(text || '').split(/\s+·\s+/).map((p) => p.trim()).filter(Boolean)) {
+    const n = lines.length - 1;
+    if (n >= 0 && fits(`${lines[n]} · ${part}`, n)) {
+      lines[n] = `${lines[n]} · ${part}`;
+      continue;
+    }
+    if (n >= 0) lines[n] = `${lines[n]} ·`;
+    // the part on a line of its own, each word joining the line while it fits
+    let first = true;
+    for (const wd of part.split(/\s+/).filter(Boolean)) {
+      const k = lines.length - 1;
+      if (!first && fits(`${lines[k]} ${wd}`, k)) {
+        lines[k] = `${lines[k]} ${wd}`;
+        continue;
+      }
+      for (const piece of breakWord(wd, lines.length)) lines.push(piece);
+      first = false;
+    }
+  }
+  return lines;
 }
 
 const DARK_INK = new Set([P.yellow, P.cyan, P.green, P.cream, P.white, P.silver, P.orange, P.pink]);

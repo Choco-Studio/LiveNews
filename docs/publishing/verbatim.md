@@ -85,6 +85,28 @@ not. A post with no source texts gets a warning, and so does one checked against
 publishing desk's posts writer applies the same rule before a post is written (`server/publish/posts.js`,
 `wording.js`).
 
+**The article cache** (`server/articlecache.js`, round 5). The sources a clip, an upload or a post is measured against
+are the archive's title and summary, plus the story's own words that the channel already read. These words are kept
+beside the archive in `data/compliance/articles/<sha1(link)[:20]>.json` as `{ link, text, via, source, at }`, the
+format this audit already uses:
+- **article:** the article text the news desk read for the writer (`news.js` `readArticle`). It is the outlet's page,
+  read under the desk's own rules, and only its first paragraphs (`article.js` caps it at 2,400 characters).
+- **feed:** otherwise, the feed's own full text (`content:encoded`, or an Atom entry's content), when it says more than
+  the summary (`news.js` `parseItem` `feedText`).
+
+The cache fetches nothing, and no page is read that the channel did not already read. The archive writes the cache
+as it records each story an episode tells (`Archive({ articles })`, when the episode is made), so only the stories
+the channel tells are kept. It stores text only, at
+most 6,000 characters, cut at a sentence. An article kept is never replaced by a feed's text. A story told again
+refreshes its file. A file not written or refreshed for 14 days (the archive's own span) is removed, checked at most
+once an hour. `archiveGetStory` reads the cache, so the factory, the upload, the publisher, its re-check and the posts
+writer all measure against it. With it, a post can carry an aired line that the article proves is the channel's own
+words (`posts.js` `newsLine`).
+
+`ARTICLE_CACHE=off` keeps nothing, and a feed marked `"cache": false` in the feeds file is never kept. The news desk's
+reader does not consult robots.txt or terms before it reads a page, and the cache keeps only what that reader read, so
+it adds no reading of its own. Keeping the extracts is item 11 of the lawyer's list (`compliance.md` §9).
+
 **The live stream's net: the launch report.** The stream has no publish step, so `launchReport()` (`node tools/compliance/cli.mjs launch`) measures what aired. `archiveSample()` reads the last 300 real stories of `data/archive` and checks each one's reading and analysis against its title and summary, and against its article when this audit has cached it in `data/compliance/articles`. Launch is blocked while more than 5 % of those stories break the rule. On 17 Oct 2026 the rate is 80.3 % against title and summary alone (241 of 300), and 99 % with the articles (297 of 300, 280 articles cached). It takes about a third of a second.
 
 ## 5. How the fallback writer can comply (proposal, for the writer team)

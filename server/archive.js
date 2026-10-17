@@ -7,6 +7,8 @@
 //   archive.week({ days, now, same })   the week's stories, grouped by event: [{ key, entries, first, last, times,
 //                                       programmes, days, best, latest, score }], the most told first
 //   archive.story(id)                   an archived story (for its picture once the news desk has let it go)
+// With `articles` (server/articlecache.js), each recorded story's article text (or its feed's full text) is kept beside
+// it, the outlet's words a clip or a post is measured against once the news desk has let the story go.
 import fs from 'node:fs';
 import path from 'node:path';
 import { compactRights, currentRights } from './rights.js';
@@ -15,8 +17,9 @@ const DAY = 86400_000;
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 export class Archive {
-  constructor({ dir = null, days = 14, now = () => Date.now(), log = console, pictures = null } = {}) {
+  constructor({ dir = null, days = 14, now = () => Date.now(), log = console, pictures = null, articles = null } = {}) {
     this.dir = dir;
+    this.articles = articles;
     // the picture rights mode (server/rights.js): 'cleared' shows an archived picture again only with its cleared rights
     // record (an older entry's outlet photo is kept aside as `outletImage`); 'preview' shows them all; null (tests,
     // older callers) leaves the entries as written
@@ -113,6 +116,7 @@ export class Archive {
       };
       lines.push(e);
       this.keep(e);
+      this.articles?.save?.(s);
     }
     this.prune();
     if (this.dir && lines.length) {

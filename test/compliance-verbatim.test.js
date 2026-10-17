@@ -93,3 +93,62 @@ test('the launch report measures what aired: copied summaries block launch, comp
   assert.equal(archiveGetStory({ dataDir })('s20').body, ARTICLE);
   assert.equal(archiveGetStory({ dataDir })('nope'), null);
 });
+
+test('the article cache: the archive keeps the article the desk read (else the feed\'s full text), capped, expired; nothing fetched', async () => {
+  const { ArticleCache, sourceTextOf, ARTICLE_MAX } = await import('../server/articlecache.js');
+  const { Archive } = await import('../server/archive.js');
+  const { parseFeed } = await import('../server/news.js');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'articles-'));
+  let clock = Date.parse('2026-10-17T12:00:00Z');
+  const now = () => clock;
+  const cache = new ArticleCache({ dir: path.join(dataDir, 'compliance', 'articles'), now });
+  const archive = new Archive({ dir: path.join(dataDir, 'archive'), now, articles: cache });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => assert.fail('the cache never fetches');
+  try {
+    // the article the desk read for the writer; a story with only its feed's full text; one with neither
+    const read = { id: 'a1', title: 'Harbour bridge to close to cars', summary: 'The council voted to close the bridge.', link: 'https://news.example/bridge', source: 'Example News', body: ARTICLE, bodyVia: 'jsonld' };
+    const feedOnly = { id: 'a2', title: 'Ferry for cyclists', summary: 'A ferry will carry cyclists.', link: 'https://news.example/ferry', source: 'Example News', feedText: `${ARTICLE} `.repeat(30) };
+    const bare = { id: 'a3', title: 'A headline only', summary: 'A teaser.', link: 'https://news.example/teaser', source: 'Example News' };
+    const stories = new Map([read, feedOnly, bare].map((s) => [s.id, s]));
+    const ep = { program: { id: 'world-now' }, storyIds: ['a1', 'a2', 'a3'], segments: ['a1', 'a2', 'a3'].map((id) => ({ type: 'story', storyId: id, headline: 'X', text: 'Told in our own words.' })) };
+    assert.equal(archive.record(ep, { get: (id) => stories.get(id) }), 3);
+    const doc = JSON.parse(fs.readFileSync(path.join(dataDir, 'compliance', 'articles', `${articleKey(read.link)}.json`), 'utf8'));
+    assert.deepEqual(Object.keys(doc).sort(), ['at', 'link', 'source', 'text', 'via']);
+    assert.equal(doc.text, ARTICLE);
+    assert.equal(doc.via, 'article:jsonld');
+    const feedDoc = cache.read(feedOnly.link);
+    assert.equal(feedDoc.via, 'feed');
+    assert.ok(feedDoc.text.length <= ARTICLE_MAX && /[.!?]$/.test(feedDoc.text), 'capped at whole sentences');
+    assert.equal(cache.text(bare.link), null, 'a teaser keeps nothing here');
+    assert.equal(sourceTextOf(bare), null);
+    // the clip, upload and post checks read it: getStory's body
+    const get = archiveGetStory({ dataDir });
+    assert.equal(get('a1').body, ARTICLE);
+    assert.ok(get('a2').body.startsWith('The city council'));
+    assert.equal(get('a3').body, null);
+    // an article kept is never replaced by a feed's text; told again, it is refreshed and stays
+    assert.equal(cache.save({ ...read, body: null, feedText: 'A much shorter feed text that is not the article at all, but long enough to count here.' }), 'feed');
+    assert.equal(cache.text(read.link), ARTICLE);
+    // fifteen days on: what was not told again is gone, what was told again stays
+    clock += 13 * 86400_000;
+    cache.save(read);
+    clock += 2 * 86400_000;
+    assert.equal(cache.prune(), 1);
+    assert.equal(cache.text(read.link), ARTICLE);
+    assert.equal(cache.text(feedOnly.link), null);
+    // a feed marked "cache": false is never kept; with no folder (ARTICLE_CACHE=off) nothing is
+    const picky = new ArticleCache({ dir: path.join(dataDir, 'compliance', 'articles'), now, skip: (s) => s.source === 'No Copies Ltd' });
+    assert.equal(picky.save({ ...read, link: 'https://nocopies.example/a', source: 'No Copies Ltd' }), null);
+    assert.equal(picky.text('https://nocopies.example/a'), null);
+    assert.equal(new ArticleCache({ dir: null }).save(read), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  // the feed's full text on the story (content:encoded), only when it says more than the summary
+  const long = `<p>${ARTICLE}</p><p>${ARTICLE.replace('council', 'assembly')}</p>`;
+  const rss = `<?xml version="1.0"?><rss><channel><item><title>Bridge to close</title><link>https://news.example/b</link><description>The council voted to close the bridge.</description><content:encoded><![CDATA[${long}]]></content:encoded></item><item><title>Short one</title><link>https://news.example/s</link><description>Short.</description><content:encoded><![CDATA[<p>Short.</p>]]></content:encoded></item></channel></rss>`;
+  const items = parseFeed(rss, { name: 'Example News', url: 'https://news.example/rss' }, { now: Date.parse('2026-10-17T12:00:00Z') });
+  assert.ok(items[0].feedText.startsWith('The city council voted') && !/<p>/.test(items[0].feedText));
+  assert.equal(items[1].feedText, undefined);
+});

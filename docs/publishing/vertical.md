@@ -7,7 +7,8 @@ channel's own drawing code, in bands laid out for a phone. It is rendered by the
 
 Code: `public/js/clip/` (`index.js` the switch, `layout.js` the zones, `vertical.js` the compositor, `vboards.js`,
 `vquiz.js`, `vweather.js` and `vsport.js` the boards, `captions.js`, `graphics.js`, `cards.js`, `mark.js`, `thumb.js`).
-Labs: `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`, `/lab/thumb.html`.
+Labs: `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`, `/lab/thumb.html`; `/lab/weather.html`
+draws the vertical stage of the weather's map shots beside its frame.
 
 ## 1. Principles
 
@@ -154,17 +155,63 @@ the value column has one edge (41° as wide as 39° and −12°).
   chip, low). The city being said is lit.
 
 The board's countdown state is the weather centre's own (`scenes/weather/index.js` `weatherView`), so the vertical
-board lights the same row on the same word. Other weather shots show the horizontal frame's window centred on the
-presenter, who stands at either side of the wall.
+board lights the same row on the same word.
+
+The map shots are composed again for the stage, not cropped (`scenes/weather/index.js` `drawWeatherVertical`, round 5).
+The weather centre draws them with its own code at the stage's size (216 × 176): the map runs to the stage's full
+width, under the feeds' buttons too, and every word stays inside the safe column (x 8–188) and the stage.
+
+- **The world ("graphic"):** the world at the horizontal graphic's own scale (1.2 px a degree), so about half of it
+  is in view. The camera opens on the first place the voice names. It pans (1.1 s) to each place, high or low the voice
+  names next, unless that one is already well inside the column. The high or low being named is lit in the column's
+  middle. The clock (THE NEXT 24 HOURS), or the TODAY · HIGHS tab, sits at the top left; the scale and the data's
+  credit sit at the foot, right-aligned on the column's edge.
+- **A zone ("wall"):** the zone's cities fitted to the column. The Americas fill its height, and MEXICO CITY is whole.
+  The camera flies in as on air and on to the next zone. The cities wipe in once it has arrived, with their names, and
+  the one being said is in brackets. The tab, the clock, the scale and the credit are drawn as on the world map. The
+  presenter is not in these shots.
+- **A warning:** the storm in the band over the panel. The warnings panel is centred in the column and slides in from
+  its edge, so it is never seen past it.
+
+The close-up keeps the horizontal frame's window, centred on the presenter's close-up. The world time-lapse is a clip
+moment of its own (`weather-map`, THE NEXT 24 HOURS).
+`test/publish-vertical.test.js` drives the weather centre through the world, three zones and the warning. It checks
+every word, frame by frame, against the column and the stage, and checks that the high or low being named is in the
+column.
 
 ### 3.7 Pictures, montage and tease
 
 The story's picture fills the stage's width, panning as on air. The headline montage and STILL TO COME are set again
-on the montage stage (§2, rows 72–300): the picture (or the place's map) as the backdrop, centred on the safe column,
+on the montage stage (§2, rows 72–300): the picture as the backdrop, centred on the safe column,
 a black plate with the headline at 2x as tall as its lines need (1x past four lines), the source under them
 (SOURCE: …), and TOP STORIES with the run's pips, or STILL TO COME, on the plate's top edge (in a clip the hook
 holds the title band all clip long). The montage has no captions, because its plate shows the words the voice
 reads.
+
+A story with no picture has a board of its own, prepared for the tall backdrop (216 × 228):
+- **With a place:** the locator board (`graphics/locator.js`, with its `anchor` and `frame` options). The place sits at
+  the column's middle, a third of the way down, and its name stays inside the column above the tallest headline
+  plate.
+- **Without a place:** the topic board (`graphics/topicboard.js`, with its `frame` option). The glyph sits over the
+  column's middle and its name under the glyph.
+
+FULL TIME keeps the plain ground.
+
+**Credits.** A story's picture, wherever the stage shows it (full frame, B-roll, the headline frame), carries its
+credit as its licence asks, and so does a link's file footage (`vertical.js` `pictureCredit`, `drawVerticalCredit`):
+- FILE (FILE 2023, or PHOTO for a picture of the event) white on black, and beside it the author, the licence and
+  PIXELATED silver on black, all in the body face (35 px on 1920, the compliance desk's floor for a vertical label,
+  never the micro face);
+- under the source plate over a picture (at the stage's top left in the headline frame), inside the safe column;
+- the credit wrapped at whole parts and words, then under the tag across the column, never cut (the licence asks for
+  all of it);
+- PREVIEW · NOT CLEARED in yellow under it in a private preview.
+
+The horizontal frame's credits are drawn by its own graphics, which a vertical master does not draw. Before round 5 a
+vertical clip showed no credit at all.
+
+A moment that shows a picture not cleared for publication is never chosen or queued (`moments.js` `markUncleared`,
+`clips.md` §2). Neither is any moment of a private preview, even with `--all`.
 
 ### 3.8 Recreations
 
@@ -275,11 +322,10 @@ Nothing changes on air without `?clip=1` or `?format=vertical`.
 
 ## 8. What remains
 
-- WORLD WEATHER's map shots (each continent's map behind the presenter, and the "graphic" world map with its
-  symbols) fall back to a window on the horizontal frame centred on the presenter. Their own labels can reach the
-  feeds' right band and be cut at the frame's edge ("MEXICO C…", the 4x sheet of 17 Oct). They are not moments the
-  factory picks (its weather clips are the two boards, set natively), but a clip that passes through one shows a
-  crop.
+- WORLD WEATHER's close-up is still a window on the horizontal frame (the presenter is whole in it). Its map shots are
+  composed for the tall frame since round 5 (§3.6), without the presenter.
+- The pictures in vertical were checked on a demo edition (the repository's fixture art with DEMO credits), because
+  the offline material carries no pictures. The first real edition with cleared pictures should be watched in vertical.
 - FULL TIME has been through the factory only as a demo edition (the archive's one FULL TIME is the fictional fixture
   league of 13 Oct); its first real edition should be watched in vertical before its clips are approved.
 - The quiz's and the weather's labs (`/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`) show every board.

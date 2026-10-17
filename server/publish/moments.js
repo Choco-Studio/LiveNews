@@ -10,6 +10,7 @@
 //   quiz-round     a whole round, title to last reveal: TikTok's longer clip (over a minute)
 //   weather-board  WORLD WEATHER: HOT AND COLD, THE NEXT THREE DAYS
 //   weather-story  WORLD WEATHER's big story: its headline segment and its warning
+//   weather-map    WORLD WEATHER's world: the next 24 hours as a time-lapse, the highs and lows and places named
 //   sport-result   FULL TIME: a result told with its score card or the SCORE CENTRE
 //   lead           a programme's lead story told with its board
 //   known          a story told over WHAT WE KNOW
@@ -37,7 +38,7 @@ const NOT_LIGHT = (text, subject) => {
   const k = excludedKind(text, subject);
   return k && k !== 'promotion' ? k : null;
 };
-export const KIND_BASE = { 'quiz-question': 7.5, 'quiz-round': 7, 'weather-board': 6.5, 'weather-story': 6.5, 'sport-result': 7, lead: 6, known: 6.5, number: 6.5, expert: 6.5, unit8: 6.5, montage: 5.5, week60: 7, stories: 5.5, story: 4.5 };
+export const KIND_BASE = { 'quiz-question': 7.5, 'quiz-round': 7, 'weather-board': 6.5, 'weather-story': 6.5, 'weather-map': 6.5, 'sport-result': 7, lead: 6, known: 6.5, number: 6.5, expert: 6.5, unit8: 6.5, montage: 5.5, week60: 7, stories: 5.5, story: 4.5 };
 const BOARD_FIELDS = ['numbers', 'known', 'timeline', 'change', 'share', 'next', 'who', 'quote', 'term', 'score', 'chalk', 'fixtures', 'fact'];
 const hasBoard = (seg) => BOARD_FIELDS.some((k) => (Array.isArray(seg?.[k]) ? seg[k].length : seg?.[k]));
 const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -322,6 +323,8 @@ function weatherMoments(episode, timeline) {
     if (s.kind === 'hotcold') out.push(makeMoment(episode, timeline, 'weather-board', i, i, { keepStart: true, board: true, hook: pickHook([['HOT AND COLD:', "TODAY'S EXTREMES"], 'HOT AND COLD'], 'WORLD WEATHER') }));
     else if (s.kind === 'outlook') out.push(makeMoment(episode, timeline, 'weather-board', i, i, { keepStart: true, board: true, hook: pickHook(['THE NEXT THREE DAYS'], 'WORLD WEATHER') }));
     else if (s.kind === 'warning') out.push(makeMoment(episode, timeline, 'weather-story', i, i, { keepStart: true, board: true, hook: pickHook(['WEATHER WARNING'], 'WORLD WEATHER') }));
+    // the world's next 24 hours (composed for the tall frame too: scenes/weather/index.js drawWeatherVertical)
+    else if (s.kind === 'world' && s.timelapse) out.push(makeMoment(episode, timeline, 'weather-map', i, i, { keepStart: true, board: true, hook: pickHook([['THE NEXT 24 HOURS', 'AROUND THE WORLD'], 'THE NEXT 24 HOURS'], 'WORLD WEATHER') }));
   });
   return out.filter(Boolean);
 }
@@ -489,7 +492,57 @@ export function detectMoments(episode, { timeline = null } = {}) {
 
 /** Moments a phase may publish: light, not demo, sense at least `minSense` (Phase 1: the light programmes only). */
 export function publishable(moments, { phase = 1, minSense = 7 } = {}) {
-  return moments.filter((m) => !m.demo && !m.copied && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+  return moments.filter((m) => !m.demo && !m.copied && !m.uncleared && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+}
+
+/**
+ * The pictures a moment puts on screen (docs/pictures/RIGHTS.md): its own segments' (a story's picture, full frame, on
+ * the studio wall, behind a board), and the rundown items its cold open's montage (the teased stories, else the first
+ * three) or a STILL TO COME shows. -> [the segments and rundown items with a picture]
+ */
+export function picturesShown(episode, from, to) {
+  const segs = (Array.isArray(episode?.segments) ? episode.segments : []).slice(from, to + 1);
+  const rundown = Array.isArray(episode?.rundown) ? episode.rundown : [];
+  const byId = (id) => rundown.find((r) => r?.storyId === id);
+  const out = new Set();
+  const quizPics = new Map();
+  for (const s of segs) {
+    if (s?.hasImage) out.add(s);
+    // PAY ATTENTION's PICTURE THIS: the archived story's picture with the record it aired with (a local fixture's own
+    // file is the operator's)
+    const q = s?.quiz?.question;
+    if (q?.type === 'picture' && q.image && !/^file:/i.test(q.image)) {
+      const id = q.imageId || q.key;
+      if (!quizPics.has(id)) quizPics.set(id, { storyId: id, hasImage: true, imageRights: q.imageRights || null, imageCredit: q.imageCredit || null, source: q.aired?.source || null });
+      out.add(quizPics.get(id));
+    }
+    if (s?.type === 'intro') for (const id of Array.isArray(s.teases) && s.teases.length ? s.teases : rundown.slice(0, 3).map((r) => r?.storyId)) if (byId(id)?.hasImage) out.add(byId(id));
+    for (const x of Array.isArray(s?.stillToCome) ? s.stillToCome : []) if (byId(x?.storyId)?.hasImage) out.add(byId(x.storyId));
+  }
+  return [...out];
+}
+
+/**
+ * The picture rule (docs/pictures/RIGHTS.md; publishing round 5): a moment that shows a picture not cleared for
+ * publication is never chosen nor queued, in any phase; nor any moment of an episode made as a private preview
+ * (PICTURE_RIGHTS=preview: outlet photos stand in, marked NOT CLEARED). `audit` is the compliance desk's auditItem (its
+ * picture records); without it a picture counts as cleared only with a cleared rights record.
+ */
+export function markUncleared(moments, episode, { audit = null } = {}) {
+  const preview = !!episode?.picturePreview;
+  for (const m of moments) {
+    let why = preview ? 'a private preview (PICTURE_RIGHTS=preview) is never published' : null;
+    if (!why) {
+      const shown = picturesShown(episode, m.from, m.to);
+      const bad = audit ? (audit({ segments: shown }).missing || []).filter((a) => a.kind === 'picture').map((a) => a.storyId) : shown.filter((x) => x.imageRights?.cleared !== true || x.imageUncleared).map((x) => x.storyId);
+      if (bad.length) why = `a picture not cleared for publication (story ${[...new Set(bad)].filter(Boolean).join(', ') || 'unknown'})`;
+    }
+    if (why) {
+      m.uncleared = true;
+      m.refused = m.refused ? `${m.refused}; pictures: ${why}` : `pictures: ${why}`;
+    }
+  }
+  return moments;
 }
 
 /**

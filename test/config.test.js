@@ -40,6 +40,7 @@ const KEYS = [
   'DEEPSEEK_BASE_URL',
   'AI_INBOX_DIR',
   'AI_INBOX_TIMEOUT_MS',
+  'ARTICLE_CACHE',
   'QUEUE_SIZE',
   'CANDIDATE_POOL',
   'REVIEW_PASS',
@@ -245,6 +246,12 @@ describe('.env.example', () => {
     const used = [...source.matchAll(/\b(?:env|num|bounded)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
     assert.deepEqual([...used].sort(), [...KEYS].sort(), 'the list of variables in this test is out of date');
     for (const key of used) assert.ok(key in example, `${key} is missing from .env.example`);
+  });
+
+  test('ARTICLE_CACHE: on by default (the text the desk already read, kept for the checks); off keeps nothing', async () => {
+    assert.equal((await loadConfig({})).articleCache, true);
+    assert.equal((await loadConfig({ ARTICLE_CACHE: 'off' })).articleCache, false);
+    assert.equal((await loadConfig({ ARTICLE_CACHE: 'OFF' })).articleCache, false);
   });
 
   test('DRAFTS_ON_AIR: none by default; a list of draft ids (with an optional @slot) for a test or a recording', async () => {
