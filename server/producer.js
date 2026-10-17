@@ -13,7 +13,7 @@ import { rightsGate } from './compliance/credits.js';
 import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
-import { pictureCleared } from './quiz/desk.js';
+import { pictureCleared, quizEvents } from './quiz/desk.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
@@ -139,12 +139,22 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, pictureAhead = null, log = console }) {
     this.config = config;
     // the rights-aware picture desk (server/picturedesk.js): every picture on air is one the channel may publish, with
     // its rights record; without it (tests, older callers) the news desk's own pictures air as before
     this.pictureDesk = pictureDesk;
     this.pictureMode = pictureMode(config?.pictures?.rights);
+    // ...deciding ahead of air (server/pictureahead.js; round 9): stories are decided in the background as they come in,
+    // the next programmes' first; production only reads the decisions that are ready. Without it (tests, older callers)
+    // the desk decides within the picture budget, as before
+    this.pictureAhead = pictureDesk ? pictureAhead : null;
+    this.lookAheadAt = null; // { channel, ids }: the programmes the station makes next (their candidates decided first)
+    if (this.pictureAhead) {
+      this.pictureAhead.tiers = () => this.pictureTiers();
+      this.pictureAhead.watch = () => this.liveStories();
+      this.pictureAhead.onDecided = (s, tier) => this.pictureDecided(s, tier);
+    }
     // the channel's memory of what it aired (server/archive.js): every news episode is recorded, SEVEN DAYS is
     // written from it
     this.archive = archive;
@@ -299,6 +309,8 @@ export class Producer {
     if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
     if (program.kind === 'quiz') return this.produceQuiz(channel, program);
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    // (the programmes after this one, and the clock's pinned bulletin: their candidates are the picture desk's next work)
+    this.lookAhead(channel, [...upcoming, ...(channel.clock?.pins || []).map((p) => p.program)]);
     if (candidates.length < this.floorOf(program)) return null;
 
     // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
@@ -408,6 +420,16 @@ export class Producer {
   weeklyReady(program) {
     if (!this.archive) return false;
     if (Date.now() - this.lastWeeklyAt < (program.minGapHours ?? 3) * 3600_000) return false;
+    // a count first: grouping the week by sameStory is quadratic, and canProduce runs at every /api/next. On the
+    // 5,600 airings of 17 Oct it held the station's event loop 60 % of the time (every programme "ready in" 70-120 s,
+    // Wikimedia's answers timing out unread). The days told are the entries' own days; thirty stories or more are six
+    // events or more however they group (fewer are grouped as before)
+    const now = typeof this.archive.now === 'function' ? this.archive.now() : Date.now(); // (the archive's clock, as week())
+    const entries = (this.archive.entries || []).filter((e) => e.at >= now - 7 * 86400_000 && e.at <= now);
+    const days = new Set(entries.map((e) => new Date(e.at).toISOString().slice(0, 10)));
+    const ids = new Set(entries.map((e) => e.id));
+    if (days.size < 3 || ids.size < 6) return false;
+    if (ids.size >= 30) return true;
     const week = this.weekStories();
     return week.length >= 6 && new Set(week.flatMap((c) => c.days)).size >= 3;
   }
@@ -944,13 +966,110 @@ export class Producer {
    * a few stories at a time (decisions are kept, so the next episodes find theirs ready and Wikimedia is asked little).
    */
   async clearPictures(stories) {
+    // ahead of air: the decisions that are ready (the rest go to the front of the queue, for the assets stage)
+    if (this.pictureAhead) {
+      this.pictureAhead.urgent(stories);
+      return this.pictureDesk.assign(stories, { ready: true });
+    }
     const stats = await this.pictureDesk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
     this.warmPictures();
     return stats;
   }
 
+  // ---------------------------------------------------------------- the picture desk ahead of air
+
+  /** The programmes the station makes next (produce: the rotation's next three and the clock's pins). */
+  lookAhead(channel, ids) {
+    if (!channel?.programs) return;
+    this.lookAheadAt = { channel, ids: [...new Set((ids || []).filter((id) => channel.programs[id]))] };
+    this.nextStories = null;
+  }
+
+  /** The news desk's own stories (never the operator's local feed: its pictures are its own). */
+  liveStories() {
+    return typeof this.news?.stories?.values === 'function' ? [...this.news.stories.values()].filter((s) => s && !s.local) : [];
+  }
+
+  /**
+   * The picture desk's queue in the order things air: the next programmes' candidates (as select() would choose them
+   * now), the stories new in the last three hours (the newest first), the rest of the news desk (the last in first),
+   * then the week's archived stories without a cleared picture (PICTURE THIS), in small batches of their own.
+   */
+  pictureTiers() {
+    const t = Date.now();
+    const tiers = [
+      { name: 'next', stories: () => this.upcomingStories() },
+      { name: 'fresh', stories: () => this.liveStories().filter((s) => t - (s.published || 0) < 3 * 3600_000).sort((a, b) => (b.published || 0) - (a.published || 0)) },
+      { name: 'pool', stories: () => this.liveStories().reverse() },
+    ];
+    if (this.archive?.entries && this.config?.pictures?.archiveAhead !== false) tiers.push({ name: 'archive', alone: true, batch: 4, stories: () => this.archivedWithoutPicture() });
+    return tiers;
+  }
+
+  /** The candidates of the programmes the station makes next (kept half a minute: select() ranks the whole desk). */
+  upcomingStories() {
+    const at = this.lookAheadAt;
+    if (!at) return [];
+    if (this.nextStories && Date.now() - this.nextStories.at < 30_000) return this.nextStories.list;
+    const list = [];
+    for (const id of at.ids) {
+      const program = { id, ...at.channel.programs[id] };
+      if (['weather', 'weekly', 'quiz'].includes(program.kind)) continue;
+      try {
+        const upcoming = at.ids.filter((x) => x !== id).map((x) => at.channel.programs[x]).filter(Boolean);
+        list.push(...this.select(program, { upcoming }).slice(0, Math.ceil((program.stories || 8) * 1.5)));
+      } catch {
+        /* a programme that cannot select now */
+      }
+    }
+    this.nextStories = { at: Date.now(), list };
+    return list;
+  }
+
+  /** The week's archived stories without a picture the channel may show (the latest telling of each), newest first. */
+  archivedWithoutPicture() {
+    if (this.archivedCache && Date.now() - this.archivedCache.at < 10 * 60_000) return this.archivedCache.list;
+    const since = Date.now() - 7 * 86400_000;
+    const latest = new Map();
+    const shown = new Set();
+    for (const e of this.archive.entries || []) {
+      if (!e?.id || e.at < since) continue;
+      if (e.image && ((e.imageRights?.cleared && e.imageRights.url === e.image) || /^file:/i.test(e.image))) shown.add(e.id);
+      latest.set(e.id, e);
+    }
+    // (the stories PAY ATTENTION could ask about first: its PICTURE THIS needs a cleared picture of the latest telling)
+    let quiz = new Set();
+    try {
+      quiz = new Set(quizEvents(this.archive, { pictures: this.pictureMode }).events.filter((ev) => !ev.image).map((ev) => ev.latest?.id));
+    } catch {
+      /* the order by time alone */
+    }
+    const list = [...latest.values()]
+      .filter((e) => !shown.has(e.id) && !this.news?.stories?.has?.(e.id))
+      .sort((a, b) => (quiz.has(b.id) ? 1 : 0) - (quiz.has(a.id) ? 1 : 0) || b.at - a.at)
+      .map((e) => ({ id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, link: e.link, grave: !!e.grave, published: e.at, archived: true }));
+    this.archivedCache = { at: Date.now(), list };
+    return list;
+  }
+
+  /**
+   * A decision is ready for this story: on the news desk's own story it is applied at once (NEWS IN 60 picks the stories
+   * that have a picture); a story that already aired without one has the cleared picture put on its archive entries
+   * (SEVEN DAYS, PICTURE THIS).
+   */
+  pictureDecided(s, tier) {
+    const desk = this.pictureDesk;
+    if (!desk || !s) return;
+    if (tier !== 'archive' && this.news?.stories?.get?.(s.id) === s) desk.apply(s);
+    if (!this.archive?.amendPicture) return;
+    const pick = desk.pickFor(s);
+    if (!pick?.rights?.cleared) return;
+    const n = this.archive.amendPicture(s.id, { image: pick.url, imageRights: compactRights(pick.rights), imageSubject: pick.subject?.kind ? { kind: pick.subject.kind, label: pick.subject.label || null } : null });
+    if (n) this.archivedCache = null;
+  }
+
   warmPictures() {
-    if (this.pictureWarm || typeof this.news?.stories?.values !== 'function') return;
+    if (this.pictureAhead || this.pictureWarm || typeof this.news?.stories?.values !== 'function') return;
     const pool = [...this.news.stories.values()].filter((s) => s && !s.local).slice(-300);
     const step = async (i) => {
       if (i >= pool.length) return;
@@ -974,7 +1093,14 @@ export class Producer {
       if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
       else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
     }
-    const cleared = desk ? await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 }) : null;
+    // ahead of air: only the decisions that are ready; a batch in flight that holds one of these stories is waited for,
+    // within the picture budget (never a request of its own here)
+    let cleared = null;
+    if (desk && this.pictureAhead) {
+      this.pictureAhead.urgent(stories);
+      await this.pictureAhead.settle(stories, { maxMs: this.config.pictureBudgetMs ?? 6000 });
+      cleared = await desk.assign(stories, { ready: true });
+    } else if (desk) cleared = await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
     const verified = this.images ? await this.verifyPictures(stories) : null;
     // (an archived story is a fresh object at every look: the desk's kept decision is put on it each time)
     const story = (id) => {
@@ -1078,6 +1204,8 @@ export class Producer {
       ...(borrowed ? { borrowed } : {}),
       ...(verified || {}),
       ...(cleared ? { cleared: cleared.cleared, uncleared: stories.filter((s) => s.image && !currentRights(s)?.cleared).length } : {}),
+      // (ahead of air: how many of the episode's stories had their decision ready when it was made)
+      ...(desk && this.pictureAhead ? { decidedAhead: stories.filter((s) => !s.local && desk.ready(s)).length, decidable: stories.filter((s) => !s.local).length } : {}),
       ...(rights.missing ? { unlicensed: rights.missing, ...(rights.dropped ? { offAir: rights.dropped } : {}) } : {}),
     };
   }

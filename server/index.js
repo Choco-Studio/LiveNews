@@ -25,6 +25,7 @@ import { PictureDesk } from './picturedesk.js';
 import { FaceStore } from './faces.js';
 import { FaceReader } from './facereader.js';
 import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
+import { PictureAhead } from './pictureahead.js';
 import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
 
@@ -111,7 +112,10 @@ const uncachedFeeds = (() => {
 const articles = config.articleCache ? new ArticleCache({ dir: path.join(config.dataDir, 'compliance', 'articles'), skip: (s) => uncachedFeeds.has(s?.source) }) : null;
 const archive = new Archive({ dir: path.join(config.dataDir, 'archive'), pictures: config.pictures.rights, articles });
 newsDesk.archive = archive;
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk });
+// the picture desk ahead of air: stories decided in the background as they come in, the next programmes' first; each
+// episode reads the decisions that are ready (server/pictureahead.js)
+const pictureAhead = config.pictures.desk && config.pictures.ahead ? new PictureAhead({ desk: pictureDesk }) : null;
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, pictureAhead });
 // (DRAFTS_ON_AIR: a draft programme on air for a test or a recording, never the official line-up)
 const station = new Station({ config, newsDesk, producer, chain, ...(config.draftsOnAir.length ? { channel: () => withDraftsOnAir(loadChannel(), config.draftsOnAir) } : {}) });
 if (config.draftsOnAir.length) console.warn(`[channel] test mode: drafts on air: ${config.draftsOnAir.join(', ')}`);
@@ -232,6 +236,11 @@ const server = http.createServer(async (req, res) => {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
       return sendJson(res, 200, url.pathname === '/api/desk' ? newsDesk.deskView() : station.queue);
     }
+    // the picture desk ahead of air: what it decided, the requests a story, a fresh story's wait, what is left (operator)
+    if (req.method === 'GET' && url.pathname === '/api/pictures/ahead') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      return sendJson(res, 200, pictureAhead ? pictureAhead.status() : { running: false });
+    }
     // Recorded voices: /api/voice/<id>.ogg|.json (content-addressed clips), /api/voice/ads, /api/voice/status.
     if (req.method === 'GET' && url.pathname.startsWith('/api/voice/') && voice.handle(req, res, url.pathname)) return;
     // The orchestrator's picture tool: free-licensed file photos for a query (operator / orchestrator only)
@@ -285,6 +294,7 @@ findPlaces('Warm-up in London');
 
 server.listen(config.port, config.host, () => {
   faceReader.start();
+  pictureAhead?.start();
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
   // The mock writes but never reviews: say so rather than promise an editor that is not there.
   const editor = chain.providers.some((p) => p.reviews !== false);

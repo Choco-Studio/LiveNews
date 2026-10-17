@@ -693,7 +693,10 @@ export class PictureDesk {
     if (this.openverse && !this.openverse.store) this.openverse.store = this.kept;
     this.busy = Promise.resolve(); // decisions run one at a time
     this.failedUrls = new Map(); // url -> until
-    this.warned = 0;
+    this.warned = new Map(); // a warning's kind -> [last logged, how many since]
+    // stories whose lean decision found no usable Wikidata portrait: their person's own category and searches next time
+    this.expand = new Set();
+    this.titlesOf = new Map(); // a story's key -> the exact titles its decision asks Wikipedia for
   }
 
   // ---------------------------------------------------------------- the questions (batched, kept)
@@ -759,7 +762,7 @@ export class PictureDesk {
       else ask.push(id);
     }
     for (const part of chunks(ask, 40)) {
-      const query = `SELECT ?item (SAMPLE(?d) AS ?desc) (GROUP_CONCAT(DISTINCT ?instL; separator="|") AS ?inst) (GROUP_CONCAT(DISTINCT STR(?img); separator="|") AS ?imgs) (SAMPLE(?b) AS ?born) (SAMPLE(?dd) AS ?died) (SAMPLE(?links) AS ?sitelinks) (GROUP_CONCAT(DISTINCT ?occL; separator="|") AS ?occ) (GROUP_CONCAT(DISTINCT ?posL; separator="|") AS ?pos) (GROUP_CONCAT(DISTINCT ?ctyL; separator="|") AS ?cty) (SAMPLE(?c) AS ?coord) (GROUP_CONCAT(DISTINCT STR(?logo); separator="|") AS ?logos) (GROUP_CONCAT(DISTINCT STR(?aerial); separator="|") AS ?aerials) WHERE {
+      const query = `SELECT ?item (SAMPLE(?d) AS ?desc) (GROUP_CONCAT(DISTINCT ?instL; separator="|") AS ?inst) (GROUP_CONCAT(DISTINCT STR(?img); separator="|") AS ?imgs) (SAMPLE(?b) AS ?born) (SAMPLE(?dd) AS ?died) (SAMPLE(?links) AS ?sitelinks) (GROUP_CONCAT(DISTINCT ?occL; separator="|") AS ?occ) (GROUP_CONCAT(DISTINCT ?posL; separator="|") AS ?pos) (GROUP_CONCAT(DISTINCT ?ctyL; separator="|") AS ?cty) (SAMPLE(?c) AS ?coord) (GROUP_CONCAT(DISTINCT STR(?logo); separator="|") AS ?logos) (GROUP_CONCAT(DISTINCT STR(?aerial); separator="|") AS ?aerials) (SAMPLE(?cat_) AS ?commonsCat) (GROUP_CONCAT(DISTINCT STR(?cap_); separator="|") AS ?caps) WHERE {
   VALUES ?item { ${part.map((i) => `wd:${i}`).join(' ')} }
   OPTIONAL { ?item schema:description ?d FILTER(LANG(?d) = "en") }
   OPTIONAL { ?item wdt:P31 ?inst_ . ?inst_ rdfs:label ?instL FILTER(LANG(?instL) = "en") }
@@ -773,6 +776,8 @@ export class PictureDesk {
   OPTIONAL { ?item wdt:P625 ?c }
   OPTIONAL { ?item wdt:P154 ?logo }
   OPTIONAL { ?item wdt:P8592 ?aerial }
+  OPTIONAL { ?item wdt:P373 ?cat_ }
+  OPTIONAL { ?item wdt:P36 ?cap_ }
 } GROUP BY ?item`;
       let data;
       try {
@@ -801,6 +806,10 @@ export class PictureDesk {
           positions: list('pos').slice(0, 40),
           countries: list('cty').slice(0, 6),
           coords: pt ? { lat: Number(pt[2]), lon: Number(pt[1]) } : null,
+          // (asked in the same query, round 9: a person's Commons category and a country's capitals cost no request
+          // of their own; a record kept before has neither, and commonsCats/capitals ask for it then)
+          commonsCat: b.commonsCat?.value || null,
+          capitals: list('caps').map((u) => u.split('/').pop()).filter((x) => /^Q\d+$/.test(x)).slice(0, 2),
         });
       }
       for (const id of part) out.set(id, this.kept.set(`q:${id}`, got.get(id) || null, TTL.entity));
@@ -813,7 +822,9 @@ export class PictureDesk {
     const out = new Map();
     const ask = [];
     for (const id of new Set(qids.filter((x) => /^Q\d+$/.test(x || '')))) {
+      const f = this.kept.get(`q:${id}`);
       if (this.kept.has(`cc:${id}`)) out.set(id, this.kept.get(`cc:${id}`));
+      else if (f && f.commonsCat !== undefined) out.set(id, f.commonsCat);
       else ask.push(id);
     }
     for (const part of chunks(ask, 40)) {
@@ -852,7 +863,9 @@ export class PictureDesk {
     const out = new Map();
     const ask = [];
     for (const id of new Set(qids)) {
+      const f = this.kept.get(`q:${id}`);
       if (this.kept.has(`c:${id}`)) out.set(id, this.kept.get(`c:${id}`));
+      else if (f && Array.isArray(f.capitals)) out.set(id, f.capitals);
       else ask.push(id);
     }
     for (const part of chunks(ask, 40)) {
@@ -936,8 +949,15 @@ export class PictureDesk {
     }
   }
 
+  // a warning of each kind once in ten minutes, with how many there were since (round 9: five warnings a lifetime left the
+  // live station's log silent on why it aired no picture for an hour)
   warn(msg) {
-    if (this.warned++ < 5) this.log.warn?.(`[pictures] ${msg}`);
+    const kind = String(msg).split(':')[0];
+    const t = this.now();
+    const [at, since] = this.warned.get(kind) || [-Infinity, 0];
+    if (t - at < 10 * 60_000) return void this.warned.set(kind, [at, since + 1]);
+    this.warned.set(kind, [t, 0]);
+    this.log.warn?.(`[pictures] ${msg}${since ? ` (and ${since} more since)` : ''}`);
   }
 
   // ---------------------------------------------------------------- the decision
@@ -970,7 +990,7 @@ export class PictureDesk {
     return job;
   }
 
-  async decideNow(stories, { budgetMs = 8000 } = {}) {
+  async decideNow(stories, { budgetMs = 8000, lean = false } = {}) {
     const deadline = this.now() + budgetMs;
     const result = new Map();
     const todo = [];
@@ -1011,7 +1031,19 @@ export class PictureDesk {
     // a portrait that must be sober (a grave story): the person's own Commons category adds candidates after the Wikidata
     // picture (the face reader picks a sober one)
     // (and any public figure the desk may show: a few more from their own Commons category, so their portrait rotates)
-    const soberOpts = [...options.values()].flat().filter((o) => o.kind === 'person' && !o.refused && o.qid);
+    // lean (the ahead queue, server/pictureahead.js; round 9): a public figure's rotation is looked for once they recur
+    // (aired in the last day, their uses kept, or twice in this batch). The first story of anyone airs their Wikidata
+    // portrait; their category and searches, four requests or more a person and most of a decision's cost, wait until
+    // they matter. Never for a sober portrait, a person with no Wikidata picture, or a story whose portrait failed
+    const leanSkipped = new Set();
+    const seenIn = new Map();
+    for (const opts of options.values()) for (const qid of new Set(opts.filter((o) => o.kind === 'person' && o.qid).map((o) => o.qid))) seenIn.set(qid, (seenIn.get(qid) || 0) + 1);
+    const expanding = new Set(todo.filter((s) => this.expand.has(keyOf(s))).map((s) => s.id));
+    const recurring = (qid) => (seenIn.get(qid) || 0) > 1 || Object.keys(this.kept.get(`u:${qid}`) || {}).length > 0;
+    for (const [id, opts] of options) {
+      for (const o of opts) if (lean && o.kind === 'person' && !o.refused && o.qid && !o.sober && o.files.length && !recurring(o.qid) && !expanding.has(id)) leanSkipped.add(o);
+    }
+    const soberOpts = [...options.values()].flat().filter((o) => o.kind === 'person' && !o.refused && o.qid && !leanSkipped.has(o));
     if (soberOpts.length) {
       const cats = await this.commonsCats(soberOpts.map((o) => o.qid));
       for (const o of soberOpts) {
@@ -1062,7 +1094,7 @@ export class PictureDesk {
         const pg = this.kept.get(`t:${t}`);
         if (pg?.qid && !pg.disambiguation && !pg.fragment && !this.kept.has(`q:${pg.qid}`)) return false;
       }
-      return opts.every((o) => (!o.country || this.kept.has(`c:${o.qid}`)) && o.files.every((f) => this.kept.has(`f:${f}`)));
+      return opts.every((o) => (!o.country || this.kept.has(`c:${o.qid}`) || Array.isArray(this.kept.get(`q:${o.qid}`)?.capitals)) && o.files.every((f) => this.kept.has(`f:${f}`)));
     };
     for (const s of todo) {
       const plan = plans.get(s.id);
@@ -1138,7 +1170,13 @@ export class PictureDesk {
       // (a portrait waiting for the face reader: decided again once it has read them)
       const waiting = !picks.some((p) => p.tier <= 1) && opts.some((o) => o.awaiting);
       const known = answered(plan, opts);
-      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: known && !waiting, awaitingFaces: known && waiting, ...(altsPending ? { altsPending: true } : {}) });
+      // (a lean decision whose person's Wikidata portrait would not do: their category and searches at the next try)
+      const skipped = opts.filter((o) => leanSkipped.has(o));
+      const short = skipped.length && !picks.some((p) => p.tier <= Math.min(...skipped.map((o) => o.tier)));
+      if (short) this.expand.add(keyOf(s));
+      else this.expand.delete(keyOf(s));
+      if (this.expand.size > 2000) this.expand.delete(this.expand.values().next().value);
+      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: known && !waiting && !short, awaitingFaces: known && waiting, ...(altsPending ? { altsPending: true } : {}), ...(lean ? { lean: true } : {}) });
     }
     // 3b. a grave story's public figure whose Commons pictures were all read and none is sober: an institution's own
     // Flickr picture of them (Openverse), read by the face reader too
@@ -1628,7 +1666,8 @@ export class PictureDesk {
       if (pick.alts?.length && !this.kept.get(`p:${keyOf(s)}`)) fresh.push([s, pick]);
       else {
         taken.add(pick.url);
-        if (pick.alts?.length) aired.push(pick);
+        // (a person with one portrait so far is remembered too: once they recur, the lean desk looks for their others)
+        if (pick.alts?.length || pick.subject?.kind === 'person') aired.push(pick);
       }
     }
     const used = (who) => {
@@ -1702,16 +1741,61 @@ export class PictureDesk {
     return null;
   }
 
-  /** Decide (within the budget) and apply: the stories carry only cleared pictures afterwards. */
-  async assign(stories, { budgetMs = 6000 } = {}) {
+  /**
+   * Would deciding this story ask Wikipedia (an exact title not kept yet)? After a 429 from Wikipedia, the ahead queue
+   * waits the pause out like any other, then decides first the stories that need nothing from it.
+   */
+  asksWikipedia(story) {
+    if (!story?.id || story.local) return false;
+    const k = keyOf(story);
+    let titles = this.titlesOf.get(k);
+    if (!titles) {
+      const p = this.plan(story);
+      titles = [...p.subjects.map((c) => c.text), ...p.placeTitles];
+      this.titlesOf.set(k, titles);
+      if (this.titlesOf.size > 4000) this.titlesOf.delete(this.titlesOf.keys().next().value);
+    }
+    return titles.some((t) => !this.kept.has(`t:${t}`));
+  }
+
+  /** Have this story's exact titles been worked out already (asksWikipedia answers at once)? undefined when not. */
+  titlesKnown(story) {
+    return story?.id && this.titlesOf.has(keyOf(story)) ? true : undefined;
+  }
+
+  /** The decision kept for a story (data/pictures/answers.json, with its lifetime), or null. */
+  decisionOf(story) {
+    return story?.id && !story.local ? this.kept.get(`d:${keyOf(story)}`) || null : null;
+  }
+
+  /** May the producer use this story's decision now: one made in full, or one with a picture while a source is asked again? */
+  ready(story) {
+    const d = this.decisionOf(story);
+    return !!d && (d.complete !== false || !!d.picks?.length);
+  }
+
+  /** Does this story still want deciding (none kept, or one made while a source did not answer or the face reader had not read)? */
+  needs(story) {
+    if (!story?.id || story.local) return false;
+    const d = this.decisionOf(story);
+    return !d || d.complete === false;
+  }
+
+  /**
+   * Decide (within the budget) and apply: the stories carry only cleared pictures afterwards. With `ready` (the ahead
+   * queue decides in the background: server/pictureahead.js), nothing is asked: the decisions already kept are applied.
+   */
+  async assign(stories, { budgetMs = 6000, ready = false } = {}) {
     const list = (stories || []).filter(Boolean);
-    let timer;
-    const work = this.decide(list, { budgetMs }).catch((err) => {
-      this.warn(`decide: ${err.message}`);
-      return null;
-    });
-    await Promise.race([work, new Promise((r) => (timer = setTimeout(r, budgetMs)))]);
-    clearTimeout(timer);
+    if (!ready) {
+      let timer;
+      const work = this.decide(list, { budgetMs }).catch((err) => {
+        this.warn(`decide: ${err.message}`);
+        return null;
+      });
+      await Promise.race([work, new Promise((r) => (timer = setTimeout(r, budgetMs)))]);
+      clearTimeout(timer);
+    }
     const stats = { stories: list.length, cleared: 0, portrait: 0, subject: 0, place: 0, official: 0, preview: 0, none: 0 };
     this.rotate(list);
     for (const s of list) {

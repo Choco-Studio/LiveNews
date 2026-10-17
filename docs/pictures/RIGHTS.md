@@ -15,7 +15,8 @@ from this machine), the relevance rules, how the desk copes with rate limits, th
 Code: `server/rights.js` (licences, the record, credits, the gate), `server/picturedesk.js` (the desk),
 `server/fileevents.js` (FILE pictures of the same actor, the seat of government), `server/openverse.js` (institutions'
 Flickr pictures through Openverse), `server/faces.js` and `tools/pictures/faces.mjs` (the face reader),
-`server/facereader.js` (the station runs the face reader and starts it again),
+`server/facereader.js` (the station runs the face reader and starts it again), `server/pictureahead.js` (the desk
+decides ahead of air, in the background),
 `public/js/graphics/locator.js`, `public/js/boardspec.js` and `topicboard.js` (the boards when nothing is cleared),
 `server/wikimedia.js` (the polite Wikimedia client and the kept answers), `server/imagesearch.js` (the Commons search),
 `server/footage.js` (clips get records too), the producer's picture stage, `server/archive.js` (the gate on old
@@ -276,13 +277,52 @@ Wikimedia's limits (mediawiki.org "Wikimedia APIs/Rate limits", read 17 Oct 2026
   3 h) and written at most every 30 s; a decision missing an answer is never kept as "nothing", and one that found a
   picture while a source was paused is kept only 20 minutes and decided again (asking only what is missing): the
   subject it missed may be the better one (Hubble over NASA's headquarters);
-- the producer gives the desk the picture budget (6 s) for the candidates, then keeps deciding the rest of the news
-  desk in the background, 12 stories at a time (so the next episodes find theirs ready);
+- **the desk decides ahead of air** (`server/pictureahead.js`, round 9), never inside an episode's production: see
+  below;
 - NASA has its own gentle queue; a source that is down costs its pictures, never the episode; a picture that will not
   download gives way to the story's next cleared picture (`PictureDesk.failed`).
 
 Measured from this machine, whose address is shared with other agents: Wikimedia answered 429 on about one request in
-four with Retry-After 10–56 s. The measurement tool waits pauses out; the station never does.
+four with Retry-After 10–56 s (17 Oct, afternoon); that evening Wikipedia's API answered 429 to every request from
+this address, one a minute, whatever the User-Agent (Commons and the Query Service still answered). The station waits
+pauses out in the background; production never waits for Wikimedia.
+
+**Deciding ahead of air** (round 9). On 17 Oct the live station aired 59 stories in an hour without a single picture:
+the desk decided inside the producer's 6 s picture budget, Wikimedia asked for a 51 s pause, and nothing was ever
+decided in time. Now:
+
+- stories are decided as they come in, in the background, through the same paced Wikimedia queue; each decision is
+  kept with its lifetime in `data/pictures/answers.json` (12 h with a picture, 3 h without, 20 minutes when a source
+  did not answer), keyed by the story and its headline, so a restart finds them all;
+- the order is what airs next: the stories of the episode in production (urgent), the candidates of the next
+  programmes (the rotation's next three and the clock's pinned NEWS IN 60, as `select()` would choose them now), the
+  stories of the last three hours (the newest first), the rest of the news desk, and last the week's archived stories
+  without a cleared picture, PAY ATTENTION's own candidates first, four at a time in a batch of their own (an urgent
+  story waits behind one such batch at most);
+- production reads only what is ready: the picture stage and the assets stage apply the kept decisions and put the
+  undecided stories at the front of the queue; the assets stage waits for a batch already in flight that holds one of
+  its stories, within the picture budget, and never asks Wikimedia itself;
+- a 429 is waited out to its end, then the batch it cut is asked again at once; a story that failed otherwise is asked
+  again after 1, 2, 4… minutes (30 at most). After a 429 from Wikipedia, the stories that need nothing from Wikipedia
+  (their exact titles already kept) go first once the pause is over, and Wikipedia is asked again when nothing else is
+  waiting: never sooner than its Retry-After, and less often than before;
+- fewer requests a story: a person's Commons category and a country's capitals come in the Wikidata query that brings
+  their facts (two queries a batch fewer); a public figure's rotation (their category and up to three searches, most
+  of a decision's cost) is looked for only once they recur, aired in the last day or twice in a batch, and their
+  Wikidata portrait airs meanwhile (unless it will not do: then their category and searches at the next try); every
+  entity, file and search answer is shared by all the stories that need it;
+- a decision made for a story that already aired without a picture is put on its archive entries (`archive.
+  amendPicture`, kept beside the days' files in `data/archive/pictures.json`), so SEVEN DAYS and PICTURE THIS can show
+  it; the station's own archive entries carry `imageRights` and `imageSubject` as they air;
+- `/api/pictures/ahead` (operator) and a log line every 15 minutes: decided, with a picture, Wikimedia requests a
+  story, the pause, a fresh story's wait, what is left by tier. `PICTURES_AHEAD=off` goes back to deciding within the
+  budget (the round-8 way).
+
+**The station's own event loop** (round 9): SEVEN DAYS's readiness grouped the whole week with the news desk's
+`sameStory` at every `/api/next`; on 5,600 airings that held the event loop 60 % of the time (every programme "ready
+in" 70–120 s, Wikimedia's answers arriving after their 8 s timeout). It now counts the week's stories and days first
+and groups only a small week (`Producer.weeklyReady`); the Query Service has 30 s (it answered a two-line query in 10 s
+through the proxy).
 
 **The face reader** is run by the station itself (`server/facereader.js`): a child process, `tools/pictures/faces.mjs
 --dir data/pictures --watch 60`, which reads the queue the desk writes, again every minute, and never writes over it.
@@ -309,6 +349,8 @@ public figure whose Commons pictures were all read and none is sober, and for a 
 | `OPENVERSE` | `1` | `0`: Openverse is not asked |
 | `OPENVERSE_DAILY` | `150` | Openverse requests a day at most (0–190; the anonymous allowance is 200) |
 | `FACE_READER` | `1` | `0`: the station does not run the face reader (a grave story's portrait then never airs, and portraits do not rotate) |
+| `PICTURES_AHEAD` | `1` | `0`: no background desk; each episode decides within its picture budget (`PICTURE_BUDGET_MS`), which a rate limit leaves with no picture at all |
+| `PICTURES_ARCHIVE` | `1` | `0`: the week's archived stories are not given cleared pictures in the background (PICTURE THIS then has only the pictures stories aired with) |
 
 After a measurement the face reader is run by hand: `NODE_USE_ENV_PROXY=1 node tools/pictures/faces.mjs --dir <its
 out>` (once over the queue; `--watch <s>` keeps it running).
@@ -330,6 +372,11 @@ Every news episode carries:
 
 A publisher should refuse an episode with `picturesCleared !== true`, and paste the `attribution` lines into the
 video's description (or a credits page it links).
+
+PAY ATTENTION's PICTURE THIS shows a picture only with its cleared record (or the operator's own file), and draws the
+record's credit ("FILE · AUTHOR · CC BY 4.0 · PIXELATED") under the board for as long as the picture is on, as the
+montage draws it (`public/js/quizplay.js` `quizPictureCredit`, `scenes/cards-quiz.js`); in a private preview an
+outlet's photo says `PREVIEW · NOT CLEARED` there.
 
 ## 8. What a lawyer should still confirm
 
