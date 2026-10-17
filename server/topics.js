@@ -22,7 +22,9 @@ export const TOPICS = [
   // a strike is a labour dispute only with its workers, union or pay in the same sentence (ahead of the sector
   // topics: a nurses' or a rail strike is the dispute)
   [/\b(?:workers?|staff|employees|unions?|pay)\b[^.]{0,60}\bstrik(?:e|es|ing)\b|\bstrik(?:e|es|ing)\b[^.]{0,60}\b(?:workers?|staff|employees|unions?|pay)\b|walkouts?|\bwalk(?:s|ed|ing)? out\b|industrial action/i, 'INDUSTRY'],
-  [/volcan|eruption|lava/i, 'VOLCANO'],
+  // (an eruption on a black hole, a star or the Sun is astronomy: "Astronomers discover a strange universal rule behind black
+  // hole eruptions" went out as VOLCANO, ScienceDaily 17 Oct)
+  [/volcan|\blava\b|(?<!\b(?:black[- ]holes?|solar|stellar|stars?|sun|sun's|cosmic|galactic|magnetars?|quasars?|plasma)\s)\beruptions?\b/i, 'VOLCANO'],
   [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
   [/wildfire|bushfire|forest fire/i, 'WILDFIRE'],
   [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave|heat alert|degrees celsius/i, 'WEATHER'],
@@ -38,7 +40,7 @@ export const TOPICS = [
   [/\binternet\b|broadband|\b5G\b/i, 'CONNECTIVITY'],
   // (a star of the sky, never a sports or a film star: "Lando Norris has become the latest sports star to join…" went out
   // as ASTRONOMY, Sky News 14 Oct)
-  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|(?<!(?:sports?|film|movie|pop|rock|TV|reality|football|tennis|music|rising|former|global|Hollywood|Olympic|Bollywood|YouTube|social media|guest|co-|all-)\s?)\bstars?\b(?!\s+(?:players?|strikers?|signings?|turn|power|athletes?|witness|wars))|\bmoon\b|nebula/i, 'ASTRONOMY'],
+  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|black[- ]holes?|(?<!(?:sports?|film|movie|pop|rock|TV|reality|football|tennis|music|rising|former|global|Hollywood|Olympic|Bollywood|YouTube|social media|guest|co-|all-)\s?)\bstars?\b(?!\s+(?:players?|strikers?|signings?|turn|power|athletes?|witness|wars))|\bmoon\b|nebula/i, 'ASTRONOMY'],
   [/rocket|\borbit|astronaut|space station|spacecraft|\bprobe\b|\brover\b|\bmars\b/i, 'SPACE'],
   [/\b(?:tram|train|rail|metro|ferry|ferries|airport|flights?|bus|buses|bicycle|cycling|bike|tunnel)\b/i, 'TRANSPORT'],
   [/deforest|climate|emission|carbon|glacier|ice sheet/i, 'CLIMATE'],

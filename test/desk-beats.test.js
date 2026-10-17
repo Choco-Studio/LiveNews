@@ -38,6 +38,11 @@ describe('topics', () => {
     assert.equal(topicOf({ title: 'Rocket launches a probe to study the Sun', summary: '' }), 'SPACE');
     assert.equal(topicOf({ title: 'Handheld games console sells 2 million units', summary: '' }), 'GAMING');
     assert.equal(topicOf({ title: 'Quiet day', summary: 'A telescope in Chile saw it.' }), 'ASTRONOMY');
+    // an eruption on a black hole or the Sun is astronomy; a volcano's stays VOLCANO
+    assert.equal(topicOf({ title: 'Astronomers discover a strange universal rule behind black hole eruptions', summary: '', category: 'science' }), 'ASTRONOMY');
+    assert.notEqual(topicOf({ title: 'Huge solar eruption sends plasma towards Earth', summary: '', category: 'science' }), 'VOLCANO');
+    assert.equal(topicOf({ title: 'Etna eruption grounds flights in Sicily', summary: '' }), 'VOLCANO');
+    assert.equal(topicOf({ title: 'Lava reaches homes as Iceland eruption continues', summary: '' }), 'VOLCANO');
     assert.equal(topicOf({ title: 'Quiet day', summary: 'Nothing.', category: 'tech' }), 'TECHNOLOGY');
     assert.equal(topicOf({ title: 'Quiet day', summary: 'Nothing.', category: 'tech' }, { section: false }), null);
   });
