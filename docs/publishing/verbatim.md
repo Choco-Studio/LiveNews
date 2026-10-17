@@ -72,7 +72,9 @@ Written 17 October 2026. The writer team owns `server/writer.js` and `server/pro
   - an AI writer gets the violating sentences back with "say this in your own words; keep only facts, names, numbers and attributed quotations";
   - the fallback writer must not emit them (§5).
 
-**The last net.** `preflight` (publish time) refuses an episode whose lint fails (`verbatim`, default `block`). The live stream relies on the writer applying the rule.
+**The last net.** `preflight` (publish time) refuses an episode whose lint fails (`verbatim`, default `block`).
+
+**The live stream's net: the launch report.** The stream has no publish step, so `launchReport()` (`node tools/compliance/cli.mjs launch`) measures what aired. `archiveSample()` reads the last 300 real stories of `data/archive` and checks each one's reading and analysis against its title and summary, and against its article when this audit has cached it in `data/compliance/articles`. Launch is blocked while more than 5 % of those stories break the rule. On 17 Oct 2026 the rate is 80.3 % against title and summary alone (241 of 300), and 99 % with the articles (297 of 300, 280 articles cached). It takes about a third of a second.
 
 ## 5. How the fallback writer can comply (proposal, for the writer team)
 

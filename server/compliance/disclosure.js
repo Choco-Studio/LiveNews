@@ -15,6 +15,7 @@
 //
 // Platform fields, as their APIs name them (checked 17 Oct 2026, sources in compliance.md §2):
 //   YouTube    videos.status.containsSyntheticMedia (live: the broadcast's own video id, videos.update)
+//              and status.selfDeclaredMadeForKids = false on every video and broadcast (the audience YouTube requires)
 //   TikTok     post_info.is_aigc (Content Posting API, /v2/post/publish/video/init/)
 //   Instagram  is_ai_generated on the media container (Content Publishing API, 22 Jun 2026)
 //   Facebook, Threads, X, Bluesky, Mastodon, LinkedIn: no API flag for this; the label in the frame, the C2PA
@@ -171,6 +172,9 @@ export function disclosureFor(item = {}) {
       field: kind === 'live' ? 'videos.status.containsSyntheticMedia (the broadcast’s video id)' : 'videos.status.containsSyntheticMedia',
       containsSyntheticMedia: flag,
       required: hasRecreation,
+      // the audience YouTube requires on every upload and broadcast (US COPPA): news for a general audience
+      audienceField: 'status.selfDeclaredMadeForKids',
+      selfDeclaredMadeForKids: false,
       descriptionTop: opening,
       // news is a sensitive topic: YouTube shows its label on the player, not only in the description
       prominentLabel: true,

@@ -129,7 +129,7 @@ export const legibleCap = (outputH) => Math.max(16, 0.016 * outputH);
  * Check one item before it is published. `clip` = {
  *   id, kind: 'clip'|'short'|'episode', episode, range: { start, end } (seconds; an episode: the whole),
  *   timeline? (timelineFromRecording), recording? (the record.mjs report, when no timeline is given),
- *   frame? (frameGeometry), platforms: ['youtube', ...], flags: { youtube: { containsSyntheticMedia: true }, ... },
+ *   frame? (frameGeometry), platforms: ['youtube', ...], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false }, ... },
  *   text? (the post's or description's words), publishAt? (ms)
  * }
  * `opts` = { now, calendar, register (registry.js), requireReview (true), dataDir }
@@ -196,7 +196,7 @@ export function checkClip(clip = {}, opts = {}) {
       const booking = episode?.guests?.[rec.id] || null;
       const seg = episode?.segments?.[rec.index] || {};
       const L = recreationLayout(recreationOf(booking, seg), g.window);
-      if (!L.whole) v('label-out-of-frame', `the label loses words in this window: ${L.lost.join(' / ')}`, { recreation: rec.id });
+      if (!L.whole) v('label-out-of-frame', `the label or the name super loses words in this window: ${L.lost.join(' / ')}`, { recreation: rec.id });
       if (!inside(L.label, c)) v('label-out-of-frame', `the AI RECREATION label and its SOURCE (x ${L.label.x0}-${L.label.x1}, y ${L.label.y0}-${L.label.y1}) are not inside the crop (x ${c.x}-${c.x + c.w}): record with ?frame=${aspectOf(g)}@${c.x}`, { recreation: rec.id, label: L.label, crop: c });
       // the smallest capitals of the label: the body face's 7 px, or the micro face's 5 px for the source in a window
       const cap = Math.min(...L.plates.filter((p) => p.role === 'mark' || p.role === 'line' || p.role === 'credit').map((p) => (p.font === 'micro' ? MICRO_CAP : CAP)));
@@ -209,7 +209,8 @@ export function checkClip(clip = {}, opts = {}) {
   const disclosure = disclosureFor({ kind: kind === 'short' ? 'short' : kind, episode, recreations: inRange, platforms: clip.platforms });
   for (const [name, d] of Object.entries(disclosure.platforms)) {
     const set = clip.flags?.[name] || {};
-    if (d.field && name === 'youtube' && set.containsSyntheticMedia !== true) v('flag-missing', 'YouTube: set status.containsSyntheticMedia = true', { platform: name });
+    if (d.field && name === 'youtube' && set.containsSyntheticMedia !== true) v('flag-missing', 'YouTube: set status.containsSyntheticMedia = true', { platform: name, field: 'containsSyntheticMedia' });
+    if (d.field && name === 'youtube' && set.selfDeclaredMadeForKids !== false) v('flag-missing', 'YouTube: set status.selfDeclaredMadeForKids = false (news for a general audience, not made for kids)', { platform: name, field: 'selfDeclaredMadeForKids' });
     if (d.field && name === 'tiktok' && set.is_aigc !== true) v('flag-missing', 'TikTok: set post_info.is_aigc = true', { platform: name });
     if (d.field && name === 'instagram' && set.is_ai_generated !== true) v('flag-missing', 'Instagram: set is_ai_generated = true', { platform: name });
     if (!d.field && d.manualLabel && set.manualLabel !== true) v('flag-unavailable', `${name}: no API flag for AI content; publish this item with the AI label applied by hand (flags.${name}.manualLabel = true) or leave ${name} out`, { platform: name });

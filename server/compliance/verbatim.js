@@ -14,6 +14,13 @@
 //   verbatimRuns(aired, sources, { min })    every maximal run of >= min words of `aired` found in a source
 //   storyReport(aired, sources, opts)        -> { words, quoted, copied, share, longest, runs, violations }
 //   lintEpisode(episode, { getStory })       -> { ok, stories: [...], violations }  (the writer team's lint)
+//   archiveSample({ dataDir, limit })        -> { stories, violating, rate, withArticle }  (the launch check, on what aired)
+//   archiveGetStory({ dataDir })             -> getStory(id) from the archive and the audit's article cache
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+
 export const MAX_RUN = 12;
 export const MAX_SHARE = 0.2;
 export const PHRASE = 6;
@@ -162,4 +169,79 @@ export function lintEpisode(episode, { getStory = () => null, strict = false, ..
     for (const v of r.violations) violations.push({ storyId: id, ...v });
   }
   return { ok: violations.length === 0, stories, violations };
+}
+
+// ---------------------------------------------------------------------------------------------- the archive
+
+/** The key of an article in the audit's cache (tools/compliance/verbatim-audit.mjs writes it). */
+export const articleKey = (link) => crypto.createHash('sha1').update(String(link)).digest('hex').slice(0, 20);
+
+/** The archive's story tellings (`<dataDir>/archive/YYYY-MM-DD.jsonl`, one line per story told), newest first. */
+function archiveEntries(dataDir, { limit = Infinity, real = false } = {}) {
+  const dir = dataDir ? path.join(dataDir, 'archive') : null;
+  const entries = [];
+  if (!dir || !fs.existsSync(dir)) return entries;
+  const files = fs.readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n)).sort().reverse();
+  for (const f of files) {
+    const lines = fs.readFileSync(path.join(dir, f), 'utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0 && entries.length < limit; i--) {
+      if (!lines[i].trim()) continue;
+      try {
+        const e = JSON.parse(lines[i]);
+        // fixture stories (links on .invalid) are not what the channel airs
+        if (e && e.text && (!real || !/\.invalid\//.test(e.link || ''))) entries.push(e);
+      } catch { /* a torn line */ }
+    }
+    if (entries.length >= limit) break;
+  }
+  return entries;
+}
+
+function cachedArticle(cacheDir, link) {
+  if (!cacheDir || !link) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(cacheDir, `${articleKey(link)}.json`), 'utf8')).text || null;
+  } catch {
+    return null; // not cached
+  }
+}
+
+const cacheOf = (dataDir, cacheDir) => cacheDir || (dataDir ? path.join(dataDir, 'compliance', 'articles') : null);
+
+/**
+ * The stories' sources as the archive keeps them, for the lint and the publish check when the news desk is not at
+ * hand (the operator's command line): getStory(id) -> { title, summary, body } (body: the cached article, or null).
+ */
+export function archiveGetStory({ dataDir = null, cacheDir = null } = {}) {
+  const cache = cacheOf(dataDir, cacheDir);
+  const byId = new Map();
+  for (const e of archiveEntries(dataDir)) if (e.id && !byId.has(e.id)) byId.set(e.id, e);
+  return (id) => {
+    const e = byId.get(id);
+    return e ? { title: e.title || '', summary: e.summary || '', body: cachedArticle(cache, e.link) } : null;
+  };
+}
+
+/**
+ * The launch check's measure of what aired (compliance.md §9): the last `limit` real stories of the archive, each
+ * one's reading and analysis against its title and feed summary, and against its article too when the audit's cache
+ * holds it (`cacheDir`, by default `<dataDir>/compliance/articles`). Without the article the measure is a floor: it
+ * can only find less.
+ * -> { stories, violating, rate, withArticle, examples: [{ id, at, programId, longest, share }] }
+ */
+export function archiveSample({ dataDir = null, cacheDir = null, limit = 300, ...opts } = {}) {
+  const out = { stories: 0, violating: 0, rate: 0, withArticle: 0, examples: [] };
+  const cache = cacheOf(dataDir, cacheDir);
+  for (const e of archiveEntries(dataDir, { limit, real: true })) {
+    const body = cachedArticle(cache, e.link);
+    const r = storyReport([e.text, e.analysis?.text].filter(Boolean).join(' '), [e.title, e.summary, body].filter(Boolean), opts);
+    out.stories++;
+    if (body) out.withArticle++;
+    if (r.violations.length) {
+      out.violating++;
+      if (out.examples.length < 3) out.examples.push({ id: e.id, at: e.at, programId: e.programId, longest: r.longest, share: Math.round(r.share * 1000) / 1000 });
+    }
+  }
+  out.rate = out.stories ? out.violating / out.stories : 0;
+  return out;
 }

@@ -50,7 +50,7 @@ function timeline(ep) {
     { start: 14, end: 17, text: 'It will clear by the weekend.', segIndex: 2, kind: 'speech', quote: false },
   ];
 }
-const FLAGS = { youtube: { containsSyntheticMedia: true }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
+const FLAGS = { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
 const reviewed = () => {
   const reg = new ComplianceRegister({});
   reg.recordReview('e1', { by: 'owner', checks: { quoteAgainstSource: true, factsChecked: true }, verdict: 'approve' });
@@ -107,12 +107,16 @@ test('the platforms\' flags: missing ones refuse; Facebook has none, so a recrea
   const base = { id: 'c1', kind: 'clip', episode: ep, range: { start: 4, end: 10.4 }, timeline: timeline(ep) };
   const opts = { now: NOW, calendar: QUIET, register: reviewed() };
   const r = checkClip({ ...base, platforms: ['youtube', 'tiktok', 'instagram'], flags: {} }, opts);
-  assert.equal(r.violations.filter((v) => v.rule === 'flag-missing').length, 3);
+  assert.equal(r.violations.filter((v) => v.rule === 'flag-missing').length, 4, 'YouTube\'s two settings, TikTok\'s and Instagram\'s');
   assert.deepEqual(rules(checkClip({ ...base, platforms: ['facebook'], flags: {} }, opts)), ['flag-unavailable']);
   assert.deepEqual(rules(checkClip({ ...base, platforms: ['facebook'], flags: { facebook: { manualLabel: true } } }, opts)), []);
   // a clip without a recreation still carries the flags on YouTube (our policy: every upload)
   const plain = checkClip({ ...base, range: { start: 11, end: 17 }, platforms: ['youtube'], flags: {} }, opts);
-  assert.deepEqual(rules(plain), ['flag-missing']);
+  assert.deepEqual(plain.violations.map((v) => v.field), ['containsSyntheticMedia', 'selfDeclaredMadeForKids']);
+  // YouTube's audience: news for a general audience is never "made for kids" (that would also switch off comments)
+  const kids = checkClip({ ...base, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: true } } }, opts);
+  assert.deepEqual(kids.violations.map((v) => [v.rule, v.field]), [['flag-missing', 'selfDeclaredMadeForKids']]);
+  assert.equal(kids.disclosure.platforms.youtube.selfDeclaredMadeForKids, false);
 });
 
 test('election periods: a politician of a country inside its window is held; a scientist is not; silence holds a clip about the vote', () => {

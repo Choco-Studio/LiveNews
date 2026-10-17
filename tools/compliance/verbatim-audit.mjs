@@ -11,9 +11,8 @@
 // presenter's reading of it (the archive keeps the first story segment) and the expert's analysis when there was one.
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { storyReport, tokens, MAX_RUN, MAX_SHARE, PHRASE } from '../../server/compliance/verbatim.js';
+import { storyReport, tokens, articleKey, MAX_RUN, MAX_SHARE, PHRASE } from '../../server/compliance/verbatim.js';
 import { extractArticle } from '../../server/article.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -44,7 +43,7 @@ const real = entries.filter((e) => /^https?:\/\//.test(e.link || '') && !/\.inva
 console.log(`${entries.length} archived story tellings, ${real.length} with a real article link`);
 
 // ---- the articles (cached)
-const keyOf = (u) => crypto.createHash('sha1').update(u).digest('hex').slice(0, 20);
+const keyOf = articleKey; // the launch report reads the same cache (verbatim.js archiveSample)
 async function article(link) {
   const f = path.join(cacheDir, `${keyOf(link)}.json`);
   if (fs.existsSync(f)) {

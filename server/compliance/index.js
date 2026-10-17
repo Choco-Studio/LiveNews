@@ -19,7 +19,7 @@ export { creditsFor, auditItem, scanRepoAssets, rightsGate, loadRights } from '.
 export { checkClip, timelineFromRecording, frameGeometry, legibleCap, RECREATION_WINDOW } from './clips.js';
 export { markFile, readMark, buildManifest, c2paStatus, watermarkStatus, signingIdentity, SOURCE_TYPE } from './c2pa.js';
 export { ComplianceRegister, sharedRegister, CATEGORIES, DECISIONS } from './registry.js';
-export { lintEpisode, storyReport, verbatimRuns, MAX_RUN, MAX_SHARE, PHRASE } from './verbatim.js';
+export { lintEpisode, storyReport, verbatimRuns, archiveSample, archiveGetStory, MAX_RUN, MAX_SHARE, PHRASE } from './verbatim.js';
 export { loadCalendar, electionHold, silenceHold, activeElections, ELECTION_RULE, startElectionCalendar } from './elections.js';
 
 import fs from 'node:fs';
@@ -28,10 +28,14 @@ import { disclosureFor, describe, editorialContact } from './disclosure.js';
 import { auditItem } from './credits.js';
 import { checkClip } from './clips.js';
 import { readMark, c2paStatus, watermarkStatus } from './c2pa.js';
-import { lintEpisode } from './verbatim.js';
+import { lintEpisode, archiveSample } from './verbatim.js';
 import { loadCalendar } from './elections.js';
 
 const VIDEO = new Set(['live', 'episode', 'clip', 'short']);
+// the launch check of the verbatim rule on what aired: the last VERBATIM_SAMPLE stories, at most VERBATIM_LAUNCH_RATE
+// of them breaking it (the live stream has no publish check of its own: this is what holds it back)
+export const VERBATIM_SAMPLE = 300;
+export const VERBATIM_LAUNCH_RATE = 0.05;
 
 /**
  * The publish-time gate of one item. Refuses (ok: false) on any violation; the publisher uploads nothing then.
@@ -106,8 +110,16 @@ export function launchReport({ env = process.env, dataDir = null, now = Date.now
   if (!env.OPEN_METEO_API_KEY && !env.OPEN_METEO_COMMERCIAL) blockers.push('Open-Meteo: the free API is non-commercial only; a monetised channel needs a paid plan (set OPEN_METEO_API_KEY once it is in place)');
   const cal = loadCalendar({ dataDir, now });
   if (cal.stale) blockers.push('the election calendar is out of date (node tools/compliance/elections.mjs, and the server refreshes it daily)');
+  // what aired: the writer's text against its sources (title and summary always, the article where the audit cached it)
+  const verbatim = archiveSample({ dataDir, limit: VERBATIM_SAMPLE });
+  if (!verbatim.stories) warnings.push('verbatim: no archive yet to measure the aired text against its sources; run this report again after a day on air');
+  else if (verbatim.rate > VERBATIM_LAUNCH_RATE) {
+    const pct = Math.round(verbatim.rate * 1000) / 10;
+    blockers.push(`the writer's aired text breaks the verbatim rule in ${pct} % of the last ${verbatim.stories} stories (at most ${VERBATIM_LAUNCH_RATE * 100} %): sentences must be composed from the facts, not copied (docs/publishing/verbatim.md)`);
+  }
+  if (verbatim.stories && verbatim.withArticle < verbatim.stories / 2) warnings.push(`verbatim: ${verbatim.withArticle} of ${verbatim.stories} stories measured against their article (the rest against title and summary only, a floor); node tools/compliance/verbatim-audit.mjs fills the cache`);
   warnings.push('YouTube live: set "altered or synthetic content" on the broadcast (videos.update on its video id, or Studio) at each new stream');
   warnings.push('X, Bluesky, Mastodon: mark the accounts as automated where the network offers it');
-  return { ready: blockers.length === 0, blockers, warnings, c2pa: c2, watermark: wm, calendar: { generatedAt: cal.generatedAt, stale: cal.stale, votes: cal.elections.length } };
+  return { ready: blockers.length === 0, blockers, warnings, c2pa: c2, watermark: wm, calendar: { generatedAt: cal.generatedAt, stale: cal.stale, votes: cal.elections.length }, verbatim };
 }
 

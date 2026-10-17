@@ -24,6 +24,7 @@ test('disclosureFor: every platform gets its flag; a recreation makes it require
   assert.equal(d.platforms.youtube.containsSyntheticMedia, true);
   assert.equal(d.platforms.youtube.required, true);
   assert.equal(d.platforms.youtube.prominentLabel, true, 'news: the label shows on the player');
+  assert.equal(d.platforms.youtube.selfDeclaredMadeForKids, false, 'the audience YouTube requires: general, not made for kids');
   assert.equal(d.platforms.tiktok.is_aigc, true);
   assert.equal(d.platforms.instagram.is_ai_generated, true);
   assert.equal(d.platforms.facebook.field, null);

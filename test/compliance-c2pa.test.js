@@ -60,7 +60,7 @@ test('a video and a thumbnail are marked in place and read back as AI-produced; 
   try {
     const { mp4, png } = media(dir);
     assert.equal(readMark(mp4).ok, false, 'nothing before');
-    const before = preflight({ id: 'e1', kind: 'episode', episode: { ...ep, segments: ep.segments.slice(0, 1) }, files: [mp4], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true } } }, { calendar: QUIET, env: ENV, requireReview: false });
+    const before = preflight({ id: 'e1', kind: 'episode', episode: { ...ep, segments: ep.segments.slice(0, 1) }, files: [mp4], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
     assert.ok(before.violations.some((v) => v.rule === 'unmarked'), 'refused while unmarked');
     for (const f of [mp4, png]) {
       const r = markFile(f, buildManifest({ kind: 'episode', episode: ep }), { dataDir: dir, tsa: '' });
@@ -75,7 +75,7 @@ test('a video and a thumbnail are marked in place and read back as AI-produced; 
       assert.ok(back.validation.every((s) => s.code === 'signingCredential.untrusted'), back.validation.map((s) => s.code).join());
       assert.equal(back.state, 'Valid');
     }
-    const after = preflight({ id: 'e1', kind: 'episode', episode: { ...ep, segments: ep.segments.slice(0, 1) }, files: [mp4, png], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true } } }, { calendar: QUIET, env: ENV, requireReview: false });
+    const after = preflight({ id: 'e1', kind: 'episode', episode: { ...ep, segments: ep.segments.slice(0, 1) }, files: [mp4, png], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
     assert.deepEqual(after.violations.filter((v) => v.rule === 'unmarked'), []);
     // the signing key never leaves data/compliance/c2pa, readable by its owner only
     const key = path.join(dir, 'compliance', 'c2pa', 'sign.key');

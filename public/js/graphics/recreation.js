@@ -62,11 +62,59 @@ function fit(text, room) {
 }
 const DANGLING = /^(?:OF|THE|AND|FOR|AT|IN|ON|TO|A|AN|WITH|FROM|BY|&|-|—)$/i;
 
+// line breaks: never after a word that binds to the next; a looser preposition may end a line to keep its phrase whole
+const TIGHT = /^(?:OF|THE|A|AN|AND|TO|&|-|—)$/i;
+const LOOSE = /^(?:FOR|AT|IN|ON|WITH|FROM|BY)$/i;
+
+/**
+ * `text` wrapped to `room` px; when it takes two lines, broken where a subtitler would break it. Never after a word
+ * that binds to the next ("OF", "THE"). At a natural point when one fits: after "SOURCE:", before "OF", "FROM" or
+ * "THE", or after a looser preposition, which keeps the phrase after it whole. The most even of those; otherwise the
+ * most even break. So "CHIEF EXECUTIVE / OF NIMBUS RAIL", not "CHIEF EXECUTIVE OF NIMBUS / RAIL"; "WORDS FROM /
+ * PUBLIC STATEMENTS"; "SOURCE: / THE WALL STREET JOURNAL" keeps the outlet's name whole. The same for three or four lines.
+ */
+export function evenLines(text, room, font = 'body', most = 4) {
+  const lines = wrapLines(String(text || ''), room, 1, font);
+  if (lines.length < 2 || lines.length > most) return lines.slice();
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const widthOf = (i, j) => measureText(words.slice(i, j).join(' '), 1, font);
+  const natural = (k) => /:$/.test(words[k - 1]) || DANGLING.test(words[k]) || LOOSE.test(words[k - 1]);
+  // every split into m lines (a role or a source is a handful of words): fewest rough breaks, then the narrowest
+  // widest line (within a letter), then the fullest last line (no lone word left under the rest)
+  const better = (a, b) => {
+    if (!b || a.rough !== b.rough) return !b || a.rough < b.rough;
+    if (Math.abs(a.wide - b.wide) > 6) return a.wide < b.wide;
+    return a.last > b.last || (a.last === b.last && a.wide < b.wide);
+  };
+  const search = (i, m, cuts, rough, wide, best) => {
+    if (m === 1) {
+      const last = widthOf(i, words.length);
+      if (last > room) return best;
+      const cand = { rough, wide: Math.max(wide, last), last, cuts };
+      return better(cand, best) ? cand : best;
+    }
+    for (let k = i + 1; k <= words.length - m + 1; k++) {
+      const head = widthOf(i, k);
+      if (head > room) break;
+      if (TIGHT.test(words[k - 1])) continue;
+      best = search(k, m - 1, [...cuts, k], rough + (natural(k) ? 0 : 1), Math.max(wide, head), best);
+    }
+    return best;
+  };
+  // as few lines as the greedy wrap, or one more when no acceptable break exists at that count
+  for (let m = lines.length; m <= most; m++) {
+    const best = search(0, m, [], 0, 0, null);
+    if (best) return [0, ...best.cuts].map((c, n, all) => words.slice(c, all[n + 1] ?? words.length).join(' '));
+  }
+  return lines.slice();
+}
+
 /**
  * Where every plate of the label and the name super goes, in the full frame or inside a clip's window.
  * `frame` = { active, x, w } (graphics/disclosure.js FRAME; the full width when not active).
  * -> { plates: [{ role, x, y, w, h, color, text, ink, ai? }], label: { x0, y0, x1, y1 }, whole: bool, lost: [words] }
- * `whole` is false when a word of the label or the source could not be shown (the window is too narrow for it).
+ * `whole` is false when a word of the label, the source, the name or the role could not be shown (the window is too
+ * narrow for it).
  */
 export function recreationLayout(rec, frame = FRAME) {
   const r = rec || recreationOf(null, {});
@@ -96,7 +144,7 @@ export function recreationLayout(rec, frame = FRAME) {
     plates.push({ role: 'mark', x: right - HEAD_W, y: yy, w: HEAD_W, h, color: P.yellow, text: HEAD, ink: P.black, ai: true });
     yy += h + 1;
     const words = rest.replace(/^[—–-]\s*/, '');
-    for (const ln of wrapLines(words, room - 9)) {
+    for (const ln of evenLines(words, room - 9)) {
       const w = measureText(ln) + 9;
       if (w > room) lost.push(ln);
       plates.push({ role: 'line', x: right - w, y: yy, w, h, color: P.black, text: ln, ink: P.white });
@@ -105,7 +153,7 @@ export function recreationLayout(rec, frame = FRAME) {
     // the source in the micro face (the package's face for sources: ART_DIRECTION §4), so the stack stays above
     // the guest's eyes in a 9:16 window; 5 px capitals are still 44 px tall on a 1920 px picture
     yy += gap - 1;
-    for (const ln of wrapLines(credit, room - 8, 1, 'micro')) {
+    for (const ln of evenLines(credit, room - 8, 'micro')) {
       const w = measureText(ln, 1, 'micro') + 8;
       if (w > room) lost.push(ln);
       plates.push({ role: 'credit', x: right - w, y: yy, w, h: MICRO_H, color: P.ink, text: ln, ink: P.silver, font: 'micro' });
@@ -119,12 +167,12 @@ export function recreationLayout(rec, frame = FRAME) {
   const sx = narrow ? left : STRAP.x;
   const sw = narrow ? room : STRAP.right - STRAP.x;
   const nameRoom = narrow ? room - 10 : NAME_ROOM;
-  const nameLines = narrow ? wrapLines(String(r.name || ''), nameRoom).slice(0, 2) : [fit(String(r.name || ''), nameRoom)];
+  const nameLines = narrow ? upTo(String(r.name || ''), nameRoom, 2, lost) : [fit(String(r.name || ''), nameRoom)];
   const barH = STRAP.barH + (nameLines.length - 1) * 10;
   const barY = STRAP.bottom - barH;
-  // (the role wraps too inside a window: two lines on the tag rather than a role cut after "OF")
+  // (the role wraps too inside a window, up to four lines on the tag, rather than a role cut after "OF")
   const roleText = r.role ? r.role : FEATURE;
-  const roleLines = narrow ? twoLines(roleText, nameRoom) : [fit(roleText, nameRoom)];
+  const roleLines = narrow ? upTo(roleText, nameRoom, 4, lost) : [fit(roleText, nameRoom)];
   const tagH = STRAP.tagH + (roleLines.length - 1) * 10;
   const tagW = Math.max(...roleLines.map((l) => measureText(l))) + 10;
   plates.push({ role: 'role', x: sx, y: barY - tagH, w: tagW, h: tagH, color: null, text: roleLines.join('\n'), lines: roleLines });
@@ -132,11 +180,17 @@ export function recreationLayout(rec, frame = FRAME) {
   return { plates, label, whole: lost.length === 0, lost };
 }
 
-/** At most two lines of `text` in `room` px, whole words; a second line that would still overflow is fitted. */
-function twoLines(text, room) {
-  const lines = wrapLines(String(text || ''), room);
-  if (lines.length <= 2) return lines.slice();
-  return [lines[0], fit(lines.slice(1).join(' '), room)];
+/**
+ * At most `max` lines of `text` in `room` px, whole words. When even that cannot hold it, the last line is fitted and
+ * the words left out go to `lost` (the layout is then not whole, and the publish check refuses the window).
+ */
+function upTo(text, room, max, lost) {
+  const lines = evenLines(String(text || ''), room, 'body', max);
+  if (lines.length <= max) return lines;
+  const kept = [...lines.slice(0, max - 1), fit(lines.slice(max - 1).join(' '), room)];
+  const shown = kept.join(' ').split(' ').length;
+  lost.push(String(text).split(/\s+/).filter(Boolean).slice(shown).join(' '));
+  return kept;
 }
 
 /**

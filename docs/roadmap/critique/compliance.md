@@ -121,7 +121,65 @@ What was there:
 
 **Round 2: 9.2** (enforcement).
 
-## Round 3
+## Round 3: the launch check reads what aired; YouTube's audience; the operator's command line; line breaks
 
-<!-- filled after round 3's work: launch report reads the archive for the verbatim rule; YouTube made-for-kids;
-     the operator's command line; the full suite -->
+**Enforcement: the launch report measures the verbatim rule on what aired.**
+- `launchReport()` reads the last 300 real stories of `data/archive` (`archiveSample()`). It checks each one's reading and analysis against its title and summary, and against its article when the audit has cached it. It blocks launch while more than 5 % of them break the rule.
+- The live stream has no publish step, so this is the check that holds it back.
+- On today's archive: **80.3 %** (241 of 300) against title and summary alone, which is a floor; **99 %** (297 of 300) with the 280 cached articles. It runs in about a third of a second.
+- It clears when the writer team's composed sentences are on air, measured by the same code. The audit tool and the report share one cache key, so they cannot drift apart.
+
+**Platforms: YouTube's audience.**
+- YouTube "require[s] you to tell us whether or not your videos are made for kids" (COPPA). The field `status.selfDeclaredMadeForKids` was checked on both the videos and the liveBroadcasts resources.
+- `disclosureFor` gives `false`, because news for a general audience is not child-directed even in pixel art. The publish check refuses a YouTube upload without it.
+
+**The operator's command line** (`tools/compliance/cli.mjs`).
+- `launch` exits 1 while a blocker stands. `check <item.json>` runs the publish check, with the stories checked against the archive's sources, and exits 1 when refused.
+- `mark` and `read` sign a file and read its C2PA manifest back.
+- `complaint add | triage | done | close`, `complaints [--open | --overdue]` and `actions` cover the register.
+- A complaint is logged in one command when it arrives. A test shows the running server's register holding the person from that moment, with no restart.
+
+**Legal: the lawyer's list** gains general media law for the news text:
+- contempt of court and reporting restrictions in the UK;
+- the anonymity of victims and minors in the UK and Spain;
+- the Spanish right of reply (LO 2/1984);
+- what an AI presenter may say about someone accused but not convicted.
+
+**Quality: the pixel artist's 1:1 and 4:5 renders** (`09-recreation-1x1-window.png`, `10-recreation-4x5-window.png`) showed two lone words:
+- the role as "CHIEF EXECUTIVE OF NIMBUS / RAIL";
+- the label as "WORDS FROM PUBLIC / STATEMENTS".
+
+They also showed that a long real role in 9:16, "SECRETARY-GENERAL OF THE UNITED NATIONS", **lost "NATIONS"** without a word of warning. The fixes:
+- `evenLines()` breaks where a subtitler would: never after "OF" or "THE", at a natural point when one fits, and otherwise most evenly with no lone last word. The tag now reads CHIEF EXECUTIVE / OF NIMBUS RAIL, the label WORDS FROM / PUBLIC STATEMENTS, and a long source SOURCE: / THE WALL STREET JOURNAL.
+- A role wraps to up to four lines inside a window.
+- A role or name that cannot fit is reported in `lost`, and the publish check refuses that window (`label-out-of-frame`). A word is never dropped silently.
+- The 4:5 render also has a caption that runs into the next sentence ("…NEXT WEEK. EVERY"). The cause is the lab page, which feeds the whole quote as one subtitle. The runtime feeds one sentence at a time (`director.js`), so air is not affected.
+
+**Tests.** New tests cover:
+- the YouTube audience flag, in `disclosureFor` and refused when missing or true;
+- the launch report on a temporary archive: copied summaries block, composed sentences at 2.5 % pass, fixtures are left out, the newest stories are measured, and a cached article finds what the summary alone cannot;
+- the command line: a complaint reaches a running register at once, triage and close follow, a bad category is refused, `launch` exits 1, and `check` refuses and then passes;
+- line breaks for five long real roles in five windows, every word kept, and an impossible role refused.
+
+The full suite: 2,616 tests, 0 failures (it was 2,612 before this round).
+
+**Scores.**
+
+| Category | Score | Notes |
+| --- | --- | --- |
+| Legal coverage | 9.8 | Every rule read at its source, or flagged where the source refused automated reading (EUR-Lex for the Omnibus; TikTok's and X's pages): those are worded "confirm" on the lawyer's list. The watermark gap is written down as the guidelines ask (point 148) |
+| Platform coverage | 9.8 | Every platform's field checked in its API reference, now with YouTube's audience. Facebook and Threads have no flag, so they need a hand label, recorded |
+| Quality preserved | 9.8 | Every feature kept, IN THEIR WORDS included. The renders are clean in 16:9, 9:16, 1:1 and 4:5. One break is readable but not ideal: UNITED STATES SECRETARY / OF STATE in 4:5, since the rule cannot see that "secretary of state" is one title |
+| Enforcement | 9.8 | Publish refused on 21 rules. Launch blocked on six conditions, including what aired. The operator's commands exit non-zero when they refuse |
+| Robustness | 9.8 | Fail closed: a stale calendar, an unreadable manifest, a word that does not fit, a missing flag. Across processes: a complaint from the command line reaches the server's register at once |
+| Tests | 9.8 | 53 compliance tests in nine files, the full suite green |
+
+**Round 3: 9.8.** Above the 9.7 bar.
+
+**What stays open, outside the code.** These are written into the launch report and the lawyer's list:
+- a C2PA certificate from a CA on the trust list;
+- the audio watermark: its download hosts answered 403 here, and the integration is ready;
+- `EDITORIAL_CONTACT`;
+- `RIGHTS_GATE=strict`;
+- the Open-Meteo paid plan;
+- the writer team's composed sentences.

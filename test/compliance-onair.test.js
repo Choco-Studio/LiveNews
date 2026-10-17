@@ -42,7 +42,7 @@ const { P } = await import('../public/js/palette.js');
 const { TOP, W, CAPTION } = await import('../public/js/graphics/layout.js');
 const { drawTopRow, BUG_W } = await import('../public/js/graphics/bug.js');
 const D = await import('../public/js/graphics/disclosure.js');
-const { recreationOf, recreationLayout, drawRecreation, RECREATION } = await import('../public/js/graphics/recreation.js');
+const { recreationOf, recreationLayout, drawRecreation, evenLines, RECREATION } = await import('../public/js/graphics/recreation.js');
 const { Graphics } = await import('../public/js/graphics/index.js');
 const { measureText } = await import('../public/js/font.js');
 const { weatherCredit } = await import('../public/js/scenes/weather/index.js');
@@ -177,6 +177,38 @@ test('in a 9:16 window the label stacks, every word whole and inside, also for a
     assert.ok(!/ (?:OF|THE|AND)$/.test(tag.lines.at(-1)), `${spec}: it never ends on a word that needs the next (${tag.lines.join(' / ')})`);
     assert.ok(tag.x + tag.w <= f.x + f.w && tag.y + tag.h <= ceo.plates.find((p) => p.role === 'name').y, `${spec}: the tag sits on the name bar, inside`);
   }
+  D.setFrame(null);
+});
+
+test('line breaks in a window fall where a subtitler would put them; a long role takes more lines, never loses a word', () => {
+  // the 4:5 render showed "CHIEF EXECUTIVE OF NIMBUS / RAIL" and "WORDS FROM PUBLIC / STATEMENTS": lone words
+  const f = D.setFrame('4x5@38');
+  const ceo = recreationLayout(recreationOf({ strap: { name: 'HIRO MENSAH', role: 'CHIEF EXECUTIVE OF NIMBUS RAIL' }, label: { line: 'RECREATION — WORDS FROM PUBLIC STATEMENTS', credit: 'SOURCE: CIRCUIT WEEKLY' } }), f);
+  assert.deepEqual(ceo.plates.find((p) => p.role === 'role').lines, ['CHIEF EXECUTIVE', 'OF NIMBUS RAIL']);
+  assert.deepEqual(ceo.plates.filter((p) => p.role === 'line').map((p) => p.text), ['WORDS FROM', 'PUBLIC STATEMENTS']);
+  // the outlet's name stays whole after "SOURCE:" when the source takes two lines
+  assert.deepEqual(evenLines('SOURCE: THE WALL STREET JOURNAL', 100, 'micro'), ['SOURCE:', 'THE WALL STREET JOURNAL']);
+  // never a line ending on a word that binds to the next, in any window, for long real roles
+  const TIGHT = /\b(?:OF|THE|A|AN|AND|TO)$/;
+  const roles = ['SECRETARY-GENERAL OF THE UNITED NATIONS', 'UNITED STATES SECRETARY OF STATE', 'DIRECTOR-GENERAL OF THE WORLD HEALTH ORGANIZATION', 'PRESIDENT OF THE EUROPEAN COMMISSION', 'GOVERNOR OF THE BANK OF ENGLAND'];
+  for (const spec of ['9x16', '9x16@0', '1x1', '4x5', '3x4']) {
+    const fr = D.setFrame(spec);
+    for (const role of roles) {
+      const L = recreationLayout(recreationOf({ strap: { name: 'TEDROS ADHANOM GHEBREYESUS', role }, label: { line: 'RECREATION — WORDS FROM PUBLIC STATEMENTS', credit: 'SOURCE: AGENCE FRANCE-PRESSE' } }), fr);
+      const tag = L.plates.find((p) => p.role === 'role');
+      const name = L.plates.find((p) => p.role === 'name');
+      assert.ok(L.whole, `${spec} ${role}: ${L.lost.join(' / ')}`);
+      assert.equal(tag.lines.join(' '), role, `${spec}: every word of the role`);
+      assert.equal(name.lines.join(' '), 'TEDROS ADHANOM GHEBREYESUS', `${spec}: every word of the name`);
+      for (const ln of [...tag.lines.slice(0, -1), ...name.lines.slice(0, -1)]) assert.ok(!TIGHT.test(ln), `${spec}: "${ln}" ends on a word that needs the next (${tag.lines.join(' / ')})`);
+      assert.ok(tag.x + tag.w <= fr.x + fr.w && tag.y > L.label.y1, `${spec} ${role}: the tag inside the window, below the label`);
+    }
+  }
+  // a role no window can hold is reported, and the publish check refuses the window (label-out-of-frame)
+  D.setFrame('9x16');
+  const huge = recreationLayout(recreationOf({ strap: { name: 'ANA SILVA', role: 'DEPUTY DIRECTOR-GENERAL FOR INTERNATIONAL COOPERATION AND DEVELOPMENT OF THE EUROPEAN COMMISSION' }, label: { line: 'RECREATION — WORDS FROM PUBLIC STATEMENTS', credit: 'SOURCE: BBC' } }));
+  assert.equal(huge.whole, false);
+  assert.ok(huge.lost.join(' ').length > 0);
   D.setFrame(null);
 });
 

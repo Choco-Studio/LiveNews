@@ -17,6 +17,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
   2. **Open-Meteo:** el plan gratuito es solo para uso no comercial. Un canal con anuncios necesita el plan de pago.
   3. Las **fotos de los medios** no tienen licencia. Otro equipo las está cambiando por fotos con licencia, y el canal ya sabe quitar del aire cualquier foto sin licencia (`RIGHTS_GATE=strict`).
   4. Hay que poner un **contacto editorial** público: quién responde del canal.
+- **Una orden para saber si estamos listos:** `node tools/compliance/cli.mjs launch` dice qué falta. Mientras el redactor siga copiando (hoy el 80 % de las últimas 300 noticias rompe la regla, medido solo contra el resumen del medio), el lanzamiento queda bloqueado. Con la misma herramienta se apunta una queja en una línea (`complaint add`), y la persona queda retenida al instante (§7).
 
 ## 1. What applies to which output
 
@@ -28,6 +29,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 | Art. 50(5): clear, at first exposure, accessible | Persistent AI mark, openings every 5 min and after breaks, the spoken line at breaks | Mark plus description first line | Mark (kept inside the crop) plus caption first line | Prefix first |
 | Copyright of text (verbatim) | Applies (communication to the public) | Applies. Refused at publish if over the rule | Same | Same |
 | YouTube altered or synthetic content | Set on the broadcast (§2.5) | `status.containsSyntheticMedia = true` | Same, for Shorts | n/a |
+| YouTube audience ("made for kids", COPPA) | `status.selfDeclaredMadeForKids = false` on the broadcast | Same, on every video | Same, for Shorts | n/a |
 | YouTube inauthentic and reused content (monetisation) | Applies to the channel | Applies | Applies | n/a |
 | TikTok AI-generated content label | n/a | n/a | `post_info.is_aigc = true` | n/a |
 | Meta AI info label | n/a | Facebook: label set by hand plus C2PA | Instagram `is_ai_generated = true`. Facebook and Threads: by hand plus C2PA | Threads: prefix |
@@ -164,6 +166,10 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
   - Creators who consistently fail to disclose risk removal or suspension from the Partner Program.
   - In the API it is `videos.status.containsSyntheticMedia` ([Data API](https://developers.google.com/youtube/v3/docs/videos)). The `liveBroadcast` resource has no such field ([Live API](https://developers.google.com/youtube/v3/live/docs/liveBroadcasts)), so it is set on the broadcast's video id or in Studio. The lawyer or the publishing team should confirm (§9).
   - **We set it on every upload.** Pixel art might be "clearly unrealistic", but our synthetic voices narrate real news, our recreations put real people's words in a voice that is not theirs, and our C2PA manifest triggers the label anyway.
+- **Audience ("made for kids").** YouTube says "we require you to tell us whether or not your videos are made for kids", to help creators "comply with the Children's Online Privacy Protection Act (COPPA)", and "failure to set your content appropriately may result in consequences on YouTube" ([Help: Set your channel or video's audience](https://support.google.com/youtube/answer/9528076)).
+  - In the API it is `status.selfDeclaredMadeForKids`, on videos and on live broadcasts alike ([videos](https://developers.google.com/youtube/v3/docs/videos), [liveBroadcasts](https://developers.google.com/youtube/v3/live/docs/liveBroadcasts)).
+  - **We set it to `false` everywhere.** News for a general audience is not child-directed, even drawn in pixel art. A pixel-art channel is exactly the kind a reviewer might mistake for a children's one, so we say it on every upload instead of leaving it to a channel default. (Made-for-kids would also switch off comments and personalised ads.)
+  - The publish check refuses a YouTube upload without it (§5.5).
 - **Inauthentic content (renamed from "repetitious content" on 15 July 2025).** Content must "not be mass-produced, generic, repetitive, or manipulative" ([Channel monetisation policies](https://support.google.com/youtube/answer/1311392)). The same page refuses:
   - "AI-generated content made with generic or unoriginal templates giving the impression of mass production";
   - "content that exclusively features readings of other materials you did not originally create… like text from websites or news feeds" (the verbatim problem again);
@@ -301,12 +307,13 @@ Everything the feature already does stays:
 
 - **Clip frames.** A clip for a vertical or square platform is recorded with `?frame=9x16` (or `9x16@<x>`, `1x1`, `4x5`). A recreation's 9:16 window is `RECREATION_WINDOW` = `9x16@64`, centred on the guest at the lectern. The graphics that carry a disclosure are then laid out inside that window:
   - the bug and the AI mark (its words open only where they fit whole, so a 9:16 window keeps the plate);
-  - the label, stacked: AI RECREATION, then WORDS FROM PUBLIC / STATEMENTS, then the source in the package's micro face for sources (SOURCE: CIRCUIT WEEKLY), all above the guest's eyes;
-  - the name super (the role and the name wrap rather than losing a word);
+  - the label, stacked: AI RECREATION, then WORDS FROM / PUBLIC STATEMENTS, then the source in the package's micro face for sources (SOURCE: CIRCUIT WEEKLY), all above the guest's eyes;
+  - the name super: the role wraps to up to four lines on its tag and the name to two, rather than losing a word;
   - the captions, always above the super.
+- **Line breaks** fall where a subtitler would put them (`evenLines`): never after a word that binds to the next ("OF", "THE"), at a natural point when one fits (after "SOURCE:", before "OF" or "FROM"), and otherwise where the lines are most even, with no lone word left under the rest. So the tag reads CHIEF EXECUTIVE / OF NIMBUS RAIL, and a long source reads SOURCE: / THE WALL STREET JOURNAL with the outlet's name whole. A role or name that even four lines cannot hold is reported, and the publish check refuses that window: a word is never dropped silently.
 - The clock and the ticker stay out of a clip.
 - `recreationLayout(rec, frame)` is the single source of where every plate goes. The renderer draws from it and the publish check verifies the crop against it.
-- **Tested** on centred, left and right 9:16, 1:1 and 4:5 windows with long outlets and names (`test/compliance-onair.test.js`).
+- **Tested** on centred, left and right 9:16, 1:1, 4:5 and 3:4 windows with long outlets, names and real long roles (Secretary-General of the United Nations, Director-General of the World Health Organization) (`test/compliance-onair.test.js`). Rendered at 4x in 9:16, 1:1 and 4:5.
 - **Legibility.** The label's smallest capitals must be at least 1.6 % of the published picture's height (16 px minimum). These are the body face's 7 px, or the micro face's 5 px for the source in a window, which is 44 px on a 1920 px picture. A whole 16:9 frame shrunk into a 9:16 picture gives 19.7 px on 1920. That fails, and the check says to crop to the window instead.
 
 ### 5.2 Provenance and no cut inside a quote
@@ -320,6 +327,7 @@ Everything the feature already does stays:
 
 - YouTube `containsSyntheticMedia`, TikTok `is_aigc` and Instagram `is_ai_generated` are required on every upload. With a recreation, they are *required by the platform's own rule* too.
 - Facebook and Threads have no API flag, so they need the label set by hand, recorded as `flags.<platform>.manualLabel`, or the platform left out.
+- YouTube's audience setting, `selfDeclaredMadeForKids = false`, is checked on the same line as its synthetic-content flag (§2.5).
 
 ### 5.4 Election periods: the rule we decided
 
@@ -406,7 +414,10 @@ Everything the feature already does stays:
 **1. Receive.**
 
 - Complaints arrive by e-mail at `EDITORIAL_CONTACT` (in every description and on the About page), through platform notices (YouTube privacy complaints, copyright notices, Meta or TikTok reports), by letter, or through a missing-label report.
-- Each is logged **the moment it arrives**, by the owner or by whoever reads the inbox: `register.fileComplaint({ receivedAt, channel, from, contact, about: { url | remote: { platform, remoteId } | itemId | storyId | person }, category, text })`.
+- Each is logged **the moment it arrives**, by the owner or by whoever reads the inbox, in one command:
+  `node tools/compliance/cli.mjs complaint add --category privacy-likeness --person "Name" --url <link> --from "…" --text "…"`
+  (in code: `register.fileComplaint({ receivedAt, channel, from, contact, about: { url | remote: { platform, remoteId } | itemId | storyId | person }, category, text })`).
+- The running server sees it at once: its register re-reads the file before every check, so no new recreation of the person is made from that moment.
 
 **2. Hold at once.** Logging a complaint about a person, a story or an item holds new publications of it (a *precaution* block) until it is triaged.
 
@@ -426,7 +437,7 @@ Everything the feature already does stays:
 
 On a privacy complaint YouTube "may give the creator time to remove or edit" the content (its privacy guidelines give no fixed time). We act within the hours above. `register.overdue()` lists anything late.
 
-**4. Triage.** `register.triage(id, { decision, scope, reason, by })` with one of these decisions:
+**4. Triage.** `cli.mjs complaint triage <id> --decision … --reason …` (in code `register.triage(id, { decision, scope, reason, by })`) with one of these decisions:
 
 | Decision | What it does |
 | --- | --- |
@@ -453,7 +464,8 @@ On a privacy complaint YouTube "may give the creator time to remove or edit" the
 
 **7. Close.**
 
-- `register.close(id, { outcome, reply })` succeeds only when every action is done. The reply to the complainant is recorded.
+- `register.close(id, { outcome, reply })` (`cli.mjs complaint close <id> --outcome … --reply …`) succeeds only when every action is done. The reply to the complainant is recorded.
+- `cli.mjs complaints --open`, `complaints --overdue` and `actions` show what is waiting.
 
 **8. Records.**
 
@@ -473,7 +485,7 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 
 | Function | Input | Output |
 | --- | --- | --- |
-| `disclosureFor(item)` | `{ kind: 'live'\|'episode'\|'clip'\|'short'\|'text'\|'image', episode?, programId?, recreations?, platforms?, writer? }` | `{ kind, programme, writer, ai, recreations, labels: { onAir, mark, recreation?, textPrefix }, description: { opening, lines }, channel, platforms: { youtube: { field, containsSyntheticMedia, required, prominentLabel, descriptionTop }, tiktok: { field, is_aigc, … }, instagram: { field, is_ai_generated, … }, facebook\|threads: { field: null, manualLabel, c2pa }, x\|bluesky\|mastodon\|linkedin: { textTop, … } } }` |
+| `disclosureFor(item)` | `{ kind: 'live'\|'episode'\|'clip'\|'short'\|'text'\|'image', episode?, programId?, recreations?, platforms?, writer? }` | `{ kind, programme, writer, ai, recreations, labels: { onAir, mark, recreation?, textPrefix }, description: { opening, lines }, channel, platforms: { youtube: { field, containsSyntheticMedia, audienceField, selfDeclaredMadeForKids: false, required, prominentLabel, descriptionTop }, tiktok: { field, is_aigc, … }, instagram: { field, is_ai_generated, … }, facebook\|threads: { field: null, manualLabel, c2pa }, x\|bluesky\|mastodon\|linkedin: { textTop, … } } }` |
 | `describe(item, { credits, summary })` | as above | the description text, disclosure first |
 | `textPost(item, { max })` | `{ text, source, link }` | the post, "AI-generated:" first, within `max` |
 | `creditsFor(item)` | `{ episode }` or an episode | `["Reporting: …", "Pictures: …", "Footage: …", "Weather data by Open-Meteo.com (CC BY 4.0)…", "Map data: Natural Earth", "Voices: synthetic…", "Presenters, sets, graphics and music: original…"]` |
@@ -483,8 +495,10 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 | `markFile(path, manifest, opts)` | a file and `buildManifest(item, { title, sources, credits })` | `{ ok, path, label, validation, timestamped, devCert, aiGenerated, watermark }`. Throws if it cannot mark |
 | `readMark(path)` | a file | `{ ok, aiGenerated, sourceType, disclosure, validation, state, signer }` |
 | `lintEpisode(episode, { getStory, strict })` | the episode and the stories' `{ title, summary, body }` | `{ ok, stories, violations }` |
+| `archiveSample({ dataDir, cacheDir, limit })` | the archive (`data/archive`) and the audit's article cache | `{ stories, violating, rate, withArticle, examples }` |
+| `archiveGetStory({ dataDir, cacheDir })` | same | `getStory(id)` for `lintEpisode` and `preflight` when the news desk is not at hand |
 | `preflight(item, opts)` | a clip (as above) plus `{ files, text }`; `opts` also `{ getStory, verbatim: 'block'\|'warn', env }` | `{ ok, violations, warnings, disclosure, credits, description, recreations }` |
-| `launchReport()` | the environment | `{ ready, blockers, warnings, c2pa, watermark, calendar }` |
+| `launchReport({ env, dataDir })` | the environment and the archive | `{ ready, blockers, warnings, c2pa, watermark, calendar, verbatim }` |
 | `ComplianceRegister` | `{ dir }` (the server's: `sharedRegister(dataDir)`) | publications, reviews, complaints, triage, actions, blocks, corrections (§7) |
 
 **The publisher's sequence for one item.**
@@ -494,11 +508,21 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 3. For a recreation, get the owner's `recordReview`.
 4. Export the file and run `markFile` (and on the thumbnail too).
 5. Run `preflight(item, { register, getStory })`. **Stop if not ok.**
-6. Upload with the flags from `disclosureFor` and the text from `describe` or `textPost`.
+6. Upload with the flags from `disclosureFor` (on YouTube both `containsSyntheticMedia: true` and `selfDeclaredMadeForKids: false`) and the text from `describe` or `textPost`.
 7. Run `recordPublication({ itemId, parentId, platform, remoteId, url, storyIds, recreations: result.recreations, flags, manifest })`.
 8. Poll `register.openActions()` and perform them.
 
 **Errors.** Violations are data, not exceptions: show them to the owner and do not upload. Only `markFile` throws, when a file cannot be marked. An unmarked file is never uploaded.
+
+**The operator's command line** (`tools/compliance/cli.mjs`, reading `DATA_DIR` or `data/`):
+
+| Command | What it does | Exit code |
+| --- | --- | --- |
+| `launch` | the launch report (§9) | 1 while a blocker stands |
+| `check <item.json>` | `preflight` of a saved item, its stories checked against the archive's sources | 1 when refused |
+| `mark <file> [--item <item.json>]`, `read <file>` | sign a file, read its manifest back | |
+| `complaint add \| triage \| done \| close` | the register's steps (§7) | 2 on a bad category |
+| `complaints [--open \| --overdue]`, `actions` | what is waiting | |
 
 ## 9. Before launch
 
@@ -512,12 +536,14 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 6. **Data and pictures.** Can Open-Meteo be used commercially (paid plan), and do the Met Office's CC BY-SA terms apply to the forecasts it blends? Confirm the GDACS terms. Agree the cleared-pictures licences with the other team.
 7. **Elections.** Is the rule (30 days, silence periods, fail closed) proportionate? Do the EU political advertising rules (Regulation 2024/900) touch anything we do?
 8. **Platforms.** Confirm the YouTube live disclosure path and TikTok's current guideline wording, which could not be read from here.
+9. **General media law for the news text.** These are not AI rules, but every news outlet has them, and the writer and the cast follow whatever the lawyer sets: contempt of court and reporting restrictions in the UK (active proceedings, anonymity orders); the anonymity of victims of sexual offences and of minors in the UK and in Spain; the Spanish right of reply (LO 2/1984) and how fast it must be answered; and what an AI presenter may say about someone accused but not convicted.
 
-**What the launch report blocks on today** (`launchReport()`):
+**What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 
 - the C2PA development certificate (a trusted one is needed);
 - `EDITORIAL_CONTACT` is not set;
 - `RIGHTS_GATE` is not strict;
-- the Open-Meteo commercial plan.
+- the Open-Meteo commercial plan;
+- **the verbatim rule on what aired.** The report reads the last 300 real stories of `data/archive` and blocks while more than 5 % of them break the rule. On today's archive it is **80.3 %** (241 of 300) against the outlets' titles and summaries alone. That is a floor: with the articles, which the audit tool caches in `data/compliance/articles`, the same 300 stories give **99 %**. The live stream has no publish check of its own, so this is the check that holds it back. It clears when the writer team's composed sentences are on air, measured with the same code.
 
 The audio watermark is a warning.
