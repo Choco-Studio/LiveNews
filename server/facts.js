@@ -478,14 +478,19 @@ export function qualifierConflict(text, source) {
 }
 
 /** The qualifier the source gives a figure ("ABOUT" for "about 1.2 million"), as a card label, or null. */
-export function sourceQualifier(value, source) {
+export function sourceQualifier(value, source, label = '') {
   const want = numbersIn(value)[0];
   if (!want) return null;
   const src = String(source ?? '');
-  for (const s of numbersIn(src)) {
-    if (!(close(s.scaled, want.scaled) || close(s.value, want.value))) continue;
+  // (the figure as the label says it: "a 2.3-billion-year-old mystery" takes no "About" from "About 2.3 billion years ago",
+  // a sentence later, ScienceDaily 15 Oct, once shown as "ABOUT 2.3-BILLION YEAR-OLD MYSTERY")
+  const head = String(label).toLowerCase().match(/[a-z]{3,}/)?.[0];
+  const same = numbersIn(src).filter((s) => close(s.scaled, want.scaled) || close(s.value, want.value));
+  const labelled = head ? same.filter((s) => src.slice(s.end, s.end + 40).toLowerCase().includes(head)) : [];
+  for (const s of labelled.length ? labelled : same) {
     const q = qualifierAt(src, s.index);
     if (q) return QUALIFIER_LABEL[q] || q.toUpperCase();
+    if (labelled.length) return null;
   }
   return null;
 }
@@ -529,7 +534,10 @@ export function quotesIn(text) {
       // (and a speaker is a name or a role, never a clause's words: "…described it as a threat but said: “…”" once gave "a
       // threat but", aired as "As a threat but put it", Guardian 15 Oct)
       const by = speakerOf(s, m.index, m.index + m[0].length, { closed: /\.\s*$/.test(m[1]) });
-      out.push({ text: quote, by: by && /\b(?:but|and|or|as|which|that|who|whom|of|to|with|for|by|from|if|when|while)$/i.test(by) ? null : by, index: m.index });
+      // (nor the end of one sentence and the start of the next: "…Zelensky noted wryly on Monday. He added: “…”" once signed a
+      // quote card "Monday. He", round 5)
+      const broken = by && (/[a-z]\.\s+\p{Lu}/u.test(by) || /^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|He|She|They|It)\b/.test(by));
+      out.push({ text: quote, by: broken || (by && /\b(?:but|and|or|as|which|that|who|whom|of|to|with|for|by|from|if|when|while)$/i.test(by)) ? null : by, index: m.index });
     }
   }
   return out.sort((a, b) => a.index - b.index);
@@ -591,7 +599,7 @@ export function quotationsGrounded(text, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath within without despite amid among beyond toward towards under upon via inside outside along not no never'.split(
+  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath within without despite amid among beyond toward towards under upon via inside outside along not no never others'.split(
     ' '
   )
 );
@@ -693,6 +701,8 @@ export function extractFigures(text, max = 3) {
     if (isYear) continue;
     const rest = s.slice(n.end);
     if (/^(?:st|nd|rd|th)\b/i.test(rest) || /^:\d/.test(rest)) continue; // ordinals, clock times
+    // (a name's number with its possessive: "France 24's" once put "24 'S" on a NEWS IN 60 card, round 5)
+    if (/^[’']s\b/i.test(rest)) continue;
     const glued = /^-[A-Za-z]/.test(rest); // "3,000-year-old temple"
     // "a 24-hour strike", "a 3-day festival": a duration describing a noun is no figure for a card (an age is
     // kept: "3,000-year-old temple" is flagged below)
@@ -943,7 +953,7 @@ export function fixNameTypos(text, title, whole = text) {
 // Oct). A sentence that says who holds the view keeps it (theirs, said so); a rule ("If the fourth attempt fails, a snap
 // election must be called") is no view.
 const VIEW_MODAL = /\b(?:should|must|ought to|needs? to|has to|have to|had better)\b/i;
-const VIEW_WORDS = /\b(?:(?:un)?surprisingly|unsurprising|beautiful|awkward(?:ly)?|unconvincing|embarrassing|shameful|disgraceful|absurd|ridiculous|bizarre|astonishing|outrageous|appalling|dreadful|brilliant|wonderful|fantastic|superb|admirabl[ey]|laughabl[ey]|pathetic|dubious|reckless|foolish|hypocritic\w*|ironically|unfortunately|fortunately|sadly|thankfully|hopefully|clearly|obviously|undoubtedly|of course|could do more|have not done so|less than (?:she|he|they|it|we) should|it is (?:hard|easy) to (?:see|feel|argue|imagine|understand)|it would be (?:surprising|wise|wrong|right|unwise|a mistake)|easy to feel|which is (?:beautiful|wonderful|great|terrible|sad)|as luck would have it|in a good way|greatest spectacles?|looks like (?:the|its|their) (?:company's |firm's )?best)\b/i;
+const VIEW_WORDS = /\b(?:(?:un)?surprisingly|unsurprising|beautiful|awkward(?:ly)?|unconvincing|embarrassing|shameful|disgraceful|absurd|ridiculous|bizarre|astonishing|outrageous|appalling|dreadful|brilliant|wonderful|fantastic|superb|admirabl[ey]|laughabl[ey]|pathetic|dubious|reckless|foolish|hypocritic\w*|ironically|unfortunately|fortunately|sadly|thankfully|hopefully|clearly|obviously|undoubtedly|certainly|frankly|admittedly|of course|might have nailed|is chaos|to ingratiate|it (?:looks|seems) (?:like|as if|as though)|could do more|have not done so|less than (?:she|he|they|it|we) should|it is (?:hard|easy) to (?:see|feel|argue|imagine|understand)|it would be (?:surprising|wise|wrong|right|unwise|a mistake)|easy to feel|which is (?:beautiful|wonderful|great|terrible|sad)|as luck would have it|in a good way|greatest spectacles?|looks like (?:the|its|their) (?:company's |firm's )?best)\b/i;
 const HELD_BY = /\b(?:said|says|say|told|tells|warned|warns|added|adds|according to|argued|argues|believes?|believed|claims?|claimed|insisted|insists|urged|urges|called for|calls for|wrote|writes|recommend\w*|suggest\w*|stressed|noted|accused|accuses|demanded|demands)\b/i;
 export const outletView = (t) => {
   const unq = String(t).replace(/“[^”]*”|"[^"]*"|‘[^’]*’/g, ' ');

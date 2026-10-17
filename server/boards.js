@@ -293,6 +293,10 @@ const STOP_MOD = /^(?:when|while|as|after|before|but|and|or|so|the|a|an|in|on|at
 const NAMED_AFTER = /^(?:Airport|International|University|College|School|Hospital|Street|Road|Avenue|Square|Bridge|Stadium|Arena|Mosque|Church|Cathedral|Foundation|Institute|Centre|Center|Prize|Award|Medal|Park|Station|Port|Dam|Canal|Highway|Hall|Library|Museum|Trophy|Cup)$/;
 const NAME_TOKEN = /^(?:[A-Z][\p{Ll}’'.-]*\p{Ll}|Mc[A-Z]\p{Ll}+|Mac[A-Z]\p{Ll}+|O[’'][A-Z]\p{Ll}+|[A-Z]\.|[IVX]{1,4})$/u;
 const PARTICLE = /^(?:de|da|del|della|di|du|dos|das|van|von|der|den|bin|ibn|al|el|la|le)$/;
+// inside a name, a particle may be written with its capital: "Abdulaziz bin Salman Al Saud"
+const PARTICLE_IN = /^(?:de|da|del|della|di|du|dos|das|van|von|der|den|bin|ibn|al|el|la|le|abu|bint)$/i;
+// a title that comes before a name and is not the role the story gives: "Energy Minister Prince Abdulaziz…"
+const NAME_TITLE = /^(?:Prince|Princess|King|Queen|Sheikh|Sheikha|Emir|Sultan|Sir|Dame|Lord|Lady)$/;
 const NOT_NAME = /^(?:Airport|International|Party|Cabinet|Government|Ministry|Council|House|Street|Authority|Bank|University|Company|Group|Inc|Ltd|Corp|Republic|Kingdom|States|Union|Army|Force|Forces|Police|Court|Office|Department|News|Times|Post|Agency|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|Today|The|And|But|Of|In|On|At|For|With|After|Before|When|Some|All|This|That|It|He|She|They|Mr|Mrs|Ms|Dr|Sir|Lord|Lady|Minister|President|Chancellor|Secretary|Senator|Governor|Mayor)$/;
 // never a person to pin up, whatever their title (the restage rule, WAVE3 §6.5)
 const NEVER_WHO = /\b(?:victim|survivor|relative|widow|mother|father|parent|son|daughter|brother|sister|husband|wife|family|witness|resident|neighbou?r|passenger|bystander|pupil|student|suspect|accused|defendant|prisoner|detainee|hostage|patient|child|teenager|boy|girl)\b/i;
@@ -300,18 +304,24 @@ const NEVER_WHO = /\b(?:victim|survivor|relative|widow|mother|father|parent|son|
 const tokensOf = (s) => s.split(/\s+/).filter(Boolean);
 const bare = (w) => w.replace(/^[^\p{L}]+|[^\p{L}.]+$/gu, '');
 
-/** A name read forward from a token index: 1-3 capitalised tokens (particles between), cut at a possessive. */
+/**
+ * A name read forward from a token index: 1-3 capitalised tokens (particles between), cut at a possessive. Never a name
+ * cut short: "Saudi Energy Minister Prince Abdulaziz bin Salman Al Saud" once made a card for "Abdulaziz bin Salman Al"
+ * (DW 14 Oct); a name longer than the board holds is no card.
+ */
 function nameAt(toks, i, royal) {
   const out = [];
-  for (let k = i; k < toks.length && out.length < 4; k++) {
+  for (let k = i; k < toks.length; k++) {
     const raw = toks[k];
     const poss = /[’']s[^\p{L}]*$/u.test(raw);
     let w = bare(raw.replace(/[’']s([^\p{L}]*)$/u, '$1'));
     if (!/^[A-Z]\.$/.test(w)) w = w.replace(/\.+$/, ''); // a full stop ends the sentence, not the name ("Jensen Huang.")
-    if (PARTICLE.test(w) && out.length && k + 1 < toks.length) {
+    if ((PARTICLE.test(w) || (PARTICLE_IN.test(w) && out.length)) && out.length && k + 1 < toks.length) {
       out.push(w);
       continue;
     }
+    // (a title before the name is not part of it when the role is another: the minister is "Abdulaziz bin Salman Al Saud")
+    if (!out.length && !royal && NAME_TITLE.test(w)) continue;
     if (NAMED_AFTER.test(w)) return null;
     // (two capitals open a name as its initials, "JD Vance", never a body: "US", "UN")
     const initials = !out.length && /^[A-Z]{2}$/.test(w) && !/^(?:US|UK|EU|UN|AI|TV|IT|PM|MP|DC|NY|LA|OK|ID)$/.test(w) && NAME_TOKEN.test(bare(toks[k + 1] || '').replace(/\.+$/, ''));
@@ -319,8 +329,8 @@ function nameAt(toks, i, royal) {
     out.push(w);
     if (poss || /[,;:.!?)]$/.test(raw.replace(/\.$/, (d) => (/^[A-Z]\.$/.test(w) ? '' : d)))) break;
   }
-  while (out.length && PARTICLE.test(out.at(-1))) out.pop();
-  const real = out.filter((w) => !PARTICLE.test(w) && !/^[IVX]{1,4}$/.test(w));
+  while (out.length && PARTICLE_IN.test(out.at(-1))) out.pop();
+  const real = out.filter((w, n) => !PARTICLE.test(w) && !(n > 0 && PARTICLE_IN.test(w)) && !/^[IVX]{1,4}$/.test(w));
   if (!real.length || real.length > 3 || (real.length < 2 && !royal)) return null;
   if (real.every((w) => /^[A-Z]\.$/.test(w))) return null;
   return out.join(' ');
@@ -349,6 +359,13 @@ function titled(sentence) {
         if (/[,;:.!?()]["”’']*$/.test(raw) && !/^(?:[A-Z]\.){2,}$/.test(raw)) break;
         const w = bare(raw.replace(/[’']s$/u, ''));
         if (STOP_MOD.test(w)) break;
+        // (a modifier that is itself a role means the role was glued to another: "Energy Minister Prince Abdulaziz…"
+        // once made "SAUDI ENERGY MINISTER PRINCE", DW 14 Oct)
+        if (new RegExp(`^(?:${ROLE_CORE})$`, 'i').test(w)) {
+          mods.length = 0;
+          mods.push('\u0000');
+          break;
+        }
         if (PORTFOLIO.test(w) || SPECIFIC.test(w) || /^\p{Lu}/u.test(w)) {
           mods.unshift(/[’']s$/u.test(raw) ? `${w}’S` : w);
           // (a portfolio word proves nothing, capital or not: "Party founder Abhijeet Dipke")
@@ -358,6 +375,7 @@ function titled(sentence) {
         }
         break;
       }
+      if (mods[0] === '\u0000') break;
       // a role that is not theirs now is said as the story says it, or not at all
       const prev = k >= 0 ? bare(toks[k]).toLowerCase() : '';
       if (/^(?:late|then|would-be|deposed|ousted|jailed|exiled|disgraced|self-styled|so-called|ex)$/.test(prev)) break;

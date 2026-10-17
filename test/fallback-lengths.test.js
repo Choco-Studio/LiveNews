@@ -753,3 +753,457 @@ describe('what reading the last replay showed', () => {
     assert.ok(!ep.segments.some((s) => /Walk me through/.test(s.text || '')), ep.segments.map((s) => `${s.type}: ${s.text}`).join('\n'));
   });
 });
+
+describe('round 5: the coherence gate', () => {
+  test('a lifted sentence that leans on what was never said is caught, by rule; one that stands is not', async () => {
+    const { untold } = await import('../server/coherence.js');
+    // (the real lines of WORLD NOW 14 Oct 07:10 and others, with what the programme had said of their story)
+    assert.equal(untold('the department did not directly answer those questions.', 'Video recording device found in cabin of HMAS Leeuwin navy ship. The department confirmed a device had been found.'), 'demonstrative');
+    assert.equal(untold('The temporary shutdown disrupted oil exports and increased risks for the energy markets.', 'Saudi Arabia is under pressure. Drones severely damaged the Saudi East-West oil pipeline.'), 'definite');
+    assert.equal(untold('In a second attack on Sunday, the militia killed another civilian and injured 11 others.', 'Houthi attacks on airports and energy facilities are putting Saudi Arabia under pressure.'), 'sequel');
+    assert.equal(untold('In early September, drones also severely damaged the Saudi East-West oil pipeline.', 'Saudi Arabia is under pressure from Houthi attacks.'), 'also');
+    assert.equal(untold('Many residents here raise sheep and goats beside homes made from corrugated metal.', 'Palestinians in the West Bank.'), 'here');
+    assert.equal(untold('The last stint was in 2018, The Guardian reports.', 'Man who died was a father and educator.'), 'sequel');
+    assert.equal(untold('The two were unharmed in the incident.', 'Kariem and his daughter survived a car fire.'), 'definite');
+    assert.equal(untold('The incident was captured in souvenir photos, the witness added.', 'One person has died on a rollercoaster.'), 'definite');
+    assert.equal(untold('The girl’s body was swelling and she needed medical help.', 'A Thai court case.'), 'person');
+    // (said before, in its own order, or a count that carries its own first: no lean)
+    assert.equal(untold('The government asked these questions in parliament.', 'MPs asked questions about the device.'), null);
+    assert.equal(untold('Russian ballistic missiles struck Kyiv for a second consecutive day without advance warning.', 'Kyiv hit by Russian ballistic missiles'), null);
+    assert.equal(untold('Atletico and Man United are set to clash for only the fifth time in history.', 'Atletico host Man United'), null);
+    assert.equal(untold('The government will also consider using the bill for AI safety rules.', 'The government plans a cyber security law.'), null);
+    assert.equal(untold('In a second attack on Sunday, the militia killed another civilian.', '', { prevSaid: true }), null);
+    assert.equal(untold('Few phones have been more anticipated than a foldable iPhone, but it is finally here.', ''), null);
+    assert.equal(untold('Officials condemned the suspension of the provincial government.', 'Pakistan politics'), null);
+  });
+
+  test('the writer never lifts a leaning sentence: not in a story, not in a correspondent’s piece, not as the line kept for an exchange', async () => {
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 1, maxChats: 2, crosses: 0 };
+    const body = [
+      'Houthi attacks on airports and energy facilities are putting Saudi Arabia under pressure.',
+      'Saudi Energy Minister Prince Abdulaziz bin Salman Al Saud warned of the consequences for energy security.',
+      // (each leaning line follows one the writer never tells, a sentence with brackets: its own order is not heard)
+      'Officials (speaking anonymously) gave few details.',
+      'In a second attack on Sunday, the militia killed another civilian and injured 11 others.',
+      'Officials (speaking anonymously) gave no figures.',
+      'The temporary shutdown disrupted oil exports and increased risks for the energy markets.',
+      'Many residents here say they no longer feel safe at the airport.',
+      'Saudi Arabia is targeting Houthi missile launch pads, according to a report by a US think tank.',
+      'Reporters (from several outlets) asked about the cost.',
+      'The department did not directly answer those questions.',
+      'The kingdom has asked its allies for more air defence systems to protect its cities and oil fields.',
+    ].join('\n');
+    for (const depth of [0, 3]) {
+      const ep = await write([st('h', 'Saudi Arabia’s military struggle against Houthi attacks', 'Houthi attacks on airports and energy facilities are putting Saudi Arabia under pressure.', { body })], program, { depth });
+      const told = ep.segments.map((s) => s.text || '').join('\n');
+      assert.ok(!/second attack|temporary shutdown|residents here|those questions/.test(told), told);
+    }
+  });
+
+  test('a surname with its particle is introduced by the whole name the article gives, or the sentence goes', async () => {
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 1, maxChats: 0 };
+    const body = [
+      'Palestinians in the occupied West Bank see little prospect that the election will change their lives.',
+      '“They treat us like something that doesn’t exist,” said Atallah al-Jahalin, the community’s representative.',
+      'Residents face constant pressure from soldiers and settlers, al-Jahalin said, on top of repeated demolitions.',
+    ].join('\n');
+    const ep = await write([st('w', '‘Like we don’t exist’: Palestinians in West Bank denied say', 'Palestinians in the occupied West Bank see little prospect that the election will change their lives.', { body })], program, { depth: 3 });
+    const told = ep.segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/(?<!Atallah )al-Jahalin/.test(told), told);
+  });
+});
+
+describe('round 5: name cards', () => {
+  test('a name is never cut and a role is never two roles glued; a quote card keeps its speaker’s name whole', async () => {
+    const { peopleWithRoles } = await import('../server/boards.js');
+    const people = peopleWithRoles('Houthi attacks are putting Saudi Arabia under pressure. Saudi Energy Minister Prince Abdulaziz bin Salman Al Saud warned of the consequences. US President Donald Trump said talks would go on.');
+    assert.deepEqual(people, [{ name: 'Abdulaziz bin Salman Al Saud', role: 'SAUDI ENERGY MINISTER' }, { name: 'Donald Trump', role: 'US PRESIDENT' }]);
+    assert.deepEqual(peopleWithRoles('King Charles met Prime Minister Keir Starmer on Tuesday.'), [{ name: 'Charles', role: 'KING' }, { name: 'Keir Starmer', role: 'PRIME MINISTER' }]);
+    const { clipSpeaker } = await import('../server/writer.js');
+    assert.equal(clipSpeaker('NASA Administrator Jared Isaacman', 32), 'Administrator Jared Isaacman');
+    assert.equal(clipSpeaker('Porsche Chairman Michael Leiters', 32), 'Porsche Chairman Michael Leiters');
+  });
+});
+
+describe('round 5: the clock with editions as long as the news allows', () => {
+  test('a run before a mark is planned halfway between a programme’s estimate and the longest of its recent editions: NEWS IN 60 is never more than 192 s off its mark', async () => {
+    const { Station, episodeAir, breakAir, localTime } = await import('../server/station.js');
+    const channel = loadChannel();
+    // (the lengths the final replay of round 4 made, in its order: a thin desk's TECH BYTES of 127 s next to full ones of 430 s)
+    const LENGTHS = {
+      'tech-bytes': [302, 325, 127, 404, 191, 432, 215, 435, 398, 458, 417, 409, 444, 416, 309, 395],
+      cosmos: [290, 343, 315, 346, 479, 422, 416, 416, 403, 408, 401, 299, 404, 391, 420, 404],
+      'world-now': [465, 548, 574, 573, 571, 496, 468, 488, 335, 595, 510, 603, 579, 534, 581, 587],
+      'money-minute': [225, 227, 217, 278, 301, 264, 310, 264, 239, 281, 259, 207, 285, 298, 305, 196],
+      'news-60': [74, 70, 59, 68, 61, 67, 65, 59, 63, 60, 58, 56, 58, 60, 62, 63],
+    };
+    const n = {};
+    const producer = {
+      canProduce: () => true,
+      async produce(ch, id) {
+        const list = LENGTHS[id];
+        const [lo, hi] = ch.programs[id].targetSeconds || [300, 300];
+        const air = list ? list[(n[id] = ((n[id] ?? -1) + 1)) % list.length] : (lo + hi) / 2;
+        return { kind: 'episode', id: `${id}-${n[id] ?? 0}`, program: { id, title: ch.programs[id].title }, segments: [{ audio: { duration: air - 12 } }] };
+      },
+    };
+    const start = Date.parse('2026-10-12T05:00:00+01:00');
+    let now = start;
+    const station = new Station({ config: { queueSize: 2, clock: true, now: () => now }, newsDesk: { stories: new Map(), uncovered: () => [], feedStatus: {}, lastRefresh: 0 }, producer, chain: { status: () => [] }, channel: () => channel, log: { info() {}, warn() {}, error() {} } });
+    await station.fill();
+    const offs = [];
+    while (now < start + 24 * 3600_000) {
+      const item = station.next();
+      assert.ok(item);
+      if (item.kind === 'episode' && item.program?.id === 'news-60' && !item.replay) {
+        const { minute, second } = localTime(now, 'Europe/London');
+        const s = (minute % 30) * 60 + second;
+        offs.push(s > 900 ? s - 1800 : s);
+      }
+      now += (item.kind === 'episode' ? episodeAir(item) : breakAir(item)) * 1000;
+      for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+    }
+    assert.ok(offs.length >= 46, `${offs.length} bulletins`);
+    assert.ok(Math.max(...offs.map(Math.abs)) <= 192, `worst ${Math.max(...offs.map(Math.abs))} s: ${offs.join(' ')}`);
+  });
+});
+
+describe('round 5: the open faults of round 4', () => {
+  test('cards: an "about" from another sentence, "20 others"; a France 24 blurb keeps only its first item', async () => {
+    const { extractFigures, sourceQualifier } = await import('../server/facts.js');
+    const src = 'Scientists may have solved a 2.3-billion-year-old mystery about how Earth kept its oxygen. About 2.3 billion years ago, Earth experienced the Great Oxidation Event.';
+    assert.equal(sourceQualifier('2.3-BILLION', src, 'YEAR-OLD MYSTERY'), null);
+    assert.equal(sourceQualifier('2.3 BILLION', src, 'YEARS AGO'), 'ABOUT');
+    assert.deepEqual(extractFigures('A strike on a grocery store killed three people and injured 20 others, including two children.').map((f) => f.fact).filter((f) => /OTHERS/.test(f)), []);
+    const info = study(st('k', 'Kabila launches new coalition with M23', "In tonight's edition, Joseph Kabila has been named leader of a new rebel coalition, vowing to topple the government. Also, Africa's largest ever IPO has been extended. And Formula 1 will return to Africa once a new circuit is built in Rwanda."));
+    assert.equal(info.s.summary, 'Joseph Kabila has been named leader of a new rebel coalition, vowing to topple the government.');
+  });
+
+  test('page furniture, promotions and features: a hand-over, a start time, a picture described, a job listing, the outlet’s own event, a podcast’s week', async () => {
+    const program = { id: 'cosmos', title: 'COSMOS DESK', stories: 1, maxChats: 0 };
+    const body = [
+      'Hurricane Simon strengthened off the Mexican coast on Saturday, forecasters said.',
+      'This nighttime image, acquired with VIIRS on the NOAA-21 satellite, shows atmospheric gravity waves radiating from the hurricane.',
+      'Opaque white areas indicate the thickest clouds.',
+      'Coverage begins at 9:15 a.m. EDT on NASA+.',
+      'Claire Paccalin has the latest.',
+      'The hurricane is expected to bring heavy rain to the Mexican coast on Monday, forecasters said.',
+    ].join('\n');
+    const told = (await write([st('h', 'Hurricane Simon lurks off the Mexican coast', 'Hurricane Simon strengthened off the Mexican coast on Saturday, forecasters said.', { body })], program, { depth: 3 })).segments.map((s) => s.text || '').join(' ');
+    assert.ok(!/image|Opaque|Coverage begins|has the latest/.test(told), told);
+    assert.match(told, /heavy rain/);
+    for (const title of ['Job opportunities: NASA office of general counsel', 'TechCrunch Disrupt 2026 officially kicks off today']) {
+      const p2 = { id: 'tech-bytes', title: 'TECH BYTES', stories: 3, maxChats: 0 };
+      const out = (await write([st('p', title, 'Apply now for the roles.'), st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'), st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'), st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.')], p2)).segments.map((s) => s.text || '').join(' ');
+      assert.ok(!/Job opportunities|Disrupt|Apply now/.test(out), out);
+    }
+    for (const title of ['This week in science: sea monsters, long COVID patients’ microbiome, elephant carcasses', "'Frankly shocking' risk-taking by motorists uncovered by AI-powered cameras", 'Ocarina of Time remake feels remarkably modern']) assert.equal(!!study(st('f', title, 'A summary.')).column, true, title);
+  });
+
+  test('kickers from what a story is about: a cyber-attack, cancer research, a tax fight, Amazon’s Bee, an election as a date, a game’s port, strikes at sea', () => {
+    const k = (title, summary = '', category = 'world') => topicOf({ title, summary, category });
+    assert.equal(k('French supermarket director apologises', 'A cyber-attack caused refrigeration temperatures to soar. At Intermarché, the attack caused fridge temperatures to reach 27C.', 'business'), 'SECURITY');
+    assert.notEqual(k('Protein that fuels cancer could also be key', 'Scientists have found a key to fighting it.', 'science'), 'CONFLICT');
+    assert.notEqual(k('Ultra-rich are spending 1m dollars a day fighting California’s proposed billionaire tax', '', 'business'), 'CONFLICT');
+    assert.notEqual(k('Amazon’s Bee launches two personal AI devices', 'Amazon-owned Bee has launched its first new AI devices.', 'tech'), 'WILDLIFE');
+    assert.notEqual(k('US inflation rises more than expected ahead of midterm elections', 'US inflation rose by more than expected.', 'business'), 'ELECTIONS');
+    assert.notEqual(k('Long-lost horror gaming cult classic P.T. gets much-needed PC port', '', 'tech'), 'TRADE');
+    assert.equal(k('Bulgaria says Russia likely behind Black Sea strikes as rescue operations continue'), 'CONFLICT');
+    assert.equal(k('Heavy fighting in Sudan as RSF advances'), 'CONFLICT');
+  });
+
+  test('questions fitted to their answers: a price, who it is for, the catch, what comes next, when we will know more', async () => {
+    const { followLine } = await import('../server/experts.js');
+    const e = { first: 'Clara', name: 'Clara Meridian' };
+    for (let seed = 0; seed < 12; seed++) {
+      assert.ok(!/comes next|happens next|watch for|comes after|happens now|know more/.test(followLine(e, `s${seed}`, '“We will, in short, ensure any attack proves futile,” Grynkewich said.', seed)));
+      assert.ok(!/know more/.test(followLine(e, `t${seed}`, 'Officials will review the plan.', seed)));
+    }
+    const program = { id: 'tech-bytes', title: 'TECH BYTES', stories: 2, maxChats: 4 };
+    const s1 = st('o', 'Meta launches open-weight AI model that runs on Macs', 'Meta has launched what it calls the most capable open-weight model in the United States. Open-weight models can be significantly more cost-efficient and offer transparency that closed models do not. The model was designed to work with Macs.', { category: 'tech' });
+    const s2 = st('n', 'Netflix is laying off around 1,000 employees', 'Netflix is laying off around 1,000 employees. Netflix’s revenue increased to $45.2 billion in 2025 from 325 million subscribers. Most cuts are in product and tech.', { category: 'tech' });
+    const told = (await write([s1, s2], program)).segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/what will all this cost\?[^\n]*\n[^\n]*cost-efficient/i.test(told), told);
+    assert.ok(!/Who is this for, exactly\?[^\n]*\n[^\n]*revenue/i.test(told), told);
+  });
+
+  test('names keep their capitals mid-sentence; a toss of two words goes before a hand-over; one company’s news from two outlets is one story; an aside that heads a list stays', async () => {
+    const program = { id: 'tech-bytes', title: 'TECH BYTES', stories: 3, maxChats: 0 };
+    const stories = [
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('c', 'Cerebras CEO pushes back on AI doomsday warnings', 'Cerebras Systems CEO Andrew Feldman thinks the doomer narrative is not helping the industry.', { source: 'TechCrunch' }),
+      st('f', 'Faisal Islam: What surprise praise for UK economy tells us about the Budget', 'Top IMF officials have praised UK plans to reduce borrowing.', { source: 'BBC Business' }),
+      st('d', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+    ];
+    const intro = (await write(stories, program)).segments.find((s) => s.type === 'intro').text;
+    assert.ok(!/\bcerebras CEO|\bfaisal Islam/.test(intro), intro);
+    const p2 = { id: 'tech-bytes', title: 'TECH BYTES', stories: 4, maxChats: 0 };
+    const pair = [
+      st('n1', 'Netflix is laying off around 1,000 employees', 'Netflix is laying off around 1,000 employees, The Verge has learned.', { source: 'The Verge', category: 'tech' }),
+      st('n2', 'Netflix to lay off 1,000 staff', 'Netflix is laying off about 6% of its employee base, or close to 1,000 staff.', { source: 'TechCrunch', category: 'tech' }),
+      st('x', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('y', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+      st('z', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.'),
+    ];
+    const ids = new Set((await write(pair, p2)).segments.filter((s) => s.storyId).map((s) => s.storyId));
+    assert.ok(!(ids.has('n1') && ids.has('n2')), [...ids].join(' '));
+  });
+});
+
+describe('round 5: what reading the round-5 replay showed', () => {
+  test('a cut never leaves what someone said without its verb; a quote card is never signed by the end of a sentence', async () => {
+    const cut = trimClause("Poland's Prime Minister Donald Tusk said a man accused of plotting an assassination attack against him and his defence minister has been detained.", 16, 6);
+    assert.ok(cut === null || /detained/.test(cut), cut);
+    const { quotesIn } = await import('../server/facts.js');
+    assert.equal(quotesIn('"It is clear that Putin does not read Truth Social," Zelensky noted wryly on Monday. He added: "This winter, if Russia does not agree to an energy ceasefire, we will respond."').at(-1).by, null);
+    const { untold } = await import('../server/coherence.js');
+    assert.equal(untold('Two others were arrested later, including a British-Iranian national.', 'UK blames Iran for airbase plot.'), 'sequel');
+    assert.equal(untold('The men were later released without charge on police bail.', 'UK blames Iran for airbase plot.'), 'person');
+    assert.equal(untold('The men were later released without charge on police bail.', 'Three men were arrested near the base.'), null);
+  });
+
+  test('"that decision", "something similar", "most were", "the problem": each leans on what was never said', async () => {
+    const { untold } = await import('../server/coherence.js');
+    assert.equal(untold('The department did not answer questions about that decision.', 'Justice Department sues TV networks'), 'demonstrative');
+    assert.equal(untold('The department did not answer questions about that decision.', 'The department announced its decision on Monday.'), null);
+    assert.equal(untold('Something similar happened in 2019.', 'Floods hit the valley'), 'sequel');
+    assert.equal(untold('Most were female and aged under 30.', 'Clinic sees rise in patients'), 'sequel');
+    assert.equal(untold('Older single-glazed windows allow more heat loss, which exacerbates the problem.', 'Energy bills through the roof'), 'definite');
+    assert.equal(untold('It is the first such case in a decade.', 'Court jails smuggler'), null);
+  });
+
+  test('an advice column’s imperative, an email address and a technical bulletin never air; a story’s plot is no WHAT WE KNOW', async () => {
+    const { ownVoice } = await import('../server/providers/mock.js');
+    assert.ok(ownVoice('Pick a day when there is a good breeze, and heat the house to its usual temperature.'));
+    assert.ok(!ownVoice('Close to 1,000 staff will lose their jobs.'));
+    assert.ok(!ownVoice('Start-ups raised more money this quarter.'));
+    const program = { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 0 };
+    const stories = [
+      st('tb', 'TB 25-03 Wind tunnel results for the X-66 wing', 'Sills, Langley Research Center, joel.w.sills@nasa.gov Download the PDF version of this bulletin.', { category: 'science', source: 'NASA' }),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.', { category: 'science' }),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.', { category: 'science' }),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.', { category: 'science' }),
+    ];
+    const told = (await write(stories, program)).segments.map((s) => `${s.headline || ''} ${s.text || ''}`).join('\n');
+    assert.ok(!/@|PDF|TB 25-03/.test(told), told);
+    const news = { id: 'world-now', title: 'WORLD NOW', stories: 1, maxChats: 0, boards: ['known'] };
+    const plot = 'War reduced Japan to zero. Two years have passed since the bombing, and the survivors rebuild Tokyo. A giant monster rises from the sea and attacks the city. The film opens in cinemas in November.';
+    const seg = (await write([st('g', 'Godzilla Minus Zero gets its first trailer', 'War reduced Japan to zero, and a giant monster rises from the sea.', { body: plot, category: 'world' })], news, { depth: 2 })).segments.find((s) => s.type === 'story');
+    assert.ok(!seg?.known, JSON.stringify(seg?.known));
+  });
+
+  test('an acronym keeps its capitals after the outlet’s article; a name’s number with its possessive is no card; deportations are migration', async () => {
+    const title = 'UK economy to grow more than expected - but households face sharper rise in inflation, IMF says';
+    const s = st('uk', title, 'The International Monetary Fund says the UK economy will grow by 1.3% this year.', { category: 'business' });
+    assert.match(spokenTitle(title, study(s)), /^The UK economy is to grow/);
+    const { extractFigures } = await import('../server/facts.js');
+    assert.ok(!extractFigures("France 24's correspondent in Kyiv said 40 drones were shot down overnight.").some((f) => /^24\b/.test(String(f.value))));
+    assert.equal(topicOf({ title: 'Deportees describe their first days back in Guatemala', summary: 'More than 120 people arrived on Tuesday.', category: 'world' }), 'MIGRATION');
+  });
+});
+
+describe('round 5: the last of the open faults', () => {
+  test('a headline that quotes words without saying whose, or holds the outlet’s view of a motive, is never said as ours', async () => {
+    const { unsignedTitle } = await import('../server/providers/mock.js');
+    assert.ok(unsignedTitle('British and Irish governments ‘should negotiate paramilitary disbandment’'));
+    assert.ok(unsignedTitle('Ken Paxton stirs vaccines skpeticism to ingratiate himself with Maha movement'));
+    assert.ok(!unsignedTitle('Starmer says Iran plot ‘likely coordinated’'));
+    assert.ok(!unsignedTitle('IFS: budget will be ‘work of fiction’ without tax rises'));
+    assert.ok(!unsignedTitle("Netflix's new show is a hit"));
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 3, maxChats: 0 };
+    const stories = [
+      st('q', 'British and Irish governments ‘should negotiate paramilitary disbandment’', 'The British and Irish governments should begin talks on disbanding paramilitary groups, a report by an independent commission has said. The commission said the talks should start within a year.'),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+    ];
+    const told = (await write(stories, program)).segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/governments should negotiate paramilitary disbandment/i.test(told), told);
+  });
+
+  test('a sentence that says what figures show takes no outlet’s credit too; an acronym takes the article its outlet gives it', async () => {
+    const program = { id: 'money-minute', title: 'MONEY MINUTE', stories: 3, maxChats: 0 };
+    const stories = [
+      st('v', 'UK van drivers face extra £2.5bn in diesel costs', 'UK van drivers face an extra £2.5bn in diesel costs this year, figures show. Prices at the pump have risen for six weeks.', { source: 'Guardian Business', category: 'business' }),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.', { category: 'business' }),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.', { category: 'business' }),
+    ];
+    const told = (await write(stories, program)).segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/figures show, Guardian Business reports/.test(told), told);
+    const iea = st('i', 'IEA warns of oil glut next year', 'The IEA said supply would outpace demand. The IEA expects prices to fall.', { category: 'business' });
+    assert.match(spokenTitle(iea.title, study(iea)), /^The IEA has warned/);
+    const nasa = st('n', 'NASA launches new weather satellite', 'NASA said the satellite reached orbit. The NASA mission will last ten years.', { category: 'science' });
+    assert.match(spokenTitle(nasa.title, study(nasa)), /^NASA has launched/);
+    const saudi = st('s', 'Saudi national charged with planting listening device at OpenAI offices', 'A Saudi national has been charged with planting a listening device at OpenAI offices in San Francisco.', { category: 'tech' });
+    assert.match(spokenTitle(saudi.title, study(saudi)), /^A Saudi national has been charged/);
+  });
+
+  test('a cut never ends on a word that cannot end a clause', () => {
+    const t = "The building that houses London's oldest restaurant has been donated to Europe's biggest conservation charity, a move that will, it is hoped, secure one of the U.K. capital's go-to eateries for centuries to come.";
+    for (const n of [16, 20, 24]) assert.ok(!/\bwill\.$/.test(trimClause(t, n, 6) || ''), trimClause(t, n, 6));
+  });
+
+  test('NEWS IN 60 past its window at its fewest stories says one sentence less: never an item’s first, its credit or its card’s figure; never under the window', () => {
+    const producer = new Producer({ config: {}, newsDesk: {}, chain: {}, log: { info() {}, warn() {}, error() {}, debug() {} } });
+    const sentence = (n, end = '.') => `Word ${Array.from({ length: n - 2 }, () => 'word').join(' ')} word${end}`;
+    const seg = (type, text, extra = {}) => ({ type, anchor: 'A', text, ...extra });
+    const ctx = (segments) => ({
+      program: { timing: { target: 60, wpm: 170, gap: 0.7, minStories: 3, accept: [55, 62] } },
+      episode: { segments, rundown: segments.filter((s) => s.storyId).map((s) => ({ storyId: s.storyId })), storyIds: segments.filter((s) => s.storyId).map((s) => s.storyId) },
+    });
+    const three = [sentence(20), sentence(20), sentence(20)].join(' ');
+    const over = ctx([seg('intro', sentence(8)), seg('story', three, { storyId: 'a' }), seg('story', `${sentence(25)} ${sentence(25)}`, { storyId: 'b' }), seg('story', sentence(50), { storyId: 'c' }), seg('outro', sentence(8))]);
+    const note = producer.fit(over);
+    assert.deepEqual(over.episode.storyIds, ['a', 'b', 'c']);
+    assert.equal(note.trimmed, 1);
+    assert.equal(over.episode.segments[1].text, [sentence(20), sentence(20)].join(' '));
+    assert.ok(note.estimate >= 55 && note.estimate <= 62, JSON.stringify(note));
+    const credited = ctx([seg('intro', sentence(8)), seg('story', `${sentence(20)} ${sentence(20)} ${sentence(16, ', Pixelburg Post reports.')}`, { storyId: 'a' }), seg('story', `${sentence(25)} ${sentence(25)}`, { storyId: 'b' }), seg('story', sentence(50), { storyId: 'c' }), seg('outro', sentence(8))]);
+    producer.fit(credited);
+    assert.match(credited.episode.segments[1].text, /Pixelburg Post reports\.$/);
+    assert.equal(credited.episode.segments[2].text, sentence(25));
+    const tight = ctx([seg('intro', sentence(8)), seg('story', `${sentence(30)} ${sentence(30)}`, { storyId: 'a' }), seg('story', sentence(50), { storyId: 'b' }), seg('story', sentence(50), { storyId: 'c' }), seg('outro', sentence(8))]);
+    const before = tight.episode.segments.map((s) => s.text);
+    producer.fit({ ...tight, program: { timing: { ...tight.program.timing, accept: [62, 64] } } });
+    assert.deepEqual(tight.episode.segments.map((s) => s.text), before);
+  });
+});
+
+describe('round 5: what reading the final16 replay showed', () => {
+  test('a story whose news is told only in a sentence too long to tell opens on its headline; an earlier time never opens a story', async () => {
+    const program = { id: 'news-60', title: 'NEWS IN 60', stories: 5, maxChats: 0 };
+    const summary = 'Paris Fire Brigade images show flames ravaging the Marché Couvert des Enfants Rouges in the Marais district during the night between Sunday and Monday, October 12. Founded in 1615, the Enfants Rouges market is the oldest covered food market in Paris and is listed as a historic monument.';
+    const stories = [
+      st('m', 'Fire ravages oldest covered food market in Paris', summary, { source: 'France 24' }),
+      st('d', 'Nairobi floods cut off two districts', 'Heavy rain in Nairobi has cut off two districts, the city says.'),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.'),
+    ];
+    const segs = (await write(stories, program, { presenters: { A: { id: 'sam', name: 'Sam Night' } } })).segments;
+    const fire = segs.find((s) => s.storyId === 'm')?.text || '';
+    assert.match(fire, /^(?:\[[^\]]*\]\s*)?Fire ravages/, fire);
+    assert.match(segs.find((s) => s.storyId === 'd')?.text || '', /heavy rain/i);
+    const mm = { id: 'money-minute', title: 'MONEY MINUTE', stories: 3, maxChats: 0 };
+    const body = [
+      'A British Airways flight en route to Portugal was forced to return to Gatwick Airport on Tuesday due to a minor technical issue, reported to be a cracked window.',
+      'Last week, a BA flight bound for Chicago spent five hours circling over Ireland, before turning back and landing at London Heathrow, where it had taken off.',
+      'And in August Serbian national Ljubisa Karović was injured on a Ryanair flight.',
+      'Ryanair subsequently said the window may have been damaged by a foreign object.',
+    ].join('\n');
+    const ba = st('ba', 'BA flight forced to turn back over cracked window', 'British Airways said the plane landed safely at Gatwick and passengers were due to resume their journey.', { body, category: 'business' });
+    const told = (await write([st('x', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'), ba, st('y', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.')], mm, { depth: 3 })).segments.find((s) => s.storyId === 'ba').text;
+    assert.ok(!/^(?:\[[^\]]*\]\s*)?Last week/.test(told), told);
+    assert.ok(!/Ryanair subsequently/.test(told), told);
+  });
+
+  test('an analysis is a feature; "Imagine…" is the outlet talking; "it looks like…" is a view; a connective, "two days later" and "subsequently" lean', async () => {
+    const { ownVoice } = await import('../server/providers/mock.js');
+    const { untold } = await import('../server/coherence.js');
+    assert.ok(ownVoice('Imagine a universe where stars still shine, planets still form, and water exists.'));
+    assert.ok(outletView('With the midterms coming up, it looks like Trump is turning overseas for help.'));
+    assert.equal(untold('Two days later, Trump was back on his social media website.', 'Trump announces energy ceasefire'), 'sequel');
+    assert.equal(untold('Ryanair subsequently said the window may have been damaged.', 'BA flight forced to turn back'), 'sequel');
+    assert.equal(untold('Nor is Honeyjar trying to replace PR professionals.', 'Honeyjar offers AI tools to improve PR'), 'also');
+    assert.equal(untold('However, in reality, that might not be the case.', 'Voice AI has not reached its moment'), 'also');
+    assert.equal(untold('The company is now officially embracing the chaos of this new AI-powered era of game modding.', 'Xbox is officially embracing the chaos of AI-powered game ports'), null);
+    assert.equal(untold('This latest move comes after months of pressure.', 'Xbox is officially embracing the chaos of AI-powered game ports'), 'demonstrative');
+    // (the desk's label is checked as the outlet wrote it: the writer reads the title without "Analysis:")
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 5, maxChats: 0 };
+    const stories = [
+      st('an', "Analysis: Trump's global headaches worsen weeks before crucial elections", 'US President Donald Trump has had a whirlwind weekend, announcing a diesel deal with Russia.'),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.'),
+      st('d', 'Nairobi floods cut off two districts', 'Heavy rain in Nairobi has cut off two districts, the city says.'),
+    ];
+    const ids = (await write(stories, program)).segments.map((s) => s.storyId).filter(Boolean);
+    assert.ok(!ids.includes('an') && ids.includes('d'), ids.join(' '));
+  });
+
+  test('a strap’s whole name is said when a story opens on the surname; a cut never ends on a dash’s verbless clause; a role keeps no sentence capital', async () => {
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 3, maxChats: 0 };
+    const gold = st('g', 'Israeli academic and Al Jazeera contributor Ori Goldberg dies', 'Goldberg was a regular Al Jazeera contributor and died after a long battle with colon cancer, his family said.', { body: 'Israeli academic and independent analyst Ori Goldberg has died at the age of 50, his family has said.', source: 'Al Jazeera' });
+    const told = (await write([st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'), gold, st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.')], program)).segments.find((s) => s.storyId === 'g').text;
+    assert.ok(!/(?<!Ori )Goldberg was/.test(told), told);
+    const cut = trimClause('Bedbugs causing travel chaos is not unusual - less than two weeks ago, several Southeastern train services in England were cancelled after drivers discovered the creepy-crawlies in their cabs.', 12, 4);
+    assert.ok(cut === null || !/weeks ago\.$/.test(cut), cut);
+    const { provenanceLine } = await import('../server/guests/restage.js');
+    assert.ok(!/the Computer scientist/.test(provenanceLine({ id: 'rp_x', name: 'Raphael Wimmer', role: 'Computer scientist' }, 'The Verge', 's')));
+    assert.match(provenanceLine({ id: 'rp_y', name: 'Olena Shevchenko', role: 'Ukrainian president' }, 'BBC', 's'), /Ukrainian president/);
+  });
+
+  test('a first sentence that shares no word with its headline never stands for it; a live page’s "is speaking now" is no news line', async () => {
+    const program = { id: 'news-60', title: 'NEWS IN 60', stories: 5, maxChats: 0 };
+    const stories = [
+      st('e', 'Crew searching for Amelia Earhart arrives at remote island', 'Coconut crabs, also known as Robber crabs, emerge at night to hunt for small mammals and seabirds.', { category: 'science' }),
+      st('d', 'Nairobi floods cut off two districts', 'Heavy rain in Nairobi has cut off two districts, the city says.'),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.'),
+    ];
+    const segs = (await write(stories, program, { presenters: { A: { id: 'sam', name: 'Sam Night' } } })).segments;
+    const crew = segs.find((s) => s.storyId === 'e')?.text || '';
+    assert.match(crew, /Amelia Earhart/, crew);
+    assert.ok(!study(st('l', 'Burnham says public will be boss', 'Zia Yusuf, Reform UK’s home affairs spokesperson, is speaking now. Burnham will urge MPs to embrace closer ties with the EU.')).sentences.some((t) => /speaking now/.test(t)));
+    // (a headline whose predicate is a "not" is never made a passive: it says the opposite)
+    const kenya = 'Mourners killed by Kenya police at ex-PM\'s national farewell not part of violence';
+    assert.ok(!/have been killed/.test(spokenTitle(kenya, study(st('k', kenya, 'A BBC investigation found that none of those killed had been involved in violence.')))));
+    // (and NEWS IN 60 never airs a live page: its item would be a sentence of someone's speech without its marks)
+    const live = st('lv', 'Burnham says ‘public will be boss’ – live', 'Burnham will urge MPs to embrace closer ties with the EU. That’s 300 people a week, 300 lives destroyed, 300 families devastated.', { live: true });
+    const four = stories.slice(1);
+    const ids = (await write([live, ...four], program, { presenters: { A: { id: 'sam', name: 'Sam Night' } } })).segments.map((s) => s.storyId).filter(Boolean);
+    assert.ok(!ids.includes('lv'), ids.join(' '));
+  });
+
+  test('a war is never "And finally", curiosity or not; a name keeps its capital with its possessive after "And finally:"', async () => {
+    const program = { id: 'world-now', title: 'WORLD NOW', stories: 5, maxChats: 2, features: ['lighter'], chats: { after: ['lighter'] } };
+    const drones = st('dr', 'Both Russia and Ukraine are using AI-powered drones on the battlefield', 'A Ukrainian company that got rich making smartphone-controlled cameras to watch pets at home now outfits first-person-view drones with an image recognition system powered by artificial intelligence.', { source: 'NPR' });
+    const stories = [
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.'),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.'),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.'),
+      st('d', 'Nairobi floods cut off two districts', 'Heavy rain in Nairobi has cut off two districts, the city says.'),
+      drones,
+    ];
+    const segs = (await write(stories, program)).segments;
+    assert.ok(!segs.some((s) => s.storyId === 'dr' && s.feature === 'lighter'), segs.map((s) => `${s.storyId} ${s.feature || ''}`).join(' | '));
+    const { study: studyOf } = await import('../server/providers/mock.js');
+    const rivian = st('rv', 'Rivian’s startup Mind Robotics has hired former Ford EV chief Doug Field', 'Mind Robotics, the startup spun out of Rivian last year, has hired Doug Field. The robots will run on foundation models, Rivian said.', { category: 'tech' });
+    const tb = { id: 'tech-bytes', title: 'TECH BYTES', stories: 4, maxChats: 0, features: ['lighter'] };
+    const told = (await write([st('x', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.', { category: 'tech' }), st('y', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.', { category: 'tech' }), st('z', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.', { category: 'tech' }), rivian], tb)).segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/\brivian’s/.test(told), told);
+    assert.ok(studyOf(rivian));
+    // (and a famine's "food crisis monitor" is no gadget: GADGETS once headed Sudan's famine warning, WORLD NOW 14 Oct)
+    assert.notEqual(topicOf({ title: 'Conflict, drought increasing risk of famine in Sudan: Monitor', summary: 'Conflict and drought are increasing the risk of famine across Sudan’s Darfur and West Kordofan regions, warns a global food crisis monitor.', category: 'world' }), 'GADGETS');
+    assert.equal(topicOf({ title: 'Samsung unveils a curved gaming monitor', summary: 'The new OLED monitor has a 240Hz panel.', category: 'tech' }), 'GADGETS');
+  });
+
+  test('of two reports of one event the one with more to tell airs; UNIT-8 restates only what a story said, a note with nothing to restate only after the lead', async () => {
+    const program = { id: 'tech-bytes', title: 'TECH BYTES', stories: 4, maxChats: 0 };
+    const stories = [
+      st('v', 'Google makes it easier to launch your vibe-coded apps', '', { source: 'The Verge', category: 'tech' }),
+      st('t', 'Google Play now lets anyone build private, vibe-coded apps that run on Android', 'Google Play now lets anyone build private, vibe-coded apps that run on Android. The feature will be available to users in the U.S., age 18 and up.', { source: 'TechCrunch', category: 'tech' }),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.', { category: 'tech' }),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.', { category: 'tech' }),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.', { category: 'tech' }),
+    ];
+    const ids = (await write(stories, program)).segments.map((s) => s.storyId).filter(Boolean);
+    assert.ok(ids.includes('t'), ids.join(' '));
+    // (an appeal already dismissed is no next step: "And from here?" once heard the news again)
+    const tb = { id: 'tech-bytes', title: 'TECH BYTES', stories: 3, maxChats: 4, chats: { after: ['lead', 'lighter', 'story'] } };
+    const appeal = st('ap', 'Appeal for energy storage system rejected', 'Plans for a battery site near the Devon-Dorset border have been dismissed again. Proposals to install a major battery energy storage system have been rejected after an appeal by the developer was dismissed.', { category: 'tech' });
+    const told = (await write([appeal, stories[2], stories[3]], tb)).segments.map((s) => s.text || '').join('\n');
+    assert.ok(!/(?:from here|what happens now|what comes next)\?[^\n]*\n[^\n]*appeal by the developer was dismissed/i.test(told), told);
+    const cosmos = { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 10, chats: { after: ['lead', 'lighter', 'story'], max: { lead: 2, lighter: 1, story: 2 } } };
+    const UNIT = { A: { id: 'nova', name: 'Dr Nova Reyes' }, B: { id: 'unit8', name: 'UNIT-8' } };
+    const science = [
+      st('l', 'Scientists find why mushrooms glow', 'Scientists have found why some mushrooms glow in the dark, a study says.', { category: 'science' }),
+      st('a', 'Lisbon opens a new metro line', 'Lisbon has opened a new metro line linking the airport to the centre.', { category: 'science' }),
+      st('b', 'Oslo bans cars from its old town', 'Oslo has banned private cars from its old town from next month.', { category: 'science' }),
+      st('c', 'Lima plants ten thousand trees', 'Lima has planted ten thousand trees along its river, the city says.', { category: 'science' }),
+    ];
+    const segs = (await write(science, { ...cosmos, stories: 4 }, { presenters: UNIT, depth: 3 })).segments;
+    const notes = segs.filter((s, i) => s.type === 'chat' && /Entered in the record|Filed under remarkable|Logged, Dr Reyes\.$|thinking about that one|Understood, Dr Reyes/.test(s.text || '') && segs.slice(0, i).filter((x) => x.type === 'story').length > 1);
+    assert.deepEqual(notes, [], segs.map((s) => s.text).join('\n'));
+  });
+});

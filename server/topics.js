@@ -10,11 +10,13 @@ export const TOPICS = [
   [/\b(?:executions?|death penalty|death row|firing squad)\b/i, 'JUSTICE'],
   // armed conflict first: a "rocket" or "satellite" in a war story is not SPACE, and military "strikes" are not
   // a labour dispute (first live run, 4 Oct: "Yemen's Houthis claim attacks" went out as INDUSTRY)
-  [/\b(?:air ?strikes?|airstrikes?|missiles?|drone (?:attacks?|strikes?)|shelling|troops|soldiers|militants?|militias?|rebels?|insurgents?|fighters|fighting|clashes|offensive|ceasefire|battlefields?|(?:military|armed|attack|kamikaze|AI-powered) drones|invasion|warplanes?|bombard\w*|front ?line|war\b|military|armed forces|government forces|(?:federal|security|allied|rebel|enemy|ground|special|coalition|paramilitary|[a-z]+(?:ian|ish|ese|i)) forces|houthis?|hezbollah|hamas|taliban|islamic state|al-shabab|boko haram|rapid support forces|struck again|struck by (?:missiles?|drones?|rockets?)|(?<!heart |panic |cyber[- ]?|asthma |immune |viral |virus |phage )attacks?|(?:Russia|Russian|Ukraine|Ukrainian|Israel|Israeli|Iran|Iranian)\w* (?:hits?|strikes?|pounds?|shells?|targets?))\b/i, 'CONFLICT'],
+  [/\b(?:air ?strikes?|airstrikes?|missiles?|drone (?:attacks?|strikes?)|shelling|troops|soldiers|militants?|militias?|rebels?|insurgents?|fighters|(?:heavy|fierce|street|renewed) fighting|fighting (?:in|between|broke out|erupted|continues|raged|around)|clashes|offensive|ceasefire|battlefields?(?! 200)|(?:military|armed|attack|kamikaze|AI-powered) drones|invasion|warplanes?|bombard\w*|front ?line|war\b|military|armed forces|government forces|(?:federal|security|allied|rebel|enemy|ground|special|coalition|paramilitary|[a-z]+(?:ian|ish|ese|i)) forces|houthis?|hezbollah|hamas|taliban|islamic state|al-shabab|boko haram|rapid support forces|struck again|struck by (?:missiles?|drones?|rockets?)|\b(?:sea|naval|black sea) strikes|behind (?:the )?(?:\w+ ){0,2}strikes|(?<!heart |panic |cyber[- ]?|asthma |immune |viral |virus |phage |the |this )attacks?|(?:Russia|Russian|Ukraine|Ukrainian|Israel|Israeli|Iran|Iranian)\w* (?:hits?|strikes?|pounds?|shells?|targets?))\b/i, 'CONFLICT'],
   // a killing is a crime story, whatever else its report mentions (an immigration agent's shooting once went out as
   // CULTURE, a "museum" in its summary, 13 Oct)
   [/\bshootings?\b|shot dead|shot and killed|fatally shot|\b(?:was|were|been|being|got|people|teachers?|pupils?|students?|officers?|men|women|children) shot\b|opened fire|\bgunm[ae]n\b|\bstabb(?:ed|ing|ings)\b|\bmurder(?:ed|s)?\b|manslaughter|homicide|\bsexual (?:assaults?|violence|abuse)\b|\b(?:domestic|family) violence\b/i, 'CRIME'],
-  [/\belections?\b|\bvot(?:e|es|ers|ing)\b|\bballots?\b|referendum|polling (?:stations?|day)/i, 'ELECTIONS'],
+  // (an election as the story's time, not its subject: "US inflation rises more than expected ahead of midterm elections" went
+  // out as ELECTIONS, BBC 15 Oct)
+  [/(?<!\bahead of (?:the )?(?:\w+ )?)\belections?\b|\bvot(?:e|es|ers|ing)\b|\bballots?\b|referendum|polling (?:stations?|day)/i, 'ELECTIONS'],
   [/\bprotests?\b|protesters?|demonstrat(?:ion|ions|ors)\b/i, 'PROTESTS'],
   // a strike is a labour dispute only with its workers, union or pay in the same sentence (ahead of the sector
   // topics: a nurses' or a rail strike is the dispute)
@@ -46,7 +48,7 @@ export const TOPICS = [
   [/\bschools?\b|education|students?|universit(?:y|ies) (?:fees|places|admissions|funding|staff|strikes?|campus(?:es)?)|tuition/i, 'EDUCATION'],
   [/clean water|drinking water|water projects|reservoir/i, 'WATER'],
   // (apes too: "Orangutans released back into Borneo forest" went out as RESCUE, BBC 12 Oct)
-  [/wildlife|zoo|panda|penguins?|elephants?|orangutans?|gorillas?|chimpanzees?|\bapes\b|monkeys?|tortoises?|leopards?|turtles?|mangroves?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
+  [/wildlife|zoo|panda|penguins?|elephants?|orangutans?|gorillas?|chimpanzees?|\bapes\b|monkeys?|tortoises?|leopards?|turtles?|mangroves?|birds?\b|species|\bbees\b|\b(?:honey ?|bumble ?)bees?\b/i, 'WILDLIFE'],
   [/\btrees\b|city parks?|gardens?\b|green spaces?/i, 'GREEN CITIES'],
   // (whole words: a "social supermarket" is no market, BBC 14 Oct)
   [/\bstocks?\b|\bshares\b|\bindex\b|\bmarkets?\b|\binvestors\b/i, 'MARKETS'],
@@ -54,16 +56,16 @@ export const TOPICS = [
   [/inflation|prices|interest rates?|economy|economic growth|\bGDP\b|recession/i, 'ECONOMY'],
   // people who flee and a boat that goes down are their own story, whatever port it left ("Children among 139 dead after boat
   // capsizes" went out as TRADE, 14 Oct)
-  [/\bmigrants?\b|\brefugees?\b|asylum seekers?/i, 'MIGRATION'],
+  [/\bmigrants?\b|\brefugees?\b|asylum seekers?|\bdeport(?:ees?|ations?|ed|ing)\b/i, 'MIGRATION'],
   // (never an ancient wreck: "World's oldest shipwreck found off coast of Turkey" went out as ACCIDENTS, BBC 14 Oct)
   [/capsiz\w*|\bdrown(?:s|ed|ing)?\b|boat (?:sank|sinks|sinking)|(?:plane|train|bus|coach|helicopter) crash\w*|derail\w*/i, 'ACCIDENTS'],
   // (never the slave trade nor a trade union: a church's slavery memorial fund went out as TRADE, Guardian 14 Oct)
   // (nor trade secrets: "Judge orders OpenAI to turn over hiring records" went out as TRADE, TechCrunch 14 Oct)
-  [/(?<!slave )\btrade\b(?! unions?| secrets?)|\bexports?\b|\bimports?\b|tariffs?|\bshipping\b|\bports?\b|\bcanal\b/i, 'TRADE'],
+  [/(?<!slave )\btrade\b(?! unions?| secrets?)|\bexports?\b|\bimports?\b|tariffs?|\bshipping\b|(?<!\b(?:PC|console|Switch|Mac|mobile|iOS|Android|much-needed|new)\s)\bports?\b(?!\s+(?:of|to|for) (?:the )?(?:game|PC|Switch))|\bcanal\b/i, 'TRADE'],
   [/\bjobs\b|unemployment|wages|workers/i, 'JOBS'],
   // a security flaw, a hack or surveillance is the story, whatever the technology (an AI flood of bug reports is
   // SECURITY, a licence-plate camera search PRIVACY: TECH BYTES, 4 Oct)
-  [/\b(?:hack(?:ed|ers?|ing)?|breach(?:es|ed)?|cyber ?attacks?|cybersecurity|ransomware|malware|spyware|phishing|bug bount(?:y|ies)|vulnerabilit(?:y|ies)|security flaws?|zero-day|data leaks?)\b/i, 'SECURITY'],
+  [/\b(?:hack(?:ed|ers?|ing)?|breach(?:es|ed)?|cyber[- ]?attacks?|cybersecurity|ransomware|malware|spyware|phishing|bug bount(?:y|ies)|vulnerabilit(?:y|ies)|security flaws?|zero-day|data leaks?)\b/i, 'SECURITY'],
   [/\b(?:surveillance|privacy|data protection|facial recognition|licen[sc]e plate (?:readers?|cameras?)|tracking (?:people|users))\b/i, 'PRIVACY'],
   // (a regulator's move is regulation, whatever it regulates: "Julie Inman Grant may be able to limit Australians seeing a
   // livestreamed US execution" went out as CONFLICT and SOFTWARE, Guardian 12 Oct)
@@ -71,7 +73,7 @@ export const TOPICS = [
   [/robot/i, 'ROBOTICS'],
   [/\bAI\b|artificial intelligence|chatbot/i, 'AI'],
   [/\bchips?\b|semiconductor|processor/i, 'CHIPS'],
-  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|headphones|\bspeakers?\b|smartwatch|\bsmart ring|glasses|\biPad|\biPhone|\bKindles?\b|\blaptops?\b|MacBook|Chromebook|\btablets?\b|e-readers?|\bcameras?\b|\bTVs?\b(?!\s+(?:networks?|channels?|stations?|news|presenters?|hosts?|shows?|series|rights|licen[cs]es?|debates?|ads?|adverts?|audiences?|viewers?|interviews?))|\bmonitors?\b|\bkeyboards?\b|\brouters?\b/i, 'GADGETS'],
+  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|headphones|\bspeakers?\b|smartwatch|\bsmart ring|glasses|\biPad|\biPhone|\bKindles?\b|\blaptops?\b|MacBook|Chromebook|\btablets?\b|e-readers?|\bcameras?\b|\bTVs?\b(?!\s+(?:networks?|channels?|stations?|news|presenters?|hosts?|shows?|series|rights|licen[cs]es?|debates?|ads?|adverts?|audiences?|viewers?|interviews?))|\b(?:computer|gaming|desktop|PC|OLED|4K|curved|external|portable|LCD|LED|ultrawide)\s+monitors?\b|\bkeyboards?\b|\brouters?\b/i, 'GADGETS'],
   // (an app's or a system's update, never "an update on" a detention: a Vietnam detention went out as SOFTWARE, 13 Oct)
   [/\bapps?\b|software|\b(?:iOS|Android|Windows|macOS|firmware|security) updates?\b|browser/i, 'SOFTWARE'],
   [/video games?|gaming|console/i, 'GAMING'],

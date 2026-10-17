@@ -25,6 +25,8 @@ const ownCredit = (credit, outlet) => !credit || fold(credit) === fold(outlet) |
 export const SOURCE_MAX = 36;
 // PAY ATTENTION's pictures kept as fetched for its editions (two editions' worth, DOUBLE OR NOTHING's offers with them)
 const QUIZ_PICTURES_KEPT = 16;
+// Where one spoken sentence ends and the next begins: a stop, then a capital (never "Mr. Smith", "U.S. officials", "$10.5m").
+const SENTENCE_BREAK = /(?<=[.!?]["”’)]?)(?<!\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Gen|Lt|Col|Sgt|Rep|Sen|Gov|Prof|No|vs|Inc|Ltd|Co|U\.S|U\.K|a\.m|p\.m)\.)\s+(?=["“‘(]?\p{Lu})/u;
 // The credit line graphics may draw as is ("PHOTO: PIXEL WIRE AGENCY"), in the micro font under a picture.
 export const CREDIT_LINE_MAX = 28;
 /** The credit's first part: "Getty Images/AFP via Getty Images" -> "Getty Images"; "Jane Doe, Reuters" -> "Jane Doe". */
@@ -604,7 +606,8 @@ export class Producer {
       }
       // (and a toss to the co-presenter goes: the recreation follows, not them; "…becomes. Nova? This is what Jevgenij
       // Raskatov… said", COSMOS 14 Oct)
-      while (sentences.length > 1 && /^(?:\[[^\]]*\]\s*)*\p{Lu}[\p{L}-]+[?.]$/u.test(sentences.at(-1).trim())) sentences.pop();
+      // (and "Over to you, UNIT-8." before Raskatov's words, COSMOS 15 Oct)
+      while (sentences.length > 1 && (/^(?:\[[^\]]*\]\s*)*\p{Lu}[\p{L}-]+[?.]$/u.test(sentences.at(-1).trim()) || /^(?:\[[^\]]*\]\s*)*(?:Over|Back|Now over) to you,?\s+[\p{L}\d-]+[?.]$/u.test(sentences.at(-1).trim()))) sentences.pop();
       sentences.push(provenanceLine(booking, seg.source, seg.storyId));
       seg.text = sentences.join(' ');
       seg.link = slot;
@@ -820,6 +823,7 @@ export class Producer {
       ? (segs) => voicedAir({ ...ctx.episode, segments: segs, program: { id: ctx.program.id }, cast: ctx.cast })
       : (segs) => 0.3 + segs.reduce((n, seg) => n + words(seg), 0) / (timing.wpm / 60) + (timing.gap ?? 0.7) * (segs.length - 1);
     const minStories = timing.minStories ?? 1;
+    const accept = (voiced && Array.isArray(ctx.program.targetSeconds) && ctx.program.targetSeconds) || timing.accept || [timing.target * 0.9, timing.target * 1.1];
     let segs = ctx.episode.segments;
     const options = [{ segs, t: estimate(segs) }];
     for (;;) {
@@ -835,6 +839,25 @@ export class Producer {
     // Closest to the target; within a second of each other, more stories win.
     let best = options[0];
     for (const o of options.slice(1)) if (Math.abs(o.t - timing.target) < Math.abs(best.t - timing.target) - 1) best = o;
+    // (still past the window at the fewest stories: one sentence less, the last of the longest item that has one to spare,
+    // never an item's first sentence nor the one that credits its outlet, while that keeps the edition inside the window;
+    // NEWS IN 60 ran up to 77 s in 5 of 56 replayed editions with five stories, its floor, round 4)
+    let trimmed = 0;
+    while (best.t > accept[1] && trimmed < 3) {
+      const spare = best.segs
+        .map((seg, k) => ({ seg, k, parts: String(seg.text || '').trim().split(SENTENCE_BREAK) }))
+        // (and never the sentence that says a card's figure)
+        .filter(({ seg, parts }) => seg.type === 'story' && parts.length >= 2 && !/\b(?:reports?|according to)\b/i.test(parts.at(-1)) && !/["“”]/.test(parts.at(-1)) && !((seg.fact || seg.numbers) && /\d/.test(parts.at(-1))))
+        .sort((a, b) => String(b.seg.text).length - String(a.seg.text).length)[0];
+      if (!spare) break;
+      const cues = (spare.parts.at(-1).match(/(?:\s*\[[^\]]*\])+\s*$/) || [''])[0];
+      const text = `${spare.parts.slice(0, -1).join(' ').trim()}${cues ? ` ${cues.trim()}` : ''}`;
+      const segs2 = best.segs.map((seg, k) => (k === spare.k ? { ...seg, text, ...(Array.isArray(seg.cues) ? { cues: seg.cues.filter((c) => !(c.char > text.length)) } : {}) } : seg));
+      const t2 = estimate(segs2);
+      if (t2 < accept[0]) break;
+      best = { segs: segs2, t: t2 };
+      trimmed++;
+    }
     const kept = new Set(best.segs.filter((seg) => seg.storyId).map((seg) => seg.storyId));
     const dropped = ctx.episode.storyIds.filter((id) => !kept.has(id)).length;
     ctx.episode.segments = best.segs;
@@ -842,8 +865,7 @@ export class Producer {
     ctx.episode.storyIds = ctx.episode.storyIds.filter((id) => kept.has(id));
     const intro = best.segs[0];
     if (intro?.teases) intro.teases = intro.teases.map((id) => (id && kept.has(id) ? id : null));
-    const accept = (voiced && Array.isArray(ctx.program.targetSeconds) && ctx.program.targetSeconds) || timing.accept || [timing.target * 0.9, timing.target * 1.1];
-    return { estimate: Math.round(best.t * 10) / 10, dropped, ...(voiced ? { voiced: true } : {}), ...(best.t < accept[0] ? { short: true } : {}) };
+    return { estimate: Math.round(best.t * 10) / 10, dropped, ...(trimmed ? { trimmed } : {}), ...(voiced ? { voiced: true } : {}), ...(best.t < accept[0] ? { short: true } : {}) };
   }
 
   /** Pictures for the candidates: article pages, then other outlets' reports of the same event (within a budget). */
