@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { balance, leansOnCount, prepareStory, sameEvent, together } from '../server/sport/prepare.js';
-import { BANKS, ROSA_MEMORIES, ROSA_NEEDLES, shapeEpisode } from '../server/sport/shape.js';
+import { BANKS, ROSA_MEMORIES, ROSA_NEEDLES, cutMidThought, fullNames, shapeEpisode, wholeThought } from '../server/sport/shape.js';
 import { chalkOf, headlineContradicts, scorelinesIn } from '../server/sport/scores.js';
 import { notSport, sportApart } from '../server/sport/desk.js';
 import { withoutJudgement } from '../server/sport/words.js';
-import { isGrave } from '../server/facts.js';
+import { isGrave, sentencesIn } from '../server/facts.js';
 import { isNavRun } from '../server/transcript.js';
 import { hasFiniteVerb, trimClause } from '../server/writer.js';
 import { NewsDesk } from '../server/news.js';
@@ -258,7 +258,8 @@ describe('FULL TIME: the light touches', () => {
   });
 
   test('the banks are deep enough for a day of editions (none repeats within six hours)', () => {
-    assert.ok(BANKS.hello.length >= 12 && ROSA_MEMORIES.length >= 12 && ROSA_NEEDLES.length >= 12);
+    assert.ok(Object.values(BANKS.hello).flat().length >= 12 && ROSA_MEMORIES.length >= 12 && ROSA_NEEDLES.length >= 12);
+    for (const part of ['morning', 'afternoon', 'evening']) assert.ok(BANKS.hello[part].length + BANKS.hello.any.length >= 12, part);
     for (const part of ['morning', 'afternoon', 'evening']) assert.ok(BANKS.greeting[part].length >= 6 && BANKS.signoff[part].length >= 6, part);
     for (const shape of ['MATCHDAY', 'MIDWEEK']) assert.ok(BANKS.results[shape].length >= 8, shape);
     // no real club, player or number in Rosa's stories
@@ -322,5 +323,169 @@ describe('FULL TIME: THE MOMENT ON THE BOARD', () => {
       ['She holed a putt from 30 feet.', 'golf'],
       ['He scored from 30 yards.', 'basketball'],
     ]) assert.equal(chalkOf(text, sport), null, text);
+  });
+});
+
+// ---- the first real matchday: Saturday 17 Oct, 18:40 (the outlets' own sentences; their stories as the desk read them)
+describe('FULL TIME: the first real matchday (17 Oct)', () => {
+  const SAT = Date.parse('2026-10-17T18:40:00Z');
+  const real = (id, source, link, title, summary, body) => ({ id, source, link, title, summary, body, published: SAT - 600_000, category: 'sport' });
+  const STORIES = [
+    real('mart', 'ESPN', 'https://www.espn.com/soccer/story/_/id/50200995/emi-martinez-hospital', "GK Martínez taken to hospital for 'precautionary' head injury tests", "Emi Martínez suffered a worrying-looking head injury during Chelsea's Premier League win over Everton on Saturday.", "Emi Martínez has been taken to hospital after he suffered a head injury during Chelsea 's Premier League match against Everton on Saturday. Chelsea coach Xabi Alonso told reporters that the Argentina international was conscious when leaving the stadium and has been taken to hospital for \"precautionary tests,\" adding: \"For now, we need to wait.\" He added: \"It was a concussion, but more than that. I saw just one clip, but we'll have to wait.\" Martínez, 34, collided with Everton's Jarrad Branthwaite when rushing from his goal to attempt to punch an Everton free kick out of his penalty area in the 67th minute of Saturday's match at the Hill Dickinson Stadium. Both players received treatment on the pitch, with the Everton defender recovering quickly. Martínez, however, received extended treatment from the Chelsea physios and paramedics before being stretchered from the field while receiving oxygen. Two goals from Pedro Neto ensured Chelsea took all three points from their trip to Merseyside."),
+    real('lough', 'BBC Sport', 'https://www.bbc.co.uk/sport/horse-racing/articles/cv98zwz4y2w4o', 'Loughnane, 20, becomes youngest champion jockey since 1923', "Billy Loughnane becomes the youngest rider in over a century to be crowned Britain's champion jockey as he collects his trophy at Ascot.", "Billy Loughnane became the youngest rider in over a century to be crowned Britain's champion jockey when he collected his trophy at Ascot on Saturday. Aged 20, the Irishman beat five-time champion Oisin Murphy to the title, becoming its youngest holder since Charlie Elliott in 1923. Four years after his racing debut, Loughnane won his first Classic in May, the 2,000 Guineas, and rode to four further Group One victories among more than 220 wins this year. \"I love my job and I love riding horses – it's all I ever wanted to do,\" said Loughnane, nicknamed 'Billy the Kid'."),
+    real('mares', 'ESPN', 'https://www.espn.com/soccer/story/_/id/50202449/enzo-maresca-haaland', 'Maresca plays down Haaland injury fears after City star limps off', "Enzo Maresca has played down fears over Erling Haaland's fitness after the striker limped off at the end of Manchester City's 3-2 win over Ipswich.", "Enzo Maresca has played down fears over Erling Haaland 's fitness after the striker limped off at the end of Manchester City 's 3-2 win over Ipswich on Saturday. Haaland, who scored twice, looked in pain after a heavy challenge with Jack Clarke in stoppage time. The Norwegian was already heading off the pitch before the full-time whistle was blown and went straight down the tunnel at the end of the game. \"We will see,\" Maresca said afterward. \"Erling said he was OK. I don't have any news at the moment.\" Haaland was one of a number of injury worries for City during the game."),
+    real('omb', 'Sky Sports', 'https://www.skysports.com/racing/news/12040/13600297/ascot-ombudsman-simply-supreme', 'Ombudsman simply supreme in Champion Stakes', 'Ombudsman exacted Qatar Racing Champion Stakes revenge on Calandagan to come out on top with a show-stopping performance at Ascot.', "Ombudsman exacted Qatar Racing Champion Stakes revenge on Calandagan to come out on top with a show-stopping performance at Ascot. It was Francis-Henri Graffard's French raider who took home the spoils 12 months ago, but this time around there was a decisive verdict in favour of John and Thady Gosden's home favourite, who obliged as the 5-4 market leader. With the six-strong field heading into the home straight grouped tightly, the stage was set for Ombudsman to demonstrate the blistering turn of foot that has often been a hallmark of his career. When William Buick asked him to quicken, he scorched past eventual third Bay City Roller before seeing off Calandagan to banish Juddmonte International disappointment and prove he is truly one of the best middle-distance horses on the planet. Ombudsman strikes Champion Stakes gold | Full replay Almeraq proves his class in British Champions Sprint John Gosden said: \"I thought William was riding him very confidently in the straight.\""),
+    real('cam', 'Sky Sports', 'https://www.skysports.com/football/st-johnstone-vs-dundee-united/report/558386', 'Cameron equaliser earns a point for Dundee United at St Johnstone', "Lyall Cameron's 79th-minute strike earned Dundee United a deserved 1-1 draw at St Johnstone.", "Lyall Cameron's 79th-minute strike earned Dundee United a deserved 1-1 draw at St Johnstone. United trailed at half-time to a Josh Fowler goal, the striker's sixth of the Scottish Premiership campaign. The league's top scorer did not make it out for the second half due to illness and Simo Valakari's side were unable to repeat the trick of last Sunday in Aberdeen when they successfully defended a 1-0 lead."),
+    real('rl', 'BBC Sport', 'https://www.bbc.co.uk/sport/rugby-league/articles/crwyqgjg5y8wo', 'McDermott seeks fix as England fight to save their World Cup', "Brian McDermott says he can fix the errors that led to England's Rugby League World Cup defeat by Tonga - but is it already too late?", "As Tonga's deliriously happy supporters celebrated in their thousands in Perth, England knew they only had themselves to blame. They had passed up plenty of chances to win their 2026 Rugby League World Cup opener and had arguably been the better side for the opening 20 minutes of both halves. By the time Haumole Olakau'atu crashed over for Tonga's fourth try in their 30-12 victory, it was all over. The question is whether England's World Cup hopes are also over already."),
+    real('golf', 'Sky Sports', 'https://www.skysports.com/golf/news/12040/13600134/dp-world-india-championship', 'McIlroy drops out of contention at DP World India Championship', "Spain's Eugenio Chacarra holds the lead at the DP World India Championship with Rory McIlroy dropping out of contention as the third round was halted by fading light.", "Spain's Eugenio Chacarra holds the lead at the DP World India Championship with Rory McIlroy dropping out of contention as the third round was halted by fading light. Chacarra leads by two strokes on 14 under with most of the field yet to finish their third round. The Spaniard was four under for his round after 11 holes, having started out in the halfway lead after completing a second-round 67 earlier on Saturday. Patrick Reed and McIlroy - battling with Chacarra for the season-long Race to Dubai title - were eight and 10 shots off the lead respectively."),
+  ];
+  const prepared = () => STORIES.map((s) => prepareStory(s, { now: SAT })).filter(Boolean);
+  const byId = (id) => prepared().find((s) => s.id === id);
+
+  test("the desk: a result in words and its score, the people's whole names, the outlet's question and its furniture gone", async () => {
+    const { peopleIn } = await import('../server/sport/prepare.js');
+    assert.deepEqual(byId('rl').scorelines.map((x) => `${x.winner} ${x.sa}-${x.sb} ${x.loser}`), ['Tonga 30-12 England']);
+    assert.deepEqual(byId('rl').result, { winner: 'Tonga', loser: 'England', home: null });
+    assert.equal(byId('rl').code, 'league');
+    assert.match(byId('rl').summary, /^Brian McDermott says he can fix the errors that led to England's Rugby League World Cup defeat by Tonga\./, 'the statement without its question');
+    assert.doesNotMatch(byId('rl').summary + byId('rl').body, /The question is whether/);
+    assert.deepEqual(byId('cam').scorelines.map((x) => `${x.a} ${x.sa}-${x.sb} ${x.b}`), ['Dundee United 1-1 St Johnstone']);
+    assert.doesNotMatch(byId('cam').summary, /deserved/);
+    assert.doesNotMatch(byId('omb').body, /Full replay|British Champions Sprint|market leader/, 'a video link run into the text, and a price, go');
+    assert.equal(byId('lough').people.Loughnane, 'Billy');
+    assert.equal(byId('mares').people.Maresca, 'Enzo');
+    assert.match(byId('mares').body, /Erling Haaland's fitness/, 'no space before a possessive');
+    const people = peopleIn("Separate Saracens and England cricket nights out had converged. Once Al-Nassr went ahead. Goalkeeper Alex Paulsen misplaced a pass. Goals from Alex Lowry. If X, they owe a debt to Yehor Yarmolyuk. John and Thady Gosden's home favourite. John Gosden said.");
+    assert.deepEqual(people, { Lowry: 'Alex', Yarmolyuk: 'Yehor' }, "never a sentence's common first word, a role, a middle name or a name shared by two people");
+    // (a first name that is a place too, or ends like an adjective, is still one inside a sentence: ESPN 17 Oct)
+    assert.deepEqual(peopleIn("At 36 years old, Jordan Henderson is the elder statesman. Fears over Erling Haaland's fitness. Paris Saint-Germain won."), { Henderson: 'Jordan', Haaland: 'Erling' });
+    // (a one-line report is no story, but its result counts for SCORE CENTRE)
+    const one = prepareStory(real('soton', 'Sky Sports', 'https://www.skysports.com/football/southampton-vs-bolton-wanderers/report/560625', 'Southampton frustrated at home by Bolton', 'James Bree, Lewis Dobbin and Leo Scienza all squandered chances as Southampton dropped points at home for the first time this season with a 0-0 draw against Bolton.'), { now: SAT });
+    assert.equal(one.resultOnly, true);
+    assert.deepEqual(one.scorelines.map((x) => `${x.a} ${x.sa}-${x.sb} ${x.b}`), ['Southampton 0-0 Bolton']);
+    const list = balance([one, ...prepared()], { count: 6 });
+    assert.equal(list.slice(0, list.edition).some((s) => s.resultOnly), false, 'never told');
+    // (an undated story is dated by when the desk first saw it)
+    assert.equal(prepareStory({ ...STORIES[1], published: SAT + 9 * 3600_000, firstSeen: SAT }, { now: SAT + 10 * 3600_000 }).published, SAT);
+  });
+
+  test('the writer: each story opens on what happened, says who won and the score, names people whole, points back to nothing untold', async () => {
+    const channel = loadChannel(undefined, { drafts: true });
+    const program = { id: 'full-time', ...channel.programs['full-time'] };
+    const presenters = { A: { id: 'kai', ...channel.presenters.kai }, B: { id: 'rosa', ...channel.presenters.rosa } };
+    const stories = prepared();
+    const { text } = await createMockProvider().generate({ stories, channelName: 'GLOBIT 24', program, presenters, count: stories.length, now: new Date(SAT), recent: new Set() });
+    const ep = JSON.parse(text);
+    const said = (id) => String(ep.segments.find((s) => s.storyId === id)?.text || '').replace(/\[[^\]]*\]\s*/g, '');
+    assert.match(said('mart'), /^(?:And finally: )?Emi Martínez suffered a worrying-looking head injury/, 'the lead that says what happened, never "Chelsea coach Xabi Alonso told reporters that the Argentina international was conscious" first');
+    assert.match(said('lough'), /Billy Loughnane/);
+    assert.doesNotMatch(said('lough'), /(?<!Billy )Loughnane, 20, has become/);
+    assert.match(said('mares'), /Enzo Maresca has played down fears over Erling Haaland's fitness[^.]*3-2 win over Ipswich/);
+    assert.match(said('omb'), /come out on top/);
+    assert.match(said('omb'), /William Buick/, "a race's winner with who rode it");
+    assert.match(said('cam'), /1-1 draw/);
+    assert.match(said('rl'), /defeat by Tonga/);
+    assert.match(said('rl'), /30-12/);
+    for (const id of ['mart', 'golf']) {
+      const parts = sentencesIn(said(id));
+      parts.forEach((x, j) => {
+        if (/^(?:Both players|The Spaniard)\b/.test(x)) assert.ok(j > 0 && /Branthwaite|Chacarra/.test(parts.slice(0, j).join(' ')), `${id}: ${x}`);
+      });
+    }
+  });
+
+  test('the shape: rugby league said so, a strap that ends its thought, whole names, a result with its score, nothing that points back to the untold', () => {
+    const presenters = { A: { name: 'Kai Sprite' }, B: { name: 'Rosa Rally' } };
+    const cands = prepared();
+    const seg = (id, anchor, headline, text) => ({ type: 'story', anchor, storyId: id, headline, text, cues: [] });
+    // the faulty texts of the first reading, as a writer gave them
+    const ep = { segments: [
+      { type: 'intro', anchor: 'A', text: "GK Martínez taken to hospital for 'precautionary' head injury tests. Good evening, and welcome to FULL TIME.", cues: [] },
+      seg('mart', 'A', "GK Martínez taken to hospital for 'precautionary' head injury tests", 'Chelsea coach Xabi Alonso told reporters that the Argentina international was conscious. Both players received treatment on the pitch, with the Everton defender recovering quickly. Two goals from Pedro Neto ensured Chelsea took all three points from their trip to Merseyside.'),
+      seg('lough', 'B', 'Loughnane, 20, becomes youngest champion jockey', 'Loughnane, 20, has become youngest champion jockey since 1923, BBC Sport reports. "I love my job and I love riding horses – it\'s all I ever wanted to do," said Loughnane, nicknamed \'Billy the Kid\'.'),
+      seg('cam', 'A', 'Cameron equaliser earns point for Dundee United', "Cameron equaliser earns a point for Dundee United at St Johnstone. United trailed at half-time to a Josh Fowler goal, the striker's sixth of the Scottish Premiership campaign."),
+      seg('golf', 'B', 'McIlroy drops out of contention', "The Spaniard was four under for his round after 11 holes, having started out in the halfway lead after completing a second-round 67 earlier on Saturday. Spain's Eugenio Chacarra holds the lead at the DP World India Championship with Rory McIlroy dropping out of contention as the third round was halted by fading light. Chacarra leads by two strokes on 14 under with most of the field yet to finish their third round."),
+      seg('rl', 'A', 'McDermott seeks fix as England fight', "Due to the vagaries of the international rugby league calendar, this was McDermott's first match in charge of England. By the time Haumole Olakau'atu crashed over for Tonga's fourth try in their 30-12 victory, it was all over."),
+      seg('omb', 'B', 'Ombudsman simply supreme in Champion Stakes', 'Ombudsman exacted Qatar Racing Champion Stakes revenge on Calandagan to come out on top at Ascot. When William Buick asked him to quicken, he scorched past eventual third Bay City Roller before seeing off Calandagan to banish Juddmonte International disappointment.'),
+      { type: 'outro', anchor: 'A', text: 'That is FULL TIME.', cues: [] },
+    ] };
+    shapeEpisode(ep, { candidates: cands, program: { title: 'FULL TIME', headlineMax: 45 }, presenters, now: SAT, tz: 'Europe/London', seed: 'r' });
+    const story = (id) => ep.segments.find((s) => s.storyId === id && s.type === 'story');
+    const words = (id) => story(id).text.replace(/\[[^\]]*\]\s*/g, '');
+    assert.doesNotMatch(words('mart'), /Both players/, 'the collision it points back to was never told');
+    assert.match(words('mart'), /^Emi Martínez suffered a worrying-looking head injury[^.]*\. Chelsea coach Xabi Alonso/, 'a story that opened on what leans on its lede gets the lede back');
+    assert.match(words('lough'), /Billy Loughnane, 20, has become/);
+    assert.match(words('cam'), /1-1 draw/, 'a result story says its score when the source has it');
+    assert.doesNotMatch(sentencesIn(words('golf'))[0], /The Spaniard/, 'never "The Spaniard" before his name');
+    assert.equal(story('rl').kicker, 'RUGBY LEAGUE');
+    assert.match(`${words('rl')} ${ep.segments[ep.segments.indexOf(story('rl')) - 1].text}`, /rugby league/i);
+    assert.equal(story('rl').headline, 'McDermott seeks fix', 'the strap ends where its thought does');
+    assert.match(words('rl'), /Brian McDermott's first match/);
+    assert.equal(cutMidThought('McDermott seeks fix as England fight', 'McDermott seeks fix as England fight to save their World Cup'), true);
+    assert.equal(cutMidThought('Kartal reaches Wuhan final', 'Kartal reaches Wuhan final as dream week continues'), false);
+    assert.equal(wholeThought('McDermott seeks fix as England fight', 'McDermott seeks fix as England fight to save their World Cup'), 'McDermott seeks fix');
+    // (Rosa greets Kai by name, by the hour; never "Hello. Let's get started.")
+    const hello = ep.segments[1];
+    assert.equal(hello.type, 'chat');
+    assert.doesNotMatch(hello.text, /Let's get started/);
+    assert.match(hello.text, /Kai|everyone|all/);
+    // (transitions name their sport: never "Something else now." nor "Some basketball.")
+    for (const lines of Object.values(BANKS.transition)) for (const l of lines) assert.doesNotMatch(l, /^(?:Some \w+\.|Something else now\.)$/);
+    assert.ok(BANKS.transition.racing.length >= 6 && BANKS.transition['rugby-league'].length >= 6);
+    assert.equal(fullNames('Loughnane, 20, has become youngest. "I love it," said Loughnane.', { Loughnane: 'Billy' }), 'Billy Loughnane, 20, has become youngest. "I love it," said Loughnane.');
+  });
+
+  test('a story left with fewer than two sentences is not told', () => {
+    const presenters = { A: { name: 'Kai Sprite' }, B: { name: 'Rosa Rally' } };
+    const cands = prepared();
+    const ids = ['mart', 'lough', 'mares', 'omb', 'cam', 'golf'];
+    const first2 = (id) => sentencesIn(`${cands.find((c) => c.id === id).summary} ${cands.find((c) => c.id === id).body}`).slice(0, 2).join(' ');
+    const ep = { segments: [
+      { type: 'intro', anchor: 'A', text: 'Good evening, and welcome to FULL TIME.', cues: [] },
+      ...ids.map((id, i) => ({ type: 'story', anchor: i % 2 ? 'B' : 'A', storyId: id, headline: cands.find((c) => c.id === id).title, text: id === 'lough' ? 'Loughnane, 20, has become youngest champion jockey since 1923, BBC Sport reports.' : id === 'mares' ? 'Maresca plays down Haaland injury fears after City star limps off, ESPN reports.' : first2(id), cues: [] })),
+      { type: 'outro', anchor: 'A', text: 'That is FULL TIME.', cues: [] },
+    ] };
+    shapeEpisode(ep, { candidates: cands, program: { title: 'FULL TIME', headlineMax: 45 }, presenters, now: SAT, tz: 'Europe/London', seed: 'o' });
+    assert.ok(!ep.segments.some((s) => s.storyId === 'lough' && s.type === 'story'), 'the headline alone is no story');
+    // (a result story's headline alone takes its score's sentence, and is told)
+    assert.match(ep.segments.find((s) => s.storyId === 'mares' && s.type === 'story').text, /3-2 win over Ipswich/);
+  });
+
+  test("the women's game named when the copy never says it; a whole name before a headline's noun takes an article", () => {
+    const presenters = { A: { name: 'Kai Sprite' }, B: { name: 'Rosa Rally' } };
+    const rr = prepareStory(real('rr', 'Guardian Sport', 'https://www.theguardian.com/sport/2026/oct/17/canada-england-wxv-rugby-union-match-report', 'Red Roses’ four-year unbeaten streak ends in thriller', 'England have lost a rugby game after four years and 41 games unbeaten. Canada beat England 24-21 in Vancouver.', 'Canada had already ended England’s winning streak with a 26-26 draw in Exeter last month but that was not vengeance enough.'), { now: SAT });
+    assert.equal(rr.womens, true);
+    const cands = [...prepared(), rr];
+    const ep = { segments: [
+      { type: 'intro', anchor: 'A', text: 'Cameron equaliser earns a point for Dundee United at St Johnstone. Red Roses’ four-year unbeaten streak ends in thriller. Loughnane, 20, becomes youngest champion jockey since 1923. Good evening, and welcome to FULL TIME.', cues: [] },
+      { type: 'story', anchor: 'A', storyId: 'cam', headline: 'Cameron equaliser earns point for Dundee United', text: "Lyall Cameron's 79th-minute strike earned Dundee United a 1-1 draw at St Johnstone. United trailed at half-time to a Josh Fowler goal.", cues: [] },
+      { type: 'story', anchor: 'B', storyId: 'rr', headline: 'Red Roses’ four-year unbeaten streak ends in thriller', text: 'England have lost a rugby game after four years and 41 games unbeaten. Canada beat England 24-21 in Vancouver.', cues: [] },
+      { type: 'story', anchor: 'A', storyId: 'lough', headline: 'Loughnane, 20, becomes youngest champion jockey', text: "Billy Loughnane becomes the youngest rider in over a century to be crowned Britain's champion jockey. Aged 20, the Irishman beat five-time champion Oisin Murphy to the title.", cues: [] },
+      { type: 'outro', anchor: 'A', text: 'That is FULL TIME.', cues: [] },
+    ] };
+    shapeEpisode(ep, { candidates: cands, program: { title: 'FULL TIME', headlineMax: 45 }, presenters, now: SAT, tz: 'Europe/London', seed: 'w' });
+    assert.match(ep.segments.find((s) => s.storyId === 'rr' && s.type === 'story').text, /In women's rugby(?: union)?, England have lost a rugby game/);
+    const intro = ep.segments.find((s) => s.type === 'intro').text;
+    assert.match(intro, /\bA Lyall Cameron equaliser earns/, intro);
+    assert.match(intro, /Billy Loughnane, 20, becomes/, intro);
+    // (a story that says it, or whose sport does, is left alone)
+    assert.doesNotMatch(ep.segments.find((s) => s.storyId === 'lough' && s.type === 'story').text, /women's/);
+  });
+
+  test("the article page's own headline gives the score its feed title says in words, and the story says it", async () => {
+    const { scoreInto } = await import('../server/sport/shape.js');
+    const con = real('con', 'BBC Sport', 'https://www.bbc.co.uk/sport/rugby-union/articles/c0con', 'Seven-try Connacht beat Saracens in Champions Cup', 'Connacht beat Saracens in their opening Champions Cup pool game.', 'Captain Cian Prendergast and fly-half Ciaran Frawley scored two tries apiece as Connacht crossed seven times against the three-time Champions Cup winners at a raucous Dexcom Stadium. Saracens had the chance to leave with a losing bonus point.');
+    const page = 'Champions Cup: Connacht 45-36 Saracens - Hosts score seven tries in pool victory';
+    const read = (pageTitle) => prepareStory({ ...con, pageTitle }, { now: SAT }).scorelines.map((x) => `${x.a} ${x.sa}-${x.sb} ${x.b}`);
+    assert.deepEqual(read(page), ['Connacht 45-36 Saracens']);
+    // (never a live page's, nor one whose winner the feed's words do not name)
+    assert.deepEqual(read('Champions Cup: Connacht 24-17 Saracens - live'), []);
+    assert.deepEqual(read('Champions Cup: Connacht 36-45 Saracens - report'), []);
+    assert.deepEqual(read(undefined), []);
+    // (the first sentence that says the result in words takes the score)
+    const sl = prepareStory({ ...con, pageTitle: page }, { now: SAT }).scorelines[0];
+    assert.equal(scoreInto('Connacht beat Saracens in their opening Champions Cup pool game, according to BBC Sport.', sl), 'Connacht beat Saracens 45-36 in their opening Champions Cup pool game, according to BBC Sport.');
+    assert.equal(scoreInto('Dundee United drew with St Johnstone on Saturday.', { draw: true, a: 'Dundee United', b: 'St Johnstone', sa: 1, sb: 1 }), 'Dundee United drew 1-1 with St Johnstone on Saturday.');
+    assert.equal(scoreInto('Saracens had the chance to leave with a losing bonus point.', sl), null);
   });
 });

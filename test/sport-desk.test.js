@@ -149,3 +149,54 @@ describe("a club's name on a board", () => {
     assert.deepEqual(scorelinesIn(['The Gunners beat Leeds 2-1 at the Emirates.'], 'football', 'Arsenal'), [], 'a nickname');
   });
 });
+
+// ---- the first real matchday (Saturday 17 Oct, 18:40): every result the edition aired without, and the desk's faults
+describe('a Saturday of match reports (17 Oct)', () => {
+  const read = (s, sport = 'football') => scorelinesOf(s, sport).map((x) => `${resultLine(x)}${x.home ? ` (home ${x.home})` : ''}`);
+  test('the winner as a verb\'s object, a team\'s own clause, a competition\'s label; never a ground', () => {
+    assert.deepEqual(read('Greg Kiltie scored twice to lift Kilmarnock off the bottom of the Scottish Premiership with a 3-2 victory over Motherwell.'), ['Kilmarnock beat Motherwell 3-2.']);
+    assert.deepEqual(read("Lyall Cameron's 79th-minute strike earned Dundee United a 1-1 draw at St Johnstone."), ['Dundee United drew 1-1 with St Johnstone.']);
+    assert.deepEqual(read('Álex Baena struck in the 89th minute to snatch Atlético Madrid a 1-0 win at Espanyol and put pressure on the La Liga leaders, Barcelona.'), ['Atlético Madrid beat Espanyol 1-0. (home Espanyol)'], 'a win at a team is at its ground');
+    assert.deepEqual(read("Oliver Arblaster's early strike and a strong defensive display saw Sheffield United take all three points from a 1-0 Championship victory over Bristol City at Ashton Gate."), ['Sheffield United beat Bristol City 1-0.']);
+    assert.deepEqual(read('Ulster run in six tries on their way to a 40-21 bonus-point win over Zebre in Parma to open their European Challenge Cup campaign.', 'rugby'), ['Ulster beat Zebre 40-21.']);
+    assert.deepEqual(read('Aberdeen returned to winning ways in the Scottish Premiership as a 3-1 victory over St Mirren moved them above their opponents, who have now lost five straight matches.'), ['Aberdeen beat St Mirren 3-1.']);
+    assert.deepEqual(read('James Bree, Lewis Dobbin and Leo Scienza all squandered chances as Southampton dropped points at home for the first time this season with a 0-0 draw against Bolton.'), ['Southampton drew 0-0 with Bolton.']);
+    assert.deepEqual(read('WXV: Canada 24-21 England.', 'rugby'), ['Canada beat England 24-21.']);
+    assert.deepEqual(read('Portsmouth piled on the misery for struggling Norwich as they made it back-to-back Championships victories with a 1-0 triumph at Carrow Road.'), [], 'Carrow Road is a ground');
+  });
+
+  test('the result in words in the headline (or the standfirst), its score in a sentence of the copy', async () => {
+    const { pairedScorelines, resultInWords, scorelinesIn } = await import('../server/sport/scores.js');
+    const pair = (heads, sentences, sport = 'football') => pairedScorelines(heads, sentences, sport).map((x) => `${resultLine(x)}${x.home ? ` (home ${x.home})` : ''}`);
+    assert.deepEqual(pair(['Struggling Norwich beaten by Portsmouth'], ['Portsmouth piled on the misery for struggling Norwich as they made it back-to-back Championships victories with a 1-0 triumph at Carrow Road.']), ['Portsmouth beat Norwich 1-0.']);
+    assert.deepEqual(pair(['Sorry Derby beaten at home by Stoke'], ['Luke Graham scored his first goal for Stoke as they won 1-0 at Pride Park to pile more pressure on struggling Derby.']), ['Stoke beat Derby 1-0. (home Derby)']);
+    assert.deepEqual(pair(['Murrell scores two as Falkirk claim Edinburgh double by beating Hibs'], ['Falkirk registered an Edinburgh double as they put Hibs to the sword with a 2-1 win in an entertaining Scottish Premiership clash at Easter Road.']), ['Falkirk beat Hibs 2-1.']);
+    assert.deepEqual(pair(['McDermott seeks fix as England fight to save their World Cup', "Brian McDermott says he can fix the errors that led to England's Rugby League World Cup defeat by Tonga - but is it already too late?"], ["By the time Haumole Olakau'atu crashed over for Tonga's fourth try in their 30-12 victory, it was all over."], 'rugby'), ['Tonga beat England 30-12.']);
+    // (never another match's score: an earlier one, or one after its result with another team)
+    assert.deepEqual(pair(['Kiltie double helps Kilmarnock beat fellow-strugglers Motherwell'], ['"We signed him for everything," Alonso said after last weekend\'s 5-1 victory over AFC Bournemouth.']), []);
+    assert.deepEqual(pair(['Kiltie double helps Kilmarnock beat fellow-strugglers Motherwell'], ['Kilmarnock had lost their previous game, a 2-0 defeat to Hibernian.']), []);
+    assert.deepEqual(resultInWords('Cameron equaliser earns a point for Dundee United at St Johnstone', 'football'), { draw: true, a: 'Dundee United', b: 'St Johnstone' });
+    assert.deepEqual(resultInWords('Seven-try Connacht beat Saracens in Champions Cup', 'rugby'), { winner: 'Connacht', loser: 'Saracens', home: null });
+    assert.equal(resultInWords('Can Arsenal beat City?', 'football'), null, 'a question');
+    assert.equal(resultInWords('Kartal reaches Wuhan final as dream week continues', 'tennis'), null, 'no single score in tennis');
+    // (a subject read as the winner is a team only when the story never makes it a player)
+    const ctx = 'Greg Kiltie led the charge on their way to a 3-0 win over Hibs. Kiltie scored twice.';
+    assert.deepEqual(scorelinesIn(['Greg Kiltie led the charge on their way to a 3-0 win over Hibs.'], 'football', ctx), []);
+  });
+
+  test('rugby says its code: league on the tag and in the copy', () => {
+    assert.equal(sportTag({ link: 'https://www.bbc.co.uk/sport/rugby-league/articles/crwyqgjg5y8wo', title: 'McDermott seeks fix as England fight to save their World Cup' }), 'RUGBY LEAGUE');
+    assert.equal(sportTag({ link: 'https://www.bbc.co.uk/sport/rugby-union/articles/cr86zgpyz464o', title: 'Seven-try Connacht beat Saracens in Champions Cup' }), 'RUGBY UNION');
+    assert.equal(sportTag({ link: 'https://www.theguardian.com/sport/2026/oct/17/x', title: 'Red Roses’ four-year unbeaten streak ends in a thriller as Canada claim late win', summary: 'England suffer first defeat since 2022 Women’s Rugby World Cup final.' }), 'RUGBY UNION');
+    assert.equal(sportOf({ link: 'https://www.bbc.co.uk/sport/rugby-league/articles/x', title: 'x y z w' }), 'rugby', 'one sport for the balance');
+  });
+
+  test("a verdict on a result's manner goes, the result stays; a name is no verdict; blame by a verb goes", () => {
+    assert.equal(withoutJudgement("Lyall Cameron's 79th-minute strike earned Dundee United a deserved 1-1 draw at St Johnstone."), "Lyall Cameron's 79th-minute strike earned Dundee United a 1-1 draw at St Johnstone.");
+    assert.equal(withoutJudgement('Connacht produce a superb attacking performance to beat Saracens in their opening Champions Cup pool game.'), 'Connacht beat Saracens in their opening Champions Cup pool game.');
+    assert.equal(withoutJudgement('Ombudsman exacted Qatar Racing Champion Stakes revenge on Calandagan to come out on top with a show-stopping performance at Ascot.'), 'Ombudsman exacted Qatar Racing Champion Stakes revenge on Calandagan to come out on top at Ascot.');
+    assert.equal(withoutJudgement('Falkirk registered a stunning Edinburgh double as they put Hibs to the sword with a 2-1 win.'), 'Falkirk registered an Edinburgh double as they put Hibs to the sword with a 2-1 win.');
+    assert.match(withoutJudgement('Dream coach Karl Smesko was optimistic that forward Allisha Gray would return.'), /^Dream coach Karl Smesko/, 'the Atlanta Dream, not a dream coach');
+    for (const t of ['Kartal took advantage when 34th-ranked Ostapenko stuttered in high-pressure moments.', 'Brentford pressed the self-destruct button when they had Liverpool on the ropes.', 'They had only themselves to blame after tumbling out of the top four.', 'The visitors made a nightmare start.']) assert.equal(withoutJudgement(t), null, t);
+  });
+});

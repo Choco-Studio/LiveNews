@@ -384,7 +384,8 @@ export class Producer {
     const list = balance(prepareStories(ctx.candidates, { now, tz }), { count: ctx.program.stories || 10, ledLately: (id) => led.has(id), now });
     // the writer tells the edition (football at most half of it); the shape reads results and dates from all of them
     ctx.sportPool = list;
-    ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program)));
+    // (never a one-line report kept only for its result: server/sport/prepare.js resultOnly)
+    ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program))).filter((s) => !s.resultOnly);
     return { stories: ctx.candidates.length, pool: list.length, dropped: before - list.length };
   }
 

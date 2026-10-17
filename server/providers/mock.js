@@ -14,6 +14,7 @@ import { ALSO_LEAN, LIGHT, contentWords, extractFigures, fixNameTypos, sentences
 export { outletView };
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { ROSA_MEMORIES, ROSA_NEEDLES } from '../sport/shape.js';
+import { personTold, sportLeans } from '../sport/leans.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, compressSentence, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { untold } from '../coherence.js';
@@ -301,7 +302,7 @@ function headlineFuture(t, words, info) {
   // (and an auxiliary or a question word: "What ice cream has to do with this year's Nobel Prize" once aired as "…has are
   // to do…", NPR 15 Oct)
   if (/^(?:What|How|Why|Who|When|Where|Which)$/i.test(words[0] || '')) return null;
-  if (at === k && words.slice(1, k).some((w) => /^(?:has|have|had|is|are|was|were|needs|need|got|gets|used|going|ought|agrees|plans|wants|vows|refuses|threatens|seeks|aims|hopes|votes|moves|decides|promises|pledges|fails|tries|offers|prepares|expects|intends|asks|urges|calls|says|declines|chooses|tells|orders|forces|helps|lets|allows|invites|agreed|planned|voted|vowed|refused|threatened|sought|decided|promised|pledged|failed|tried|offered|asked|urged|told|ordered|forced|helped|allowed|invited)$/i.test(w))) return null;
+  if (at === k && words.slice(1, k).some((w) => /^(?:has|have|had|is|are|was|were|needs|need|got|gets|used|going|ought|agrees|plans|wants|vows|refuses|threatens|seeks|aims|hopes|votes|moves|decides|promises|pledges|fails|tries|offers|prepares|expects|intends|asks|urges|calls|says|declines|chooses|tells|orders|forces|helps|lets|allows|invites|agreed|planned|voted|vowed|refused|threatened|sought|decided|promised|pledged|failed|tried|offered|asked|urged|told|ordered|forced|helped|allowed|invited|apologises|apologizes|apologised|apologized|responds|responded|reacts|reacted|returns|returned|speaks|spoke|talks|talked|turns|turned|travels|travelled|heads|headed|goes|went|comes|came|admits|admitted|listens|switches|switched|reaches|reached|bows|bowed|waves|waved)$/i.test(w))) return null;
   // (a verb after "as", "while" or "after" is that clause's own: "UK to strengthen cyber defences as minister calls…")
   const sub = words.findIndex((w, j) => j > k + 1 && /^(?:as|while|after|amid|because|when|until|before)$/i.test(w));
   if (at < 1 || words.slice(0, at).some((w) => /[,:;]$/.test(w)) || laterVerb(words.slice(k + 2, sub > 0 ? sub : undefined))) return null;
@@ -933,8 +934,10 @@ const endsInName = (before) => {
 };
 // a whole name never starts on a date or the word before it: "On Monday Kanishka Narayan" holds "Kanishka Narayan"
 const NAME_RUN = /(?<![\p{L}’'-])(?!(?:On|In|At|By|From|Since|Until|Last|Next|This|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|June|July|August|September|October|November|December)\s)(\p{Lu}\p{Ll}+(?:[-’']\p{Lu}?\p{Ll}+)?(?:\s+\p{Lu}\p{Ll}+(?:[-’']\p{Lu}?\p{Ll}+)?){1,2})(?![\p{L}-])/gu;
-function strangers(t, told, info) {
+function strangers(t, told, info, { title = false } = {}) {
   const out = [];
+  // (`title`: a name the headline gives is a stranger too, FULL TIME's whole name the first time it is heard)
+  const inTitle = (name) => !title && info.s.title.includes(name);
   // (a whole word: "Jack Rudoni" after "Goals from" once gave "Jac", a stranger the article never names, and the sentence
   // went, Sky Sports 13 Oct; a capital inside it, "McDermott", "DeLauter", is still one name)
   for (const m of String(t).matchAll(/(?<=[\p{Ll},;”"]\s+)(\p{Lu}\p{Ll}[\p{L}’'-]+)(?![\p{L}’'-])(?![’']s\b)(?!\s+\p{Lu})/gu)) {
@@ -944,13 +947,13 @@ function strangers(t, told, info) {
     if (/\b(?:the|a|an|its|their|his|her|our)\s+$/i.test(before) || endsInName(before)) continue;
     // (a people, a faith or a party is no person to introduce: "Ukrainian officials said Russian attacks killed six people…"
     // once went for want of a "Russian"'s first name, Guardian 14 Oct)
-    if (COMMON_PROPER.test(name) || NOT_A_NAME.has(name) || DEMONYM.test(name) || GROUP_WORD.test(name) || lookupPlace(name) || told.includes(name) || info.s.title.includes(name)) continue;
+    if (COMMON_PROPER.test(name) || NOT_A_NAME.has(name) || DEMONYM.test(name) || GROUP_WORD.test(name) || lookupPlace(name) || told.includes(name) || inTitle(name)) continue;
     out.push(name);
   }
   // (and a surname with its particle, "al-Jahalin said", Al Jazeera 14 Oct, the community's representative never named)
   for (const m of String(t).matchAll(/(?<![\p{L}-])((?:al|el|ad|ash|as|at|az|ibn|bin|abu|bint)-\p{Lu}[\p{L}’'-]+)/gu)) {
     const name = m[1].replace(/[’']s$/, '');
-    if (told.includes(name) || info.s.title.includes(name) || out.includes(name)) continue;
+    if (told.includes(name) || inTitle(name) || out.includes(name)) continue;
     out.push(name);
   }
   return out;
@@ -963,7 +966,7 @@ function givenBefore(name, source) {
   for (const x of String(source).matchAll(new RegExp(`(?<![\\p{L}’'-])((?:\\p{Lu}\\p{Ll}[\\p{L}’'-]*[ \\u00A0]+){1,3})${escRe(name)}(?![\\p{L}])`, 'gu'))) {
     const ws = x[1].trim().split(/\s+/);
     const keep = [];
-    while (ws.length && givenName(ws.at(-1)) && !COMMON_START.test(ws.at(-1)) && !ROLE_WORD.test(ws.at(-1))) keep.unshift(ws.pop());
+    while (ws.length && givenName(ws.at(-1)) && !COMMON_START.test(ws.at(-1)) && !ROLE_WORD.test(ws.at(-1)) && !DEMONYM.test(ws.at(-1))) keep.unshift(ws.pop());
     // (a sentence's first word is no name when it is a common one: "Friends Malcolm Butcher, 82, Jim Tyler, 81… said" never
     // gives "Friends Malcolm", BBC 12 Oct; the source writing it in lower case says it is common)
     const opens = !ws.length && /(?:^|[.!?:"”]\s+|\n\s*)$/.test(String(source).slice(0, x.index));
@@ -994,11 +997,14 @@ export function introduceNames(t, told, info) {
   // (a strap's whole name is not said: "Goldberg was a regular Al Jazeera contributor…" once opened a story under "Israeli
   // academic and Al Jazeera contributor Ori Goldberg dies", Al Jazeera 12 Oct, round 5)
   const strapWhole = lead && new RegExp(`\\p{Lu}\\p{Ll}+\\s+${lead.replace(/[’']s$/, '')}(?![\\p{L}])`, 'u').test(info.s.title);
-  if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && (!info.s.title.includes(lead) || strapWhole)) {
+  // (FULL TIME says a person's whole name the first time whatever the strap says: the strap is not heard, and "Loughnane, 20,
+  // has become youngest champion jockey" never said who Billy Loughnane is, 17 Oct)
+  const sport = isSportStory(info);
+  if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && (!info.s.title.includes(lead) || strapWhole || sport)) {
     const source = source0;
     // (the possessive too: "Helen Barber" given in the article makes "Barber’s claim…" "Helen Barber’s claim…")
     const bare = lead.replace(/[’']s$/, '');
-    const first = [...source.matchAll(new RegExp(`(?<![\\p{L}])(\\p{Lu}\\p{Ll}[\\p{Ll}’'-]*)\\s+${bare}(?![\\p{L}])`, 'gu'))].map((x) => x[1]).find((x) => givenName(x) && !COMMON_START.test(x));
+    const first = sport ? info.s.people?.[bare] || null : [...source.matchAll(new RegExp(`(?<![\\p{L}])(\\p{Lu}\\p{Ll}[\\p{Ll}’'-]*)\\s+${bare}(?![\\p{L}])`, 'gu'))].map((x) => x[1]).find((x) => givenName(x) && !COMMON_START.test(x));
     if (first) out = `${first} ${out}`;
   }
   // (a person the story knows only by a surname, "Barber’s claim is against HDR Global Trading…", Guardian 14 Oct, opening a
@@ -1025,10 +1031,18 @@ export function introduceNames(t, told, info) {
     if (!given) return null;
     out = out.replace(m[0], `${given} ${m[1]}`);
   }
-  for (const name of strangers(out, told, info)) {
+  for (const name of strangers(out, told, info, { title: sport })) {
     const source = `${info.s.summary || ''} ${info.s.body || ''}`;
-    const first = givenBefore(name, source);
-    if (!first) return null;
+    const first = sport ? info.s.people?.[name] || null : givenBefore(name, source);
+    // (in sport a single name the article never gives a first name is a club, a horse or a ground far more often than a
+    // person: "…during Chelsea's Premier League win over Everton", "revenge on Calandagan", "at Ascot" once sent three openers
+    // that said the news to the headline instead, 17 Oct; it is said as the article says it; and a first name comes only from
+    // the story's own people, server/sport/prepare.js peopleIn, never any capitalised word before a club's name: "Separate
+    // Saracens have sacked…", 13 Oct)
+    if (!first) {
+      if (sport) continue;
+      return null;
+    }
     out = out.replace(new RegExp(`(?<![\\p{L}])${name}(?![\\p{L}])`, 'u'), `${first} ${name}`);
   }
   return out;
@@ -1103,6 +1117,7 @@ function expandLetters(t, told, info) {
 // (a surname the headline gives alone is said whole the first time too: "The IFS said that Healey must set out…" under
 // "Healey faces £35bn Budget challenge…", BBC 12 Oct; the headline is on the strap, never a sentence of the story; and in a
 // tease, with the role the source gives it: "Chancellor John Healey faces £35bn Budget challenge…")
+const SPORT_ROLE_BEFORE = /(?:^|\s)(?:Goalkeeper|Keeper|Striker|Defender|Midfielder|Winger|Forward|Captain|Skipper|Coach|Manager|Boss|Jockey|Trainer|Referee|Fly-half|Scrum-half|Prop|Hooker|Quarterback|Opener|Bowler)\s+$/u;
 function wholeSurnames(t, told, info, { role = false } = {}) {
   let out = String(t);
   const source = `${info.s.summary || ''} ${String(info.s.body || '').replace(/\n+/g, ' ')}`;
@@ -1110,10 +1125,14 @@ function wholeSurnames(t, told, info, { role = false } = {}) {
     const name = m[1].replace(/[’']s$/, '');
     if (!String(info.s.title).includes(name) || NOT_A_NAME.has(name) || COMMON_PROPER.test(name) || DEMONYM.test(name) || GROUP_WORD.test(name) || lookupPlace(name) || COMMON_START.test(name)) continue;
     const at = out.search(new RegExp(`(?<![\\p{L}’'-])${escRe(name)}(?![\\p{L}-])`, 'u'));
-    if (at < 0 || /\p{Lu}[\p{L}’'-]*\s+$/u.test(out.slice(0, at))) continue;
+    // (a sport role or a possessive before it is no first name: "Goalkeeper Martínez taken to hospital…" is said "Goalkeeper
+    // Emi Martínez…", "Bills' Allen finally gets over hump" "Bills' Josh Allen…")
+    if (at < 0 || (/\p{Lu}[\p{L}’'-]*\s+$/u.test(out.slice(0, at)) && !(isSportStory(info) && (SPORT_ROLE_BEFORE.test(out.slice(0, at)) || /['’]s?\s+$/u.test(out.slice(0, at)))))) continue;
     // (the given names before it, a title or a role before them left out: "Chancellor John Healey" gives "John")
     const given = (w) => givenName(w) && !ROLE_WORD.test(w) && !COMMON_START.test(w) && !lookupPlace(w);
-    const whole = [...source.matchAll(new RegExp(`(?<![\\p{L}’'-])((?:\\p{Lu}\\p{Ll}+\\s+){1,2})${escRe(name)}(?![\\p{L}’'-])`, 'gu'))]
+    // (in sport, the desk's people map: "Still to come: Henderson, the Premier League's oldest player…" kept the surname
+    // alone, "Jordan" being a country too, 17 Oct)
+    const whole = isSportStory(info) && info.s.people?.[name] ? info.s.people[name] : [...source.matchAll(new RegExp(`(?<![\\p{L}’'-])((?:\\p{Lu}\\p{Ll}+\\s+){1,2})${escRe(name)}(?![\\p{L}’'-])`, 'gu'))]
       .map((x) => x[1].trim().split(/\s+/))
       .map((ws) => (ws.every(given) ? ws : given(ws.at(-1)) ? ws.slice(-1) : []).join(' '))
       .find(Boolean);
@@ -1121,8 +1140,10 @@ function wholeSurnames(t, told, info, { role = false } = {}) {
     if (!full || told.includes(full) || EVERYDAY_PERSON.test(full)) continue;
     // (someone: the source says who they are, or has them speak)
     const r = roleInSource(full, source);
-    if (!r && !new RegExp(`${escRe(full)}\\s+(?:said|says|told)\\b|\\b(?:said|says|told)\\s+${escRe(full)}`, 'u').test(source)) continue;
-    const pre = role && r?.pre ? `${at === 0 ? r.pre.charAt(0).toUpperCase() + r.pre.slice(1) : r.pre} ` : '';
+    if (!r && !isSportStory(info) && !new RegExp(`${escRe(full)}\\s+(?:said|says|told)\\b|\\b(?:said|says|told)\\s+${escRe(full)}`, 'u').test(source)) continue;
+    // (never a second role before one the line already gives: "Bitport manager Bitport Athletic manager Amara Okafor", the
+    // offline desk's Okafor story since round 2, found by the matchday checks of 17 Oct)
+    const pre = role && r?.pre && !ROLE_WORD.test(out.slice(0, at).split(/\s+/).filter(Boolean).slice(-2).join(' ')) ? `${at === 0 ? r.pre.charAt(0).toUpperCase() + r.pre.slice(1) : r.pre} ` : '';
     out = `${out.slice(0, at)}${pre}${full}${out.slice(at + name.length)}`;
   }
   return out;
@@ -1173,6 +1194,9 @@ export function introducePeople(t, told, info) {
     // (a subject the line tells of, "Kanishka Narayan will call on companies…", says who too: "Kanishka Narayan, the AI minister,
     // will call on…", round 6)
     else if (role?.post && !/^[’']s\b/.test(after) && !/^,/.test(after)) out = `${before}${full}, ${role.post}${/^\s*[.!?]?\s*$/.test(after) ? '' : ','}${after}`;
+    // (FULL TIME: who a player is, the story says by what they did; "Britain's Sonay Kartal says making her maiden WTA 1000 final…"
+    // gave way to the headline's "Kartal hails mentality…" for want of a role, Sky Sports 17 Oct)
+    else if (isSportStory(info)) continue;
     else return null;
   }
   return out;
@@ -1406,7 +1430,50 @@ const orphanPlural = (t) => {
 // the toll is likely to be huge." once opened WORLD NOW's lead on an Indonesian wildfire; the article counted orangutans,
 // the viewer heard people, Guardian 14 Oct)
 const ASKS_BACK = /^(?:How many|How much|How long|How far|Why|What|Whether|Who|Where|When)\b[^.]{0,60}?\b(?:is|are|was|were|remains?)\s+(?:still\s+)?(?:unclear|unknown|not (?:yet )?(?:known|clear))/i;
-const selfStanding = (info, t) => !untold(t, String(info.s.title)) && !ASKS_BACK.test(String(t).trim()) && !ONE_OF_LIST.test(String(t).trim()) && !ADDED_LEAN.test(String(t).trim()) && !ANSWERS_BACK.test(String(t)) && !orphanPlural(t) && !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && !echoesBefore(info, t) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t) && !PRONOUN_START.test(t) && !ALSO_LEAN.test(t));
+// ---- FULL TIME (a sport story): what its sentences lean on that a news story's seldom do is server/sport/leans.js (17 Oct,
+// the first real matchday: "Both players…", "…, who later lost…", "The Spaniard…" each came before what it points back to)
+const isSportStory = (info) => info?.s?.category === 'sport' || !!info?.s?.sportTag;
+/**
+ * A lede without the clause it adds after a quotation's comma: "Britain's Sonay Kartal says making her maiden WTA 1000 final at
+ * the Wuhan Open is a "dream come true," adding that the mental side of sport is…" (Sky Sports 17 Oct, 31 words) is told to its
+ * quotation's end, "…is a "dream come true."", rather than given up for the headline; the sentence unchanged when it has none.
+ */
+const cutParticiple = (t) => {
+  const m = /^(.{30,}?)(?:,(["”’])|(["”’]),)\s+(?:adding|saying|explaining|insisting|admitting|noting|claiming|stressing)\b/u.exec(String(t || ''));
+  return m ? `${m[1]}.${m[2] || m[3]}` : String(t || '');
+};
+// a result story (FULL TIME): its headline says a result ("… beat …", "… comeback win", "… beaten by …", "… earns a point"), or
+// the desk read its result (server/sport/prepare.js: `result` in words, a scoreline of the headline's teams)
+const SCORED = new Set(['football', 'rugby', 'american-football', 'basketball', 'ice-hockey', 'baseball', 'handball']);
+export const RESULT_TITLE = /\b(?:beat|beats|beaten|win|wins|won|victory|triumph|draw|draws|drew|held|point|defeat|defeats|defeated|lose|loses|lost|thrash(?:es|ed)?|edge[sd]?|stun(?:s|ned)?|sees? off|sink|sinks|sank|down|downs|downed|rout(?:s|ed)?|hammer(?:s|ed)?|crush(?:es|ed)?|too strong for)\b/i;
+const RESULT_WORD = /\b(?:beat|beats|beaten|beating|won|win|wins|victory|victories|triumph|defeat|defeats|defeated|lost|lose|loses|draw|drew|drawn|held|point|thrash(?:es|ed)?|edged|stunned|saw off|sank|downed|routed|hammered|crushed|came from behind|comeback|too strong for)\b/i;
+const titleTeams = (info) => (String(info.s.title).match(/\p{Lu}[\p{L}'’-]{2,}/gu) || []).map((w) => w.replace(/['’]s$/u, '')).filter((w) => !NOT_A_NAME.has(w) && !/^(?:Champions|Cup|League|Premier|World|Super|Seven-try|Six-try|Struggling|Sorry|Improved)$/.test(w));
+const ownScoreline = (info) => {
+  const sls = info.s.scorelines || [];
+  const names = titleTeams(info);
+  const last = (n) => String(n || '').split(' ').at(-1).replace(/['’]s$/u, '');
+  return sls.find((sl) => sl.paired) || sls.find((sl) => names.includes(last(sl.a)) || names.includes(last(sl.b)) || names.includes(String(sl.a).split(' ')[0]) || names.includes(String(sl.b).split(' ')[0])) || null;
+};
+const resultStory = (info) => SCORED.has(info.s.sport) && (!!info.s.result || !!ownScoreline(info) || RESULT_TITLE.test(String(info.s.title)));
+const saysScore = (t, sl) => !!sl && new RegExp(`\\b(?:${sl.sa}\\s*[-–]\\s*${sl.sb}|${sl.sb}\\s*[-–]\\s*${sl.sa})\\b`).test(String(t));
+/** Does a sentence say a result story's result: its score, or a result's word beside one of its teams? */
+// (another match's result is not this one's: "Canada had already ended England's winning streak with a 26-26 draw in Exeter
+// last month…" once opened the story of Canada's 24-21 win, Guardian 17 Oct)
+const ANOTHER_TIME = /\b(?:last (?:week|weekend|season|month|year|time|Sunday|Saturday|Monday|Tuesday|Wednesday|Thursday|Friday)|previous|earlier (?:this|in the) (?:season|month|week|campaign)|midweek|already|in (?:January|February|March|April|May|June|July|August|September|November|December))\b/i;
+const statesResult = (t, info) => {
+  const sl = ownScoreline(info);
+  if (sl && saysScore(t, sl)) return true;
+  if (ANOTHER_TIME.test(String(t).replace(/[“"][^”"]*[”"]/g, ' '))) return false;
+  const teams = [...titleTeams(info), ...(info.s.result ? [info.s.result.winner, info.s.result.loser, info.s.result.a, info.s.result.b].filter(Boolean) : []), ...(sl ? [sl.a, sl.b] : [])];
+  return RESULT_WORD.test(String(t)) && teams.some((n) => new RegExp(`(?<![\\p{L}])${escRe(String(n).split(' ').at(-1))}(?![\\p{L}])`, 'u').test(String(t)));
+};
+// (a sport's own phases are no sequel to anything told: "as the third round was halted by fading light", "the second half",
+// "the fourth day" kept the golf story's lede, "Spain's Eugenio Chacarra holds the lead…", from opening it, 17 Oct)
+// (nor a run's count, "A second loss in three games…", nor a habit, "beaten up once again on the road": Newcastle's story
+// once aired as its headline alone, 13 Oct, found by the matchday checks of 17 Oct)
+const SPORT_PHASE = /\b(?:the|a)\s+(?:first|second|third|fourth|fifth|final|opening|closing|last)\s+(?:round|day|test|leg|half|set|innings|period|quarter|session|stage|race|game|match|lap|frame|hole)s?\b|\b(?:a|the|their|his|her|its)\s+(?:second|third|fourth|fifth|sixth)\s+(?:straight\s+|successive\s+|consecutive\s+)?(?:loss|defeat|win|victory|draw)\s+in\s+(?:\w+\s+){0,2}(?:games|matches|outings|starts|fixtures)\b|\bonce again\b/gi;
+const untoldIn = (info, t, told, opts) => untold(isSportStory(info) ? String(t).replace(SPORT_PHASE, 'then') : t, told, opts);
+const selfStanding = (info, t) => !(isSportStory(info) && sportLeans(t, '')) && !untoldIn(info, t, String(info.s.title)) && !ASKS_BACK.test(String(t).trim()) && !ONE_OF_LIST.test(String(t).trim()) && !ADDED_LEAN.test(String(t).trim()) && !ANSWERS_BACK.test(String(t)) && !orphanPlural(t) && !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && !echoesBefore(info, t) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t) && !PRONOUN_START.test(t) && !ALSO_LEAN.test(t));
 // (round 6: "also" leans wherever the sentence stands in the article: "Russia has previously also struck Ukrainian data
 // centres…" once opened the Yandex story, which the writer's check then dropped, its headline still in WORLD NOW's intro)
 /**
@@ -1613,7 +1680,9 @@ export function study(story, { cap = 9 } = {}) {
   // or leaves them out; "The head of Egypt’s Journalists Syndicate has insisted the organisation will continue to fight…"
   // once went, and the story opened on "Egyptian authorities denied the accusations…", Al Jazeera 12 Oct)
   const bodySentences = s.body ? sentencesOf(s.body) : [];
-  const fromBody = bodySentences.filter((x, j) => ended(x) && !unfit(x) && !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !outletView(x) && !fragment(x) && !seen.has(sameKey(x)) && sameKey(x) !== sameKey(title) && wordCount(x) >= 6 && wordCount(x) <= (j < 2 ? 44 : 34));
+  // (a sport report's facts run long, "When William Buick asked him to quicken, he scorched past…", the only sentence that
+  // names the Champion Stakes winner's jockey, Sky Sports 17 Oct: kept up to the lede's length, the teller shortens it)
+  const fromBody =bodySentences.filter((x, j) => ended(x) && !unfit(x) && !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !outletView(x) && !fragment(x) && !seen.has(sameKey(x)) && sameKey(x) !== sameKey(title) && wordCount(x) >= 6 && wordCount(x) <= (j < 2 || isSportStory({ s }) ? 44 : 34));
   // (the article's sentences about its own story: a wire roundup's other news, "Meanwhile, Israel’s former attorney general
   // took the witness stand…" inside "Iran calls US response to proposal insufficient", ABC News 14 Oct, goes; a sentence
   // shares a word of substance with the headline, the summary or a sentence already kept)
@@ -2282,7 +2351,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // once opened COSMOS, Guardian 12 Oct)
     const label = String(info.s.title).match(/^([^:“”"‘’]{2,32}):\s+(\p{Lu}.{12,})$/u);
     const bare = label && /^\p{Lu}?\p{Ll}+(?:\s+\p{Ll}+){0,3}$/u.test(label[1].trim()) && !lookupPlace(label[1].trim()) && label[2].split(/\s+/).length >= 4 ? label[2] : info.s.title;
-    const title = calmTitle(sentenceCase(bare, info));
+    // (a sport page's abbreviation is never said: "GK Martínez taken to hospital…", ESPN 17 Oct)
+    const title = calmTitle(sentenceCase(isSportStory(info) ? bare.replace(/^GK\s+/, 'Goalkeeper ') : bare, info));
     const said0 = wordCount(title) <= 12 ? unstop(title) : unstop(shortHeadline(title, program?.headlineMax, { spoken: true }));
     // (who a headline's surname is, the first time the programme says it, round 6)
     return wholeSurnames(said0, '', info, { role: true });
@@ -2439,7 +2509,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     parts.forEach((p, i) => {
       if (i < from) return;
       const plain = p.replace(/\[[^\]]*\]/g, ' ').trim();
-      if (!plain || OWN_ATTRIBUTION.test(plain) || /[“”"]/.test(plain) || /:\s*$/.test(plain) || PICKUP_LINE.test(plain)) return;
+      // (never on a sentence that names the outlet already: "BBC Sport has contacted the LFP… for comment, BBC Sport reports.",
+      // FULL TIME 13 Oct, found reading the matchday round of 17 Oct)
+      if (!plain || OWN_ATTRIBUTION.test(plain) || plain.includes(src) || /[“”"]/.test(plain) || /:\s*$/.test(plain) || PICKUP_LINE.test(plain)) return;
       eligible.push({ i, plain, words: wordCount(plain) });
     });
     if (!eligible.length) return;
@@ -2688,6 +2760,26 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // GM's factory, TechCrunch 12 Oct)
         opener ||= pickSentence((t) => selfStanding(info, t) && !BACKGROUND_OPEN.test(t) && !quoteFirst(t) && titleShare(t) >= 1) || spokenTitle(s.title, info);
       }
+      // FULL TIME: a result story says who won, and its score when the source gives one, in its first sentence ("Isak
+      // completes Liverpool's comeback win" once opened on "Brentford, who later lost Vitaly Janelt…" and never said Liverpool
+      // won, 17 Oct): the sentence with its score, else one that says the result in words, else the headline said as one
+      let sportScore = null;
+      if (isSportStory(info) && !isNumber && !isLighter && resultStory(info)) {
+        sportScore = ownScoreline(info);
+        const scoreLine = sportScore && info.sentences.find((t) => saysScore(t, sportScore));
+        if (opener && !statesResult(opener, info)) {
+          const fitsOpen = (t) => t !== reserved && selfStanding(info, t) && !quoteFirst(t) && (wordCount(t) <= maxWords + 7 || !!trimClause(t, maxWords + 3, 8, { keep: info.keep }));
+          const better = (scoreLine && fitsOpen(scoreLine) ? scoreLine : null) || info.sentences.find((t) => statesResult(t, info) && fitsOpen(t));
+          if (better) {
+            used.delete(opener);
+            used.add(better);
+            opener = better;
+          } else if (RESULT_TITLE.test(s.title) && hasFiniteVerb(spokenTitle(s.title, info))) {
+            used.delete(opener);
+            opener = spokenTitle(s.title, info);
+          }
+        }
+      }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;
       let numberRaw = null;
@@ -2704,7 +2796,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // (nor one that names its person by a role the story has not yet tied to a name: "The Brighton chairman completed a
         // near £10m investment…" before "Tony Bloom has reiterated…", Sky Sports 13 Oct)
         const byRole = /^The\s+(?:\p{Lu}[\p{L}'’-]*\s+)+(?:chairman|chairwoman|owner|manager|boss|coach|captain|striker|midfielder|defender|goalkeeper|winger|forward|player|president|chief|driver|rider|club|side|team|champion|champions)\b/u;
-        if (figureLine && !PRONOUN_START.test(figureLine) && !leansOnPrevious(figureLine) && !CONNECTIVE_START.test(figureLine) && !byRole.test(figureLine)) [opener, figureLine] = [figureLine, opener];
+        // (nor one that names its person by who they are, "The Spaniard was four under for his round…" before "Spain's Eugenio
+        // Chacarra holds the lead…", Sky Sports 17 Oct)
+        if (figureLine && !PRONOUN_START.test(figureLine) && !leansOnPrevious(figureLine) && !CONNECTIVE_START.test(figureLine) && !byRole.test(figureLine) && !sportLeans(figureLine, '')) [opener, figureLine] = [figureLine, opener];
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
       const body = [];
@@ -2723,7 +2817,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const keepAfter = leadAfterIntro ? (info.keep || []).filter((n) => !String(s.title).includes(n)) : info.keep || [];
       const keepOpen = numberRaw ? [...keepAfter, numberRaw] : keepAfter;
       const asideOff = (t) => (numberRaw && t.includes(numberRaw) ? null : dropAside(t, openMax));
-      if (opener && wordCount(opener) > openMax && !saidLede(opener)) opener = asideOff(opener) || (!quick && compressSentence(opener, openMax, { keep: keepOpen, min: 8 })?.join(' ')) || trimClause(opener, openMax, 8, { keep: keepOpen }) || (quick ? null : wordCount(opener) <= openMax + 2 ? opener : trimClause(opener, openMax + 2, 8, { keep: keepOpen })) || (wordCount(opener) <= openMax + 2 ? opener : spokenTitle(s.title, info));
+      if (opener && wordCount(opener) > openMax && !saidLede(opener)) opener = asideOff(opener) || (!quick && compressSentence(opener, openMax, { keep: keepOpen, min: 8 })?.join(' ')) || trimClause(opener, openMax, 8, { keep: keepOpen }) || (quick ? null : wordCount(opener) <= openMax + 2 ? opener : trimClause(opener, openMax + 2, 8, { keep: keepOpen })) || (isSportStory(info) && wordCount(cutParticiple(opener)) <= openMax + 2 ? cutParticiple(opener) : null) || (wordCount(opener) <= openMax + 2 ? opener : spokenTitle(s.title, info));
       let headlineOpened = false; // (a headline opening keeps its own words: no "In Yemen," before a Saudi minister)
       // NEWS IN 60: one or two sentences an item, so its first must be the news. When it names no one the headline is about
       // ("US economists developed models that help central bankers…" under "Nobel Prize for economics awarded to Hall and
@@ -2820,7 +2914,14 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // People at risk: the warning and the advice come before the colour ("a red alert... asked people to avoid
       // going out" before "some schools have moved lessons").
       const ADVICE = /\b(?:alerts?|warn\w*|advis\w*|asked (?:people|residents)|urged|told (?:people|residents)|stay indoors|avoid|evacuat\w*|shelters?)\b/i;
-      const detailOrder = info.grave || info.hard ? [...info.sentences].sort((a, b) => Number(ADVICE.test(b)) - Number(ADVICE.test(a))) : info.sentences;
+      const detailOrder0 = info.grave || info.hard ? [...info.sentences].sort((a, b) => Number(ADVICE.test(b)) - Number(ADVICE.test(a))) : info.sentences;
+      // (FULL TIME: a result story whose opener says the result in words tells its score next, when the source gives it:
+      // "…England's Rugby League World Cup defeat by Tonga." then "…their 30-12 victory…", 17 Oct)
+      const scoreDetail = sportScore && !saysScore(opener, sportScore) ? info.sentences.find((t) => saysScore(t, sportScore) && t !== reserved) : null;
+      // (and a race's winner is told with who rode it: "When William Buick asked him to quicken…" before the race's colour)
+      const rider = info.s.sport === 'racing' && !/\b(?:ridden|rode|riding|jockey)\b/i.test(opener || '') ? info.sentences.find((t) => t !== reserved && /\b(?:ridden by|rode|riding|in the saddle|partnered by|asked him|jockey)\b/i.test(t) && personTold(t)) : null;
+      const firsts = [scoreDetail, rider].filter(Boolean);
+      const detailOrder = firsts.length ? [...firsts, ...detailOrder0.filter((t) => !firsts.includes(t))] : detailOrder0;
       /**
        * A sentence of the story as it can be told after `told` (the lines already said, cues out), or null: never a
        * quotation with nobody saying it, the same news again in other words, a figure told again, a question or the
@@ -2873,9 +2974,23 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // ("Over 300 other people were wounded…" after the dead it was counting from, never told, ABC News 14 Oct)
         const leansBack = PRONOUN_START.test(t0) || POINTS_BACK.test(t0) || /^(?:[^,]{0,40}\s)?(?:those|these|such)\s+(?!(?:days|years|months|weeks|times)\b)[a-z]/i.test(t0.split(',')[0]) || /^[^,;]{0,30}\b(?:other|another|the remaining|the rest of the|the remainder)\s+(?:\d|[a-z]+)/i.test(t0) || /\b(?:something|anything) similar\b|\bthe same (?:thing|way|move|approach)\b|^Similarly\b/i.test(t0) || ANSWERS_BACK.test(t0) || ONE_OF_LIST.test(t0) || ASKS_BACK.test(t0.trim());
         if (leansBack && !said(info.prevOf.get(t0))) return null;
+        // (FULL TIME: "Both players…", "…, who later lost…", "The Spaniard…", "the Argentina international" only after what they
+        // point back to, 17 Oct)
+        if (isSportStory(info) && sportLeans(t0, toldText, { prevSaid: said(info.prevOf.get(t0)), people: info.s.people })) return null;
+        // (nor the report's rhetoric as a fact, a short line with no name and no figure: "The challenge is to push on.", the
+        // Liverpool report's third sentence, Guardian 17 Oct)
+        if (isSportStory(info) && wordCount(t0) < 8 && !/\d/.test(t0) && !/\s\p{Lu}/u.test(t0.trim())) return null;
+        // (nor someone's words said twice: "…is a "dream come true."" then ""Today was a dream come true," Kartal told media.",
+        // Sky Sports 17 Oct)
+        const flat = (x) => String(x).toLowerCase().replace(/[^\p{L}\d ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+        const quotedAgain = (q) => {
+          const w = flat(q).split(' ');
+          return w.length >= 3 && w.slice(0, -2).some((x, i) => flat(toldText).includes(w.slice(i, i + 3).join(' ')));
+        };
+        if (isSportStory(info) && [...t0.matchAll(/[“"]([^”"]{6,})[”"]/g)].some((q) => quotedAgain(q[1]))) return null;
         // (the coherence gate, server/coherence.js: "those questions", "the temporary shutdown", "a second attack", "also",
         // a reporter's "here", "the witness" with nothing said before them: real news 12-16 Oct, round 5)
-        if (untold(t0, `${toldText} ${s.title}`, { prevSaid: said(info.prevOf.get(t0)) })) return null;
+        if (untoldIn(info, t0, `${toldText} ${s.title}`, { prevSaid: said(info.prevOf.get(t0)) })) return null;
         // (and "the project", "the deal", "the move" with no project, deal or move yet said: "The project is intended to open
         // new markets…" once followed a sentence about Alberta's premier, its pipeline never told, ABC News 14 Oct)
         // (a picture or a post the page shows: "…says the chart is actually measuring requests…", The Verge 12 Oct)
@@ -3023,7 +3138,17 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       }
       // (the kept-back line is told after the story: it may lean only on what the story said, "One more line from the
       // report: the department did not directly answer those questions." once followed a story that asked none, 14 Oct)
-      if (reserved && untold(reserved, `${[...parts].join(' ')} ${s.title}`, { prevSaid: used.has(info.prevOf.get(reserved)) && [...parts].join(' ').includes(String(info.prevOf.get(reserved)).slice(0, 30)) })) reserved = null;
+      if (reserved && untoldIn(info, reserved, `${[...parts].join(' ')} ${s.title}`, { prevSaid: used.has(info.prevOf.get(reserved)) && [...parts].join(' ').includes(String(info.prevOf.get(reserved)).slice(0, 30)) })) reserved = null;
+      // (FULL TIME: Rosa's answer adds to the story, never tells it again: "And the reaction?" was once answered "Goalkeeper
+      // Emiliano Martinez was taken to hospital for "precautionary tests"…" after the story had opened on just that, BBC Sport
+      // 17 Oct; nor does it lean on what the story did not tell)
+      if (reserved && isSportStory(info)) {
+        const toldNow = [...parts].map((x) => x.replace(/\[[^\]]*\]/g, ' '));
+        const stems = (x) => new Set((String(x).toLowerCase().match(/[\p{L}\d]{4,}/gu) || []).map((w) => w.slice(0, 6)));
+        const r = [...stems(reserved)];
+        const opening5 = (x) => String(x).toLowerCase().replace(/[^\p{L}\d ]+/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+        if (toldNow.some((x) => { const t = stems(x); return (r.length && r.filter((w) => t.has(w)).length / r.length >= 0.4) || opening5(x) === opening5(reserved); }) || sportLeans(reserved, toldNow.join(' '), { prevSaid: used.has(info.prevOf.get(reserved)), people: info.s.people })) reserved = null;
+      }
       // (and with whoever it names said whole and who they are, else not at all: "And this matters too: if convicted, Duterte
       // could be permanently barred from public office." named neither Duterte, "…an AI-generated video of Neale said" nobody,
       // WORLD NOW 13-14 Oct, round 6)

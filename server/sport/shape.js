@@ -8,7 +8,8 @@ import { embedCues, parseCues } from '../../public/js/cues.js';
 import { dayIn, withoutJudgement } from './words.js';
 import { FOLLOWS_ON_START, leansOnCount, sameEvent } from './prepare.js';
 import { resultLine, chalkOf } from './scores.js';
-import { shortHeadline } from '../writer.js';
+import { sportLeans } from './leans.js';
+import { hasFiniteVerb, shortHeadline } from '../writer.js';
 
 const HOUR = 3600_000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -30,28 +31,44 @@ export const BANKS = {
     afternoon: ['Good afternoon, and welcome to {title}. I\'m {A}, with {R}.', 'Good afternoon. This is {title}, the day in sport. I\'m {A}, and with me is {R}.', 'Hello, and welcome to {title} this afternoon. I\'m {A}, alongside {R}.', 'Good afternoon. I\'m {A}, with {R}, and this is {title}.', 'Afternoon, everyone, and welcome to {title}. I\'m {A}, with {R}.', 'Hello. This is {title}. I\'m {A}, and {R} is with me. Good afternoon.'],
     evening: ['Good evening, and welcome to {title}. I\'m {A}, with {R}.', 'Good evening. This is {title}, the day in sport. I\'m {A}, and with me is {R}.', 'Hello and good evening. I\'m {A}, with {R}, and this is {title}.', 'A very good evening. This is {title}. I\'m {A}, and {R} is with me.', 'Evening, everyone, and welcome to {title}. I\'m {A}, alongside {R}.', 'Good evening. I\'m {A}, with {R} and the day in sport on {title}.'],
   },
-  hello: ['[nod] Hello. Plenty to get through.', '[nod] Hello, everyone.', '[nod] Good to be here. Let\'s get going.', '[nod] Hello. Let\'s get started.', '[nod] Hi. Let\'s get to it.', '[nod] Hello again.', '[nod] Hello. Lots to talk about.', '[nod] Good to see you all.', '[nod] Hello. Shall we?', '[nod] Hi, everyone. Here we go.', '[nod] Hello. Settle in.', '[nod] Hello. On we go.'],
+  // Rosa's hello: to Kai and the viewer, by the hour, never a filler with nothing in it ("Hello. Let's get started.", read as
+  // clunky on the first real matchday, 17 Oct); {K} is Kai's first name. A results day has its own (MATCHDAY with SCORE CENTRE).
+  hello: {
+    morning: ['[nod] Morning, {K}. Morning, everyone.', '[nod] Good morning, {K}. Good morning, all.', '[nod] Morning, {K}. Good to be with you all.', '[nod] Good morning, everyone. Glad you could join us.'],
+    afternoon: ['[nod] Afternoon, {K}. Afternoon, everyone.', '[nod] Good afternoon, {K}. Good afternoon, all.', '[nod] Afternoon, {K}. Good to be with you all.', '[nod] Good afternoon, everyone. Glad you could join us.'],
+    evening: ['[nod] Evening, {K}. Evening, everyone.', '[nod] Good evening, {K}. Good evening, all.', '[nod] Evening, {K}. Good to be with you all.', '[nod] Good evening, everyone. Glad you could join us.'],
+    any: ['[nod] Hello, {K}. Hello, everyone.', '[nod] Hi, {K}. Good to be with you all.', '[nod] Hello, everyone. Plenty to talk about.', '[nod] Hello, {K}. A lot to get through.', '[nod] Hi, everyone. Good to see you.', '[nod] Hello, {K}. Hello to you at home.', '[nod] Hello, all. Plenty to get our teeth into.', '[nod] Hi, {K}. Hello, everyone.'],
+    results: ['[nod] Hello, {K}. A lot of results to get through.', '[nod] Hello, everyone. Plenty of scores to come.', '[nod] Hi, {K}. Some results to go through.', '[nod] Hello, all. A full set of scores for you.'],
+  },
   results: {
     MATCHDAY: ['[point_screen] Now, the results.', '[point_screen] Let\'s run through the results.', '[point_screen] To the scores.', '[point_screen] Here are the results.', '[point_screen] The results now.', '[point_screen] Let\'s go through the scores.', '[point_screen] Time for the results.', '[point_screen] The scores, then.'],
     MIDWEEK: ['[point_screen] A look at the latest results.', '[point_screen] The latest scores.', '[point_screen] Some results now.', '[point_screen] Now, the scores.', '[point_screen] Here are the latest results.', '[point_screen] The results so far.', '[point_screen] To the latest scores.', '[point_screen] A few results now.'],
     PREVIEW: ['[point_screen] Before we look ahead, the latest results.', '[point_screen] First, the latest scores.', '[point_screen] The latest results first.', '[point_screen] Before the weekend, the scores so far.', '[point_screen] A look back at the latest results first.', '[point_screen] First, some results.'],
   },
   elsewhere: ['Elsewhere, ', 'Meanwhile, ', 'And elsewhere, '],
-  // (each a whole spoken line: never a bare "In tennis." that waits for a clause it does not get)
+  // (each a whole spoken line: never a bare "In tennis." that waits for a clause it does not get; never a "Some basketball."
+  // or a "Something else now.", read as clunky on the first real matchday, 17 Oct: each names its sport as a presenter would)
   transition: {
-    football: ['Football now.', 'To football.', 'Now, football.', 'To the football.', 'Football next.', 'Some football.'],
-    f1: ['To the track now.', 'Formula One now.', 'To Formula One.', 'Motor racing now.', 'On the track.', 'Formula One next.'],
-    tennis: ['Tennis now.', 'To the tennis.', 'On the court now.', 'Tennis next.', 'Some tennis.', 'To the courts.'],
-    cricket: ['Cricket now.', 'To the cricket.', 'Some cricket now.', 'Some cricket.', 'On to the cricket.', 'Cricket next.'],
-    rugby: ['Rugby now.', 'To the rugby.', 'Some rugby now.', 'Some rugby.', 'On to the rugby.', 'Rugby next.'],
+    football: ['Football now.', 'To the football.', 'Now to the football.', 'On to the football.', 'Football next.', 'Turning to the football.'],
+    f1: ['To the track now.', 'Formula One now.', 'To Formula One.', 'Motor racing now.', 'Now to Formula One.', 'Formula One next.'],
+    tennis: ['Tennis now.', 'To the tennis.', 'On the court now.', 'Tennis next.', 'Now to the tennis.', 'To the courts.'],
+    cricket: ['Cricket now.', 'To the cricket.', 'Now to the cricket.', 'On to the cricket.', 'Cricket next.', 'Turning to the cricket.'],
+    rugby: ['Rugby now.', 'To the rugby.', 'Now to the rugby.', 'On to the rugby.', 'Rugby next.', 'Turning to the rugby.'],
+    // (rugby's two codes when the edition has both, or the story's code is league: the viewer hears which game it is)
+    'rugby-league': ['Rugby league now.', 'To the rugby league.', 'Now to rugby league.', 'On to the rugby league.', 'Rugby league next.', 'Turning to rugby league.'],
+    'rugby-union': ['Rugby union now.', 'To the rugby union.', 'Now to rugby union.', 'On to the rugby union.', 'Rugby union next.', 'Turning to rugby union.'],
     'american-football': ['American football now.', 'To the NFL.', 'The NFL next.', 'Across the Atlantic, to American football.', 'The NFL now.', 'American football next.'],
-    basketball: ['Basketball now.', 'To the basketball.', 'On the court.', 'Some basketball now.', 'Some basketball.', 'Basketball next.'],
-    baseball: ['Baseball now.', 'To the baseball.', 'Some baseball now.', 'Some baseball.', 'Across the Atlantic, to baseball.', 'Baseball next.'],
-    boxing: ['To the ring now.', 'Boxing now.', 'Some boxing now.', 'To the boxing.', 'Some boxing.', 'Boxing next.'],
-    cycling: ['Cycling now.', 'To the cycling.', 'Some cycling now.', 'Some cycling.', 'On two wheels now.', 'Cycling next.'],
-    golf: ['Golf now.', 'To the golf.', 'Some golf now.', 'Some golf.', 'On the course.', 'Golf next.'],
-    athletics: ['Athletics now.', 'To the track.', 'Some athletics now.', 'Some athletics.', 'Athletics next.', 'On the track now.'],
-    other: ['Now, something different.', 'Elsewhere in sport.', 'Away from the big leagues.', 'Another story now.', 'Something else now.', 'Elsewhere now.'],
+    basketball: ['Basketball now.', 'To the basketball.', 'On the court now.', 'Now to the basketball.', 'On to the basketball.', 'Basketball next.'],
+    baseball: ['Baseball now.', 'To the baseball.', 'Now to the baseball.', 'On to the baseball.', 'Across the Atlantic, to baseball.', 'Baseball next.'],
+    boxing: ['To the ring now.', 'Boxing now.', 'Now to the boxing.', 'To the boxing.', 'On to the boxing.', 'Boxing next.'],
+    cycling: ['Cycling now.', 'To the cycling.', 'Now to the cycling.', 'On to the cycling.', 'On two wheels now.', 'Cycling next.'],
+    golf: ['Golf now.', 'To the golf.', 'Now to the golf.', 'On to the golf.', 'On the course now.', 'Golf next.'],
+    athletics: ['Athletics now.', 'To the track.', 'Now to the athletics.', 'On to the athletics.', 'Athletics next.', 'On the track now.'],
+    racing: ['Racing now.', 'To the racing.', 'Horse racing now.', 'Now to the racing.', 'On to the racing.', 'To the races now.'],
+    darts: ['Darts now.', 'To the darts.', 'Now to the darts.', 'On to the darts.', 'Darts next.', 'To the oche now.'],
+    snooker: ['Snooker now.', 'To the snooker.', 'Now to the snooker.', 'On to the snooker.', 'Snooker next.', 'To the baize now.'],
+    'ice-hockey': ['Ice hockey now.', 'To the ice hockey.', 'Now to the ice hockey.', 'On to the ice hockey.', 'Ice hockey next.', 'On the ice now.'],
+    other: ['Elsewhere in sport.', 'Away from the big leagues.', 'Another sport now.', 'Elsewhere now.', 'To another sport now.', 'And elsewhere in sport.'],
   },
   // Kai asks for one of Rosa's memories when the edition has no moment of the day
   memoryAsk: ['[look_partner] Before we go, {B}, one from your playing days?', '[look_partner] {B}, anything from the old days before we go?', '[lean_in] Any memories for us today, {B}?', '[look_partner] One from your career before we finish, {B}?', '[look_partner] {B}, a story from your playing days to end on?', '[lean_in] Anything from the archive, {B}?', '[look_partner] Before we finish, {B}, how was your week as a player?', '[look_partner] {B}, one for the road?'],
@@ -128,7 +145,16 @@ const LEANS_START = { test: (t) => pointsBack(t) || LEANS_START_RE.test(String(t
 const SERIOUS = /\b(?:sexist|racist|racism|abuse|abused|assault|court|charged|charge|banned|ban|suspended|probe|investigation|inquiry|died|dies|death|funeral|tribute|retire[sd]? (?:through|due to) injury|arrest\w*|convicted|jailed|misconduct|disciplinary|sacked)\b/i;
 const bare = (t) => String(t || '').replace(/\[[^\]]*\]\s*/g, '').trim();
 // a sport as a hand-over names it
-const SPORT_NAME = { football: 'the football', f1: 'the Formula One', rugby: 'the rugby', cricket: 'the cricket', tennis: 'the tennis', 'american-football': 'the NFL', basketball: 'the basketball', baseball: 'the baseball', boxing: 'the boxing', cycling: 'the cycling', golf: 'the golf', athletics: 'the athletics' };
+const SPORT_NAME = { football: 'the football', f1: 'the Formula One', rugby: 'the rugby', 'rugby-league': 'the rugby league', 'rugby-union': 'the rugby union', cricket: 'the cricket', tennis: 'the tennis', 'american-football': 'the NFL', basketball: 'the basketball', baseball: 'the baseball', boxing: 'the boxing', cycling: 'the cycling', golf: 'the golf', athletics: 'the athletics', racing: 'the racing', darts: 'the darts', snooker: 'the snooker', 'ice-hockey': 'the ice hockey' };
+/**
+ * A story's sport as the running order speaks of it: rugby league is its own ("Rugby league now.", "Over to Rosa for the rugby
+ * league."), and on an edition that has both codes rugby union says so too; any other sport is itself.
+ */
+export function sportKey(story, bothCodes = false) {
+  if (story?.sport !== 'rugby') return story?.sport || null;
+  if (story.code === 'league') return 'rugby-league';
+  return story.code === 'union' && bothCodes ? 'rugby-union' : 'rugby';
+}
 const ALSO_FIRST_CLAUSE = /^[^,;:.]{0,80}?\s+also\b/i;
 // a story's sentences as the outlet wrote them, and where a told sentence sits among them (its first eight words; a
 // credit the writer added at its end aside), or -1
@@ -143,6 +169,58 @@ function sourceIndex(story, sentence) {
   }
   const key = firstWords(sentence);
   return key.split(' ').length >= 5 ? sourceCache.get(story).indexOf(key) : -1;
+}
+
+// ---- a result story's own result, and the whole names of its people (17 Oct, the first real matchday)
+
+/** The result a story is about: the one the desk read from its headline in words, else one with a team its headline names. */
+export function ownResult(story) {
+  const sls = story?.scorelines || [];
+  const title = String(story?.title || '');
+  const named = (n) => new RegExp(`(?<![\\p{L}])${String(n).split(' ').at(-1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(title);
+  return sls.find((sl) => sl.paired) || sls.find((sl) => named(sl.a) || named(sl.b)) || null;
+}
+// the score put into a sentence that says the result in words: "Connacht beat Saracens in…" -> "Connacht beat Saracens 45-36
+// in…", "Dundee United drew with St Johnstone" -> "…drew 1-1 with St Johnstone"; null when the sentence has no such phrase
+const escRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const WIN_VERB = '(?:beat|beats|defeated|defeat|edged|edge|thrashed|thrash|stunned|stun|overcame|overcome|hammered|hammer|downed|routed|crushed|saw off|see off)';
+export function scoreInto(t, sl) {
+  const last = (n) => escRe(String(n || '').split(' ').at(-1));
+  if (!sl || !t) return null;
+  const out = sl.draw
+    ? String(t).replace(new RegExp(`(\\b${last(sl.a)}\\b[^.;:]*?\\bdrew)(\\s+(?:with|against)\\s+(?:[\\p{Lu}][\\p{L}'’.-]*\\s+){0,3}?${last(sl.b)})(?![\\p{L}])`, 'u'), `$1 ${sl.sa}-${sl.sb}$2`)
+    : String(t).replace(new RegExp(`(\\b${last(sl.winner)}\\b[^.;:]*?\\b${WIN_VERB}\\s+(?:the\\s+)?(?:[\\p{Lu}][\\p{L}'’.-]*\\s+){0,3}?${last(sl.loser)})(?![\\p{L}'’])`, 'u'), `$1 ${Math.max(sl.sa, sl.sb)}-${Math.min(sl.sa, sl.sb)}`);
+  return out !== String(t) ? out : null;
+}
+const WOMEN_SAID = /\b(?:women|women's|womens|woman|female|ladies|girls|WSL|NWSL|WNBA|WXV|Lionesses|Matildas|Red Roses|Black Ferns|Wildcats|she|her)\b/i;
+const NAME_ADJUNCT = /^(\p{Lu}\p{Ll}+)\s+(\p{Lu}[\p{L}’'-]+)(\s+(?:double|brace|hat-trick|treble|equaliser|equalizer|winner|goal|strike|header|penalty|stunner|try|own goal)\b)/u;
+const saysScore = (t, sl) => !!sl &&new RegExp(`\\b(?:${sl.sa}\\s*[-–]\\s*${sl.sb}|${sl.sb}\\s*[-–]\\s*${sl.sa})\\b`).test(String(t));
+const RESULT_WORDS = /\b(?:beat|beats|beaten|won|win|wins|victory|triumph|defeat|defeated|lost|lose|draw|drew|held|point|thrashed|edged|stunned|came from behind|comeback)\b/i;
+
+/**
+ * A story's text with each person's first mention said whole, as the outlet gives the name (`people`: { surname: given },
+ * prepare.js peopleIn): "Loughnane, 20, has become…" is "Billy Loughnane, 20, has become…". Never inside a quotation, never
+ * a name already said whole or after another capitalised word ("Sonay Kartal", "Neil McCann's side").
+ */
+export function fullNames(text, people) {
+  let out = String(text || '');
+  for (const [sur, given] of Object.entries(people || {})) {
+    const re = new RegExp(`(?<![\\p{L}’'-])${sur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'gu');
+    let first = null;
+    for (const m of out.matchAll(re)) {
+      // (outside a quotation: an even count of quotation marks before it)
+      const before = out.slice(0, m.index);
+      if (((before.match(/["“”]/g) || []).length % 2) === 1) continue;
+      first = m;
+      break;
+    }
+    if (!first) continue;
+    const before = out.slice(0, first.index);
+    // (a possessive before it is no first name: "Bills' Allen finally gets over hump" is "Bills' Josh Allen…")
+    if ((/\p{Lu}[\p{L}’'-]*\s+$/u.test(before) && !/['’]s?\s+$/u.test(before)) || new RegExp(`${given}\\s+$`).test(before)) continue;
+    out = `${before}${given} ${out.slice(first.index)}`;
+  }
+  return out;
 }
 
 // a headline that is only a quotation ("'I let the team down'"): Kai would say it in the first person
@@ -170,6 +248,29 @@ export function cutInAside(headline, title) {
   return strapTitle(t) !== t && h.includes(',');
 }
 
+// where a title may be cut and still say a whole thing: before a comma or a dash, a clause it adds ("as …", "after …"), or a
+// phrase of place, time or manner ("in …", "since …"); never inside an infinitive or a verb's object ("… fight | to save
+// their World Cup", "… helps Kilmarnock beat | fellow-strugglers Motherwell")
+const STRAP_BOUNDARY = /^\s*(?:[,;:–—|-]|(?:as|after|while|when|but|despite|amid|before|because|if|with|without|in|at|for|on|since|from|over|against|by|following|ahead of|during)\b)/i;
+const norm = (t) => String(t || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+/**
+ * A strap that is its title cut off inside a thought: the title goes on after it with words of the same clause ("McDermott
+ * seeks fix as England fight" from "McDermott seeks fix as England fight to save their World Cup", BBC Sport 17 Oct).
+ */
+export function cutMidThought(strap, title) {
+  const h = norm(strap).replace(/[\s.,;:]+$/, '');
+  const t = norm(strapTitle(title));
+  if (!h || h.length >= t.length || !t.toLowerCase().startsWith(h.toLowerCase())) return false;
+  const rest = t.slice(h.length);
+  return !/^\s/.test(rest) && !/^[,;:]/.test(rest) ? true : !STRAP_BOUNDARY.test(rest);
+}
+/** The strap cut back to the end of its last whole clause ("McDermott seeks fix"), else the title whole (two lines). */
+export function wholeThought(strap, title) {
+  const h = norm(strap).replace(/[\s.,;:]+$/, '');
+  const cuts = [...h.matchAll(/(?:\s+[–—-]\s+|[,;:]\s+|\s+(?=(?:as|after|while|when|but|despite|amid|before|because|if|with)\s))/gi)].map((m) => m.index).filter((i) => h.slice(0, i).split(/\s+/).length >= 2);
+  return cuts.length ? h.slice(0, cuts.at(-1)).trim() : norm(strapTitle(title));
+}
+
 const fill = (t, vars) => t.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
 const daypart = (hour) => (hour < 12 && hour >= 4 ? 'morning' : hour < 18 && hour >= 12 ? 'afternoon' : 'evening');
 
@@ -182,12 +283,15 @@ export function resultsTitle(rows, now, tz) {
   const days = rows.map((r) => dayIn(r.published, tz).n);
   if (air.weekday === 1 && air.hour < 14 && rows.every((r) => [0, 6].includes(dayIn(r.published, tz).weekday))) return "THE WEEKEND'S RESULTS";
   if (days.every((d) => d === today)) return "TODAY'S RESULTS";
+  // (last night's only for results filed late or said so; Saturday's 3pm results reported by 18:40 were yesterday's, never
+  // "last night's", on the Sunday morning, 17 Oct)
   const lastNight = rows.every((r) => {
     const d = dayIn(r.published, tz);
     const h = clockIn(r.published, tz).hour;
-    return (d.n === today - 1 && h >= 17) || (d.n === today && h < 2) || /\blast night\b/i.test(r.sentence || '');
+    return (d.n === today - 1 && h >= 20) || (d.n === today && h < 2) || /\blast night\b/i.test(r.sentence || '');
   });
   if (air.hour < 14 && lastNight) return "LAST NIGHT'S RESULTS";
+  if (days.every((d) => d === today - 1)) return "YESTERDAY'S RESULTS";
   return 'THE LATEST RESULTS';
 }
 
@@ -293,6 +397,9 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   // a story told in its time: the lead in at most five sentences, every other story in three (§4's budgets)
   const sentencesMax = (seg, k) => (k === 0 ? 5 : 3);
   const byId = new Map(candidates.map((s) => [s.id, s]));
+  // (rugby's two codes on one edition: each says which it is, "Rugby league now." and "Rugby union now.")
+  const rugbyCodes = new Set(segs.filter((x) => x.type === 'story' && x.storyId).map((x) => byId.get(x.storyId)).filter((st) => st?.sport === 'rugby').map((st) => st.code || 'rugby'));
+  const bothCodes = rugbyCodes.has('league') && rugbyCodes.size > 1;
   // THE NUMBER is MIDWEEK's (§4: MATCHDAY and PREVIEW have none; on a results day the figures are the scores): on a day
   // that will air as either, its story is told as any other, among its sport's stories, in the outlet's order and with
   // its own result on its board ("Saltmarsh Sirens beat Kestrel Vale Women 31-12…", not "Our number of the day: 6,000").
@@ -339,7 +446,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     }
     // AROUND THE GROUNDS: the lead's sport first, then each sport's stories together, in the order the writer met them
     // (a bulletin goes to the cricket once, not twice; the features keep their places at the end)
-    const sportOf = (b) => (plain(b) ? byId.get(b[0].storyId)?.sport || null : null);
+    const sportOf = (b) => (plain(b) ? sportKey(byId.get(b[0].storyId), bothCodes) : null);
     const seen = [];
     for (const b of ordered) if (sportOf(b) && !seen.includes(sportOf(b))) seen.push(sportOf(b));
     const rank = (b, i) => (i === 0 ? -1 : sportOf(b) ? seen.indexOf(sportOf(b)) : seen.length);
@@ -351,14 +458,132 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
   const words = (t) => String(t || '').toLowerCase().replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\d ]+/gu, ' ').replace(/\s+/g, ' ').trim();
   const keepPromises = (list) => list.filter((c, i, all) => {
     if (c.type !== 'chat' || !/^(?:\[[^\]]*\]\s*)*still to come\b/i.test(String(c.text || ''))) return true;
-    const key = words(String(c.text).replace(/^.*?still to come\s*:?\s*/i, '')).split(' ').slice(0, 6).join(' ');
-    // (the promise is a story's headline or its words)
-    const at = all.findIndex((x) => x.type === 'story' && key && [x.text, x.headline, byId.get(x.storyId)?.title].some((w) => words(w).includes(key)));
+    const promised = words(String(c.text).replace(/^.*?still to come\s*:?\s*/i, '')).split(' ');
+    // (the promise is a story's headline or its words; its first name may be the writer's: "Still to come: Jordan Henderson,
+    // the Premier League's oldest player…" under "Henderson, the Premier League's oldest player…", 17 Oct)
+    const keys = [promised.slice(0, 6).join(' '), promised.length >= 5 ? promised.slice(1, 6).join(' ') : ''].filter(Boolean);
+    const at = all.findIndex((x) => x.type === 'story' && [x.text, x.headline, byId.get(x.storyId)?.title].some((w) => keys.some((key) => words(w).includes(key))));
     // (and something to wait for: at least two stories before it, never the next but one)
     const between = all.slice(i + 1, at).filter((x) => x.type === 'story').length;
     return at > i && between >= 2;
   });
   segs = keepPromises(segs);
+  const title = program.title || 'FULL TIME';
+  const A = presenters.A?.name || 'Kai Sprite';
+  const B = String(presenters.B?.name || 'Rosa Rally').split(' ')[0];
+  const air = clockIn(now, tz);
+  const part = daypart(air.hour);
+  // a toss at the end of a story, by a presenter's first name ("…relegation zone. [look_partner] Rosa?", "Over to you,
+  // Rosa.")
+  const names = [A, B].map((n) => String(n).split(' ')[0]).filter(Boolean).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const tossEnd = new RegExp(`\\s*(?:\\[[^\\]]+\\]\\s*)*(?:(?:over to you|over to|and now|now)\\s*,?\\s*)?(?:${names})(?:\\?|\\.|,\\s*over to you\\.)\\s*((?:\\[[^\\]]+\\]\\s*)*)$`, 'iu');
+
+  // ---- each story's words (whichever writer wrote them): no toss left from the writer's order, the strap, the sentences that
+  // stand, its result and its people's whole names; then a story left with fewer than two sentences is not told (§3.3: the
+  // matchday checks of 17 Oct found stories aired as their headline alone, "Jacquet was 'cute and clever'…", and Newcastle's
+  // "Jaissle sorry…" since 13 Oct)
+  segs.filter((s) => s.type === 'story' && s.storyId).forEach((seg, k) => {
+    const story = byId.get(seg.storyId);
+    if (!story) return;
+    // a pick-up ("Thanks, Kai.") only answers a toss: after a story that did not hand over by name, it goes
+    // the writer's hand-overs ("…relegation zone. Rosa?" / "Thanks, Rosa.") were made for its own order, which the
+    // shape has changed: they go, and the shape hands over where the sport changes (below)
+    edit(seg, (t) => t.replace(tossEnd, ''));
+    edit(seg, (t) => t.replace(/^((?:\[[^\]]+\]\s*)*)(?:thanks|thank you)(?: very much)?,?\s+\p{Lu}[\p{L}'’-]*\.\s*/iu, '$1'));
+    // the strap's headline fits the programme's line (its words before a colon first)
+    // (from the story's own headline, never from a strap the validator already clipped; one that still runs long
+    // goes up whole on two lines rather than as a scrap, graphics/strap.js)
+    const max = program.headlineMax || 45;
+    if (String(seg.headline || '').length > max || /\b(?:will|would|could|can|is|are|was|were|be|has|have|had|to|of|for|and|the|a)$/i.test(String(seg.headline || '')) || QUOTE_ONLY.test(String(seg.headline || '')) || cutInAside(seg.headline, story.title)) seg.headline = shortHeadline(strapTitle(story.title || seg.headline), max);
+    // (never a strap cut inside a clause its title goes on with: "McDermott seeks fix as England fight", 17 Oct)
+    if (cutMidThought(seg.headline, story.title)) seg.headline = wholeThought(seg.headline, story.title);
+    edit(seg, (t) => {
+      let parts = sentencesIn(t);
+      // never a first sentence that leans on one the viewer did not hear ("On Tuesday they will oversee…"), nor a count
+      // that points back to a sentence left out ("…in all six")
+      const cue = /^((?:\[[^\]]+\]\s*)*)/;
+      const bare = (x) => x.replace(cue, '');
+      while (parts.length > 1 && LEANS_START.test(bare(parts[0]))) parts = [parts[0].match(cue)[1] + bare(parts[1]), ...parts.slice(2)];
+      parts = parts.filter((x, j) => j === 0 || !leansOnCount(bare(x), bare(parts[j - 1])));
+      // a sentence that follows on from the one the outlet wrote before it ("In the end, Piastri overtook…", "Brad
+      // O'Neill also returns…") is said only after that one; told after another, its connective goes out of the
+      // picture: a "but" or an "in the end" drops the sentence, an "also" drops the word
+      const at = (x) => sourceIndex(story, bare(x));
+      parts = parts.reduce((out, x, j) => {
+        if (j === 0 || !out.length) return [...out, x];
+        const here = at(x);
+        const prev = at(out[out.length - 1]);
+        const adjacent = here >= 0 && prev >= 0 && here === prev + 1;
+        if (adjacent || here < 0) return [...out, x];
+        if (FOLLOWS_ON_START.test(bare(x))) return out;
+        if (ALSO_FIRST_CLAUSE.test(bare(x))) return [...out, x.replace(/^([^,;:.]{0,80}?)\s+also\b/i, '$1')];
+        return [...out, x];
+      }, []);
+      // whichever writer wrote it, a sentence that points back to someone or something the story has not told goes ("Both
+      // players received treatment…", "Brentford, who later lost…", "The Spaniard was four under…", 17 Oct; leans.js), the
+      // first sentence most of all
+      // (a story that opens on what leans on its lede gets its lede back: the outlet's first sentence, which says what happened,
+      // "Emi Martínez suffered a worrying-looking head injury…" before "Chelsea coach Xabi Alonso told reporters that the
+      // Argentina international was conscious", 17 Oct)
+      if (parts.length && sportLeans(bare(parts[0]), '', { people: story.people })) {
+        const lede = sentencesIn(String(story.summary || ''))[0];
+        const key = (x) => String(x).toLowerCase().replace(/[^\p{L}\d ]+/gu, ' ').split(/\s+/).slice(0, 8).join(' ');
+        if (lede && !sportLeans(lede, '', { people: story.people }) && !parts.some((x) => key(bare(x)) === key(lede))) parts = [parts[0].match(cue)[1] + lede, bare(parts[0]), ...parts.slice(1)];
+      }
+      let carry = '';
+      parts = parts.reduce((out, x) => {
+        const idx = at(x);
+        const prevSaid = idx > 0 && out.some((p) => at(p) === idx - 1);
+        if (!sportLeans(bare(x), out.map(bare).join(' '), { prevSaid, people: story.people })) return [...out, x];
+        // (a first sentence's gestures go on with the next one)
+        if (!out.length) carry += x.match(cue)[1];
+        return out;
+      }, []);
+      if (carry && parts.length) parts[0] = (parts[0].match(cue)[1] || carry) + bare(parts[0]);
+      // a result story says its score when its source gives one (17 Oct: "Cameron equaliser earns point for Dundee United"
+      // never said 1-1): the sentence with the score first, or straight after a first sentence that says the result in words
+      const own = ownResult(story);
+      if (own && !parts.some((x) => saysScore(x, own))) {
+        // (a sentence of the story with the score, else its result line as SCORE CENTRE reads it: "WXV: Canada 24-21 England."
+        // heads the Red Roses report and no sentence of it says the score but "The 24-21 scoreline is correct", Guardian 17 Oct)
+        const said = sentencesIn(`${story.summary || ''} ${story.body || ''}`).find((x) => saysScore(x, own) && !sportLeans(x, '') && !/^["“‘]/.test(x) && hasFiniteVerb(x.replace(/[.!?]+$/, '')));
+        const withScore = said || resultLine(own);
+        if (withScore) {
+          const words = (x) => new Set(String(x).toLowerCase().match(/[\p{L}\d]{4,}/gu) || []);
+          const ws = words(withScore);
+          parts = parts.filter((x) => {
+            const w = [...words(bare(x))];
+            return !w.length || w.filter((y) => ws.has(y)).length / w.length < 0.7;
+          });
+          const inWords = parts.length && RESULT_WORDS.test(bare(parts[0])) && [own.a, own.b].some((n) => bare(parts[0]).includes(String(n).split(' ').at(-1)));
+          // (a first sentence that says "A beat B" takes the score itself, rather than a result line repeating it:
+          // "Connacht beat Saracens 45-36 in their opening Champions Cup pool game", the score from the page's headline)
+          const withIn = inWords && !said ? scoreInto(parts[0], own) : null;
+          if (withIn) parts[0] = withIn;
+          else if (inWords) parts.splice(1, 0, withScore);
+          else if (parts.length) parts = [parts[0].match(cue)[1] + withScore, bare(parts[0]), ...parts.slice(1)];
+          else parts = [withScore];
+        }
+      }
+      parts = parts.length > sentencesMax(seg, k) ? parts.slice(0, sentencesMax(seg, k)) : parts;
+      // a person's first mention says their whole name when the outlet gives it ("Loughnane, 20, has become…" for Billy
+      // Loughnane, "McDermott's first match" for Brian McDermott, 17 Oct), outside a quotation
+      return fullNames(parts.join(' '), story.people);
+    });
+  });
+  {
+    const ownCount = (seg) => sentencesIn(String(seg.text || '')).length;
+    const short = new Set(segs.filter((x) => x.type === 'story' && x.storyId && !x.feature && !x.roundup && ownCount(x) < 2 && segs.filter((y) => y.type === 'story' && y.storyId).length > 5));
+    if (short.size) {
+      const kept = [];
+      let dropping = false;
+      for (const x of segs) {
+        if (x.type === 'story') dropping = short.has(x);
+        if (!dropping || x.type === 'intro' || x.type === 'outro') kept.push(x);
+      }
+      segs = keepPromises(kept);
+    }
+  }
   // who reads what (§4): Kai the lead, Rosa a story that follows it on, then AROUND THE GROUNDS in turn; THE NUMBER and
   // the moment of the day are Rosa's (a story that changes hands takes its partner's gestures with it)
   const flip = (seg, to) => {
@@ -384,58 +609,15 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       }
     }
   }
-  const title = program.title || 'FULL TIME';
-  const A = presenters.A?.name || 'Kai Sprite';
-  const B = String(presenters.B?.name || 'Rosa Rally').split(' ')[0];
-  const air = clockIn(now, tz);
-  const part = daypart(air.hour);
-  // a toss at the end of a story, by a presenter's first name ("…relegation zone. [look_partner] Rosa?", "Over to you,
-  // Rosa.")
-  const names = [A, B].map((n) => String(n).split(' ')[0]).filter(Boolean).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const tossEnd = new RegExp(`\\s*(?:\\[[^\\]]+\\]\\s*)*(?:(?:over to you|over to|and now|now)\\s*,?\\s*)?(?:${names})(?:\\?|\\.|,\\s*over to you\\.)\\s*((?:\\[[^\\]]+\\]\\s*)*)$`, 'iu');
-
   // ---- the stories: strap tag, scoreline card where the presenter says the result, transitions, the moment
   const stories = segs.filter((s) => s.type === 'story' && s.storyId);
   const told = new Set();
+  const keyOf = (st) => sportKey(st, bothCodes);
   let prevSport = null;
   let handedOver = false; // (the last change of sport was a hand-over by name)
   stories.forEach((seg, k) => {
     const story = byId.get(seg.storyId);
     if (!story) return;
-    // a pick-up ("Thanks, Kai.") only answers a toss: after a story that did not hand over by name, it goes
-    // the writer's hand-overs ("…relegation zone. Rosa?" / "Thanks, Rosa.") were made for its own order, which the
-    // shape has changed: they go, and the shape hands over where the sport changes (below)
-    edit(seg, (t) => t.replace(tossEnd, ''));
-    edit(seg, (t) => t.replace(/^((?:\[[^\]]+\]\s*)*)(?:thanks|thank you)(?: very much)?,?\s+\p{Lu}[\p{L}'’-]*\.\s*/iu, '$1'));
-    // the strap's headline fits the programme's line (its words before a colon first)
-    // (from the story's own headline, never from a strap the validator already clipped; one that still runs long
-    // goes up whole on two lines rather than as a scrap, graphics/strap.js)
-    const max = program.headlineMax || 45;
-    if (String(seg.headline || '').length > max || /\b(?:will|would|could|can|is|are|was|were|be|has|have|had|to|of|for|and|the|a)$/i.test(String(seg.headline || '')) || QUOTE_ONLY.test(String(seg.headline || '')) || cutInAside(seg.headline, story.title)) seg.headline = shortHeadline(strapTitle(story.title || seg.headline), max);
-    edit(seg, (t) => {
-      let parts = sentencesIn(t);
-      // never a first sentence that leans on one the viewer did not hear ("On Tuesday they will oversee…"), nor a count
-      // that points back to a sentence left out ("…in all six")
-      const cue = /^((?:\[[^\]]+\]\s*)*)/;
-      const bare = (x) => x.replace(cue, '');
-      while (parts.length > 1 && LEANS_START.test(bare(parts[0]))) parts = [parts[0].match(cue)[1] + bare(parts[1]), ...parts.slice(2)];
-      parts = parts.filter((x, j) => j === 0 || !leansOnCount(bare(x), bare(parts[j - 1])));
-      // a sentence that follows on from the one the outlet wrote before it ("In the end, Piastri overtook…", "Brad
-      // O'Neill also returns…") is said only after that one; told after another, its connective goes out of the
-      // picture: a "but" or an "in the end" drops the sentence, an "also" drops the word
-      const at = (x) => sourceIndex(story, bare(x));
-      parts = parts.reduce((out, x, j) => {
-        if (j === 0 || !out.length) return [...out, x];
-        const here = at(x);
-        const prev = at(out[out.length - 1]);
-        const adjacent = here >= 0 && prev >= 0 && here === prev + 1;
-        if (adjacent || here < 0) return [...out, x];
-        if (FOLLOWS_ON_START.test(bare(x))) return out;
-        if (ALSO_FIRST_CLAUSE.test(bare(x))) return [...out, x.replace(/^([^,;:.]{0,80}?)\s+also\b/i, '$1')];
-        return [...out, x];
-      }, []);
-      return (parts.length > sentencesMax(seg, k) ? parts.slice(0, sentencesMax(seg, k)) : parts).join(' ');
-    });
     if (story.sportTag) seg.kicker = story.sportTag;
     seg.sport = story.sport || null;
     const text = String(seg.text || '');
@@ -467,7 +649,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       if (chalk) seg.chalk = chalk;
     } else if (k > 0 && seg.follows) {
       lead(pick(BANKS.follow, `${seed}~f${seg.storyId}`, recent));
-    } else if (k > 0 && seg.feature !== 'number' && story.sport && story.sport !== prevSport) {
+    } else if (k > 0 && seg.feature !== 'number' && story.sport && keyOf(story) !== prevSport) {
       // AROUND THE GROUNDS: a transition when the sport changes
       // a change of presenter with the sport: the one who read the last story hands over by name ("Rosa has the
       // rugby."), which says the sport; else the presenter says it ("Some rugby."). Never two hand-overs by name in a
@@ -477,17 +659,43 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       // Kai for the tennis." over the Hawks' 24-17)
       const before = segs[segs.indexOf(seg) - 1];
       const to = presenters[seg.anchor]?.name ? String(presenters[seg.anchor].name).split(' ')[0] : null;
-      if (!handedOver && before?.type === 'story' && before.anchor !== seg.anchor && to && SPORT_NAME[story.sport] && !before.heavy && !seg.heavy && !before.score && !before.chalk) {
-        const line = fill(pick(BANKS.handover, `${seed}~h${seg.storyId}`, recent), { N: to, S: SPORT_NAME[story.sport] });
+      if (!handedOver && before?.type === 'story' && before.anchor !== seg.anchor && to && SPORT_NAME[keyOf(story)] && !before.heavy && !seg.heavy && !before.score && !before.chalk) {
+        const line = fill(pick(BANKS.handover, `${seed}~h${seg.storyId}`, recent), { N: to, S: SPORT_NAME[keyOf(story)] });
         edit(before, (t) => `${t} [look_partner] ${line}`);
         handedOver = true;
       } else {
-        lead(pick(BANKS.transition[story.sport] || BANKS.transition.other, `${seed}~t${seg.storyId}`, recent));
+        lead(pick(BANKS.transition[keyOf(story)] || BANKS.transition.other, `${seed}~t${seg.storyId}`, recent));
         handedOver = false;
       }
     }
     if (seg.feature === 'number') seg.kicker = 'THE NUMBER';
-    prevSport = story.sport || prevSport;
+    // (rugby league is named on air: by its transition or hand-over, else in the story's first words, "In rugby league, …")
+    if (keyOf(story) === 'rugby-league' && !/\b(?:rugby league|super league|nrl)\b/i.test(`${seg.text} ${segs[segs.indexOf(seg) - 1]?.text || ''}`.replace(/\[[^\]]*\]/g, ' '))) {
+      edit(seg, (t) => {
+        const parts = sentencesIn(t);
+        const at = parts.findIndex((x) => !/^(?:\[[^\]]+\]\s*)*(?:thanks|thank you)\b[^.]*\.$/i.test(x.trim()) && !BANKS.follow.some((l) => bare(x) === l) && !BANKS.moment.some((l) => bare(x) === l));
+        if (at < 0) return t;
+        const cue = parts[at].match(/^((?:\[[^\]]+\]\s*)*)/)[1];
+        const rest = parts[at].slice(cue.length);
+        parts[at] = `${cue}In rugby league, ${/^(?:The|A|An|It|This|That|There|In|On|At|After|Before)\b/.test(rest) ? rest[0].toLowerCase() + rest.slice(1) : rest}`;
+        return parts.join(' ');
+      });
+    }
+    // (and the women's game is named: "England have lost a rugby game after four years and 41 games unbeaten" never said it
+    // was England's women, the Red Roses, Guardian 17 Oct)
+    if (story?.womens && !WOMEN_SAID.test(`${seg.text} ${segs[segs.indexOf(seg) - 1]?.text || ''}`.replace(/\[[^\]]*\]/g, ' '))) {
+      const name = String(SPORT_NAME[keyOf(story)] || '').replace(/^the\s+/, '');
+      edit(seg, (t) => {
+        const parts = sentencesIn(t);
+        const at = parts.findIndex((x) => !/^(?:\[[^\]]+\]\s*)*(?:thanks|thank you)\b[^.]*\.$/i.test(x.trim()) && !BANKS.follow.some((l) => bare(x) === l) && !BANKS.moment.some((l) => bare(x) === l) && !Object.values(BANKS.transition).flat().some((l) => bare(x) === l));
+        if (at < 0 || !name) return t;
+        const cue = parts[at].match(/^((?:\[[^\]]+\]\s*)*)/)[1];
+        const rest = parts[at].slice(cue.length);
+        parts[at] = `${cue}In women's ${name}, ${/^(?:The|A|An|It|This|That|There|In|On|At|After|Before)\b/.test(rest) ? rest[0].toLowerCase() + rest.slice(1) : rest}`;
+        return parts.join(' ');
+      });
+    }
+    prevSport = keyOf(story) || prevSport;
   });
 
   // ---- SCORE CENTRE and COMING UP
@@ -505,11 +713,13 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     centreRows = rows;
     const rTitle = resultsTitle(rows, now, tz);
     const today = dayIn(now, tz).n;
+    // (a row from another day carries its day, unless the title says the day: "YESTERDAY'S RESULTS" over four rows each
+    // marked SAT said it five times, 17 Oct)
     scoreCentre = {
       type: 'story', anchor: 'A', emotion: 'neutral', storyId: rows[0].storyId, feature: 'scores', kicker: 'SCORE CENTRE',
       headline: rTitle[0] + rTitle.slice(1).toLowerCase().replace(/'s\b/, "'s"), source: sources(rows), hasImage: false, category: 'sport', cues: [],
       text: `${pick(BANKS.results[shape], `${seed}~r`, recent)} ${text}`,
-      scores: rows.map((r) => ({ a: r.a, b: r.b, sa: r.sa, sb: r.sb, winner: r.winner, home: r.home, draw: r.draw, sport: r.sport, ...(dayIn(r.published, tz).n !== today ? { day: SHORT_DAY[dayIn(r.published, tz).weekday] } : {}) })),
+      scores: rows.map((r) => ({ a: r.a, b: r.b, sa: r.sa, sb: r.sb, winner: r.winner, home: r.home, draw: r.draw, sport: r.sport, ...(dayIn(r.published, tz).n !== today && !/^(?:YESTERDAY|LAST NIGHT)/.test(rTitle) ? { day: SHORT_DAY[dayIn(r.published, tz).weekday] } : {}) })),
       scoresTitle: rTitle,
     };
   }
@@ -633,16 +843,25 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
         heads = chosen.map((x) => {
           const tw = words(byId.get(x.storyId).title);
           const own = heads.find((h) => [...words(h)].filter((w) => tw.has(w)).length >= 3 && !QUOTE_ONLY.test(h.replace(/[.!?]+$/, '')));
-          return own || `${shortHeadline(strapTitle(byId.get(x.storyId).title), 60).replace(/[.!?]*$/, '')}.`;
+          // (with its people's first names, as the stories say them: "Renshaw stars as Australia close in…" for Matt
+          // Renshaw, 13 Oct, found by the first-name check of 17 Oct)
+          return fullNames(own || `${shortHeadline(strapTitle(byId.get(x.storyId).title), 60).replace(/[.!?]*$/, '')}.`, byId.get(x.storyId).people);
         });
         // the montage cuts to the story each headline names (director.js playIntro, the v2 plan's montageCard): the
         // writer's teases named its own three, and the strap under a spoken headline showed another story
         teases = [...chosen.map((x) => x.storyId), ...sentencesIn(greeting).map(() => null)];
       }
+      // (a whole name before a headline's noun takes an article: "Kiltie double helps Kilmarnock…" is said "A Greg Kiltie
+      // double helps…", never "Greg Kiltie double helps…", 17 Oct)
+      // (only a first name a story's people give: never "A Late Lindqvist goal…", the offline desk)
+      const known = (given, sur) => [...byId.values()].some((c) => c.people?.[sur] === given);
+      heads = heads.map((h) => h.replace(NAME_ADJUNCT, (m, given, sur, rest) => (known(given, sur) ? `${/^[AEIOU]/.test(given) ? 'An' : 'A'} ${given} ${sur}${rest}` : m)));
       return `${heads.join(' ')} [nod] ${greeting}`.trim();
     });
   }
-  const hello = { type: 'chat', anchor: 'B', emotion: 'neutral', cues: [], text: pick(BANKS.hello, `${seed}~h`, recent) };
+  // (to Kai by name and to the viewer, by the hour; on a results day, the results)
+  const helloPool = [...(shape === 'MATCHDAY' && scoreCentre ? BANKS.hello.results : []), ...BANKS.hello[part], ...BANKS.hello.any].map((l) => fill(l, { K: String(A).split(' ')[0] }));
+  const hello = { type: 'chat', anchor: 'B', emotion: 'neutral', cues: [], text: pick(helloPool, `${seed}~h`, recent) };
   const lastStory = order.flat().filter((s) => s.type === 'story').at(-1);
   const grave = lastStory && byId.get(lastStory.storyId) && isGrave(`${byId.get(lastStory.storyId).title}`);
   if (outro) edit(outro, () => fill(pick(BANKS.signoff[part], `${seed}~s`, recent), { title, B, channel: channelName }).replace(grave ? /\[wave\]/g : /$^/, '[nod]'));
