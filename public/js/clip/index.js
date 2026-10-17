@@ -56,6 +56,6 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
   });
   if (quizMod?.installQuiz) quizMod.installQuiz(comp);
   if (weatherMod?.installWeather) weatherMod.installWeather(comp);
-  if (sportMod) comp.sport = { scoreline: sportMod.drawVerticalScoreline, scoreboard: sportMod.drawVerticalScoreboard };
+  if (sportMod) comp.sport = { scoreline: sportMod.drawVerticalScoreline, scoreboard: sportMod.drawVerticalScoreboard, fixtures: sportMod.drawVerticalComingUp, chalk: sportMod.drawVerticalChalkboard };
   return { vertical: true, compositor: comp, frame: (t, scene) => comp.frame(t, scene) };
 }

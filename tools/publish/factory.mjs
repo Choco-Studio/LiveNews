@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
-import { detectMoments, publishable } from '../../server/publish/moments.js';
+import { detectMoments, publishable, markCopied, ownHook } from '../../server/publish/moments.js';
 import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/platforms.js';
@@ -120,7 +120,21 @@ const timeline = timelines[refFmt];
 const drift = formats.length > 1 ? Math.max(0, ...timelines[formats[0]].segments.map((s, i) => Math.abs(s.start - (timelines[formats[1]].segments[i]?.start ?? s.start)))) : 0;
 say(`timeline: ${timeline.segments.length}/${episode.segments.filter((s) => String(s.text || '').trim()).length} segments aired in ${seconds} s; formats drift ${drift.toFixed(3)} s`);
 
+// the verbatim rule's sources (the archive's title and summary, the article when the compliance desk cached it): the
+// gate measures each clip's own stories' aired words against them, and holds a clip that copies (verbatim.md)
+const sourcesOf = compliance.archiveGetStory({ dataDir: path.join(root, 'data') });
 const all = detectMoments(episode, { timeline });
+// a moment that tells a story whose aired words copy its source is never chosen (the gate would hold its clip): the
+// summary lists it as refused (`--all` or `--moments` still make it, to look at)
+const copied = new Set((compliance.lintEpisode(episode, { getStory: sourcesOf }).violations || []).map((v) => v.storyId));
+markCopied(all, copied);
+// (a hook that is the outlet's headline is never burned into a clip as the channel's title: ownHook)
+for (const m of all) {
+  const seg = episode.segments.slice(m.from, m.to + 1).find((x) => x.headline && x.storyId) || {};
+  const sources = (m.storyIds || []).flatMap((id) => { const st = sourcesOf(id); return st ? [st.title, st.summary, st.body] : []; });
+  m.hook = ownHook(m, { kicker: seg.kicker, location: seg.location, category: seg.category }, sources);
+}
+if (copied.size) say(`verbatim: ${copied.size} of the episode's stories copy their sources; their moments are not chosen`);
 const pub = new Set(publishable(all, { phase: 1 }).map((m) => m.id));
 // the choice: the best of each kind first (variety), then by score; a moment must have aired whole in the recording
 const chosen = [];
@@ -128,6 +142,7 @@ const perKind = new Map();
 for (const m of all) {
   if (wanted && !wanted.has(m.id)) continue;
   if (!wanted && !flag('all') && !pub.has(m.id) && !episode.demo) continue;
+  if (!wanted && !flag('all') && m.copied) continue;
   const k = perKind.get(m.kind) || 0;
   const cap = m.kind === 'quiz-question' ? 4 : ['quiz-round', 'stories', 'montage', 'lead', 'number'].includes(m.kind) ? 1 : 2;
   if (!wanted && k >= cap) continue;
@@ -264,7 +279,7 @@ for (const m of chosen) {
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null });
         meta.texts[p] = t;
-        const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now() });
+        const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now(), getStory: compliance.clipGetStory(m.storyIds, sourcesOf) });
         meta.compliance[p] = { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub };
       }
       fs.writeFileSync(path.join(clipsDir, `${name}.json`), JSON.stringify(meta, null, 1));
@@ -315,7 +330,7 @@ const summary = {
   episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString(), demo: !!episode.demo },
   recorded: seconds,
   drift,
-  moments: all.map((m) => ({ id: m.id, kind: m.kind, start: m.start, end: m.end, duration: m.duration, scores: m.scores, hook: m.hook, light: m.light, grave: m.grave, refused: m.refused, publishable: pub.has(m.id) })),
+  moments: all.map((m) => ({ id: m.id, kind: m.kind, start: m.start, end: m.end, duration: m.duration, scores: m.scores, hook: m.hook, light: m.light, grave: m.grave, refused: m.refused, copied: !!m.copied, publishable: pub.has(m.id) })),
   failed,
   clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
 };

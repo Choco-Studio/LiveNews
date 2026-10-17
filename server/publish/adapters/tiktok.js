@@ -44,9 +44,10 @@ export class TikTokAdapter extends Adapter {
       title: tiktokCaption(item),
       // chosen by the owner on the approval page (never a default: TikTok's guidelines)
       privacy_level: t.privacy || '<chosen by the owner on the approval page>',
-      disable_comment: t.allowComment === false,
-      disable_duet: t.allowDuet === false,
-      disable_stitch: t.allowStitch === false,
+      // comments, duets and stitches only when the owner ticked them (nothing is on by default)
+      disable_comment: t.allowComment !== true,
+      disable_duet: t.allowDuet !== true,
+      disable_stitch: t.allowStitch !== true,
       video_cover_timestamp_ms: Math.round((item.media?.coverAt ?? 1) * 1000),
       brand_content_toggle: false,
       brand_organic_toggle: false,

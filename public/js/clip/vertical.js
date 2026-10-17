@@ -16,20 +16,21 @@
 //   quiz, scores, weather the programme's own vertical boards when there are (clip/vquiz.js), else the frame's middle
 // Everything is drawn at 1x on the frame's grid: no element is ever scaled, so no pixel is bigger than another.
 import { P } from '../palette.js';
+import { drawRecreation } from '../graphics/recreation.js';
 import { drawText, measureText } from '../font.js';
 import { THEME_ACCENT, presenterName } from '../cast.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import { drawWorldMap } from '../scenes/worldmap.js';
 import { picturePan } from '../pace.js';
-import { clamp, seg, easeOutQuint, balanceLines, ellipsis, textW } from '../gfx/index.js';
+import { clamp, seg, easeOutQuint, balanceLines, textW } from '../gfx/index.js';
 import { bayer } from '../gfx/dither.js';
 import { mk } from '../gfx/canvas.js';
 import { u32 } from '../gfx/color.js';
 import { TOP } from '../graphics/layout.js';
 import { contentWords } from '../graphics/index.js';
-import { VW, VH, V, HW, HH } from './layout.js';
-import { WordCaptions } from './captions.js';
-import { drawVerticalBoard, boardKind } from './vboards.js';
+import { VW, VH, V, HW, HH, SAFE, boardBox } from './layout.js';
+import { WordCaptions, CLIP_CAPTION } from './captions.js';
+import { drawVerticalBoard, boardKind, microFit } from './vboards.js';
 import { drawBugOnly, drawProgrammeTag, speechNow, graveNow, boardRepeats } from './graphics.js';
 
 const ST = V.stage;
@@ -37,11 +38,16 @@ const REST_WALL = Object.freeze({ mode: 'rest' });
 // the tall stage (no title band): the quiz, whose boards and three people need the frame's full 216 rows
 const TALL = Object.freeze({ x: 0, y: V.title.y, w: VW, h: V.stage.y + V.stage.h - V.title.y });
 const NORMAL = Object.freeze({ x: 0, y: ST.y, w: VW, h: ST.h });
+// the headline frame (the montage, STILL TO COME): the stage and the captions' rows together, the headline at the foot
+// of the safe area (the voice reads the headline on screen: it is the caption)
+const MONTAGE = Object.freeze({ x: 0, y: ST.y, w: VW, h: V.caps.y + V.caps.h - ST.y });
 
-/** The stage's box for a scene: the tall stage for the quiz, else the stage under the title band. */
+/** The stage's box for a scene: the tall stage for the quiz, the montage's to the safe area's foot, else the stage. */
 export function profileOf(scene) {
   const quiz = scene?.program?.id === 'pay-attention' || !!(scene?.cast?.H && scene?.cast?.A && scene?.cast?.B);
-  return quiz ? { name: 'tall', box: TALL, title: false } : { name: 'normal', box: NORMAL, title: true };
+  if (quiz) return { name: 'tall', box: TALL, title: false, captions: true };
+  if (scene?.shot === 'montage' || scene?.shot === 'tease') return { name: 'montage', box: MONTAGE, title: true, captions: false };
+  return { name: 'normal', box: NORMAL, title: true, captions: true };
 }
 const STUDIO = new Set(['wide', 'close']);
 const S = {
@@ -107,7 +113,8 @@ export class VerticalCompositor {
     this.proxy = null;
     this.speaker = null;
     this.cutAt = 0;
-    this.caps = new WordCaptions({ maxW: VW - 16, scale: 2, perPage: 2 });
+    // (the line's text and its black box's padding either side, together inside the safe column)
+    this.caps = new WordCaptions({ maxW: SAFE.w - 2 * CLIP_CAPTION.padX * 2, scale: 2, perPage: 2 });
     this.onAt = 0;
     this.lastMode = null;
     this.lastHead = { x: HW / 2, y: 150 };
@@ -154,7 +161,7 @@ export class VerticalCompositor {
       if (on) {
         if (this.profile.title) this.drawTitle(t, scene);
         this.drawMast(t, scene);
-        this.drawCaptions(t, scene);
+        if (this.profile.captions !== false) this.drawCaptions(t, scene);
         this.drawFoot(t, scene);
       } else this.drawChannelFrame(t, scene);
     } catch (err) {
@@ -182,18 +189,22 @@ export class VerticalCompositor {
       else if (shot === 'location') this.remote(scene);
       else if (shot === 'twoway') this.twoway(scene);
       else if (shot === 'broll') this.broll(t, scene, dt);
-      else if (shot === 'quiz' && this.quiz?.(t, scene, dt, this.box)) {
+      else if (shot === 'quiz' && this.quiz?.(t, scene, dt, boardBox(this.box))) {
         /* the programme's own vertical board */
       } else if (shot === 'scores' && this.sport && scene.card?.scores?.length) {
         // FULL TIME's SCORE CENTRE: the board set again, a result on two lines
         this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-        this.sport.scoreboard(this.ctx, dt, scene.card, this.box, THEME_ACCENT[scene.program?.theme] || P.orange);
-      } else if (shot === 'weather' && this.weather?.(t, scene, this.box)) {
+        this.sport.scoreboard(this.ctx, dt, scene.card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
+      } else if (shot === 'weather' && this.weather?.(t, scene, boardBox(this.box))) {
         /* WORLD WEATHER's board set again, or the window on the presenter */
       } else this.middle(scene);
       // PAY ATTENTION's scores strip over the studio (the half-time scores and the banter after them)
       if (scene.quizStrip && STUDIO.has(shot)) this.quizStrip(t, scene.quizStrip);
-      if (scene.recreation) this.recreationLabel(scene.recreation);
+      // the story's source and NEWS IN 60's minute, on the stage: in a clip the hook holds the title band and the feeds
+      // cover the foot, so the stage is where they are seen (a board, the montage and a recreation carry their own)
+      if ((STUDIO.has(shot) || ['map', 'full', 'broll', 'location'].includes(shot)) && this.profile?.name !== 'tall') this.sourcePlate(t, scene);
+      this.progressRule();
+      if (scene.recreation) this.recreationLabel(scene.recreation, scene);
     } finally {
       ctx.restore();
     }
@@ -261,7 +272,7 @@ export class VerticalCompositor {
     const ctx = this.ctx;
     const parts = strip.players.slice(0, 2).map((pl) => ({ pl, s: String(strip.scores?.[pl.seat] ?? 0) }));
     const w = parts.reduce((a, x) => a + 9 + measureText(String(x.pl.name || '').toUpperCase()) + 6 + measureText(x.s), 0) + 21 + 12;
-    const x0 = Math.round((VW - w) / 2);
+    const x0 = Math.round(SAFE.cx - w / 2);
     const y0 = this.box.y + this.box.h - 17;
     const vis = Math.round(w * easeOutQuint(seg(t - (strip.since || 0), 0, 0.3)));
     if (vis <= 0) return;
@@ -302,7 +313,7 @@ export class VerticalCompositor {
     const name = presenterName(id);
     const role = this.channel?.presenters?.[id]?.role ? String(this.channel.presenters[id].role).toUpperCase() : '';
     const acc = THEME_ACCENT[scene.program?.theme] || P.red;
-    const w = Math.min(VW - 16, Math.max(measureText(name), role ? measureText(role, 1, 'micro') : 0) + 10);
+    const w = Math.min(SAFE.w, Math.max(measureText(name), role ? measureText(role, 1, 'micro') : 0) + 10);
     const vis = Math.round(w * easeOutQuint(seg(since, 0.4, 0.35)));
     if (vis <= 0) return;
     const ctx = this.ctx;
@@ -328,16 +339,32 @@ export class VerticalCompositor {
     const kind = boardKind(card);
     if (kind === 'score' && this.sport) {
       this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-      return this.sport.scoreline(this.ctx, dt, card, this.box, THEME_ACCENT[scene.program?.theme] || P.orange);
+      return this.sport.scoreline(this.ctx, dt, card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
+    }
+    // FULL TIME's COMING UP and THE MOMENT ON THE BOARD, set for the tall frame
+    if ((kind === 'fixtures' || kind === 'chalk') && this.sport?.[kind]) {
+      this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+      return this.sport[kind](this.ctx, dt, card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
     }
     if (!kind || ['score', 'chalk', 'fixtures'].includes(kind)) return false;
     this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-    return drawVerticalBoard(this.ctx, dt, card, { x: 0, y: this.box.y, w: VW, h: this.box.h, programId: scene.program?.id, accent: THEME_ACCENT[scene.program?.theme] });
+    return drawVerticalBoard(this.ctx, dt, card, { ...boardBox(this.box), programId: scene.program?.id, accent: THEME_ACCENT[scene.program?.theme] });
   }
 
+  /**
+   * The map over the safe column (its place label and the names round it fall inside x 8-188), the strip beyond it in
+   * the map's own sea, under the feed's buttons.
+   */
   map(t, scene, dt) {
     const card = scene.card || {};
-    drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
+    const w = SAFE.right + 8;
+    drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
+    this.seaStrip(w);
+  }
+
+  /** The stage beyond the safe column, after a map drawn to its edge: the map's last column of sea, carried on. */
+  seaStrip(x) {
+    this.ctx.drawImage(this.canvas, x - 1, this.box.y, 1, this.box.h, x, this.box.y, VW - x, this.box.h);
   }
 
   picture(t, scene, dt) {
@@ -352,7 +379,8 @@ export class VerticalCompositor {
     const img = scene.storyId ? scene.images?.get?.(scene.storyId) : null;
     if (!scene.card?.footage && img?.full) return this.picture(t, scene, dt);
     if (!scene.card?.footage && scene.remote && Number.isFinite(scene.remote.lat)) {
-      drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, follow: true });
+      drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: SAFE.right + 8, h: this.box.h, lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, follow: true });
+      this.seaStrip(SAFE.right + 8);
       return;
     }
     this.middle(scene);
@@ -370,7 +398,7 @@ export class VerticalCompositor {
     ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
     const bw = 178;
     const bh = 82;
-    const x = Math.round((VW - bw) / 2);
+    const x = Math.round(SAFE.cx - bw / 2);
     const boxes = [[11, this.box.y + 4], [195, this.box.y + 4 + bh + 6]];
     for (const [sx, dy] of boxes) {
       ctx.drawImage(this.src, sx, 31 + 9, bw, bh, x, dy, bw, bh);
@@ -390,20 +418,22 @@ export class VerticalCompositor {
     const acc = THEME_ACCENT[scene.program?.theme] || P.red;
     const pic = scene.images?.get?.(item.storyId)?.card || null;
     const loc = item.location;
-    if (pic) ctx.drawImage(pic, -Math.round((pic.width - VW) / 2), this.box.y);
+    // (the backdrop fills the box above the plate; a photo is centred on the safe column)
+    if (pic) ctx.drawImage(pic, Math.round(SAFE.cx - pic.width / 2), this.box.y);
     else if (Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon)) drawWorldMap(ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: acc, programId: scene.program?.id, follow: true });
     else ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
     // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
     const headline = String(item.headline || '').toUpperCase();
     let scale = 2;
-    let lines = balanceLines(headline, VW - 24, 2, 4);
+    let lines = balanceLines(headline, SAFE.w - 8, 2, 4);
     if (lines[lines.length - 1]?.endsWith('...')) {
       scale = 1;
-      lines = balanceLines(headline, VW - 24, 1, 5);
+      lines = balanceLines(headline, SAFE.w - 8, 1, 5);
     }
     const lh = scale === 2 ? 18 : 11;
     const textH = lines.length * lh - (lh - 7 * scale);
-    const plateH = textH + 12 + (item.source ? 9 : 0);
+    // the plate rises from the safe area's foot, never less than 64 rows tall (the backdrop above it keeps the rest)
+    const plateH = Math.max(64, textH + 16 + (item.source ? 10 : 0));
     const py = this.box.y + this.box.h - plateH;
     const p = easeOutQuint(seg(dt, 0, 0.3));
     ctx.fillStyle = P.black;
@@ -413,10 +443,11 @@ export class VerticalCompositor {
     for (let i = 0; i < lines.length; i++) {
       const lp = seg(dt, 0.15 + i * 0.07, 0.3);
       if (lp <= 0) continue;
-      drawText(ctx, lines[i], 12, py + 6 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
+      drawText(ctx, lines[i], 12, py + 8 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
     }
-    if (item.source) drawText(ctx, ellipsis(String(item.source).toUpperCase(), VW - 24, 1, false), 12, py + 6 + textH + 4, S.microFog);
-    // the tag: TOP STORIES (with the pips of the run) or STILL TO COME
+    if (item.source) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
+    // the tag: TOP STORIES (with the pips of the run) or STILL TO COME (on the plate: the clip's hook covers the
+    // title band all clip long)
     const tag = tease ? 'STILL TO COME' : 'TOP STORIES';
     const tw = measureText(tag, 1, 'micro') + 8;
     ctx.fillStyle = P.black;
@@ -431,32 +462,13 @@ export class VerticalCompositor {
     }
   }
 
-  /** RECREATION — WORDS FROM PUBLIC STATEMENTS and SOURCE, at the stage's top right, on every frame of the piece. */
-  recreationLabel(rec) {
-    const ctx = this.ctx;
-    const right = VW - 8;
-    let y = this.box.y + 4;
-    const lines = [['RECREATION', P.yellow, P.black], ['WORDS FROM PUBLIC STATEMENTS', P.black, P.white]];
-    if (rec.credit) lines.push([ellipsis(String(rec.credit).toUpperCase(), VW - 26, 1), P.ink, P.silver]);
-    for (const [text, bg, fg] of lines) {
-      const w = measureText(text) + 8;
-      ctx.fillStyle = bg;
-      ctx.fillRect(right - w, y, w, 11);
-      drawText(ctx, text, right - w + 4, y + 2, { color: fg });
-      y += 12;
-    }
-    // the guest's name super at the stage's foot, as the channel's (the role on the accent tag, the name on the bar)
-    const name = ellipsis(String(rec.name || ''), VW - 30, 1);
-    const role = rec.role ? ellipsis(String(rec.role), VW - 30, 1, false) : 'IN THEIR WORDS';
-    const by = this.box.y + this.box.h - 26;
-    const rw = measureText(role) + 8;
-    ctx.fillStyle = P.yellow;
-    ctx.fillRect(8, by, rw, 11);
-    drawText(ctx, role, 12, by + 2, { color: P.black });
-    const nw = measureText(name) + 10;
-    ctx.fillStyle = P.ink;
-    ctx.fillRect(8, by + 11, nw, 13);
-    drawText(ctx, name, 13, by + 14, S.white);
+  /**
+   * AI RECREATION — WORDS FROM PUBLIC STATEMENTS and SOURCE at the stage's top right, the name super at its foot, on
+   * every frame of the piece: the compliance desk's own plates (graphics/recreation.js), laid out for this frame, the
+   * same layout server/compliance/clips.js checks a vertical clip against.
+   */
+  recreationLabel(rec, scene = null) {
+    drawRecreation(this.ctx, rec, THEME_ACCENT[scene?.program?.theme] || P.red, { vertical: boardBox(this.box) });
   }
 
   // ------------------------------------------------------------------ bands
@@ -468,7 +480,7 @@ export class VerticalCompositor {
     if (title) {
       const color = THEME_ACCENT[scene.program?.theme] || P.red;
       const w = measureText(title) + 8;
-      drawProgrammeTag(ctx, VW - 8 - w, 10, title, color);
+      drawProgrammeTag(ctx, SAFE.right - w, 10, title, color);
     }
   }
 
@@ -477,15 +489,16 @@ export class VerticalCompositor {
     const ctx = this.ctx;
     const y0 = V.title.y;
     const g = this.renderer?.graphics;
+    // (in a clip the hook holds this band all clip long: what a viewer must see lives on the stage, sourcePlate)
     const cur = g?.strap?.cur && g.strap.outAt === null ? g.strap.cur : null;
     const rec = scene.recreation;
     const headline = cur?.headline || '';
     if (headline && !rec && !['montage', 'tease'].includes(scene.shot)) {
       const tag = cur.tag || '';
       const color = cur.tagColor || THEME_ACCENT[scene.program?.theme] || P.red;
-      const two = balanceLines(headline.toUpperCase(), VW - 16, 1, 2);
+      const two = balanceLines(headline.toUpperCase(), SAFE.w, 1, 2);
       const fits = !two[two.length - 1]?.endsWith('...');
-      const lines = fits ? two : balanceLines(headline.toUpperCase(), VW - 16, 1, 3);
+      const lines = fits ? two : balanceLines(headline.toUpperCase(), SAFE.w, 1, 3);
       const showTag = fits && tag;
       const since = Math.max(0, t - (cur.since || 0));
       const p = easeOutQuint(seg(since, 0, 0.35));
@@ -510,7 +523,49 @@ export class VerticalCompositor {
     const title = String(scene.program?.title || this.channel?.name || 'GLOBIT 24');
     const tagline = scene.program?.tagline ? String(scene.program.tagline) : '';
     drawText(ctx, title, 8, y0 + 7, S.white2);
-    if (tagline) drawText(ctx, ellipsis(tagline, VW - 16, 1), 8, y0 + 27, S.microFog);
+    if (tagline) drawText(ctx, microFit(tagline, SAFE.w), 8, y0 + 27, S.microFog);
+  }
+
+  /**
+   * The story's source on a plate at the stage's top left, inside the safe column (SOURCE: NPR SCIENCE, micro on
+   * black), while its strap is up. A recreation carries its own credit.
+   */
+  sourcePlate(t, scene) {
+    const cur = this.renderer?.graphics?.strap;
+    if (scene.recreation || !cur?.cur || cur.outAt !== null || !cur.cur.headline) return;
+    const source = this.sourceOf(scene);
+    if (!source) return;
+    const since = Math.max(0, t - (cur.cur.since || 0));
+    const p = easeOutQuint(seg(since, 0.2, 0.3));
+    if (p <= 0) return;
+    const text = microFit(`SOURCE: ${source}`, SAFE.w - 8);
+    const w = measureText(text, 1, 'micro') + 8;
+    const ctx = this.ctx;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(SAFE.x, this.box.y + 4, Math.round(w * p), 9);
+    if (p >= 1) drawText(ctx, text, SAFE.x + 4, this.box.y + 6, S.microFog);
+  }
+
+  /**
+   * NEWS IN 60's progress rule (the strap's top line on air: graphics/strap.js), 2 px along the stage's top edge
+   * across the safe column: the slate track, the yellow fill in whole pixels.
+   */
+  progressRule() {
+    const progress = this.renderer?.graphics?.strap?.progress;
+    if (!Number.isFinite(progress)) return;
+    const ctx = this.ctx;
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(SAFE.x, this.box.y, SAFE.w, 2);
+    ctx.fillStyle = P.yellow;
+    ctx.fillRect(SAFE.x, this.box.y, Math.floor(SAFE.w * clamp(progress, 0, 1)), 2);
+  }
+
+  /** The story's outlet as the strap shows it (the channel's own name is no source). */
+  sourceOf(scene) {
+    const cur = this.renderer?.graphics?.strap?.cur;
+    const story = scene.storyId && scene.rundown ? scene.rundown.find((r) => r.storyId === scene.storyId) : null;
+    const source = String(cur?.plate || story?.source || '').split(' / ')[0].trim();
+    return source && source !== this.channel?.name ? source.toUpperCase() : '';
   }
 
   drawCaptions(t, scene) {
@@ -529,20 +584,16 @@ export class VerticalCompositor {
     if (text && scene.shot === 'fact' && scene.card?.term?.term) text = null;
     if (boardRepeats(text, scene)) text = null;
     this.caps.update(t, text, sp.charIndex, { grave: graveNow(scene, sp.slot) });
-    this.caps.draw(this.ctx, t, { cx: VW / 2, bottom: V.caps.y + V.caps.h - 4 });
+    this.caps.draw(this.ctx, t, { cx: SAFE.cx, bottom: V.caps.y + V.caps.h - 4 });
   }
 
   drawFoot(t, scene) {
     const ctx = this.ctx;
     const y = V.foot.y;
+    // the foot: the feeds' buttons and caption sit over it, so it carries nothing a viewer must read (the source is in
+    // the title band, beside the story's tag): a rule and the channel's name, small
     ctx.fillStyle = P.slate;
-    ctx.fillRect(8, y, VW - 16, 1);
-    const g = this.renderer?.graphics;
-    const cur = g?.strap?.cur;
-    const story = scene.storyId && scene.rundown ? scene.rundown.find((r) => r.storyId === scene.storyId) : null;
-    const source = cur?.plate || story?.source || '';
-    if (source && source !== this.channel?.name) drawText(ctx, ellipsis(`SOURCE: ${String(source).toUpperCase()}`, VW - 16, 1), 8, y + 6, S.microFog);
-    // the channel's name, small, at the foot (the feed's own text sits over this band)
+    ctx.fillRect(8, y, SAFE.w, 1);
     const lw = measureLogo({ variant: 'full', scale: 1 }).w;
     drawLogo(ctx, Math.round((VW - lw) / 2), VH - 30, { variant: 'full', scale: 1, t: null });
   }

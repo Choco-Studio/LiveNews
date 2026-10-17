@@ -9,6 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { PublishQueue } from '../server/publish/queue.js';
 import { createApprovalServer, insideRoots, itemView } from '../server/publish/approval.js';
+import { makeAdapter } from '../server/publish/adapters/index.js';
 
 let dir;
 let media;
@@ -114,6 +115,13 @@ test('media: the item\'s own files inside the given folders only, ranges for vid
   assert.ok(insideRoots(path.join(media, 'clip.mp4'), [media]));
 });
 
+test('itemView: why an item was held, in Spanish for the owner, the desk\'s own message kept', () => {
+  const v = itemView({ ...heldItem, compliance: { ok: false, violations: [{ rule: 'verbatim', message: 'the story\'s aired text copies 18 words in a row from its source' }, { rule: 'something-new', message: 'x' }] } });
+  assert.match(v.compliance.violations[0].es, /Copia palabras del medio/);
+  assert.match(v.compliance.violations[0].message, /copies 18 words/);
+  assert.equal(v.compliance.violations[1].es, null, 'a rule without words of its own shows its message');
+});
+
 test('itemView: what the card shows', () => {
   const v = itemView({ ...okItem, schedule: { at: Date.parse('2026-10-17T09:30:00Z'), tz: 'Europe/London' } });
   assert.equal(v.schedule.time, '10:30');
@@ -137,4 +145,74 @@ test('approve on every network: the same clip\'s other pending items, never one 
   assert.equal(q.get(a.id).status, 'approved');
   assert.equal(q.get(b.id).status, 'approved');
   assert.equal(q.get(c.id).status, 'held');
+});
+
+test('TikTok: the owner\'s privacy, interaction choices and consent saved on the item (no default privacy)', async () => {
+  const t = q.enqueue({ kind: 'clip', platform: 'tiktok', format: 'vertical', title: 'Owls', text: 'Owls', media: {}, source: { momentId: 'm20' }, compliance: { ok: true } });
+  const yt = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Owls', text: 'Owls', media: {}, source: { momentId: 'm20' }, compliance: { ok: true } });
+  // the card: nothing chosen until the owner chooses it; no block for another network
+  assert.deepEqual(itemView(t).tiktok, { privacy: null, allowComment: false, allowDuet: false, allowStitch: false, consent: false });
+  assert.equal(itemView(yt).tiktok, null);
+  const st = JSON.parse((await req('GET', '/api/state')).body);
+  assert.equal(st.tiktokMode, 'inbox', 'the inbox route unless TIKTOK_MODE says direct');
+  assert.equal((await post('/api/tiktok', { id: t.id, privacy: 'EVERYONE' })).status, 400, 'only TikTok\'s own levels');
+  assert.equal((await post('/api/tiktok', { id: yt.id, privacy: 'SELF_ONLY' })).status, 400, 'only on a TikTok item');
+  const r = await post('/api/tiktok', { id: t.id, privacy: 'FOLLOWER_OF_CREATOR', allowComment: true, allowDuet: 'yes', consent: true });
+  assert.equal(r.status, 200);
+  assert.deepEqual(q.get(t.id).tiktok, { privacy: 'FOLLOWER_OF_CREATOR', allowComment: true, allowDuet: false, allowStitch: false, consent: true });
+  assert.equal(JSON.parse(r.body).item.tiktok.privacy, 'FOLLOWER_OF_CREATOR');
+  assert.ok(q.get(t.id).history.some((h) => h.action === 'tiktok choices' && h.by === 'owner'));
+  // what the adapter would send: comments as ticked, duets and stitches off (nothing on unless the owner ticks it)
+  const info = makeAdapter('tiktok', { env: {}, dryRun: true }).postInfo(q.get(t.id));
+  assert.deepEqual([info.privacy_level, info.disable_comment, info.disable_duet, info.disable_stitch], ['FOLLOWER_OF_CREATOR', false, true, true]);
+  assert.equal(makeAdapter('tiktok', { env: {}, dryRun: true }).postInfo({ ...t, tiktok: undefined }).disable_comment, true, 'no choice made: comments off');
+  // the page carries the block, in Spanish, with no radio checked by default
+  const page = (await req('GET', '/')).body;
+  assert.match(page, /Todo el mundo/);
+  assert.match(page, /Solo yo/);
+  assert.match(page, /Music Usage Confirmation/);
+  assert.match(page, /\/api\/tiktok/);
+  assert.doesNotMatch(page, /checked: true|checked="checked"/);
+  // in the inbox route an approval needs none of it (the owner finishes the post in the TikTok app)
+  const t2 = q.enqueue({ kind: 'clip', platform: 'tiktok', format: 'vertical', title: 'Owls', text: 'Owls', media: {}, source: { momentId: 'm21' }, compliance: { ok: true } });
+  assert.equal((await post('/api/approve', { id: t2.id })).status, 200);
+  assert.equal(q.get(t2.id).status, 'approved');
+});
+
+test('TikTok direct posts: no approval until the owner has chosen the privacy and given consent', async () => {
+  const d = createApprovalServer({ queue: q, mediaRoots: [media], env: { TIKTOK_MODE: 'direct' } });
+  const dport = await d.listen(0);
+  const dpost = (p, body) => new Promise((resolve, reject) => {
+    const r = http.request({ host: '127.0.0.1', port: dport, method: 'POST', path: p, headers: { host: `127.0.0.1:${dport}`, 'content-type': 'application/json', 'x-approval-token': d.token } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    r.on('error', reject);
+    r.end(JSON.stringify(body));
+  });
+  try {
+    const mk = (platform) => q.enqueue({ kind: 'clip', platform, format: 'vertical', title: 'Owls', text: 'Owls', media: {}, source: { momentId: 'm30' }, compliance: { ok: true } });
+    const yt = mk('youtube');
+    const tt = mk('tiktok');
+    const no = await dpost('/api/approve', { id: tt.id });
+    assert.equal(no.status, 409);
+    assert.equal(JSON.parse(no.body).error, 'tiktok');
+    assert.equal(q.get(tt.id).status, 'pending');
+    // "approve on every network" leaves the TikTok item waiting for its own choices
+    assert.equal((await dpost('/api/approve', { id: yt.id, all: true })).status, 200);
+    assert.equal(q.get(yt.id).status, 'approved');
+    assert.equal(q.get(tt.id).status, 'pending');
+    // privacy alone is not enough: the consent too
+    await dpost('/api/tiktok', { id: tt.id, privacy: 'SELF_ONLY' });
+    assert.equal((await dpost('/api/approve', { id: tt.id })).status, 409);
+    await dpost('/api/tiktok', { id: tt.id, privacy: 'SELF_ONLY', consent: true });
+    assert.equal((await dpost('/api/approve', { id: tt.id })).status, 200);
+    assert.equal(q.get(tt.id).status, 'approved');
+    // once out, the choices are not changed after the fact
+    q.save({ ...q.get(tt.id), status: 'published' });
+    assert.equal((await dpost('/api/tiktok', { id: tt.id, privacy: 'PUBLIC_TO_EVERYONE', consent: true })).status, 409);
+  } finally {
+    d.close();
+  }
 });

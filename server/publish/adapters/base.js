@@ -159,6 +159,14 @@ export class Adapter {
     return {};
   }
 
+  /**
+   * The words a reader sees in the post this adapter sends for an item (the text, and on a network that composes
+   * its own message, what it adds): what the compliance gate measures against the story's sources.
+   */
+  postText(item) {
+    return String(item?.text || '');
+  }
+
   /** The documented requests for an item. Subclasses implement it. */
   plan() {
     throw new Error('plan() not implemented');

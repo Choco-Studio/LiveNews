@@ -33,7 +33,15 @@ const S = {
 const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink, 'full-time': P.orange, 'pay-attention': P.purple };
 const accentFor = (programId, accent) => accent || PROGRAM_ACCENT[programId] || P.red;
 const styleOf = (scale, ink = false) => (ink ? (scale === 3 ? S.ink3 : scale === 2 ? S.ink2 : S.ink) : scale === 3 ? S.white3 : scale === 2 ? S.white2 : S.white);
-const srcLine = (source, maxW) => (source ? ellipsis(`SOURCE: ${String(source).toUpperCase()}`, maxW, 1) : '');
+/** Micro text cut to `w` px with dots, measured in the micro face it is drawn in (gfx `ellipsis` measures the body
+ * face, wider, and would cut a credit that fits: "SOURCE: GUARDIA…"). */
+export function microFit(text, w) {
+  let s = String(text ?? '');
+  if (measureText(s, 1, 'micro') <= w) return s;
+  while (s && measureText(`${s}...`, 1, 'micro') > w) s = s.slice(0, -1).trimEnd();
+  return `${s}...`;
+}
+const srcLine = (source, maxW) => (source ? microFit(`SOURCE: ${String(source).toUpperCase()}`, maxW) : '');
 
 /** Text rising into place inside a mask at its own rows (p 0..1), as the channel's boards. */
 function rise(ctx, text, x, y, p, style) {
@@ -160,7 +168,35 @@ function layoutKnown(o, w, h) {
   return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: 'WHAT WE KNOW' });
 }
 
+// HOW THE WEEK UNFOLDED (SEVEN DAYS), set for the tall frame as on air: the week's diary, up to five days, oldest
+// first, the day at 2x in its own column (right-aligned on the widest, WED), a node on the rail beside it, the day's
+// headline beside the rail at 1x on up to three lines (never cut). Only when every day is a day's name that fits the
+// column; a dated step falls back to the timeline (the date over its words).
+function layoutWeek(o, w, h, programId) {
+  const inner = w - 2 * PAD;
+  const steps = o.timeline.slice(0, 5);
+  const dayW = textW('WED', 2);
+  const days = steps.map((p) => String(p.when).toUpperCase().trim());
+  if (!days.every((d) => d && textW(d, 2) <= dayW)) return null;
+  const railX = dayW + 6;
+  const textX = railX + 7;
+  const tw = inner - textX;
+  const out = [];
+  let y = TOP;
+  steps.forEach((p, i) => {
+    const lines = balanceLines(String(p.what).trim(), tw, 1, 3);
+    const rh = Math.max(14, lines.length * 11 - 4);
+    out.push({ y, h: rh, kind: 'day', when: days[i], lines, dayW, railX, textX });
+    y += rh + 8;
+  });
+  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(boardTitle('timeline', { programId }), inner, 1) });
+}
+
 function layoutTimeline(o, w, h, programId) {
+  if (programId === 'seven-days') {
+    const week = layoutWeek(o, w, h, programId);
+    if (week) return week;
+  }
   const inner = w - 2 * PAD;
   const steps = o.timeline.slice(0, 3);
   const tx = 14; // the words' column right of the rail
@@ -412,6 +448,25 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           ctx.fillRect(railX - 1, ry + (r.ws === 2 ? 5 : 2), 3, 3);
           rise(ctx, r.when, tx + r.tx, ry, seg(dt, at + 0.05, 0.34), styleOf(r.ws));
           r.lines.forEach((ln, k) => rise(ctx, ln, tx + r.tx, ry + 7 * r.ws + 5 + k * 11, seg(dt, at + 0.12 + k * 0.07, 0.34), S.white));
+          break;
+        }
+        case 'day': {
+          // the week's diary: the rail drawn down to the next day's node, the node, the day rising right-aligned in
+          // its column, the day's headline rising beside the rail
+          const railX = tx + r.railX;
+          if (i < L.rows.length - 1) {
+            const next = PY + L.rows[i + 1].y;
+            const len = Math.round((next - ry) * easeOutQuint(seg(dt, at + 0.2, 0.4)));
+            if (len > 0) {
+              ctx.fillStyle = P.slate;
+              ctx.fillRect(railX, ry + 6, 1, len);
+            }
+          }
+          if (dt < at) break;
+          ctx.fillStyle = acc;
+          ctx.fillRect(railX - 1, ry + 5, 3, 3);
+          rise(ctx, r.when, tx + r.dayW - textW(r.when, 2), ry, seg(dt, at + 0.04, 0.34), S.white2);
+          r.lines.forEach((ln, k) => rise(ctx, ln, tx + r.textX, ry + 4 + k * 11 - (r.lines.length > 1 ? 4 : 0), seg(dt, at + 0.12 + k * 0.07, 0.34), S.white));
           break;
         }
         case 'from':

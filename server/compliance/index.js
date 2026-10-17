@@ -28,7 +28,7 @@ import { disclosureFor, describe, editorialContact } from './disclosure.js';
 import { auditItem } from './credits.js';
 import { checkClip } from './clips.js';
 import { readMark, c2paStatus, watermarkStatus } from './c2pa.js';
-import { lintEpisode, archiveSample } from './verbatim.js';
+import { lintEpisode, archiveSample, storyReport } from './verbatim.js';
 import { loadCalendar } from './elections.js';
 
 const VIDEO = new Set(['live', 'episode', 'clip', 'short']);
@@ -39,7 +39,8 @@ export const VERBATIM_LAUNCH_RATE = 0.05;
 
 /**
  * The publish-time gate of one item. Refuses (ok: false) on any violation; the publisher uploads nothing then.
- * `item` = checkClip's clip plus { kind, text (a post), files: [paths of the exported files] }.
+ * `item` = checkClip's clip plus { kind, text (a post), sourceTexts (a post's story sources: the outlet's title, summary
+ * and article), files: [paths of the exported files] }.
  * `opts` = { register, calendar, getStory (verbatim sources), now, dataDir, verbatim: 'block'|'warn',
  *            requireReview, env }
  * -> { ok, violations, warnings, disclosure, credits, description, recreations }
@@ -75,6 +76,20 @@ export function preflight(item = {}, opts = {}) {
       else warnings.push(msg);
     }
   } else if (item.episode) warnings.push('verbatim: no getStory given, the story texts were not checked against their sources');
+  // a text post: the same rule on its own words (links and markup aside) against its story's sources; an outlet's
+  // headline is allowed only as an attributed citation (quotedSpans), the post's other words must be the channel's
+  if (kind === 'text') {
+    const src = (Array.isArray(item.sourceTexts) ? item.sourceTexts : []).filter((t) => typeof t === 'string' && t.trim());
+    if (src.length) {
+      const r = storyReport(postWords(item.text), src);
+      for (const x of r.violations) {
+        const msg = x.rule === 'run' ? `the post copies ${x.length} words in a row from its source ("${String(x.text).slice(0, 90)}…")` : `${Math.round(x.share * 100)} % of the post's words are copied from its source`;
+        if ((opts.verbatim || 'block') === 'block') v('verbatim', msg);
+        else warnings.push(msg);
+      }
+      if (!src.some((t) => t.length > 1200)) warnings.push('verbatim: the post was checked against its source\'s title and summary only (no article at hand)');
+    } else warnings.push('verbatim: the post carries no source texts, its words were not checked against them');
+  }
   // every exported file carries a manifest that reads back as AI-produced
   for (const f of item.files || []) {
     if (!fs.existsSync(f)) {
@@ -89,6 +104,18 @@ export function preflight(item = {}, opts = {}) {
   // who answers for it, in every description (AI Act guidelines §6.2.3; EMFA Art. 6)
   if (!editorialContact(env)) v('editorial-contact-missing', 'EDITORIAL_CONTACT (and EDITORIAL_RESPONSIBLE) must be set: every description names who answers for the channel');
   return { ok: violations.length === 0, violations, warnings, disclosure, credits: audit.credits, description: describe(item, { credits: audit.credits }), recreations };
+}
+
+/** A post's words as a reader sees them: no links (their slugs repeat the headline), no markup, entities decoded. */
+export function postWords(text) {
+  return String(text ?? '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 /**

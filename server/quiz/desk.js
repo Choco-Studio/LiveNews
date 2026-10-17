@@ -277,9 +277,16 @@ export const MAX_SENTENCE_CHARS = 150;
  * its label; not a model name ("Maia 300"), not a year. Returns { value, label, qualifier, exact, sentence, masked } or
  * null. `masked` hides the value and keeps the qualifier ("…can pay up to ▮▮▮ more").
  */
+// a running-order label the presenter said before the sentence ("And finally:"): the board shows the news sentence alone
+const RUNNING_LABEL = /^(?:and finally|finally|and now|meanwhile|elsewhere|next)\s*[:,–—-]\s*/i;
+const unlabelled = (s) => {
+  const t = s.replace(RUNNING_LABEL, '');
+  return t === s ? s : t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 export function usableFigure(e) {
   const nums = Array.isArray(e?.numbers) ? e.numbers : [];
-  const sentences = sentencesIn(String(e?.text || ''));
+  const sentences = sentencesIn(String(e?.text || '')).map(unlabelled);
   for (const n of nums) {
     const value = String(n?.value || '').trim();
     if (!/\d/.test(value) || /^(?:19|20)\d\d$/.test(value) || !parseFigure(value)) continue;

@@ -18,6 +18,7 @@ import { uploadMeta } from '../../server/publish/uploads.js';
 import { composeArgs, srtFor } from '../../server/publish/render.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
+import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
 
 const { opt, flag } = argsOf();
@@ -128,7 +129,7 @@ await pb.close();
 
 // ---------------------------------------------------------------- the verdict, the files, the queue
 
-const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true } }, text: meta.description }, { now: Date.now() });
+const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), getStory: compliance.archiveGetStory({ dataDir: path.join(root, 'data') }) });
 const record = { episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString() }, ...meta, duration: D, thumb, video, compliance: { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub }, frameAt: at };
 fs.writeFileSync(path.join(out, `${prog}.upload.json`), JSON.stringify(record, null, 1));
 fs.writeFileSync(path.join(out, `${prog}.description.txt`), `${meta.title}\n\n${meta.description}\n\nTags: ${meta.tags.join(', ')}\n`);

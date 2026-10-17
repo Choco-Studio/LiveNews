@@ -69,7 +69,9 @@ export class Publisher {
       return q.save(q.note(item, 'duplicate', 'desk', { reason: q.published(item.key, { dry }) ? 'already published to this network' : q.nearDuplicate(item, { dry }) }));
     }
     // 2. the compliance gate, again, at the moment of publishing
-    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir) });
+    // (the verbatim lint: the item's own stories against their sources in the archive)
+    this.sourcesOf ||= compliance.archiveGetStory({ dataDir: this.dataDir });
+    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir), getStory: compliance.clipGetStory(item.source?.storyIds, this.sourcesOf) });
     item.compliance = { ok: !!gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: !!this.usingStub, checkedAt: this.now() };
     if (!gate.ok) {
       item.status = 'held';
@@ -135,7 +137,9 @@ export class Publisher {
       platforms: [item.platform],
       // the flags the adapter will really send (and an owner's hand-set label on a network with no field)
       flags: { [item.platform]: { ...(item.disclosure?.[item.platform] || {}), ...makeAdapter(item.platform, { env: {}, dryRun: true }).aiFlags(item), ...(item.manualLabel?.[item.platform] ? { manualLabel: true } : {}) } },
-      text: item.text,
+      // a post: the words its network will show, and its story's sources (the verbatim rule)
+      text: item.kind === 'text' ? makeAdapter(item.platform, { env: {}, dryRun: true }).postText(item) : item.text,
+      sourceTexts: item.sourceTexts || null,
       labelFrames: item.gate?.labelFrames || null,
       // the vertical picture is recomposed at 216x384 and scaled 5x (docs/publishing/vertical.md), not a crop
       frame: item.gate?.frame || (item.format === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null),

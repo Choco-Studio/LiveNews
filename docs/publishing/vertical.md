@@ -18,24 +18,42 @@ Labs: `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.ht
   to a window on the horizontal frame.
 - **Readable on a phone with the sound off.** Captions at 2x (14 px caps at 1x, 70 px on a 1080-wide screen), the hook
   at 2x, every word inside the platforms' safe area.
-- **Disclosed.** The AI mark stands beside the bug all clip long, the RECREATION label is drawn natively when a
-  recreation is on screen, and the end card says how the channel is made.
+- **Disclosed.** The AI mark stands beside the bug all clip long, drawn once (the bug's own row draws no second
+  mark), the RECREATION label is set for the tall frame when a recreation is on screen (§3.8), and the end card says
+  how the channel is made.
 
 ## 2. The grid and the zones (`layout.js`)
 
 | Zone | Rows (1x) | What it holds |
 |---|---|---|
 | MAST | 0–31 | The channel's bug at (8, 10), the AI mark docked to it, the programme's tag at the right (or the quiz's hook) |
-| TITLE | 32–71 | The story's tag and headline, set for the tall frame (or the programme's title and tagline) |
-| STAGE | 72–247 (216 × 176) | The picture: the speaker, the board, the map, the photo |
+| TITLE | 32–71 | In a clip, the hook, all clip long (it is laid over the master's mast and band: §5). In the master, the story's tag and headline, or the programme's title and tagline. |
+| STAGE | 72–247 (216 × 176) | The picture: the speaker, the board, the map, the photo. Over a single, a map or a picture, the story's source on a plate at the top left (SOURCE: NASA); NEWS IN 60's progress rule along its top edge. A board, the montage and a recreation carry their own credit. |
 | CAPS | 248–299 | The captions: two lines at 2x on black boxes |
-| FOOT | 300–383 | A slate rule, the source line in micro type, the full logo at the bottom. The feeds put their own buttons and text here, so nothing essential lives in it. |
+| FOOT | 300–383 | A slate rule and the full logo at the bottom, nothing else. The feeds put their own buttons and text here, so nothing a viewer must read lives in it. |
 
 **The safe area** (`PLATFORM_SAFE`): x 8–188, y 32–300. TikTok, Reels and Shorts all lay their buttons over the right
-edge and their caption and handle over the foot, so every word a viewer must read stays inside this box.
+edge (about 12 % of the width) and their caption and handle over the foot (about 20 % of the height), so every word a
+viewer must read stays inside this box.
+
+**The safe column** (`SAFE`: x 8–188, centre 98). Pictures, maps, grounds and the studio fill all 216 columns, but
+everything to read is set in the column:
+
+- every board is laid out in `boardBox(stage)`, a box that ends 8 px right of the column (x 0–196), so its panel's
+  padding, never its words, reaches toward the buttons;
+- the captions are centred on the column's centre and are no wider than the column;
+- the title band, the hook and the name tags are set inside it; the two-way's boxes, the end card and the quiz's
+  strip are centred on it;
+- the programme's tag in the mast ends at the column's right edge.
+
+`test/publish-vertical.test.js` draws every board, card and band and checks that each word lies inside x 8–188 and
+above row 300.
 
 **The tall stage** (`profileOf`): PAY ATTENTION's boards and three people need height, so the quiz has no title band.
 Its stage runs from row 32 to row 247 (216 × 216), and its hook lives in the mast.
+
+**The montage stage**: the headline montage and STILL TO COME have no captions (the plate shows the words the voice
+reads), so their stage runs on through the captions' band to row 300 (216 × 228) and nothing is left empty.
 
 ## 3. The stage, shot by shot (`vertical.js` `drawStage`)
 
@@ -86,12 +104,24 @@ A board that does not fit drops its source line first, then its last rows, and n
 - **The SCORE CENTRE:** the board with its title in the accent, each result on two lines (home over away), so no name
   is cut. Up to four rows have 2x scores; five or six have 1x scores. The winner's score is in the accent; a draw's
   two are white, as on the RESULT card.
-- COMING UP and the chalkboard fall back to the middle (see §8).
+- **COMING UP:** the title in the accent, then a row for each fixture (two or three): its calendar leaf (the month on
+  the accent, the day at 3x, the weekday) dropping in when its date is read, the two sides on two lines with V between
+  them, the time under them, the sport's icon at the right and the source at the foot.
+- **THE MOMENT ON THE BOARD:** the channel's chalkboard, its ground (football, rugby, American football) drawn to
+  scale inside the box: the scale is the smaller of what the height and the width allow, so the distance is never
+  bent to fit.
+
+**SEVEN DAYS**: HOW THE WEEK UNFOLDED is the week's diary, as on air: up to five days, oldest first, the day at 2x in
+its own column, a node on the rail, the day's headline beside it at 1x on up to three lines, never cut. A step with a
+date instead of a day's name falls back to the timeline (the date over its words). THE WEEK IN NUMBERS is the figures
+board under its own kicker.
 
 ### 3.4 Maps
 
-The channel's world map (`scenes/worldmap.js`) takes any viewport. It is drawn at the stage's own size with the story's
-view, so the pin and the place's name are as sharp as on air.
+The channel's world map (`scenes/worldmap.js`) takes any viewport. It is drawn with the story's view on a viewport
+that ends 8 px right of the safe column, so the pin and the place's name land inside the column and are as sharp as on
+air. The map's last column of sea is then repeated to the frame's edge (`seaStrip`): the strip under the buttons holds
+only sea. A picture's pan does the same.
 
 ### 3.5 PAY ATTENTION's boards (`vquiz.js`)
 
@@ -105,6 +135,12 @@ They use the horizontal boards' own helpers (seats and their shapes, the masked 
 picture's whole-block sharpening, the credit lines), so a question reads the same in both formats. The player's
 shape, never a letter, tells who locked in. `test/publish-vertical.test.js` draws every lab case at every moment and
 checks that nothing leaves the box.
+
+HOW MANY? gives the space under the players' guesses a job all question long, because the board is on screen while
+the host reads and the countdown often runs over the players' faces: YOUR GUESS? at 2x over an empty answer box at 3x
+height, its cursor blinking on the bed's half notes, and the countdown under it while it runs. At the reveal the box
+reads THE ANSWER and the figure lands in it at 3x in the reveal's yellow, its label under it, the credit at the foot.
+The box is one width whatever the answer, so it gives nothing away.
 
 ### 3.6 WORLD WEATHER (`vweather.js`)
 
@@ -123,19 +159,25 @@ presenter, who stands at either side of the wall.
 
 ### 3.7 Pictures, montage and tease
 
-The story's picture fills the stage's width, panning as on air. The headline montage and STILL TO COME are set again:
-the picture (or the place's map) as the backdrop, a black plate with the headline at 2x, and TOP STORIES pips or STILL
-TO COME. While the montage's teaser reads the headline that is on screen, the caption stays off, so the words never
-show twice.
+The story's picture fills the stage's width, panning as on air. The headline montage and STILL TO COME are set again
+on the montage stage (§2, rows 72–300): the picture (or the place's map) as the backdrop, centred on the safe column,
+a black plate with the headline at 2x as tall as its lines need (1x past four lines), the source under them
+(SOURCE: …), and TOP STORIES with the run's pips, or STILL TO COME, on the plate's top edge (in a clip the hook
+holds the title band all clip long). The montage has no captions, because its plate shows the words the voice
+reads.
 
 ### 3.8 Recreations
 
-A recreation (AI RECREATION, words from public statements) is drawn natively on the vertical frame:
+A recreation (AI RECREATION, words from public statements) is set for the tall frame by the compliance desk's own
+layout (`graphics/recreation.js` `recreationLayout(rec, frame)` with `frame.vertical`):
 
-- the yellow RECREATION label, WORDS FROM PUBLIC STATEMENTS and the source's credit at the stage's top right;
-- the name super at the stage's foot.
+- the plates at the stage's top right, inside the safe column: AI RECREATION on the label's yellow, WORDS FROM PUBLIC
+  STATEMENTS, and the source's credit, all in the body face (7 px at 1x, 35 px at 1080 × 1920), never the micro face;
+- the role and the name at the stage's foot, on up to two lines.
 
-The factory measures that the label is there in every frame of the recreation (`labelEvidence`).
+`server/compliance/clips.js` `checkClip` reads a vertical frame (`frame.layout: 'vertical-216x384'`, 1080 × 1920,
+scale 5): the label must be whole, inside the frame and the stage, and legible at the output size. The factory also
+measures that the label is there in every frame of the recreation (`labelEvidence`).
 
 ### 3.9 The fallback
 
@@ -161,6 +203,10 @@ crisp, but it is a crop, and §8 lists what remains.
 - No clock and no LIVE tag, because a clip is not live.
 - No ticker: its headlines belong to the hour it aired.
 - The bug stays, with the AI mark docked to it and the programme's tag beside it for the whole clip.
+- NEWS IN 60 keeps its progress rule, as on air: a 2 px track along the stage's top edge, filled in yellow as its
+  minute runs (the title band is the hook's in a clip).
+- The story's source is never in the foot (the feeds cover it) nor in the title band (the hook covers it): it is on a
+  plate at the stage's top left while the story's strap is up.
 - The strap, the RECREATION label and the link graphics draw exactly as on air, with one exception: a clip never shows
   another story's strap. A strap that is leaving is dropped at once. So is a strap whose headline belongs to a
   different story in the running order from the one the shot shows, because the director cuts to the next story a
@@ -229,10 +275,13 @@ Nothing changes on air without `?clip=1` or `?format=vertical`.
 
 ## 8. What remains
 
-- FULL TIME's COMING UP and chalkboard, and WORLD WEATHER's "graphic" shot (the world map with its symbols), fall back
-  to a window on the horizontal frame. None of them is a moment the factory picks, but a clip that passes through one
-  shows a crop.
-- SEVEN DAYS' and NEWS IN 60's special graphics fall back the same way (Phase 2).
+- WORLD WEATHER's map shots (each continent's map behind the presenter, and the "graphic" world map with its
+  symbols) fall back to a window on the horizontal frame centred on the presenter. Their own labels can reach the
+  feeds' right band and be cut at the frame's edge ("MEXICO C…", the 4x sheet of 17 Oct). They are not moments the
+  factory picks (its weather clips are the two boards, set natively), but a clip that passes through one shows a
+  crop.
+- FULL TIME has been through the factory only as a demo edition (the archive's one FULL TIME is the fictional fixture
+  league of 13 Oct); its first real edition should be watched in vertical before its clips are approved.
 - The quiz's and the weather's labs (`/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`) show every board.
   The tests draw them all at every moment and check nothing leaves its box.
 - The quiz's first frame is the round card's panel wiping in, so the hook in the mast carries the first 0.3 s.

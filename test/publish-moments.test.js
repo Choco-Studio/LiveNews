@@ -3,7 +3,7 @@
 // own measures, and only the light ones publishable in Phase 1.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook } from '../server/publish/moments.js';
+import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook } from '../server/publish/moments.js';
 import { estimateTimeline } from '../server/publish/timeline.js';
 import { dangling, backReference, endsClean, quotesBalanced } from '../server/publish/text.js';
 
@@ -132,4 +132,28 @@ test('PAY ATTENTION: a question from its round title to its reveal and the react
   const round = ms.find((m) => m.kind === 'quiz-round');
   assert.ok(round && round.from === 1 && round.to === 8);
   for (const m of ms) assert.ok(m.light, 'the quiz is light');
+});
+
+test('a moment whose story copies its source is not publishable in any phase (the gate would hold its clip)', () => {
+  const m = (id, storyIds) => ({ id, kind: 'story', storyIds, light: true, grave: false, scores: { sense: 9 } });
+  const all = markCopied([m('a', ['s1']), m('b', ['s2']), m('c', ['s2', 's3'])], new Set(['s3']));
+  for (const phase of [1, 2, 3]) assert.deepEqual(publishable(all, { phase }).map((x) => x.id), ['a', 'b'], `phase ${phase}`);
+  assert.equal(all[2].refused, 'verbatim: its aired words copy the source');
+  assert.equal(all[0].copied, undefined);
+});
+
+test('a clip\'s burned-in title is never the outlet\'s headline passed off as the channel\'s (ownHook)', () => {
+  const title = 'Evacuation orders as fast-moving California wildfire burns homes';
+  const sources = [title, 'Evacuation orders in California are in effect due to a rapidly growing wildfire.'];
+  const story = { kicker: 'WILDFIRE', location: { place: 'CALIFORNIA, USA' } };
+  const copied = { headline: title, hook: headlineHook(title), programme: 'COSMOS DESK' };
+  assert.deepEqual(ownHook(copied, story, sources), ['WILDFIRE:', 'CALIFORNIA, USA']);
+  // the channel's own headline stays; a kind's own hook stays; nothing to check against: as it was
+  const own = { headline: 'Thirteen fires burn across California as winds rise', hook: headlineHook('Thirteen fires burn across California as winds rise'), programme: 'COSMOS DESK' };
+  assert.deepEqual(ownHook(own, story, sources), own.hook);
+  const kind = { headline: title, hook: ['4 STORIES', 'IN 55 SECONDS'], programme: 'COSMOS DESK' };
+  assert.deepEqual(ownHook(kind, story, sources), kind.hook);
+  assert.deepEqual(ownHook(copied, story, []), copied.hook);
+  // no label the story bears out: the programme's name
+  assert.deepEqual(ownHook(copied, { kicker: 'VOLCANO' }, sources), ['COSMOS DESK']);
 });

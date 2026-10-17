@@ -57,7 +57,10 @@ export class YouTubeAdapter extends Adapter {
   static limits = { perMinute: 30, perDay: 100 };
 
   aiFlags(item) {
-    return { containsSyntheticMedia: videoResource(item).status.containsSyntheticMedia };
+    // both fields the upload really sends: the synthetic-content flag and the audience (the compliance desk's gate
+    // checks the two on one line: news for a general audience is never "made for kids")
+    const { containsSyntheticMedia, selfDeclaredMadeForKids } = videoResource(item).status;
+    return { containsSyntheticMedia, selfDeclaredMadeForKids };
   }
 
   plan(item) {

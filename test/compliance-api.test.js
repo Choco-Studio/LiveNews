@@ -94,3 +94,26 @@ test('the launch report lists what must be in place, and says the channel is not
   for (const want of [/EDITORIAL_CONTACT/, /RIGHTS_GATE/, /Open-Meteo/, /C2PA/]) assert.match(all, want);
   assert.ok(r.warnings.some((w) => /YouTube live/.test(w)));
 });
+
+test('preflight: a text post may not copy its source (MAX_RUN 12, MAX_SHARE 0.2); an attributed headline is a citation', () => {
+  const env = { EDITORIAL_CONTACT: 'editor@example.org' };
+  // 17 Oct, BBC Science: the post carried the article's opening sentence, 22 words of it
+  const title = 'Evacuation orders as fast-moving California wildfire burns homes';
+  const summary = 'Fanned by the fierce Santa Ana winds, the Norte Fire is one of 13 burning across the state.';
+  const article = 'Evacuation orders in California are in effect due to a rapidly growing wildfire that has already burned six homes in the southern Los Angeles area. The US National Weather Service has issued a red flag warning for several California counties.';
+  const copied = `AI-generated: ${title}. Evacuation orders in California are in effect due to a rapidly growing wildfire that has already burned six homes in the southern Los Angeles area. via BBC Science: https://www.bbc.co.uk/news/articles/c6vgjnk8nw2wo`;
+  const r = preflight({ kind: 'text', text: copied, sourceTexts: [title, summary, article] }, { env });
+  assert.equal(r.ok, false);
+  assert.ok(r.violations.some((x) => x.rule === 'verbatim' && /words in a row/.test(x.message)), JSON.stringify(r.violations));
+  // the channel's own words, the outlet's headline only as an attributed citation beside the link: allowed
+  const cited = `AI-generated: Wildfire · California, USA. BBC Science: “${title}” https://www.bbc.co.uk/news/articles/c6vgjnk8nw2wo`;
+  assert.equal(preflight({ kind: 'text', text: cited, sourceTexts: [title, summary, article] }, { env }).ok, true);
+  // the same headline unattributed, as the post's own words: refused (all of its words are the outlet's)
+  const bare = `AI-generated: ${title}. https://www.bbc.co.uk/news/articles/c6vgjnk8nw2wo`;
+  assert.ok(preflight({ kind: 'text', text: bare, sourceTexts: [title, summary] }, { env }).violations.some((x) => x.rule === 'verbatim'));
+  // a link's slug repeats the headline: links are not words of the post
+  const slug = 'AI-generated: Wildfire · California, USA. BBC Science: https://www.example.org/evacuation-orders-as-fast-moving-california-wildfire-burns-homes';
+  assert.equal(preflight({ kind: 'text', text: slug, sourceTexts: [title, summary] }, { env }).ok, true);
+  // no sources given: not checked, and said so
+  assert.ok(preflight({ kind: 'text', text: cited }, { env }).warnings.some((w) => /no source texts/.test(w)));
+});

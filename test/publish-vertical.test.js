@@ -56,6 +56,22 @@ const visible = (d) => {
   const y1 = Math.min(d.y + d.h, d.clip.y + d.clip.h);
   return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
 };
+/**
+ * Every word a viewer must read inside the platforms' safe column (x 8-188) and above their caption band (y 300): the
+ * text-sized images drawn (words, the bug, small plates' text), not the pictures. A pixel of slack for a glyph's edge.
+ */
+function wordsSafe(ctx, label, { bottom = 300, left = 8, right = 188 } = {}) {
+  let n = 0;
+  for (const im of ctx.images) {
+    if (!(im.h <= 24 && im.w <= right - left + 2)) continue;
+    const v = visible(im);
+    if (!v) continue;
+    n++;
+    assert.ok(v.x >= left - 1 && v.x + v.w <= right + 1, `${label}: a word outside the safe column (x ${left}-${right}): ${JSON.stringify(v)}`);
+    assert.ok(v.y + v.h <= bottom + 1, `${label}: a word under the feed's caption band (y ${bottom}): ${JSON.stringify(v)}`);
+  }
+  return n;
+}
 function inside(ctx, box, label) {
   for (const d of [...ctx.fills, ...ctx.images]) {
     const v = visible(d);
@@ -109,8 +125,8 @@ describe('the vertical picture', () => {
     assert.equal(clipIdx.clipOptions(p('clip=clean&format=vertical')).clean, undefined, 'the vertical picture is never a plate');
   });
 
-  test('every PAY ATTENTION board set for the tall stage stays inside its 216x216 box at every moment', () => {
-    const BOX = { x: 0, y: 32, w: 216, h: 216 };
+  test('every PAY ATTENTION board set for the tall stage stays inside its box, its words in the safe column', () => {
+    const BOX = L.boardBox({ x: 0, y: 32, w: 216, h: 216 });
     const pics = Object.fromEntries(['device', 'ice', 'corridor', 'rocket', 'owl', 'phone'].map((k) => [k, fakeCanvas(512, 288)]));
     const box = (fn) => (ctx, t, o) => fn(ctx, t, o, BOX);
     const V = { ...Q, drawQuestionBoard: box(VQ.VQUIZ.picture), drawLettersBoard: box(VQ.VQUIZ.letters), drawWhereBoard: box(VQ.VQUIZ.where), drawHowManyBoard: box(VQ.VQUIZ.howmany), drawTodayBoard: box(VQ.VQUIZ.today), drawScoresStrip: (ctx, t, o) => (o.compact ? null : VQ.VQUIZ.final(ctx, t, o, BOX)), drawDoubleCard: box(VQ.VQUIZ.double), drawTableBoard: box(VQ.VQUIZ.table), drawRoundCard: box(VQ.VQUIZ.round) };
@@ -122,14 +138,15 @@ describe('the vertical picture', () => {
         const ctx = fakeCanvas().getContext('2d');
         c.draw(ctx, t);
         inside(ctx, BOX, `${id} at ${name}`);
+        wordsSafe(ctx, `${id} at ${name}`);
         n++;
       }
     }
     assert.ok(n > 30, `${n} board moments checked`);
   });
 
-  test('every news board set for the vertical stage stays inside its box', () => {
-    const STAGE = { x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h };
+  test('every news board set for the vertical stage stays inside its box, its words in the safe column', () => {
+    const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
     const boards = {
       figures: { numbers: [{ value: '$1.3 billion', label: 'acquisition' }, { value: '68.7%', label: 'profit rise' }], source: 'TechCrunch' },
       known: { known: ['Only one in five services is running', 'Unions say talks over pay have stalled', 'Stations across Germany were almost empty'], source: 'DW' },
@@ -149,14 +166,80 @@ describe('the vertical picture', () => {
           const drew = VB.drawVerticalBoard(ctx, dt, card, { ...STAGE, programId: prog });
           assert.ok(drew, `${kind} drew`);
           inside(ctx, STAGE, `${kind} (${prog}) at ${dt}`);
+          wordsSafe(ctx, `${kind} (${prog}) at ${dt}`);
         }
       }
     }
   });
 
+  test('HOW MANY? gives the space under the guesses a job all question long, with or without the countdown on the board', async () => {
+    const { P: PAL } = await import('../public/js/palette.js');
+    const BOX = L.boardBox({ x: 0, y: 32, w: 216, h: 216 });
+    // the real TSMC question of 17 Oct: the board is up while the host reads; the countdown runs over the players' faces
+    const q = { type: 'howmany', words: 'TSMC profit soars', masked: 'Taiwanese chip giant TSMC said on Thursday that net profit soared ▮▮▮▮▮ to a record high in the third quarter.', sentence: 'Taiwanese chip giant TSMC said on Thursday that net profit soared 68.7% to a record high in the third quarter.', figure: { value: '68.7%', label: 'NET PROFIT UP', qualifier: '', exact: true }, aired: { programme: 'world-now', at: Date.parse('2026-10-16T16:56:00Z'), source: 'Euronews Business' } };
+    const players = [{ seat: 'A', name: 'UNIT-8', id: 'unit8' }, { seat: 'B', name: 'PENNY', id: 'penny' }];
+    const o = { question: q, players, countdown: null, guesses: [], revealAt: 15.5, now: Date.parse('2026-10-17T13:20:00Z') };
+    const mid = (ctx) => ctx.fills.filter((f) => f.y >= 140 && f.y + f.h <= 236 && f.w * f.h > 0);
+    const read = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.howmany(read, 3, o, BOX);
+    assert.ok(mid(read).some((f) => f.c === PAL.slate && f.w === 96 && f.h === 27), 'the empty answer box, one width whatever the answer');
+    const empty = mid(read).find((f) => f.c === PAL.slate && f.h === 27);
+    assert.ok(read.images.some((im) => im.w > 100 && im.y + im.h <= empty.y && im.y >= empty.y - 30), 'YOUR GUESS? at 2x over it');
+    const answer = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.howmany(answer, 17, { ...o, guesses: [{ seat: 'A', said: '70%', at: 10, points: 2 }, { seat: 'B', said: '50%', at: 12, points: 0 }] }, BOX);
+    const box = mid(answer).find((f) => f.c === PAL.slate && f.h === 27);
+    assert.ok(box && answer.images.some((im) => im.w >= 40 && im.y + im.h / 2 > box.y && im.y + im.h / 2 < box.y + box.h), 'the answer at 3x, in the box');
+    for (const [ctx, label] of [[read, 'read'], [answer, 'answer']]) {
+      inside(ctx, BOX, `HOW MANY? ${label}`);
+      wordsSafe(ctx, `HOW MANY? ${label}`);
+    }
+  });
+
+  test('a credit in the micro face is measured in it: never cut when it fits (17 Oct: "SOURCE: GUARDIA…")', async () => {
+    const { measureText } = await import('../public/js/font.js');
+    const { ellipsis } = await import('../public/js/gfx/index.js');
+    const src = 'SOURCE: GUARDIAN SCIENCE';
+    const w = measureText(src, 1, 'micro');
+    assert.notEqual(ellipsis(src, w, 1), src, 'the body face\'s measure cut it');
+    assert.equal(VB.microFit(src, w), src);
+    assert.ok(measureText(VB.microFit(src, w - 10), 1, 'micro') <= w - 10);
+    assert.ok(VB.microFit(src, w - 10).endsWith('...'));
+  });
+
+  test('the week\'s table never cuts a name mid-word (17 Oct: "PENNY STER…")', () => {
+    assert.equal(VQ.tableName('Penny Sterling', 200), 'PENNY STERLING');
+    assert.equal(VQ.tableName('Penny Sterling', 70), 'PENNY S.');
+    assert.equal(VQ.tableName('Penny Sterling', 35), 'PENNY');
+    assert.equal(VQ.tableName('UNIT-8', 40), 'UNIT-8');
+  });
+
+  test('SEVEN DAYS\'s HOW THE WEEK UNFOLDED set for the tall frame: the whole week (up to five days), no headline cut', () => {
+    const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
+    // the real week of 17 Oct (material of SEVEN DAYS), and a full five-day week
+    const week4 = { timeline: [{ when: 'MON', what: 'Pope Leo XIV will have surgery' }, { when: 'WED', what: 'Pope Leo has cancerous growth removed' }, { when: 'WED', what: 'Vatican confirms the surgery went well' }, { when: 'FRI', what: 'Pope pictured for first time' }], source: 'Vatican News' };
+    const week5 = { timeline: ['MON', 'TUE', 'WED', 'THU', 'FRI'].map((d, i) => ({ when: d, what: ['Talks open in Geneva', 'Both sides walk out', 'Mediators table a new plan', 'The plan is accepted in part', 'A ceasefire is signed'][i] })) };
+    for (const [card, n] of [[week4, 4], [week5, 5]]) {
+      const Lw = VB.verticalBoardLayout(card, STAGE.w - 16, STAGE.h - 8, 'seven-days');
+      assert.equal(Lw.kicker, 'HOW THE WEEK UNFOLDED');
+      assert.equal(Lw.rows.filter((r) => r.kind === 'day').length, n, `all ${n} days`);
+      for (const r of Lw.rows) assert.ok(!r.lines.join(' ').includes('…'), `whole: ${r.lines.join(' ')}`);
+      assert.equal(Lw.rows.map((r) => r.lines.join(' ')).join('|'), card.timeline.map((p) => p.what.toUpperCase()).join('|'), 'every headline whole, in order');
+      for (const dt of [0.1, 0.8, 2, 4]) {
+        const ctx = fakeCanvas().getContext('2d');
+        assert.ok(VB.drawVerticalBoard(ctx, dt, card, { ...STAGE, programId: 'seven-days' }));
+        inside(ctx, STAGE, `week of ${n} at ${dt}`);
+        wordsSafe(ctx, `week of ${n} at ${dt}`);
+      }
+    }
+    // a dated step is the timeline's (the date over its words); another programme keeps HOW WE GOT HERE
+    const dated = { timeline: [{ when: '3 October 2026', what: 'The bridge closes' }, { when: '10 October', what: 'Cracks found' }] };
+    assert.ok(VB.verticalBoardLayout(dated, STAGE.w - 16, STAGE.h - 8, 'seven-days').rows.every((r) => r.kind === 'step'));
+    assert.equal(VB.verticalBoardLayout(week4, STAGE.w - 16, STAGE.h - 8, 'world-now').kicker, 'HOW WE GOT HERE');
+  });
+
   test('WORLD WEATHER\'s boards set for the vertical stage stay inside it, at every step of the countdown', async () => {
     const W = await import('../public/js/clip/vweather.js');
-    const STAGE = { x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h };
+    const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
     const place = (id, name, value) => ({ id, name, value, kind: 'cloudy' });
     const hc = { kind: 'hotcold', hot: [place('a', 'KHARTOUM', 41), place('b', 'AHVAZ', 41), place('c', 'A VERY LONG PLACE NAME INDEED', 39)], cold: [place('d', 'VOSTOK STATION', -58), place('e', 'YAKUTSK', -9), place('f', 'ULAANBAATAR', -6)] };
     const day = (max, min) => ({ max, min, kind: 'rain' });
@@ -170,6 +253,7 @@ describe('the vertical picture', () => {
           const ctx = fakeCanvas().getContext('2d');
           assert.ok(W.drawVerticalWeatherBoard(ctx, t, board, { since: 0, spoken: new Map(spoken), hot: id, hotAt: at, done, anySaid: true }, STAGE));
           inside(ctx, STAGE, `${board.kind} at ${t}`);
+          wordsSafe(ctx, `${board.kind} at ${t}`);
         }
       }
     }
@@ -193,7 +277,7 @@ describe('the vertical picture', () => {
 
   test('FULL TIME\'s RESULT card and SCORE CENTRE set for the vertical stage stay inside it', async () => {
     const SP = await import('../public/js/clip/vsport.js');
-    const STAGE = { x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h };
+    const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
     const cards = [
       { score: { a: 'Coventry', b: 'Newcastle', sa: 4, sb: 1, home: 'Coventry', sport: 'football' }, source: 'Sky Sports' },
       { score: { a: 'Brighton & Hove Albion', b: 'Wolverhampton Wanderers Women Under Twenty-Ones', sa: 3, sb: 0, home: 'Wolverhampton Wanderers Women Under Twenty-Ones', sport: 'football', stage: 'SEMI-FINAL' }, source: 'A Very Long Source Name Indeed And Another' },
@@ -204,6 +288,7 @@ describe('the vertical picture', () => {
       const ctx = fakeCanvas().getContext('2d');
       assert.ok(SP.drawVerticalScoreline(ctx, dt, c, STAGE));
       inside(ctx, STAGE, `scoreline ${c.score.a} at ${dt}`);
+      wordsSafe(ctx, `scoreline ${c.score.a} at ${dt}`);
     }
     const row = (a, b, sa, sb, day) => ({ a, b, sa, sb, sport: 'football', day });
     for (const n of [1, 3, 4, 5, 6]) {
@@ -211,8 +296,38 @@ describe('the vertical picture', () => {
       const ctx = fakeCanvas().getContext('2d');
       assert.ok(SP.drawVerticalScoreboard(ctx, 20, { scores: rows, title: 'THE WEEKEND\'S RESULTS', source: 'Sky Sports / BBC Sport / The Guardian / Another' }, STAGE));
       inside(ctx, STAGE, `scoreboard of ${n}`);
+      wordsSafe(ctx, `scoreboard of ${n}`);
     }
     assert.equal(SP.drawVerticalScoreline(fakeCanvas().getContext('2d'), 1, { score: null }, STAGE), false);
+    // COMING UP and THE MOMENT ON THE BOARD, set for the tall frame (they fell back to the middle crop before)
+    const { P: PAL } = await import('../public/js/palette.js');
+    const fx = { title: 'THE WEEKEND AHEAD', source: 'BBC Sport', fixtures: [{ event: 'Arsenal v Manchester City', date: '2026-10-18', when: 'SUNDAY 16:30', sport: 'football' }, { event: 'Wolverhampton Wanderers v Brighton & Hove Albion', date: '2026-10-19', when: 'MONDAY 20:00', sport: 'football' }, { event: 'Leinster v Munster', when: 'NEXT WEEK', sport: 'rugby' }] };
+    for (const dt of [0.1, 0.5, 1.5, 5]) {
+      const ctx = fakeCanvas().getContext('2d');
+      assert.ok(SP.drawVerticalComingUp(ctx, dt, fx, STAGE, PAL.orange));
+      inside(ctx, STAGE, `coming up at ${dt}`);
+      wordsSafe(ctx, `coming up at ${dt}`);
+    }
+    assert.equal(SP.drawVerticalComingUp(fakeCanvas().getContext('2d'), 1, { fixtures: [fx.fixtures[0]] }, STAGE), false, 'one fixture is no board');
+    // a side too long for its column never runs under the sport's icon (17 Oct, the lab: "WOLVERHAMPTON WANDERER" under
+    // the ball): the row gives up its icon, and the name is whole
+    const iconX = STAGE.x + 8 + (STAGE.w - 16) - 10 - 9;
+    const cu = fakeCanvas().getContext('2d');
+    SP.drawVerticalComingUp(cu, 5, fx, STAGE, PAL.orange);
+    const icons = cu.fills.filter((f) => f.x >= iconX && f.x < iconX + 9 && f.c === PAL.fog);
+    const words = cu.images.filter((im) => im.h <= 24);
+    for (const ic of icons) for (const im of words) if (im.y < ic.y + ic.h && ic.y < im.y + im.h) assert.ok(im.x + im.w <= iconX + 1 || im.x >= iconX + 9, `a word under the icon: ${JSON.stringify(im)}`);
+    const rowsWithIcon = new Set(icons.map((f) => Math.floor((f.y - STAGE.y - 26) / 44)));
+    assert.ok(!rowsWithIcon.has(1), 'the Wolverhampton row gives up its icon');
+    for (const chalk of [{ yards: 30, sport: 'football' }, { yards: 45, sport: 'american-football' }, { metres: 40, sport: 'rugby', label: 'FROM HALFWAY' }]) {
+      for (const dt of [0.2, 1, 3]) {
+        const ctx = fakeCanvas().getContext('2d');
+        assert.ok(SP.drawVerticalChalkboard(ctx, dt, { chalk }, STAGE));
+        inside(ctx, STAGE, `chalkboard ${chalk.sport} at ${dt}`);
+        wordsSafe(ctx, `chalkboard ${chalk.sport} at ${dt}`);
+      }
+    }
+    assert.equal(SP.drawVerticalChalkboard(fakeCanvas().getContext('2d'), 1, { chalk: { yards: 300 } }, STAGE), false, 'a distance it cannot draw to scale: no board');
     // SCORE CENTRE: the winner's score in the accent, a draw's two in white (as on the RESULT card)
     const { P } = await import('../public/js/palette.js');
     const accentWords = (rows) => {
@@ -230,6 +345,7 @@ describe('the vertical picture', () => {
         const v = fakeCanvas(216, 384).getContext('2d');
         cards.drawHook(v, { format: 'vertical', lines, programme: 'PAY ATTENTION', profile });
         inside(v, { x: 0, y: 0, w: 216, h: 384 }, `vertical hook ${profile} ${lines}`);
+        wordsSafe(v, `vertical hook ${profile} ${lines}`);
         for (const im of v.images) assert.ok(im.y + im.h <= (profile === 'tall' ? L.V.title.y : L.V.stage.y), 'the hook keeps to the mast and title band');
         const h = fakeCanvas(384, 216).getContext('2d');
         cards.drawHook(h, { format: 'horizontal', lines, programme: 'PAY ATTENTION', profile });
@@ -240,12 +356,60 @@ describe('the vertical picture', () => {
       const v = fakeCanvas(216, 384).getContext('2d');
       cards.drawEndCard(v, t, { format: 'vertical', programme: 'COSMOS DESK' });
       inside(v, { x: 0, y: 0, w: 216, h: 384 }, `vertical end card at ${t}`);
-      const words = v.images.filter((im) => im.w < 216 && im.h <= 24 && im.y > 150);
-      for (const im of words) assert.ok(im.y + im.h <= L.PLATFORM_SAFE.bottom, `end card words below the safe area: ${JSON.stringify(im)}`);
+      wordsSafe(v, `vertical end card at ${t}`);
       const h = fakeCanvas(384, 216).getContext('2d');
       cards.drawEndCard(h, t, { format: 'horizontal', programme: 'COSMOS DESK' });
       inside(h, { x: 0, y: 0, w: 384, h: 216 }, `horizontal end card at ${t}`);
     }
+  });
+
+  test('the vertical frame\'s own bands: the source and NEWS IN 60\'s minute on the stage (the hook holds the title band in a clip), a foot with nothing to read', async () => {
+    const mark = await import('../public/js/clip/mark.js');
+    await mark.markReady;
+    const { VerticalCompositor, profileOf } = await import('../public/js/clip/vertical.js');
+    const strap = { cur: { headline: 'NASA to conduct low-altitude flights over Texas', tag: 'TRANSPORT', plate: 'NASA', since: 0 }, outAt: null };
+    const canvas = fakeCanvas(216, 384);
+    const comp = new VerticalCompositor({ canvas, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+    const scene = { shot: 'close', program: { id: 'cosmos', title: 'COSMOS DESK', theme: 'space' }, storyId: 's1', rundown: [{ storyId: 's1', source: 'NASA' }] };
+    comp.profile = profileOf(scene);
+    comp.box = comp.profile.box;
+    const ctx = canvas.getContext('2d');
+    comp.drawMast(9, scene);
+    comp.drawTitle(9, scene);
+    const band = ctx.images.length;
+    comp.sourcePlate(9, scene);
+    comp.caps.update(1, 'NASA will fly low over the Texas farmland this autumn to measure emissions from the fields.', 30);
+    comp.caps.draw(ctx, 1, { cx: L.SAFE.cx, bottom: L.V.caps.y + L.V.caps.h - 4 });
+    const before = ctx.images.length;
+    comp.drawFoot(9, scene);
+    assert.ok(wordsSafe(ctx, 'mast, title, source, captions') > 5);
+    // the source on a plate at the stage's top left, inside the safe column (a clip's hook covers the whole band)
+    const plate = ctx.fills.find((f) => f.y === L.V.stage.y + 4 && f.h === 9);
+    assert.ok(plate && plate.x === L.SAFE.x && plate.y === L.V.stage.y + 4, JSON.stringify(plate));
+    assert.ok(ctx.images.slice(band, before).some((im) => im.y >= L.V.stage.y && im.y < L.V.stage.y + 16), 'SOURCE: NASA at the stage\'s top left');
+    assert.ok(!ctx.images.slice(0, band).some((im) => im.y >= L.V.title.y && im.y < L.V.title.y + 16 && im.x > 50), 'nothing beside the tag: the hook covers the band');
+    const footWords = ctx.images.slice(before).filter((im) => im.h <= 8);
+    assert.equal(footWords.length, 0, 'no source or other small type in the foot (the feeds cover it)');
+    // no plate once the strap has gone, nor on the quiz's tall stage
+    const c2 = fakeCanvas(216, 384);
+    const comp2 = new VerticalCompositor({ canvas: c2, source: fakeCanvas(384, 216), renderer: { graphics: { strap: { ...strap, outAt: 8 } } }, channel: { name: 'GLOBIT 24' } });
+    comp2.profile = comp.profile;
+    comp2.box = comp.box;
+    comp2.sourcePlate(9, scene);
+    assert.equal(c2.getContext('2d').images.length, 0);
+    // NEWS IN 60: its progress rule across the safe column along the stage's top edge
+    const c60 = fakeCanvas(216, 384);
+    const comp60 = new VerticalCompositor({ canvas: c60, source: fakeCanvas(384, 216), renderer: { graphics: { strap: { ...strap, progress: 0.5 } } }, channel: { name: 'GLOBIT 24' } });
+    comp60.profile = comp.profile;
+    comp60.box = comp.box;
+    comp60.progressRule();
+    const { P: PAL } = await import('../public/js/palette.js');
+    const fill = c60.getContext('2d').fills.find((f) => f.c === PAL.yellow && f.y === L.V.stage.y);
+    assert.ok(fill && fill.x === L.SAFE.x && fill.w === Math.floor(L.SAFE.w / 2), JSON.stringify(fill));
+    // the montage takes the captions' rows: its headline at the safe area's foot, no caption over it
+    const m = profileOf({ shot: 'montage', program: { id: 'world-now' } });
+    assert.equal(m.captions, false);
+    assert.equal(m.box.y + m.box.h, L.PLATFORM_SAFE.bottom);
   });
 
   test('the AI mark docks to the bug in every clip (the compliance desk\'s own when it is there)', async () => {
@@ -256,6 +420,11 @@ describe('the vertical picture', () => {
     assert.ok(w > mark.clipMarkWidth(), 'the bug and its mark');
     const { P } = await import('../public/js/palette.js');
     assert.ok(ctx.fills.some((f) => f.c === P.yellow && f.x >= 8 + 48), 'a yellow plate right of the bug');
+    // never twice: the bug's own row draws no mark (not even one clipped away), the clip's is the only one
+    const yellow = ctx.fills.filter((f) => f.c === P.yellow);
+    const span = Math.max(...yellow.map((f) => f.x + f.w)) - Math.min(...yellow.map((f) => f.x));
+    assert.ok(span <= mark.clipMarkWidth(), `one mark's width of yellow, no more: ${JSON.stringify(yellow)}`);
+    assert.ok(yellow.every((f) => visible(f)), 'no mark drawn into a clip that hides it (the bug row\'s own, clipped away)');
   });
 
   test('captions: whole words, at most two lines a page within the width, a weak word never ends a line', () => {

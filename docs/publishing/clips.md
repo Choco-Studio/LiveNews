@@ -89,6 +89,10 @@ when that fits, else the whole headline in the body face. A running-order label 
   `excludedKind`).
 - `publishable(moments, { phase })`: in Phase 1 only light moments, in Phase 2 nothing grave, in Phase 3 all. In
   every phase the sense must be at least 7, and demo data is never published.
+- **Never a story that copies its source** (`markCopied`). The factory runs the compliance desk's verbatim lint over
+  the episode first (`lintEpisode` against the archive's titles and summaries, and the articles when cached): a moment
+  that tells a story whose aired words copy their source is refused (`verbatim`) and not chosen, because the gate
+  would hold its clip. `--all` and `--moments` still make it, to look at.
 
 ## 3. The timeline (`server/publish/timeline.js`)
 
@@ -149,9 +153,25 @@ A YouTube clip is a Short (vertical only). Its horizontal uploads are whole prog
 
 ## 6. The texts of a clip (`server/publish/clipmeta.js`)
 
-Each network gets a title (the hook or the headline, within its limit), a text, the outlet credited with its
-article's link where links work (YouTube's description, Facebook, X; TikTok and Instagram carry the credit without a
-live link), hashtags (the programme and the subject), and the AI disclosure field. A light clip's caption may open with one emoji naming its
+Each network gets a title, a text, the outlet credited with its article's link where links work (YouTube's
+description, Facebook, X; TikTok and Instagram carry the credit without a live link), hashtags (the programme and the
+subject), and the AI disclosure field.
+
+**Whose words** (`server/publish/wording.js`; `plan.md` §4; `verbatim.md`). A clip's title and lead are the channel's
+own words or a credited citation, never an outlet's headline passed off as ours:
+
+- the channel's own headline, when the words it aired pass the verbatim check against the story's sources (`ownWords`:
+  no run of 12 copied words, no more than 20 % copied);
+- otherwise the story's label ("Wildfire · California, USA") and the outlet's headline as an attributed citation,
+  `BBC Science: “Evacuation orders as fast-moving California wildfire burns homes”`. A citation is never cut: when the
+  title is short of room, its tail (`| programme | GLOBIT 24`) goes first, then the label stands alone;
+- the quiz's own title (below), which never carries the headline;
+- the hook burned into the picture follows the same rule (`moments.js` `ownHook`): a hook that is the story's aired
+  headline stays only when the headline is the channel's own words, else it is the story's label as its words bear
+  it out ("WILDFIRE: / CALIFORNIA, USA"), else the programme's name. A burned-in title cannot carry a citation.
+
+Every link is cleaned of tracking parameters (`cleanLink`: `utm_*`, `at_*`, `fbclid`, `gclid` and the like; every other
+parameter and the fragment kept). A light clip's caption may open with one emoji naming its
 programme, on every network but YouTube. A grave clip never has one.
 
 **A quiz clip never gives its answer away** (`moments.js` `quizWords`). The question's headline is often the answer:

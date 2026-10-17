@@ -183,7 +183,7 @@ function header(ctx, dt, C, kicker, frame, beside = 0) {
   return C.py + 15 + (big ? 14 : 7) + 7;
 }
 
-function drawCountdown(ctx, dt, x, y, w, cd) {
+function drawCountdown(ctx, dt, x, y, w, cd, h = 3) {
   if (!cd || dt < cd.at) return;
   const { n, lit } = countdownCells(cd, dt);
   const gap = 2;
@@ -191,10 +191,10 @@ function drawCountdown(ctx, dt, x, y, w, cd) {
   const vis = Math.round((cw * n + gap * (n - 1)) * ease(dt, cd.at, 0.15));
   ctx.save();
   try {
-    clipRect(ctx, x, y, vis, 3);
+    clipRect(ctx, x, y, vis, h);
     for (let i = 0; i < n; i++) {
       ctx.fillStyle = i < lit ? P.white : P.slate;
-      ctx.fillRect(x + i * (cw + gap), y, cw, 3);
+      ctx.fillRect(x + i * (cw + gap), y, cw, h);
     }
   } finally {
     ctx.restore();
@@ -290,8 +290,53 @@ function vHowMany(ctx, dt, o, box) {
       }
     });
     const footY = C.py + C.ph - 14;
-    if (!revealed) drawCountdown(ctx, dt, C.x + ((C.cw - 128) >> 1), footY + 4, 128, o.countdown || null);
-    else drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), C.cw, 2, 'REPORTED'), C.x, footY, dt, revealAt + 0.3);
+    // the space under the guesses has a job, all question long (the board is on screen while the host reads it; the
+    // countdown often runs over the players' faces): YOUR GUESS? at 2x over an empty answer box at 3x height, its
+    // cursor blinking on the bed's half notes, the countdown under it while it runs; at the reveal the answer lands in
+    // the box in the reveal's yellow (the box widens to it), its label under it. The box is one width whatever the
+    // answer, so it gives nothing away. On a short stage, the countdown at the foot.
+    const midTop = y + 2 * 21 + 6;
+    const midH = footY - 6 - midTop;
+    const cx = C.x + (C.cw >> 1);
+    const fig = q.figure || null;
+    const value = up(fig ? `${fig.qualifier ? `${fig.qualifier} ` : ''}${fig.value}` : '');
+    const big = value && textW(value, 3) <= C.cw - 10 ? 3 : 2;
+    if (midH >= 58) {
+      const my = midTop + ((midH - 58) >> 1);
+      const p = ease(dt, 0.75, 0.3);
+      if (p > 0) {
+        const head = revealed ? 'THE ANSWER' : 'YOUR GUESS?';
+        const hw = textW(head, 2);
+        if (revealed) drawText(ctx, head, cx - (hw >> 1), my, S.white2);
+        else rise(ctx, head, cx - (hw >> 1), my, seg(dt, 0.75, 0.3), S.white2);
+        const bw0 = Math.min(C.cw, 96);
+        const bw = revealed && value ? Math.min(C.cw, Math.max(bw0, textW(value, big) + 12)) : bw0;
+        const bh = 27;
+        const by = my + 20;
+        const open = Math.round(bw * p);
+        ctx.fillStyle = P.slate;
+        ctx.fillRect(cx - (open >> 1), by, open, bh);
+        ctx.fillStyle = P.black;
+        if (open > 2) ctx.fillRect(cx - (open >> 1) + 1, by + 1, open - 2, bh - 2);
+        if (p >= 1) {
+          if (!revealed) {
+            // the cursor: a 3x caret on the half notes
+            if (Math.floor(dt / HALF_NOTE) % 2 === 0) {
+              ctx.fillStyle = P.white;
+              ctx.fillRect(cx - 1, by + 3, 3, bh - 6);
+            }
+          } else if (value) {
+            const vw = textW(value, big);
+            rise(ctx, value, cx - (vw >> 1), by + (big === 3 ? 3 : 6), seg(dt, revealAt + 0.15, 0.3), { color: P.yellow, scale: big });
+          }
+        }
+        const cd = o.countdown || null;
+        if (!revealed && cd && dt >= cd.at) drawCountdown(ctx, dt, C.x + ((C.cw - 140) >> 1), by + bh + 6, 140, cd, 5);
+        const label = revealed ? up(fig?.label || '') : '';
+        if (label) rise(ctx, label, cx - (measureText(label, 1, 'micro') >> 1), by + bh + 6, seg(dt, revealAt + 0.3, 0.3), S.microSilver);
+      }
+    } else if (!revealed) drawCountdown(ctx, dt, C.x + ((C.cw - 128) >> 1), footY + 4, 128, o.countdown || null);
+    if (revealed) drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), C.cw, 2, 'REPORTED'), C.x, footY, dt, revealAt + 0.3);
   } finally {
     ctx.restore();
   }
@@ -956,6 +1001,14 @@ const wins = (n) => {
   const whole = Math.floor(n);
   return n - whole >= 0.5 ? `${whole || ''}½` : String(whole);
 };
+/** A name for the week's table in `avail` px at 1x: whole, else "PENNY S.", else "PENNY", cut only past all three. */
+export function tableName(name, avail) {
+  const full = up(name);
+  const parts = full.split(/\s+/).filter(Boolean);
+  const short = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : full;
+  return [full, short, parts[0] || full].find((n) => textW(n, 1) <= avail) || ellipsis(full, avail, 1);
+}
+
 function vTable(ctx, dt, o, box) {
   const rows = tableRows(o.standings, o.players);
   if (!rows.length) return;
@@ -986,7 +1039,10 @@ function vTable(ctx, dt, o, box) {
         const rank = String(r.rank);
         drawText(ctx, rank, C.x + 6 - textW(rank, 1), ry + off, S.fog);
         if (t) drawSeat(ctx, t.seat, C.x + 12, ry + off, P.white);
-        drawText(ctx, ellipsis(up(r.name || r.id), colP - 44 - (C.x + 24), 1), C.x + 24, ry + off, S.white);
+        // the name whole when it fits before the PLAYED column, else as the boards call the player ("PENNY S.",
+        // "PENNY"): never a name cut mid-word ("PENNY STER…")
+        const avail = colP - measureText('PLAYED', 1, 'micro') - 6 - (C.x + 24);
+        drawText(ctx, tableName(r.name || r.id, avail), C.x + 24, ry + off, S.white);
         const pl = String(r.played);
         drawText(ctx, pl, colP - textW(pl, 1), ry + off, S.silver);
         const wv = wins(r.wins);

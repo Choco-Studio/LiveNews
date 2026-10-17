@@ -26,6 +26,7 @@ import { estimateTimeline } from './timeline.js';
 import { dangling, backReference, endsClean, quotesBalanced, graveText, interestCues, greetingOnly, teaseText } from './text.js';
 import { severity } from '../facts.js';
 import { excludedKind } from '../quiz/desk.js';
+import { ownWords, storyLabel } from './wording.js';
 
 // Phase 1's light programmes (docs/publishing/plan.md §2): the quiz, the weather, sport and the light desks (science,
 // technology, games). SEVEN DAYS and the news programmes come in Phase 2, hard news gradually after.
@@ -206,6 +207,25 @@ export function headlineHook(headline) {
   return hookLines(h) || (head && hookLines(head[1])) || hookLines(h, { chars: SMALL_LINE, max: 3 }) || (head && hookLines(head[1], { chars: SMALL_LINE, max: 3 })) || null;
 }
 const kickerHook = (k) => (k && !FEATURE_LABEL.test(String(k).trim()) ? k : null);
+
+/**
+ * The verbatim rule on a clip's burned-in title (docs/publishing/verbatim.md): a hook that is the story's aired
+ * headline (or its part before a colon) stays only when that headline is the channel's own words against the story's
+ * sources (`ownWords`); otherwise it would show the outlet's headline as the channel's, unattributed, so the hook is
+ * the story's label as its own words bear it out ("WILDFIRE · CALIFORNIA, USA"), else the programme's name.
+ * `story` = { kicker, location|place, category }; `sources` = the story's title, summary and article.
+ */
+export function ownHook(m, story = {}, sources = []) {
+  if (!m?.headline || !Array.isArray(m.hook) || !m.hook.length) return m?.hook || null;
+  const flat = (x) => upper(x).replace(/[^A-Z0-9]+/g, '');
+  const head = flat(m.headline);
+  const hook = flat(m.hook.join(' '));
+  if (!(hook.length >= 8 && head.startsWith(hook))) return m.hook; // a kind's own hook, not the headline
+  const src = (sources || []).filter((x) => typeof x === 'string' && x.trim());
+  if (!src.length || ownWords(m.headline, src)) return m.hook;
+  const label = storyLabel(story, src);
+  return pickHook([label ? label.replace(/ · /g, ': ') : null, kickerHook(upper(story.kicker || '')) && storyLabel({ kicker: story.kicker }, src) ? story.kicker : null], m.programme || 'GLOBIT 24');
+}
 
 /**
  * A quiz question's words for its posts, which never give its answer away: the question as the board asks it (its
@@ -469,5 +489,20 @@ export function detectMoments(episode, { timeline = null } = {}) {
 
 /** Moments a phase may publish: light, not demo, sense at least `minSense` (Phase 1: the light programmes only). */
 export function publishable(moments, { phase = 1, minSense = 7 } = {}) {
-  return moments.filter((m) => !m.demo && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+  return moments.filter((m) => !m.demo && !m.copied && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+}
+
+/**
+ * The verbatim rule (docs/publishing/verbatim.md): a moment that tells a story whose aired words copy its source is not
+ * publishable in any phase (the compliance gate would hold its clip). `copied`: the story ids the lint flagged.
+ */
+export function markCopied(moments, copied) {
+  const ids = copied instanceof Set ? copied : new Set(copied || []);
+  for (const m of moments) {
+    if ((m.storyIds || []).some((id) => ids.has(id))) {
+      m.copied = true;
+      m.refused = m.refused || 'verbatim: its aired words copy the source';
+    }
+  }
+  return moments;
 }

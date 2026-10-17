@@ -822,15 +822,26 @@ const chalkRect = (ctx, x, y, w, h, c) => {
  */
 const CHALK_SPORTS = new Set(['football', 'american-football', 'rugby']);
 
-export function drawChalkboard(ctx, dt, o) {
+export function drawChalkboard(ctx, dt, o, box = null) {
   const k = o.chalk;
   // (only the three grounds it knows, and only a distance it can draw to scale: never a made-up ground nor a moved mark)
   const raw = Number(k?.metres !== undefined && k?.yards === undefined ? k.metres : k?.yards);
   if (!k || !CHALK_SPORTS.has(k.sport || 'football') || !(raw >= 1 && raw <= 70)) return;
-  const bw = 196;
-  const bh = SAFE_BOTTOM - SAFE_TOP - 6;
-  const bx = (W - bw) >> 1;
-  const by = SAFE_TOP + 3;
+  let bw = 196;
+  let bh = SAFE_BOTTOM - SAFE_TOP - 6;
+  let bx = (W - bw) >> 1;
+  let by = SAFE_TOP + 3;
+  // `box`: a narrower frame (the publishing desk's vertical picture): the board inside it, the ground to scale within
+  // its width as well as its height, the board as tall as the ground needs
+  let scale = null;
+  if (box) {
+    const depth0 = clamp(Math.ceil((raw + 10) / 10) * 10, 40, 80);
+    bw = box.w - 8;
+    bx = box.x + 4;
+    scale = Math.min((box.h - 8 - 36) / depth0, (bw - 12) / ((k.sport || 'football') === 'american-football' ? 53 : 70));
+    bh = Math.round(depth0 * scale) + 36;
+    by = box.y + 4 + Math.max(0, (box.h - 8 - bh) >> 1);
+  }
   const vis = easeOutQuint(seg(dt, 0, 0.3));
   if (vis <= 0) return;
   ctx.save();
@@ -855,7 +866,7 @@ export function drawChalkboard(ctx, dt, o) {
     const metres = k.metres !== undefined && k.yards === undefined;
     const dist = raw;
     const depth = clamp(Math.ceil((dist + 10) / 10) * 10, 40, 80);
-    const s = (bh - 36) / depth;
+    const s = scale ?? (bh - 36) / depth;
     const gw = Math.round((sport === 'american-football' ? 53 : 70) * s);
     const gx = bx + ((bw - gw) >> 1);
     const top = by + 10;

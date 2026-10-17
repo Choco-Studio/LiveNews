@@ -5,6 +5,7 @@
 // grave one never has an emoji and never a playful line.
 import { describe, creditsFor, disclosureFor } from './compliance.js';
 import { PLATFORMS } from './platforms.js';
+import { ownWords, citation, storyLabel, cleanLink } from './wording.js';
 
 const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const sentence = (s) => {
@@ -63,10 +64,15 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
   const grave = !!moment.grave;
   const hook = (moment.hook || []).join(' ');
   const links = [];
+  const sources = [];
   for (const id of moment.storyIds || []) {
     const s = stories.get?.(id);
-    if (s?.link && !links.some((l) => l.url === s.link)) links.push({ label: s.source || 'Source', url: s.link, title: s.title });
+    if (s) sources.push(s.title, s.summary);
+    const url = s?.link ? cleanLink(s.link) : null;
+    if (url && !links.some((l) => l.url === url)) links.push({ label: s.source || 'Source', url, title: s.title });
   }
+  // the clip's words are the channel's own when they pass the verbatim rule; else the outlet's headline, cited
+  const ownHead = moment.headline && ownWords(moment.headline, sources.filter(Boolean)) ? norm(moment.headline) : '';
   const outlet = (moment.sources || [])[0] || links[0]?.label || null;
   let lead;
   if (moment.kind === 'quiz-question' || moment.kind === 'quiz-round') {
@@ -77,17 +83,34 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
     if (outlet) lead += ` From a story by ${outlet}.`;
   } else if (moment.kind.startsWith('weather')) {
     lead = `${sentence(hook)}. From ${prog}, the world's weather from the forecast data.`;
+  } else if (ownHead || !moment.headline) {
+    const h = ownHead || sentence(hook);
+    lead = `${h}${/[.?!]$/.test(h) ? '' : '.'}${outlet ? ` Reporting: ${outlet}.` : ''} From ${prog} on GLOBIT 24.`;
   } else {
-    lead = `${norm(moment.headline || hook)}${/[.?!]$/.test(norm(moment.headline || hook)) ? '' : '.'}${outlet ? ` Reporting: ${outlet}.` : ''} From ${prog} on GLOBIT 24.`;
+    // the channel's headline is the outlet's: its label, and the outlet's headline only as a citation
+    const label = storyLabel({ kicker: moment.kicker, place: moment.place, category: moment.category }, sources.filter(Boolean));
+    const first = (moment.storyIds || []).map((id) => stories.get?.(id)).find(Boolean);
+    lead = `${label ? `${label}. ` : ''}From ${prog} on GLOBIT 24. ${citation(outlet || first?.source || 'Source', first?.title || moment.headline)}.`;
   }
   const disclosure = 'Presenters are AI-generated characters with synthetic voices; every fact is from the named source.';
   const tags = (grave ? ['news'] : TAGS[moment.programId] || TAGS.default).slice(0, 5);
   const emoji = !grave && moment.light && EMOJI[moment.programId] ? `${EMOJI[moment.programId]} ` : '';
   // a quiz question's own title (two questions never share one); within the limit at a whole word
-  const head = moment.kind === 'quiz-question' && moment.quiz?.title ? norm(moment.quiz.title) : sentence(hook);
-  const tail = ` | ${prog} | GLOBIT 24`;
-  const room = PLATFORMS.youtube.text.title - tail.length;
-  const title = `${fitTitle(head, room)}${tail}`;
+  // a quiz question's own title (two questions never share one); a story's hook when it is the channel's own words,
+  // else the outlet's headline cited (the verbatim rule: wording.js); within the limit at a whole word
+  const storyHook = moment.headline && sentence(hook).toLowerCase().replace(/[^a-z0-9]+/g, '') === norm(moment.headline).toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const head = moment.kind === 'quiz-question' && moment.quiz?.title ? norm(moment.quiz.title) : storyHook ? ownHead || citation(outlet || 'Source', norm(moment.headline)) : sentence(hook);
+  const max = PLATFORMS.youtube.text.title;
+  let title;
+  if (/^.+: “.*”$/.test(head)) {
+    // a citation is never cut (a cut quotation misquotes): a shorter tail, else the story's label instead
+    const fit = [` | ${prog} | GLOBIT 24`, ' | GLOBIT 24', ''].find((t) => head.length + t.length <= max);
+    const label = storyLabel({ kicker: moment.kicker, place: moment.place, category: moment.category }, sources.filter(Boolean));
+    title = fit !== undefined ? `${head}${fit}` : `${fitTitle(label || prog, max - 12)} | GLOBIT 24`;
+  } else {
+    const tail = ` | ${prog} | GLOBIT 24`;
+    title = `${fitTitle(head, max - tail.length)}${tail}`;
+  }
   const item = { kind: 'clip', episode, platforms: [platform] };
   const credits = creditsFor({ ...item, credits: (moment.credits || []) });
   const sourceLines = links.map((l) => `Source: ${l.label} — ${l.url}`);

@@ -19,7 +19,7 @@
 <div class="grid" id="grid"></div>
 <script type="module">
 import { P } from '/js/palette.js';
-import { drawVerticalScoreline, drawVerticalScoreboard } from '/js/clip/vsport.js';
+import { drawVerticalScoreline, drawVerticalScoreboard, drawVerticalComingUp, drawVerticalChalkboard } from '/js/clip/vsport.js';
 import { groundOf } from '/js/clip/vertical.js';
 
 const qs = new URLSearchParams(location.search);
@@ -42,10 +42,20 @@ const ROWS = [
   { a: 'Harbourside Hawks', b: 'Millbrook Foxes', sa: 24, sb: 17, sport: 'rugby' },
   { a: 'Bills', b: 'Rams', sa: 37, sb: 34, sport: 'american-football', day: 'MON' },
 ];
+const FIXTURES = [
+  { event: 'Starfield City v Glimmerford', when: 'Tomorrow 7.45pm', date: '2026-10-14', sport: 'football' },
+  { event: 'Harbourside Hawks v Quaywick Raiders', when: 'Saturday 3pm', date: '2026-10-17', sport: 'rugby' },
+  { event: 'Bitport Comets v Ironvale Giants', when: 'Sunday 6pm', date: '2026-10-18', sport: 'basketball' },
+];
 const cases = [
   ...SC.map(([n, o]) => [`RESULT · ${n}`, (g) => drawVerticalScoreline(g, dt, o, BOX, P.orange)]),
   ['SCORE CENTRE · three rows', (g) => drawVerticalScoreboard(g, dt, { scores: ROWS.slice(0, 3), title: "TODAY'S RESULTS", source: 'Pixelburg Sport' }, BOX, P.orange)],
   ['SCORE CENTRE · six rows', (g) => drawVerticalScoreboard(g, dt + 6, { scores: ROWS, title: 'THE WEEKEND\'S RESULTS', source: 'Pixelburg Sport / Sky Sports' }, BOX, P.orange)],
+  ['COMING UP · three fixtures', (g) => drawVerticalComingUp(g, dt, { title: 'COMING UP', fixtures: FIXTURES, source: 'Pixelburg Sport' }, BOX, P.orange)],
+  ['COMING UP · two, the longest sides', (g) => drawVerticalComingUp(g, dt, { title: 'THE WEEKEND AHEAD', fixtures: [{ event: 'Brighton & Hove Albion v Wolverhampton Wanderers', when: 'Saturday 3pm', date: '2026-10-17', sport: 'football' }, { event: 'The Ashes', when: '21 November', date: '2026-11-21', sport: 'cricket' }], source: 'Sky Sports' }, BOX, P.orange)],
+  ['THE MOMENT ON THE BOARD · football, 30 yards', (g) => drawVerticalChalkboard(g, dt, { chalk: { yards: 30, sport: 'football' } }, BOX)],
+  ['THE MOMENT ON THE BOARD · rugby, 45 metres', (g) => drawVerticalChalkboard(g, dt, { chalk: { metres: 45, sport: 'rugby' } }, BOX)],
+  ['THE MOMENT ON THE BOARD · American football, 62 yards', (g) => drawVerticalChalkboard(g, dt, { chalk: { yards: 62, sport: 'american-football' } }, BOX)],
 ];
 const grid = document.getElementById('grid');
 for (const [label, draw] of cases) {

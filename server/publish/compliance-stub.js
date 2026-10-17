@@ -201,6 +201,36 @@ export async function markFile(file, manifest) {
   return { ok: false, stub: true, sidecar, reason: 'the compliance module is not installed: the file is not signed (a sidecar manifest only)' };
 }
 
+/**
+ * The verbatim measure, on the safe side of the real one (server/compliance/verbatim.js): runs of 6 words or more
+ * copied from the sources, a run over 12 words or more than 20 % of the words copied is a violation. Unlike the real
+ * module it exempts no quotation, so an attributed headline counts as copied here too (the stub refuses more).
+ */
+export function storyReport(aired, sources, { maxRun = 12, maxShare = 0.2, phrase = 6 } = {}) {
+  const toks = (t) => (String(t ?? '').match(/[\p{L}\p{N}]+(?:[’'][\p{L}]+)?/gu) || []).map((w) => w.toLowerCase().replace(/[’']/g, ''));
+  const a = toks(aired);
+  const srcs = (Array.isArray(sources) ? sources : [sources]).map(toks);
+  const grams = new Set();
+  for (const s of srcs) for (let i = 0; i + phrase <= s.length; i++) grams.add(s.slice(i, i + phrase).join(' '));
+  const runs = [];
+  for (let i = 0; i + phrase <= a.length; ) {
+    if (!grams.has(a.slice(i, i + phrase).join(' '))) {
+      i++;
+      continue;
+    }
+    let k = phrase;
+    while (i + k < a.length && grams.has(a.slice(i + k - phrase + 1, i + k + 1).join(' '))) k++;
+    runs.push({ from: i, to: i + k, length: k, longest: k, outside: k, text: a.slice(i, i + k).join(' ') });
+    i += k;
+  }
+  const copied = runs.reduce((n, r) => n + r.length, 0);
+  const share = a.length ? copied / a.length : 0;
+  const violations = [];
+  for (const r of runs) if (r.length > maxRun) violations.push({ rule: 'run', length: r.length, text: r.text });
+  if (share > maxShare) violations.push({ rule: 'share', share: Math.round(share * 1000) / 1000 });
+  return { words: a.length, quoted: 0, copied, share, longest: runs.reduce((n, r) => Math.max(n, r.length), 0), runs, violations, stub: true };
+}
+
 export function preflight(item = {}, opts = {}) {
   const kind = item.kind || (item.episode ? 'episode' : 'text');
   if (isVideo(kind)) {
@@ -209,5 +239,7 @@ export function preflight(item = {}, opts = {}) {
   }
   const violations = [];
   if (!/^AI-generated:/.test(norm(item.text))) violations.push({ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' });
+  const src = (item.sourceTexts || []).filter(Boolean);
+  if (src.length && storyReport(String(item.text || '').replace(/https?:\/\/\S+/g, ' ').replace(/<[^>]+>/g, ' '), src).violations.length) violations.push({ rule: 'verbatim', message: 'the post copies its source (the stub counts a quoted headline as copied too)' });
   return { ok: violations.length === 0, violations, warnings: [], disclosure: disclosureFor({ ...item, kind }), credits: creditsFor(item), stub: true };
 }

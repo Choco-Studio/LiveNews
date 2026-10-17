@@ -122,7 +122,23 @@ Los botones:
 - **Ajustes**, arriba: elige qué redes se usan y si cada una es **Manual** (todo espera tu aprobación) o **Apagada**.
   «Muestra» y «Automático» solo existen a partir del cuarto mes.
 
-Lo que el control de cumplimiento ha retenido no se puede aprobar: la tarjeta dice por qué.
+Lo que el control de cumplimiento ha retenido no se puede aprobar: la tarjeta dice por qué, en castellano, y debajo
+el mensaje original del control. Hoy el motivo más frecuente es «Copia palabras del medio»: la noticia se emitió con
+frases del medio casi literales, y un clip o una publicación con esas frases no sale hasta que el canal la cuente con
+sus propias palabras.
+
+**Las tarjetas de TikTok** tienen un recuadro más, porque TikTok exige que elijas tú, publicación por publicación:
+
+- **quién puede verlo**: Todo el mundo, Amigos, Seguidores o Solo yo. No viene ninguna marcada: TikTok no permite un
+  valor por defecto. Mientras TikTok no haya auditado la app, todo sale como «Solo yo», elijas lo que elijas;
+- si se permiten **comentarios**, **dúos** y **stitch** (vienen sin marcar);
+- la **confirmación de uso de música** de TikTok (Music Usage Confirmation), que tienes que aceptar tú.
+
+Al principio (modo bandeja) el vídeo llega a tu bandeja de TikTok y allí eliges la privacidad, así que el recuadro solo
+guarda tus preferencias. Cuando TikTok haya auditado la app y pongas `TIKTOK_MODE=direct`, el botón **Aprobar** de una
+tarjeta de TikTok no se activa hasta que hayas elegido quién puede verlo y aceptado la confirmación; «Aprobar en 3
+redes» deja esa tarjeta esperando hasta entonces. Contenido de marca: no (el canal no publica contenido pagado). La
+etiqueta «Contenido generado por IA» va siempre puesta.
 
 ## 7. Publicar de verdad: los cinco interruptores
 
