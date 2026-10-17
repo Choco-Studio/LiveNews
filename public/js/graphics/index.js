@@ -17,7 +17,7 @@
 import { P } from '../palette.js';
 import { THEME_ACCENT } from '../cast.js';
 import { zoneTime, STUDIO_TZ } from '../util.js';
-import { CAPTION, STRAP, lerp, easeInOut, clamp01 } from './layout.js';
+import { CAPTION, STRAP, TOP, lerp, easeInOut, clamp01 } from './layout.js';
 import { drawTopRow, drawAdTag } from './bug.js';
 import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, drawStrap } from './strap.js';
 import { CaptionState, drawCaptions } from './captions.js';
@@ -26,7 +26,7 @@ import { CHANNEL } from '../pace.js';
 import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
 import { drawRecreation, recreationTop } from './recreation.js';
 import { FRAME, MARK_TIMING, nounOf } from './disclosure.js';
-import { drawPictureCredits } from './picture.js';
+import { drawPictureCredits, headlineTagRight, CREDITS } from './picture.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -510,7 +510,13 @@ export class Graphics {
 
   /** Bottom edge (or { top }) of the caption block: 6 px above the strap's top, wherever it is. */
   captionPlace(t, scene) {
-    if (this.captionsOnTop(scene)) return TOP_PLACE;
+    if (this.captionsOnTop(scene)) {
+      // (a long credit under the clock runs on two lines beside TOP STORIES: the captions start 6 px under it)
+      const under = CREDITS.bottom ? CREDITS.bottom + CAPTION.gap : 0;
+      if (under <= CAPTION.top) return TOP_PLACE;
+      LOW_PLACE.top = under;
+      return LOW_PLACE;
+    }
     // (a recreation's name super may stand taller in a clip's narrow window: its role and name wrap)
     const above = (this.strap.cur && !scene.recreation ? this.strap.top(t) : scene.recreation ? recreationTop(scene.recreation) : STRAP.tagY) - CAPTION.gap;
     BOTTOM_PLACE.bottom = Math.round(lerp(CAPTION.bottomFree, above, this.liftAt(t)));
@@ -542,6 +548,7 @@ export class Graphics {
   /** Draw the current state (no state changes). */
   render(ctx, t, scene) {
     const mode = this.mode;
+    CREDITS.bottom = 0;
     if (mode === 'ad') return drawAdTag(ctx, t, this.adAt, scene?.adBreak?.until ?? null);
     if (!ON.has(mode)) return;
     const program = mode === 'news' && scene.program?.title ? this.programTag(scene) : null;
@@ -561,7 +568,7 @@ export class Graphics {
     // a montage frame over its place's footage (studio.js decides card.vid): FILE and the clip's credit
     if (scene.shot === 'montage' && scene.card?.vid) {
       const credit = scene.rundown?.[scene.card.index]?.footage?.credit;
-      if (credit) drawFileCredit(ctx, credit);
+      if (credit) CREDITS.bottom = TOP.y + TOP.h + 3 + 9 * drawFileCredit(ctx, credit, undefined, 'FILE', { left: headlineTagRight(scene) });
     } else if (mode === 'news') drawPictureCredits(ctx, scene); // the picture on screen, credited as its licence asks
     if (mode === 'news') {
       if (scene.recreation) drawRecreation(ctx, scene.recreation, this.accentOf(scene));
@@ -592,4 +599,5 @@ export class Graphics {
 // Reused per frame (no allocations in steady state).
 const TOP_ROW = { onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '', markFrom: 0, noun: 'NEWS' };
 const TOP_PLACE = Object.freeze({ top: CAPTION.top });
+const LOW_PLACE = { top: CAPTION.top };
 const BOTTOM_PLACE = { bottom: CAPTION.bottomFree };

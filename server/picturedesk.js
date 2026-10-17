@@ -42,6 +42,7 @@ import { WikimediaClient, PacedJson, KeptAnswers } from './wikimedia.js';
 import { fileQuery, fileFromCommons, COMMONS_MEDIA, standardRendition } from './imagesearch.js';
 import { storyAction, actorKind, eventFileProblem, eventQuery, fileYear, seatFor } from './fileevents.js';
 import { INSTITUTIONS, openverseTrust } from './openverse.js';
+import { SOBER } from './faces.js';
 export { fileFromCommons };
 
 const HOUR = 3600_000;
@@ -542,7 +543,19 @@ const PHOTO_MIME = /^image\/(?:jpeg|png|webp)$/i;
 // (the biggest face in it may be someone else's)
 // how many pictures of one person the face reader may be asked to read for a grave story
 const SOBER_CANDIDATES = 30;
-const SOBER_NOT_ALONE = /\b(?:and|with|meets?|meeting|met|greet\w*|visit\w*|crowds?|pilgrims|audience|faithful|delegation|family|wife|husband|children|kids|students|supporters|fans|people|team|group|cabinet|leaders|summit|ceremony|rally|wedding|funeral|vs|receives?|from|between|together)\b|&/i;
+// a public figure's portraits rotate (the coordinator's review of round 7: one portrait of Trump aired twenty times):
+// up to this many more of their Commons category's portraits are looked at, and up to PORTRAIT_ALTS kept beside the
+// first, each read by the face reader as a portrait of them alone
+const PORTRAIT_POOL = 10;
+const PORTRAIT_ALTS = 5;
+const PORTRAIT_SCAN = 14;
+// a rotation's portrait is a recent one, framed as a portrait (a face of a fifth of the height or more): never a
+// full-length shot from a match, never the person ten years younger
+const PORTRAIT_YEARS = 5;
+const PORTRAIT_SHARE = 0.2;
+// a picture of a sign, a banner, a cartoon or an effigy of a person, or a campaign's poster: never their portrait
+const NOT_A_PORTRAIT = /\b(?:v|vs|versus|match|matches|derby|final|semi-final|cup|league|tournament|championship|sculptures?|bust|busts|banners?|signs?|placards?|posters?|billboards?|graffiti|murals?|effigy|masks?|cartoons?|caricatures?|memes?|stickers?|t-shirts?|statues?|wax|figurines?|protests?|protesters?|rally|rallies|kill|impeach\w*|endorsed|enough|vs|versus|parody|impersonat\w*|lookalike|look-alike)\b/i;
+const SOBER_NOT_ALONE = /\b(?:and|y|e|et|ed|und|och|og|entre|avec|mit|con|com|with|meets?|meeting|met|greet\w*|visit\w*|crowds?|pilgrims|audience|faithful|delegation|family|wife|husband|children|kids|students|supporters|fans|people|team|group|cabinet|leaders|summit|ceremony|rally|wedding|funeral|vs|receives?|from|between|together)\b|[&+]/i;
 
 /** Why a Commons file must not air for this subject and story (null when it may). */
 export function pictureProblem(file, { kind = 'other', flags = {}, minWidth = null } = {}) {
@@ -997,25 +1010,41 @@ export class PictureDesk {
     }
     // a portrait that must be sober (a grave story): the person's own Commons category adds candidates after the Wikidata
     // picture (the face reader picks a sober one)
-    const soberOpts = [...options.values()].flat().filter((o) => o.sober && o.qid);
+    // (and any public figure the desk may show: a few more from their own Commons category, so their portrait rotates)
+    const soberOpts = [...options.values()].flat().filter((o) => o.kind === 'person' && !o.refused && o.qid);
     if (soberOpts.length) {
       const cats = await this.commonsCats(soberOpts.map((o) => o.qid));
       for (const o of soberOpts) {
+        const cap = o.sober ? SOBER_CANDIDATES : o.files.length + PORTRAIT_POOL;
         const name = o.label.replace(/\s*\([^)]*\)\s*$/, '');
         const surname = fold(name).split(' ').pop();
         // (a picture of one person: never one whose title speaks of others, a crowd or a meeting)
-        const alone = (t) => fold(t).includes(surname) && !SOBER_NOT_ALONE.test(String(t).replace(/^File:/, '').replace(/[_-]+/g, ' '));
+        // (nor one of a sign, a banner or a cartoon of them: "Kill Trump banner", "Haven't We Had Enough of Donald Trump")
+        const alone = (t) => fold(t).includes(surname) && !SOBER_NOT_ALONE.test(String(t).replace(/^File:/, '').replace(/[_-]+/g, ' ')) && !NOT_A_PORTRAIT.test(String(t).replace(/^File:/, '').replace(/[_-]+/g, ' '));
         const cat = cats.get(o.qid);
+        // (a file found by search, outside their own category, names them in full: "Melania Trump" is not Donald Trump)
+        // (a middle initial may stand between: "Donald J. Trump")
+        const words = fold(name).split(/\s+/).filter(Boolean);
+        const fullName = new RegExp(`\\b${words[0].replace(/[^a-z0-9]/g, '')}\\b(?:\\s+\\S+)?\\s+${words[words.length - 1].replace(/[^a-z0-9]/g, '')}\\b`);
+        const named = (t) => (words.length > 1 && fullName.test(fold(t))) || fold(t).includes(fold(name)) || (!!cat && fold(t).includes(fold(cat)));
         const listed = cat ? await this.categoryFiles(cat) : [];
-        for (const t of listed || []) if (alone(t) && !o.files.includes(t) && o.files.length < 10) o.files.push(t);
+        // (a rotation's portrait from their category names them in full too: a category keeps anything about them)
+        for (const t of listed || []) if (alone(t) && (o.sober || named(t)) && !o.files.includes(t) && o.files.length < Math.min(cap, o.sober ? 10 : cap)) o.files.push(t);
         // and the person's photographs on Commons by the category's own name when it differs ("Leo XIV" for Pope Leo
-        // XIV, whose files say so) and by name (a category often keeps them in subcategories by year); a public figure
-        // who smiles in most pictures (the Pope) needs many read before a sober one is found
-        for (const q of [...(cat && fold(cat) !== fold(name) ? [cat] : []), name]) {
-          if (o.files.length >= SOBER_CANDIDATES) break;
-          const found = await this.commonsSearch(`"${q}"`, { limit: 30 });
+        // XIV, whose files say so) and by name (a category often keeps them in subcategories by year, and its own files
+        // may be anything: banners, cartoons); a public figure who smiles in most pictures (the Pope) needs many read
+        // before a sober one is found; a rotation needs a few
+        const most = o.sober ? SOBER_CANDIDATES : cap;
+        // (a rotation wants recent portraits: the most relevant files of a famous name are often years old, so the
+        // year and the year before are asked too)
+        const year = new Date(this.now()).getUTCFullYear();
+        // (a one-word name, "Raye", is searched for a sober portrait only: a rotation never takes a stranger of that name)
+        const queries = [...(cat && fold(cat) !== fold(name) ? [`"${cat}"`] : []), ...(o.sober || words.length > 1 ? [`"${name}"`] : []), ...(o.sober || words.length < 2 ? [] : [`"${name}" ${year}`, `"${name}" ${year - 1}`])];
+        for (const q of queries) {
+          if (o.files.length >= most) break;
+          const found = await this.commonsSearch(q, { limit: 30 });
           for (const f of found || []) {
-            if (!alone(f.title) || o.files.includes(f.title) || o.files.length >= SOBER_CANDIDATES) continue;
+            if (!alone(f.title) || !named(f.title) || o.files.includes(f.title) || o.files.length >= most) continue;
             if (!this.kept.has(`f:${f.title}`)) this.kept.set(`f:${f.title}`, f, TTL.file);
             o.files.push(f.title);
           }
@@ -1042,9 +1071,15 @@ export class PictureDesk {
       // NASA's own article: its own picture, when its credit names NASA (public domain, NASA's guidelines)
       const nasaOwn = nasaOwnPicture(s, { now: this.now() });
       if (nasaOwn) picks.push(nasaOwn);
+      let altsPending = false;
       for (const o of opts) {
         o.rejected = [];
+        let primary = null;
+        let scanned = 0;
+        const stems = new Set();
         for (const f of o.files) {
+          // (beside a portrait already found: its rotation's other portraits, a few files looked at at most)
+          if (primary && ++scanned > PORTRAIT_SCAN) break;
           const file = files.get(f);
           const problem = pictureProblem(file, { kind: o.kind === 'person' ? 'person' : o.kind === 'place' ? 'place' : 'other', flags: plan.flags });
           if (problem) {
@@ -1056,29 +1091,54 @@ export class PictureDesk {
             o.rejected.push({ file: f, problem: `rights: ${rights.why}`, licence: file.licence || file.licenceName || null });
             continue;
           }
-          // a grave story's portrait: only one the face reader read as sober (one face, big enough, no smile)
-          if (o.sober) {
-            const v = this.faces?.verdict(file.url) || null;
-            if (!v) {
-              this.faces?.want(file.url, `sober portrait: ${o.label}`);
-              o.awaiting = (o.awaiting || 0) + 1;
-              o.rejected.push({ file: f, problem: 'expression not read yet' });
+          if (primary) {
+            // (another crop or another frame of the same picture is no other portrait: "Foto oficial de Lula (ombros)")
+            const stem = pictureStem(file.title);
+            if (stems.has(stem)) {
+              o.rejected.push({ file: f, problem: 'the same picture again' });
               continue;
             }
-            if (!v.sober) {
-              o.rejected.push({ file: f, problem: `not a sober portrait: ${v.why}` });
+            const when = fileYear(file, this.now());
+            if (!when || when.year < new Date(this.now()).getUTCFullYear() - PORTRAIT_YEARS) {
+              o.rejected.push({ file: f, problem: when ? `an old portrait (${when.year})` : 'a portrait of no known date' });
               continue;
             }
           }
-          picks.push({ url: file.url, width: file.width, height: file.height, tier: o.tier, kind: FAMILY_OF(o.kind), subject: { kind: o.kind, qid: o.qid, label: o.label, how: o.how || null }, focus: focusOf(o.kind, file.width, file.height), rights });
-          break;
+          // a grave story's portrait: only one the face reader read as sober (one face, big enough, no smile); a
+          // portrait for the rotation beside the first: only one it read as a portrait of them alone
+          if (o.sober || primary) {
+            const v = this.faces?.verdict(file.url) || null;
+            if (!v) {
+              this.faces?.want(file.url, `${o.sober ? 'sober portrait' : 'portrait'}: ${o.label}`);
+              // (a rotation's portrait not read yet holds nothing up: the first one airs meanwhile)
+              if (primary) altsPending = true;
+              else o.awaiting = (o.awaiting || 0) + 1;
+              o.rejected.push({ file: f, problem: 'expression not read yet' });
+              continue;
+            }
+            // (a rotation's portrait: theirs alone, no other face at all: "Lula and Tony Blair" reads as one face too often)
+            if ((o.sober && !v.sober) || (primary && (!portraitOf(v, PORTRAIT_SHARE) || v.faces !== 1)) || (!o.sober && !primary && !portraitOf(v))) {
+              o.rejected.push({ file: f, problem: o.sober ? `not a sober portrait: ${v.why}` : `not a portrait of one person: ${v.why || 'face too small'}` });
+              continue;
+            }
+          }
+          const pick = { url: file.url, width: file.width, height: file.height, tier: o.tier, kind: FAMILY_OF(o.kind), subject: { kind: o.kind, qid: o.qid, label: o.label, how: o.how || null }, focus: focusOf(o.kind, file.width, file.height), rights };
+          stems.add(pictureStem(file.title));
+          if (!primary) {
+            primary = pick;
+            picks.push(pick);
+            if (o.kind !== 'person') break;
+            continue;
+          }
+          (primary.alts ||= []).push({ url: pick.url, width: pick.width, height: pick.height, focus: pick.focus, rights });
+          if (primary.alts.length >= PORTRAIT_ALTS) break;
         }
         if (picks.length >= 3) break;
       }
       // (a portrait waiting for the face reader: decided again once it has read them)
       const waiting = !picks.some((p) => p.tier <= 1) && opts.some((o) => o.awaiting);
       const known = answered(plan, opts);
-      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: known && !waiting, awaitingFaces: known && waiting });
+      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: known && !waiting, awaitingFaces: known && waiting, ...(altsPending ? { altsPending: true } : {}) });
     }
     // 3b. a grave story's public figure whose Commons pictures were all read and none is sober: an institution's own
     // Flickr picture of them (Openverse), read by the face reader too
@@ -1152,7 +1212,8 @@ export class PictureDesk {
         continue; // asked again next time
       }
       d.at = this.now();
-      this.kept.set(`d:${keyOf(s)}`, d, !d.complete ? TTL.partial : d.picks.length ? TTL.decided : TTL.none);
+      // (a portrait rotation the face reader has still to read: decided again within the hour, its first portrait airing)
+      this.kept.set(`d:${keyOf(s)}`, d, !d.complete ? TTL.partial : d.altsPending && d.picks.length ? HOUR : d.picks.length ? TTL.decided : TTL.none);
     }
     this.kept.save();
     return result;
@@ -1187,7 +1248,8 @@ export class PictureDesk {
         const obituary = isObituary({ candidate: c, page, facts: f, flags, now: this.now() });
         const why = personProblem({ candidate: c, page, facts: f, flags, text, now: this.now(), obituary });
         if (why) {
-          opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: why });
+          // (a public figure no longer living, named in full as their article: their name may still stand on the board)
+          opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: why, about: page.description || null, ...(why === NOT_LIVING && namedAsArticle(c, page, f, text) ? { named: true } : {}) });
           continue;
         }
         const role = roleAgreement(text, f, { sport: flags.sport }) || (c.how === 'surname' && c.surname ? surnameRole(c.surname) : null) || (obituary ? { family: 'obituary', how: 'obituary' } : null);
@@ -1198,20 +1260,20 @@ export class PictureDesk {
         if (flags.harm || flags.grave || obituary) {
           const grave = graveProblem({ facts: f, role, flags, obituary });
           if (grave) {
-            opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: grave });
+            opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: grave, about: page.description || null });
             continue;
           }
-          opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: obituary ? 'obituary' : role.how, sober: true });
+          opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: obituary ? 'obituary' : role.how, sober: true, about: page.description || null });
           continue;
         }
-        opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: role.how });
+        opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: role.how, about: page.description || null });
       } else if (kind.startsWith('thing:')) {
         const why = thingProblem({ candidate: c, page, facts: f, flags, kind, text });
         if (why) {
-          opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: why });
+          opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: why, about: page.description || null });
           continue;
         }
-        opts.push({ kind, tier: 2, qid: page.qid, label: page.title, files: [...images.slice(0, 2), ...(f.aerials || []).slice(0, 1)], via: 'wikidata:P18' });
+        opts.push({ kind, tier: 2, qid: page.qid, label: page.title, files: [...images.slice(0, 2), ...(f.aerials || []).slice(0, 1)], via: 'wikidata:P18', about: page.description || null });
       } else if (kind === 'place' && !flags.harm && !flags.grave && !flags.sport && !flags.disaster && c.start <= PLACE_EARLY) {
         // a place the headline opens on (what the story is about: "Jamaica accepts..."), as the gazetteer knows it (or
         // the story's own place), confirmed by the item's coordinates; never a city's postcard under a story about nature
@@ -1527,10 +1589,69 @@ export class PictureDesk {
   // ---------------------------------------------------------------- the stories
 
   /** The cleared picture decided for a story now (the first that has not failed), or null. */
+  /**
+   * The named actor of a story without a picture, for its board's wordmark (public/js/boardspec.js): { name, about }, or
+   * null (boardActorOf).
+   */
+  boardActor(story) {
+    const d = story?.id ? this.kept.get(`d:${keyOf(story)}`) : null;
+    if (!d) return null;
+    return boardActorOf(d, { page: (t) => (this.kept.has(`t:${t}`) ? this.kept.get(`t:${t}`) : undefined), title: story.title, summary: story.summary });
+  }
+
   pickFor(story) {
     const d = story?.id ? this.kept.get(`d:${keyOf(story)}`) : null;
     const t = this.now();
-    return d?.picks?.find((p) => !(this.failedUrls.get(p.url) > t)) || null;
+    const pick = d?.picks?.find((p) => !(this.failedUrls.get(p.url) > t)) || null;
+    if (!pick?.alts?.length) return pick;
+    // a portrait that rotates: the one this story was given (rotate), as long as it may still air
+    const chosen = this.kept.get(`p:${keyOf(story)}`);
+    const alt = chosen && chosen !== pick.url ? pick.alts.find((a) => a.url === chosen && !(this.failedUrls.get(a.url) > t)) : null;
+    return alt ? { ...pick, ...alt, alts: pick.alts, rotated: true } : pick;
+  }
+
+  /**
+   * The portraits of one public figure rotate across the day: each story of an episode keeps the portrait it was given
+   * (what airs never changes under it); a story new to the air is given that person's portrait aired longest ago, never
+   * one another story of this episode shows. (The producer still takes off a file that two stories of an episode would
+   * both show: server/producer.js.) Called with an episode's stories, in their order, before they are applied.
+   */
+  rotate(stories) {
+    const t = this.now();
+    const taken = new Set();
+    const fresh = [];
+    const aired = [];
+    for (const s of stories || []) {
+      if (!s?.id || s.local) continue;
+      const pick = this.pickFor(s);
+      if (!pick) continue;
+      if (pick.alts?.length && !this.kept.get(`p:${keyOf(s)}`)) fresh.push([s, pick]);
+      else {
+        taken.add(pick.url);
+        if (pick.alts?.length) aired.push(pick);
+      }
+    }
+    const used = (who) => {
+      const u = this.kept.get(`u:${who}`) || {};
+      return Object.fromEntries(Object.entries(u).filter(([, at]) => t - at < DAY));
+    };
+    const remember = (pick) => {
+      const who = pick.subject?.qid || pick.subject?.label || '';
+      if (who) this.kept.set(`u:${who}`, { ...used(who), [pick.url]: t }, DAY);
+    };
+    for (const pick of aired) remember(pick);
+    for (const [s, pick] of fresh) {
+      const who = pick.subject?.qid || pick.subject?.label || '';
+      const u = used(who);
+      const pool = [pick, ...pick.alts].filter((p) => !(this.failedUrls.get(p.url) > t));
+      const order = new Map(pool.map((p, i) => [p.url, i]));
+      const free = pool.filter((p) => !taken.has(p.url));
+      const best = (free.length ? free : pool).sort((a, b) => (u[a.url] || 0) - (u[b.url] || 0) || order.get(a.url) - order.get(b.url))[0];
+      if (!best) continue;
+      taken.add(best.url);
+      this.kept.set(`p:${keyOf(s)}`, best.url, TTL.decided);
+      remember({ ...pick, url: best.url });
+    }
   }
 
   /**
@@ -1592,6 +1713,7 @@ export class PictureDesk {
     await Promise.race([work, new Promise((r) => (timer = setTimeout(r, budgetMs)))]);
     clearTimeout(timer);
     const stats = { stories: list.length, cleared: 0, portrait: 0, subject: 0, place: 0, official: 0, preview: 0, none: 0 };
+    this.rotate(list);
     for (const s of list) {
       const pick = this.apply(s);
       if (pick) {
@@ -1641,6 +1763,80 @@ function keyOf(s) {
 }
 
 /** Where to pixelate from: a portrait keeps the head (the top of the frame), everything else the usual 40 %. */
+/** A file's title without what tells one crop or one frame of a picture from another (brackets, numbers, crop words). */
+export function pictureStem(title) {
+  return fold(String(title || '').replace(/^File:/i, '').replace(/\.[a-z0-9]{3,4}$/i, ''))
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b(?:cropped|crop|close up|closeup|estreita|ombros|head|headshot|portrait|\d+x\d+|\d{1,3})\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** A face reading of a portrait of one person: their face sure and big enough, no one else as big beside them. */
+export function portraitOf(v, minShare = SOBER.minShare) {
+  return !!v && v.faces >= 1 && v.share >= minShare && !/^(?:no face found|face not sure|face too small for a portrait|two people)$/.test(v.why || '');
+}
+
+const NOT_LIVING = 'not in Wikipedia\'s living people';
+const ACTOR_KINDS = /^(?:person|thing:(?:org|product|craft|mission|structure))$/;
+
+/** A person named as their article: in full, early in the headline, the very title (what personProblem asks after "living"). */
+function namedAsArticle(candidate, page, facts, text) {
+  const full = page.title.replace(/\s*\([^)]*\)\s*$/, '');
+  const written = candidate.text || '';
+  if (written.split(/\s+/).length < 2 || candidate.namedThing || candidate.start > 6 || (facts?.sitelinks || 0) < 2) return false;
+  if (fold(written) !== fold(full) && !page.redirected) return false;
+  return new RegExp(`(?<![\\p{L}])${full.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(text);
+}
+
+/**
+ * The named actor of a story without a picture, for its board (public/js/boardspec.js, graphics/topicboard.js): its
+ * name and what it is, from the desk's own decision: { name, about } (about: its Wikipedia description), or null.
+ *
+ * Never a name the desk refused for who it is (an accused, a victim, a private person, someone else of that name, not
+ * the story's subject): only a person or a body the desk found and would have shown, or a public figure no longer living
+ * named in full as their article, never where people were harmed (an obituary's name; never a victim's). A name no
+ * encyclopaedia knows yet (a startup, a gadget: no article at all) stands alone, never under a grave story, only where
+ * the headline writes it as a name (and a headline's first word only where the story writes it so too).
+ *   decision: the desk's decision ({ options, plan }); page(title): the kept article lookup (null: none, undefined:
+ *   never asked).
+ */
+export function boardActorOf(decision, { page = () => undefined, title = '', summary = '' } = {}) {
+  const flags = decision?.plan?.flags || {};
+  // (the death of a public figure who was not harmed by anyone: their obituary may carry their name)
+  const obituary = !flags.violent && !flags.jeopardy && /\b(?:obituary|dies|died|death of|tributes? to)\b/i.test(String(title || ''));
+  const harmed = !!(flags.violent || flags.jeopardy || (flags.harm && !obituary));
+  for (const o of decision?.options || []) {
+    if (o.how === 'topic' || !ACTOR_KINDS.test(o.kind || '')) continue;
+    if (o.refused && !(o.refused === NOT_LIVING && o.named && !harmed)) continue;
+    const about = o.about ?? page(o.label)?.description ?? null;
+    return { name: o.label.replace(/\s*\([^)]*\)\s*$/, ''), about: about || null };
+  }
+  if (harmed || flags.harm || flags.grave || flags.deathOf || flags.disaster) return null;
+  const head = headlineOf(title);
+  for (const text of decision?.plan?.subjects || []) {
+    if (!text || text.length > 28 || page(text) !== null || /['’]/.test(text)) continue;
+    const words = text.split(/\s+/);
+    // every word written as a name ("Sprout Pi", "Cambridge Heavy Industries", "Transporter-18"), never two joined
+    // ("SNES and Genesis"), never a word that is never a name on its own
+    if (!words.every((w) => isCap(w) || /\d/.test(w)) || (words.length === 1 && NOT_A_NAME.has(text.toLowerCase()))) continue;
+    const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const at = new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, 'u').exec(head);
+    if (!at || lookupPlace(text) || findPlaces(text).length) continue;
+    // the whole name, not a part of a longer one ("Paris Auto" of "Paris Auto Show", "No Man" of "No Man's Sky")
+    const before = head.slice(0, at.index);
+    const after = head.slice(at.index + text.length);
+    if (/^\s+(?:\p{Lu}|\d)|^['’]s\s+\p{Lu}|^-/u.test(after) || /(?:^|\s)(?!The\s$)\p{Lu}[\p{L}\d-]*\s$/u.test(before)) continue;
+    // a headline's first word is capitalised whatever it is ("Thousands of NI workers", "Mysterious brain activity"): a
+    // name there only where the story writes it as one mid-sentence ("..., and Licube is preparing")
+    const first = /^[\s'‘’"“”(]*$/.test(before);
+    if (first && !/\p{Lu}.*\p{Lu}|\d/u.test(text.slice(1)) && !new RegExp(`[\\p{Ll},;]\\s+${esc}(?![\\p{L}])`, 'u').test(`${summary || ''}`)) continue;
+    return { name: text, about: null };
+  }
+  return null;
+}
+
 export function focusOf(kind, w, h) {
   if (kind !== 'person') return 0.4;
   const a = (Number(w) || 1) / (Number(h) || 1);

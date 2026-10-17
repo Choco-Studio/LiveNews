@@ -166,5 +166,8 @@ export const config = {
     // day announced; OPENVERSE_DAILY keeps the desk under it); OPENVERSE=off stops asking
     openverse: !/^(0|false|no|off)$/i.test(env('OPENVERSE', '1')),
     openverseDaily: Math.max(0, Math.min(190, Number(env('OPENVERSE_DAILY', '150')) || 0)),
+    // the face reader (tools/pictures/faces.mjs), run and watched by the station (server/facereader.js): FACE_READER=off
+    // never starts it (a grave story's portrait then never airs: unread is unknown)
+    faceReader: !/^(0|false|no|off)$/i.test(env('FACE_READER', '1')),
   },
 };

@@ -156,6 +156,54 @@ const COUNTRIES = [
   ['New Zealand', -40.9, 174.9, null, [], ['New Zealander']],
   ['Papua New Guinea', -6.3, 143.9, null, [], []],
   ['Fiji', -17.7, 178.1, null, [], ['Fijian']],
+  // every other country a headline may name (round 8 of the picture desk: "Children among 139 dead after boat capsizes
+  // off Djibouti" was put on Yemen, the summary's country, because the gazetteer did not know Djibouti)
+  ['Djibouti', 11.8, 42.6, null, [], ['Djiboutian']],
+  ['Eritrea', 15.2, 39.8, null, [], ['Eritrean']],
+  ['Benin', 9.3, 2.3, null, [], ['Beninese']],
+  ['Togo', 8.6, 0.8, null, [], ['Togolese']],
+  ['Burundi', -3.4, 29.9, null, [], ['Burundian']],
+  ['Central African Republic', 6.6, 20.9, null, [], []],
+  ['Gabon', -0.8, 11.6, null, [], ['Gabonese']],
+  ['Equatorial Guinea', 1.6, 10.3, null, [], []],
+  ['Guinea-Bissau', 11.8, -15.2, null, ['Guinea Bissau'], []],
+  ['Guinea', 9.9, -9.7, null, [], ['Guinean'], 'amb'],
+  ['Gambia', 13.4, -15.3, null, ['The Gambia'], ['Gambian']],
+  ['Sierra Leone', 8.5, -11.8, null, [], ['Sierra Leonean']],
+  ['Liberia', 6.4, -9.4, null, [], ['Liberian']],
+  ['Mauritania', 21.0, -10.9, null, [], ['Mauritanian']],
+  ['Cabo Verde', 16.0, -24.0, null, ['Cape Verde'], []],
+  ['Lesotho', -29.6, 28.2, null, [], []],
+  ['Eswatini', -26.5, 31.5, null, ['Swaziland'], []],
+  ['Comoros', -11.9, 43.9, null, [], []],
+  ['Mauritius', -20.3, 57.6, null, [], ['Mauritian']],
+  ['Seychelles', -4.7, 55.5, null, [], []],
+  ['Maldives', 3.2, 73.2, null, ['the Maldives'], ['Maldivian']],
+  ['Bhutan', 27.5, 90.4, null, [], ['Bhutanese']],
+  ['Brunei', 4.5, 114.7, null, [], []],
+  ['Timor-Leste', -8.9, 125.7, null, ['East Timor'], []],
+  ['Kyrgyzstan', 41.2, 74.8, null, [], ['Kyrgyz']],
+  ['Tajikistan', 38.9, 71.3, null, [], ['Tajik']],
+  ['Turkmenistan', 39.0, 59.6, null, [], ['Turkmen']],
+  ['Andorra', 42.5, 1.5, null, [], []],
+  ['Monaco', 43.7, 7.4, null, [], ['Monegasque']],
+  ['Liechtenstein', 47.2, 9.6, null, [], []],
+  ['San Marino', 43.9, 12.5, null, [], []],
+  ['Vatican City', 41.9, 12.45, 'VATICAN', ['Vatican', 'the Vatican', 'Holy See'], []],
+  ['Bahamas', 24.7, -77.8, null, ['The Bahamas'], ['Bahamian']],
+  ['Barbados', 13.2, -59.5, null, [], ['Barbadian']],
+  ['Trinidad and Tobago', 10.7, -61.2, null, ['Trinidad'], []],
+  ['Grenada', 12.1, -61.7, null, [], []],
+  ['Saint Lucia', 13.9, -61.0, null, ['St Lucia'], []],
+  ['Dominica', 15.4, -61.4, null, [], []],
+  ['Antigua and Barbuda', 17.1, -61.8, null, ['Antigua'], []],
+  ['Belize', 17.2, -88.7, null, [], ['Belizean']],
+  ['Guyana', 4.9, -58.9, null, [], ['Guyanese']],
+  ['Suriname', 3.9, -56.0, null, [], []],
+  ['Samoa', -13.8, -172.1, null, [], ['Samoan']],
+  ['Tonga', -21.2, -175.2, null, [], ['Tongan']],
+  ['Vanuatu', -15.4, 166.9, null, [], []],
+  ['Solomon Islands', -9.6, 160.2, null, [], []],
 ];
 
 // [name, lat, lon, country, aliases]
@@ -264,9 +312,17 @@ const CITIES = [
   ['Perth', -31.95, 115.86, 'Australia'],
   ['Auckland', -36.85, 174.76, 'New Zealand'],
   ['Wellington', -41.29, 174.78, 'New Zealand'],
-  ['New York', 40.71, -74.01, 'United States', ['New York City']],
+  ['New York', 40.71, -74.01, 'United States', ['New York City', 'Manhattan', 'Brooklyn']],
   ['Washington', 38.91, -77.04, 'United States', ['Washington DC', 'Washington, DC']],
-  ['Los Angeles', 34.05, -118.24, 'United States'],
+  ['Los Angeles', 34.05, -118.24, 'United States', ['LAX']],
+  ['Ceuta', 35.89, -5.32, 'Spain'],
+  ['Melilla', 35.29, -2.94, 'Spain'],
+  ['Cairns', -16.92, 145.77, 'Australia'],
+  ['Cork', 51.9, -8.47, 'Ireland'],
+  ['Galway', 53.27, -9.05, 'Ireland'],
+  ['Limerick', 52.66, -8.63, 'Ireland'],
+  ['Waterford', 52.26, -7.11, 'Ireland'],
+  ['Tirana', 41.33, 19.82, 'Albania'],
   ['San Francisco', 37.77, -122.42, 'United States'],
   ['Chicago', 41.88, -87.63, 'United States'],
   ['Houston', 29.76, -95.37, 'United States'],
@@ -337,6 +393,14 @@ const REGIONS = [
   ['Atlantic', 25.0, -40.0, null, ['Atlantic Ocean', 'the Atlantic'], 'broad'],
   ['Indian Ocean', -20.0, 80.0, null, [], 'broad'],
   ['North Sea', 56.0, 3.0, null, [], 'broad'],
+  // waters the news names as where it happened (round 8 of the picture desk: "Container ship sinks near strait of
+  // Hormuz" was put on the USA, a country its summary named)
+  ['Strait of Hormuz', 26.6, 56.3, null, ['Hormuz', 'strait of Hormuz', 'Hormuz Strait', 'Straits of Hormuz'], 'own'],
+  ['Red Sea', 20.0, 38.5, null, ['the Red Sea'], 'own'],
+  ['Black Sea', 43.5, 34.5, null, ['the Black Sea'], 'own'],
+  ['Taiwan Strait', 24.5, 119.5, null, ['the Taiwan Strait'], 'own'],
+  ['Gulf of Aden', 12.5, 48.0, null, [], 'own'],
+  ['Suez Canal', 30.5, 32.35, 'Egypt', [], 'own'],
   ['Amazon', -3.5, -62.0, 'Brazil', ['Amazon rainforest', 'Amazon basin', 'Amazon River', 'the Amazon'], 'amb'],
   ['Sahara', 23.4, 13.0, null, ['Sahara desert', 'the Sahara']],
   ['Sahel', 14.5, 0.0, null, ['the Sahel']],
@@ -350,6 +414,9 @@ const REGIONS = [
   ['Gaza', 31.4, 34.4, null, ['Gaza Strip'], 'own'],
   ['West Bank', 31.9, 35.3, null, ['the West Bank'], 'own'],
   ['Crimea', 45.0, 34.1, 'Ukraine', []],
+  ['Baja California', 30.0, -115.0, 'Mexico', []],
+  ['New South Wales', -32.0, 147.0, 'Australia', ['NSW']],
+  ['Hampshire', 51.06, -1.31, 'United Kingdom', []],
   ['Donbas', 48.0, 38.0, 'Ukraine', ['Donbass']],
   ['Kashmir', 34.1, 74.8, null, [], 'own'],
   ['Tibet', 31.0, 88.0, 'China', []],
@@ -365,7 +432,7 @@ const REGIONS = [
   ['Scotland', 56.5, -4.2, 'United Kingdom', [], 'own'],
   ['Wales', 52.3, -3.7, 'United Kingdom', [], 'own'],
   ['England', 52.5, -1.5, 'United Kingdom', [], 'own'],
-  ['Northern Ireland', 54.6, -6.7, 'United Kingdom', [], 'own'],
+  ['Northern Ireland', 54.6, -6.7, 'United Kingdom', ['N. Ireland', 'N Ireland'], 'own'],
   ['Bavaria', 48.8, 11.5, 'Germany', []],
   ['Sicily', 37.6, 14.0, 'Italy', []],
   ['Sardinia', 40.1, 9.0, 'Italy', []],
@@ -470,7 +537,7 @@ const PERSON_NAMES = new Set(['israel', 'sydney', 'santiago', 'paris', 'victoria
 const PLACE_FOLLOWERS = /^(?:City|Airport|Harbour|Harbor|Police|Metro|Zoo|Museum|University|Council|Mayor|Bay|River|Region|Province|Summit|Agreement|Accord|Opera|Marathon|Club|Stock|Exchange|Fashion|Motor|Games|Olympics|Declaration|Conference|Talks|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December)$/;
 // "New Mexico", "South Wales", "West Virginia": a compass word or "New" in front of a
 // name makes a different place (the real compound, when we know it, is matched first).
-const PREFIXED = /(?:^|[^\p{L}])(?:New|North|South|East|West)\s$/u;
+const PREFIXED = /(?:^|[^\p{L}])(?:New|North|South|East|West|Baja)\s$/u;
 // A few everyday clashes: the bird, not the country; the US state, not the capital.
 const CONTEXT_CLASH = {
   turkey: (text) => /\b(?:Thanksgiving|Christmas|poultry|roast|bird flu|farmers?)\b/.test(text),
@@ -478,8 +545,17 @@ const CONTEXT_CLASH = {
 };
 
 /** Is the match of `entry` at [index, end) in `text` really that place? */
+const NATIONALITY_AFTER = /^\s+(?:surfers?|tourists?|citizens?|nationals?|soldiers?|troops|servicem[ae]n|marines?|veterans?|commander|general|journalists?|reporters?|teens?|teenagers?|students?|workers?|nurses?|doctors?|diplomats?|envoys?|ambassadors?|tycoon|billionaire|man|woman|men|women|boy|girl|couple|hostages?|prisoners?|detainees?|pilots?|sailors?|climbers?|hikers?|swimmers?|athletes?|player|players)\b/i;
+// a place's name that is part of another name: a currency ("US dollar"), a newspaper ("New York Times", "Washington
+// Post"), a football club ("Manchester United"): not the place (the picture desk's board put a Musk donation story on
+// New York for "The New York Times first reported", round 8)
+const NOT_PLACE_AFTER = /^\s+(?:dollars?|sterling|yen|yuan|rupees?|roubles?|rubles?|pesos?|francs?|lira|shekels?|euros?|Times|Post|Herald|Globe|Tribune|Journal|Independent|Daily|Free Press|Gazette|Chronicle|Inquirer|Telegraph|United|Rovers|Wanderers|Athletic|Albion|Hotspur|FC|State University|University|College)\b/;
 function realHit(entry, text, index, end, matched) {
   const key = fold(matched);
+  if (NOT_PLACE_AFTER.test(text.slice(end))) return false;
+  // "US surfers", "UK nationals", "US commander": a nationality, not where it happened (round 8: a Mexican court's
+  // sentence for the murders of "Australian and US surfers" was put on the USA)
+  if (/^(?:US|U\.S\.|UK|U\.K\.)$/.test(matched) && NATIONALITY_AFTER.test(text.slice(end))) return false;
   if (PREFIXED.test(text.slice(Math.max(0, index - 7), index)) && !/^(?:new|north|south|east|west) /.test(key)) return false;
   if (PERSON_NAMES.has(key)) {
     const next = text.slice(end).match(/^ ([A-Z][\p{L}'’-]+)/u);
@@ -539,7 +615,11 @@ export function locate(headline, summary = '') {
   const pick = (hits, all) => {
     const precise = hits.filter((h) => !h.entry.broad);
     if (!precise.length) return hits[0]?.entry || null;
-    const first = precise[0].entry;
+    // a destination or an origin ("accused of trying to flee to China, arrested at LAX") gives way to where it happened
+    const before = (h) => String(h.src || '').slice(0, h.index);
+    const away = (h) => /\b(?:to|towards|from|for)\s+(?:the\s+)?$/i.test(before(h));
+    const here = precise.find((h) => /\b(?:in|at|near|off|outside|inside)\s+(?:the\s+)?$/i.test(before(h)));
+    const first = (away(precise[0]) && here ? here : precise[0]).entry;
     if (first.kind === 'country') {
       // "Kenya switches on its largest solar farm near Nairobi" → Nairobi, Kenya
       const inside = all.find((h) => h.entry.kind !== 'country' && !h.entry.broad && h.entry.country === first.name);
@@ -547,9 +627,9 @@ export function locate(headline, summary = '') {
     }
     return first;
   };
-  const head = findPlaces(headline);
-  const body = findPlaces(summary);
-  const entry = actedElsewhere(headline, summary, head, body) || pick(head, [...head, ...body]) || pick(body, body);
+  const head = findPlaces(headline).map((h) => ({ ...h, src: headline }));
+  const body = findPlaces(summary).map((h) => ({ ...h, src: summary }));
+  const entry = actedElsewhere(headline, summary, head, body) || pick(head, [...head, ...body]) || territory(headline) || institutionPlace(headline) || pick(body, body);
   return entry ? { place: entry.label, lat: entry.lat, lon: entry.lon, entry } : null;
 }
 
@@ -557,7 +637,34 @@ export function locate(headline, summary = '') {
 // from British military base RAF Fairford" happened in Britain (real news, 4 Oct: the map pinned Kansas), "China
 // sends warships near Taiwan" near Taiwan. The place is the one after a locative word, in the headline (a name or
 // its people's adjective) or else in the summary; none, and the actor's country stays.
-const LOCATIVE = /\b(?:in|at|from|near|off|on|over|outside|inside|into|across|to|towards?)\s+(?:the\s+|a\s+|an\s+|its\s+)?$/i;
+// ("from" is where it happened only after a verb of leaving: "US withdraws all B-1 bombers from British military base";
+// "Jamaica accepts first flight of third-country deportations from US" happened in Jamaica, the picture desk's hand
+// check of round 8)
+const LOCATIVE = /\b(?:in|at|near|off|on|over|outside|inside|into|across|to|towards?)\s+(?:the\s+|a\s+|an\s+|its\s+)?$/i;
+const FROM = /\bfrom\s+(?:the\s+|a\s+|an\s+|its\s+)?$/i;
+const LEAVING = /^\s+(?:withdraws?|pulls?(?:\s+out)?|removes?|evacuates?|expels?|recalls?|retreats?|flees?|exits?|leaves?|moves?)\b/i;
+// a country that speaks ("Ukraine says its Starshield access is back", "Iran denies..."): the speaking state, never a
+// country its summary goes on to name (the board lit Russia for Ukraine's words, round 8)
+const ATTACKS = /^\s+(?:strikes?|attacks?|hits?|bombs?|bombards?|shells?|pounds?|targets?|invades?|raids?|shoots?\s+down|downs?)\b/i;
+const SPEAKS = /^\s+(?:says?|said|warns?|claims?|denies|denied|insists?|accuses?|blames?|confirms?|reports?|announces?|tells?|urges?|vows?|calls?|rejects?|condemns?|demands?|threatens?|hopes?|believes?|fears?|expects?|plans?|wants?|seeks?)\b/i;
+// "Ukrainian drones strike more than 100km into Russian territory": where the territory is (a headline that names no
+// place but its people's territory, the picture desk's hand check of round 8)
+function territory(headline) {
+  const m = /\b(?:into|inside|over|on)\s+(\p{Lu}\p{Ll}+)\s+(?:territory|airspace|soil|waters)\b/u.exec(String(headline || ''));
+  const name = m ? PEOPLE_PLACE[m[1].toLowerCase()] : null;
+  return name ? lookupPlace(name) : null;
+}
+// "Mexican judge sentences three men…", "Albanian police fire tear gas…": a country's court, police or government acting
+// is where it happened, while a people's adjective on people ("Australian, US surfers", "Israeli settlers", "Three
+// Mexicans") says who they are, not where (the coordinator's round 8 case: the surfers' story aired on the USA)
+const INSTITUTION = /\b(\p{Lu}\p{Ll}+)\s+(?:\p{Ll}+\s+)?(?:courts?|judges?|prosecutors?|police|government|authorities|ministry|minister|president|prime minister|parliament|army|military|navy|coastguard|coast guard|regulators?|central bank|interior ministry|foreign ministry)\b/u;
+/** The country whose court, police or government acts in this text (its people's adjective before it), or null. */
+export function institutionPlace(text) {
+  const m = INSTITUTION.exec(String(text || ''));
+  if (!m) return null;
+  // (the people's adjective as the gazetteer knows it: "Albanian", "Mexican"; else the demonyms the locator knows)
+  return ENTRIES.find((e) => e.kind === 'country' && e.demonyms.includes(m[1])) || (PEOPLE_PLACE[m[1].toLowerCase()] ? lookupPlace(PEOPLE_PLACE[m[1].toLowerCase()]) : null);
+}
 const PEOPLE_PLACE = { british: 'Britain', french: 'France', german: 'Germany', italian: 'Italy', spanish: 'Spain', portuguese: 'Portugal', dutch: 'Netherlands', belgian: 'Belgium', irish: 'Ireland', polish: 'Poland', greek: 'Greece', swedish: 'Sweden', norwegian: 'Norway', danish: 'Denmark', finnish: 'Finland', austrian: 'Austria', swiss: 'Switzerland', ukrainian: 'Ukraine', russian: 'Russia', turkish: 'Turkey', israeli: 'Israel', iranian: 'Iran', iraqi: 'Iraq', syrian: 'Syria', lebanese: 'Lebanon', egyptian: 'Egypt', saudi: 'Saudi Arabia', chinese: 'China', japanese: 'Japan', korean: 'South Korea', taiwanese: 'Taiwan', indian: 'India', pakistani: 'Pakistan', afghan: 'Afghanistan', australian: 'Australia', canadian: 'Canada', mexican: 'Mexico', brazilian: 'Brazil', argentine: 'Argentina', venezuelan: 'Venezuela', colombian: 'Colombia', cuban: 'Cuba', nigerian: 'Nigeria', kenyan: 'Kenya', ethiopian: 'Ethiopia', somali: 'Somalia', sudanese: 'Sudan', libyan: 'Libya', yemeni: 'Yemen', qatari: 'Qatar', emirati: 'United Arab Emirates', filipino: 'Philippines', indonesian: 'Indonesia', vietnamese: 'Vietnam', thai: 'Thailand' };
 function actedElsewhere(headline, summary, head, body) {
   const actor = head[0];
@@ -568,11 +675,24 @@ function actedElsewhere(headline, summary, head, body) {
   const where = head.find((h) => h !== actor && other(h.entry) && /\b(?:in|at|near|off|outside|inside)\s+(?:the\s+|a\s+|an\s+)?$/i.test(String(headline).slice(0, h.index)));
   if (where) return where.entry;
   // the country's name is followed by its verb ("US withdraws", "China sends"), not by more of a name
-  if (!/^\s+(?:to\s+)?[a-z]/.test(String(headline).slice(actor.text.length))) return null;
-  const after = (hits, text) => hits.find((h) => h !== actor && other(h.entry) && LOCATIVE.test(String(text).slice(0, h.index)))?.entry || null;
+  const rest = String(headline).slice(actor.text.length);
+  if (!/^\s+(?:to\s+)?[a-z]/.test(rest)) return null;
+  // a country that speaks is the place (its words are the story), unless the headline names where it happened (above)
+  if (SPEAKS.test(rest)) return null;
+  // a country that strikes another ("Russia strikes 9 Ukrainian regions"): where the strikes fell, by name or people
+  if (ATTACKS.test(rest)) {
+    const target = head.find((h) => h !== actor && other(h.entry));
+    if (target) return target.entry;
+    for (const m of rest.matchAll(/\b([A-Z][a-z]+)\b/g)) {
+      const e = PEOPLE_PLACE[m[1].toLowerCase()] ? lookupPlace(PEOPLE_PLACE[m[1].toLowerCase()]) : null;
+      if (other(e)) return e;
+    }
+  }
+  const leaving = LEAVING.test(rest);
+  const after = (hits, text) => hits.find((h) => h !== actor && other(h.entry) && (LOCATIVE.test(String(text).slice(0, h.index)) || (leaving && FROM.test(String(text).slice(0, h.index)))))?.entry || null;
   const fromHead = after(head, headline);
   if (fromHead) return fromHead;
-  for (const m of String(headline).matchAll(/\b(?:in|at|from|near|off|on|over|outside|into|to)\s+(?:the\s+|a\s+|an\s+)?([A-Z][a-z]+)\b/g)) {
+  for (const m of String(headline).matchAll(leaving ? /\b(?:in|at|from|near|off|on|over|outside|into|to)\s+(?:the\s+|a\s+|an\s+)?([A-Z][a-z]+)\b/g : /\b(?:in|at|near|off|on|over|outside|into|to)\s+(?:the\s+|a\s+|an\s+)?([A-Z][a-z]+)\b/g)) {
     const e = PEOPLE_PLACE[m[1].toLowerCase()] ? lookupPlace(PEOPLE_PLACE[m[1].toLowerCase()]) : null;
     if (other(e)) return e;
   }

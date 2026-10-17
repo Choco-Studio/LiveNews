@@ -17,6 +17,8 @@ import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
 import { airable, compactRights, currentRights, pictureMode } from './rights.js';
+import { locate, lookupPlace, placeSupported, institutionPlace } from './gazetteer.js';
+import { boardSpec } from '../public/js/boardspec.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -63,6 +65,33 @@ export function sourceWithCredit(outlet, credit) {
   }
   return outlet;
 }
+/**
+ * The place a story's headline board shows (graphics/locator.js), as a rundown location, or null (no place: the topic
+ * board). The place the headline names wins: its first country or city (server/gazetteer.js locate: a country that
+ * opens the headline and acts elsewhere is put where it acted, "off <country>" is that country's coast, a country
+ * that speaks is itself), unless the writer's place is in it (a city of that country is more precise). A headline that
+ * names no place keeps the writer's place only where the story's lead names it (a newsletter's "First Thing: Pope
+ * Leo recovering from surgery" was put on Florida), else none.
+ */
+export function boardPlace(headline, location, lead = '') {
+  const asLocation = (e) => ({ place: e.label, lat: e.lat, lon: e.lon, ...(e.kind === 'country' ? { scope: 'country' } : {}) });
+  const country = (x) => (x ? (x.kind === 'country' ? x.name : x.country) : null);
+  const cur = location?.place ? lookupPlace(location.place) : null;
+  // (a headline in capitals is read in title case: "KENYA CONFIRMS THIRD EBOLA CASE" names Kenya)
+  const h = String(headline || '');
+  const head = /\p{Ll}/u.test(h) ? h : h.toLowerCase().replace(/(^|[^\p{L}'’])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const e = locate(head, '')?.entry;
+  // (the writer's more precise place within the headline's country only where the story names it: "CALIFORNIA, USA"
+  // for a story set in Baja California is not)
+  if (e && !e.broad) return cur && country(cur) === country(e) && (cur === e || placeSupported(location.place, `${h} ${lead}`)) ? location : asLocation(e);
+  // (never another place taken from the lead instead: a sports story's lead names clubs, "Atletico Madrid")
+  if (location && (!lead || placeSupported(location.place, `${headline} ${lead}`))) return location;
+  // (a headline that names no place, and a writer's place the story never names: a country's court, police or
+  // government acting in the lead is where it happened, "A Mexican judge sentenced the three men")
+  const acting = institutionPlace(lead);
+  return acting ? asLocation(acting) : null;
+}
+
 /** "PHOTO: <CREDIT>" in capitals, whole words, at most CREDIT_LINE_MAX characters (null when it cannot fit). */
 export function creditLine(credit) {
   // a FILE photo: "FILE: JANE DOE · CC BY-SA", else "FILE: JANE DOE", else "FILE PHOTO"
@@ -953,11 +982,20 @@ export class Producer {
     // outlet's own (lent by another outlet, or an agency's) also shows its credit where the source is
     // already drawn (the strap plate, the montage card): "Bitport Herald / Photo: Pixelburg Post".
     // `outlet` always keeps the outlet's own name for renderers that draw the credit themselves.
+    // a picture file -> the story that shows it in this episode
+    const fileOwner = new Map();
     const apply = (item) => {
       const s = story(item.storyId);
       // with the rights desk, a picture airs only with a cleared rights record for that very picture (or, in a private
       // preview, an outlet's photo marked as not cleared)
       item.hasImage = desk ? airable(s, { mode }) : !!s?.image;
+      // never one picture file under two stories of an episode (a public figure's portraits rotate: picturedesk.js
+      // rotate; a story whose picture another story of the episode already shows has its board instead)
+      if (desk && item.hasImage && s?.image) {
+        const owner = fileOwner.get(s.image);
+        if (owner && owner !== item.storyId) item.hasImage = false;
+        else fileOwner.set(s.image, item.storyId);
+      }
       const outlet = item.outlet || item.source || s?.source || '';
       if (outlet) item.outlet = outlet;
       for (const k of ['imageCredit', 'imageCreditVia', 'imageCreditLine', 'imageLabel', 'imageLicence', 'imageRights', 'imageFocus', 'imageFit', 'imageUncleared']) delete item[k];
@@ -992,12 +1030,30 @@ export class Producer {
       if (seg.type !== 'cross') planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
     }
     for (const item of ctx.episode.rundown) apply(item);
+    // the locator board's place: the place the headline names wins over the writer's ("Jamaica accepts first flight of
+    // deportations from US" is Jamaica's story; "boat capsizes off Djibouti" is Djibouti's coast), see boardPlace
+    for (const item of ctx.episode.rundown) {
+      if (item.hasImage) continue;
+      const s = story(item.storyId);
+      const lead = s?.summary ? (String(s.summary).match(/[^.!?]+[.!?]+["”’)]*\s*/g) || [String(s.summary)]).slice(0, 2).join(' ').slice(0, 400) : '';
+      const where = boardPlace(item.headline, item.location, lead);
+      if (where) item.location = where;
+      else delete item.location;
+    }
     // a story with neither a picture nor a place shows the topic board (public/js/graphics/topicboard.js); under a grave
     // story without its glyph: the story's segment says it (its emotion) or its words do
+    // and the board shows the story's own strongest element (public/js/boardspec.js): its key figure, a short quote, the
+    // named actor as a wordmark (the picture desk names it), its topic in words with a line glyph, its key phrase
     for (const item of ctx.episode.rundown) {
       if (item.hasImage) continue;
       const st = ctx.episode.segments.find((x) => x.type === 'story' && x.storyId === item.storyId);
       if ((st && (st.emotion === 'serious' || st.emotion === 'sad')) || isGrave(`${item.headline || ''} ${st?.text || ''}`)) item.grave = true;
+      delete item.board;
+      if (item.location) continue;
+      const s = story(item.storyId);
+      const lead = s?.summary ? (String(s.summary).match(/[^.!?]+[.!?]+["”’)]*\s*/g) || [String(s.summary)]).slice(0, 2).join(' ').slice(0, 400) : '';
+      const actor = desk && s && !s.local && typeof desk.boardActor === 'function' ? desk.boardActor(s) : null;
+      item.board = boardSpec({ headline: item.headline, alt: s?.title || '', kicker: st?.kicker || item.kicker || null, numbers: st?.numbers || null, quote: st?.quote || null, grave: !!item.grave, actor, text: `${s?.title || ''} ${lead}` });
     }
     if (desk) {
       // what a description or a publisher needs: every picture on air with its full attribution, and whether all are
