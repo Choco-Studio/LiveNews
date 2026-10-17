@@ -9,6 +9,7 @@ import { WikimediaClient, PacedJson } from '../server/wikimedia.js';
 import { FaceStore } from '../server/faces.js';
 import { ImageSearch } from '../server/imagesearch.js';
 import { lookupPlace } from '../server/gazetteer.js';
+import { rightsRecord } from '../server/rights.js';
 
 const NOW = Date.UTC(2026, 9, 17, 12);
 const YEAR = 365.25 * 86400_000;
@@ -968,6 +969,50 @@ describe('fewer requests a story (round 9: the desk decides ahead of air)', () =
     assert.ok(asked(urls, /categorymembers/) >= 1, 'her category, the second time');
     assert.equal(desk.pickFor(s)?.subject?.label, 'Lena Park');
     assert.match(desk.pickFor(s).rights.title, /city hall/);
+  });
+
+  test('a picture pinned when it airs stays under its story when the decision is made again with another first pick', async () => {
+    const { desk } = recorded();
+    const s = trump('pin1', 'Trump says tariffs on steel will rise next month');
+    await desk.decide([s], { budgetMs: 10_000, lean: true });
+    await desk.assign([s], { ready: true });
+    const aired = s.image;
+    desk.pin([s]);
+    // the queue decides it again and something else comes first (a better subject found once a source answered)
+    const key = [...desk.kept.map.keys()].find((k) => k.startsWith('d:pin1:'));
+    const d = desk.kept.get(key);
+    const other = { ...d.picks[0], url: 'https://upload.wikimedia.org/other.jpg', rights: { ...d.picks[0].rights, url: 'https://upload.wikimedia.org/other.jpg' } };
+    desk.kept.set(key, { ...d, picks: [other, ...d.picks] }, 3600_000);
+    assert.equal(desk.pickFor(s).url, aired, 'the picture it aired with, while the decision still holds it');
+    desk.failedUrls.set(aired, NOW + 3600_000);
+    assert.equal(desk.pickFor(s).url, other.url, 'unless it would not download');
+  });
+
+  test("one file a story in an episode: a story whose picture an earlier one shows takes its own next cleared picture", () => {
+    const keyOf = (st) => {
+      let h = 0;
+      for (const ch of String(st.title)) h = (h * 31 + ch.charCodeAt(0)) | 0;
+      return `${st.id}:${(h >>> 0).toString(36)}`;
+    };
+    const desk = new PictureDesk({ now: () => NOW, log: { warn() {} } });
+    const pick = (name, kind) => {
+      const url = `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/${name}.jpg/1280px-${name}.jpg`;
+      return { url, width: 1280, height: 720, tier: 2, kind, subject: { kind, label: name }, focus: 0.4, rights: rightsRecord({ source: 'wikimedia-commons', via: 'wikidata:P18', licence: 'CC-BY-SA-4.0', author: 'Jane Doe', title: `File:${name}.jpg`, page: `https://commons.wikimedia.org/wiki/File:${name}.jpg`, url }) };
+    };
+    const hq = pick('Netflix headquarters', 'thing:org');
+    const a = story('sp1', 'Netflix raises its prices again');
+    const b = story('sp2', 'Netflix and Warner sign a deal for the Harry Potter series');
+    const c = story('sp3', 'Netflix shares fall after the results');
+    desk.kept.set(`d:${keyOf(a)}`, { picks: [hq], complete: true, at: NOW }, 3600_000);
+    desk.kept.set(`d:${keyOf(b)}`, { picks: [hq, pick('Warner Bros studio', 'thing:org')], complete: true, at: NOW }, 3600_000);
+    desk.kept.set(`d:${keyOf(c)}`, { picks: [hq], complete: true, at: NOW }, 3600_000);
+    for (const s of [a, b, c]) desk.apply(s);
+    assert.equal(desk.spread([a, b, c]), 1);
+    assert.equal(a.image, hq.url);
+    assert.match(b.image, /Warner/, 'its own next subject');
+    assert.equal(c.image, hq.url, 'none left: the producer gives it its board');
+    desk.apply(b);
+    assert.match(b.image, /Warner/, 'and it stays its own');
   });
 
   test('a warning of each kind once in ten minutes, with the count of the ones since', () => {

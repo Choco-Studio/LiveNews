@@ -1101,7 +1101,13 @@ export class Producer {
       await this.pictureAhead.settle(stories, { maxMs: this.config.pictureBudgetMs ?? 6000 });
       cleared = await desk.assign(stories, { ready: true });
     } else if (desk) cleared = await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    // (one file a story: a story whose picture an earlier one shows takes its own next cleared picture, before the
+    // downloads are checked)
+    if (desk && typeof desk.spread === 'function') desk.spread(stories.filter((s) => !s.local));
     const verified = this.images ? await this.verifyPictures(stories) : null;
+    // (each story keeps the picture it airs with, once it downloaded: a decision the queue makes again later never
+    // changes it under the episode's credit)
+    if (desk && typeof desk.pin === 'function') desk.pin(stories);
     // (an archived story is a fresh object at every look: the desk's kept decision is put on it each time)
     const story = (id) => {
       const s = this.news.get(id);

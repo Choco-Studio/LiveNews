@@ -1640,12 +1640,53 @@ export class PictureDesk {
   pickFor(story) {
     const d = story?.id ? this.kept.get(`d:${keyOf(story)}`) : null;
     const t = this.now();
-    const pick = d?.picks?.find((p) => !(this.failedUrls.get(p.url) > t)) || null;
-    if (!pick?.alts?.length) return pick;
-    // a portrait that rotates: the one this story was given (rotate), as long as it may still air
+    const ok = (url) => !(this.failedUrls.get(url) > t);
+    // the picture this story was given (a portrait of the rotation, or the one it aired with: pin), as long as it may
+    // still air and its decision still holds it: a decision made again never changes a picture under a story on air
+    // (its credit was written with the episode)
     const chosen = this.kept.get(`p:${keyOf(story)}`);
-    const alt = chosen && chosen !== pick.url ? pick.alts.find((a) => a.url === chosen && !(this.failedUrls.get(a.url) > t)) : null;
-    return alt ? { ...pick, ...alt, alts: pick.alts, rotated: true } : pick;
+    if (chosen && ok(chosen)) {
+      for (const p of d?.picks || []) {
+        if (p.url === chosen) return p;
+        const alt = p.alts?.find((a) => a.url === chosen);
+        if (alt) return { ...p, ...alt, alts: p.alts, rotated: true };
+      }
+    }
+    return d?.picks?.find((p) => ok(p.url)) || null;
+  }
+
+  /**
+   * One picture file a story in an episode (its stories in order): a story whose picture an earlier one already shows
+   * takes its own next cleared picture (another of its subjects), kept as its own (pin); with none left it keeps the
+   * file, and the producer gives it its board. Round 9: two TECH BYTES stories of one company shared a file, and one
+   * aired on a board.
+   */
+  spread(stories) {
+    const t = this.now();
+    const taken = new Set();
+    let moved = 0;
+    for (const s of stories || []) {
+      if (!s?.id || s.local || !s.image) continue;
+      if (!taken.has(s.image)) {
+        taken.add(s.image);
+        continue;
+      }
+      const next = (this.decisionOf(s)?.picks || []).find((p) => !taken.has(p.url) && !(this.failedUrls.get(p.url) > t));
+      if (!next) continue;
+      this.kept.set(`p:${keyOf(s)}`, next.url, TTL.decided);
+      this.apply(s);
+      if (s.image === next.url) moved++;
+      taken.add(s.image);
+    }
+    return moved;
+  }
+
+  /** The pictures these stories air with, kept as theirs (pickFor): the episode's credits stay true until it has aired. */
+  pin(stories) {
+    for (const s of stories || []) {
+      if (!s?.id || s.local || !s.image || !currentRights(s)?.cleared || this.kept.get(`p:${keyOf(s)}`) === s.image) continue;
+      this.kept.set(`p:${keyOf(s)}`, s.image, TTL.decided);
+    }
   }
 
   /**

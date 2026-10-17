@@ -314,9 +314,18 @@ decided in time. Now:
 - a decision made for a story that already aired without a picture is put on its archive entries (`archive.
   amendPicture`, kept beside the days' files in `data/archive/pictures.json`), so SEVEN DAYS and PICTURE THIS can show
   it; the station's own archive entries carry `imageRights` and `imageSubject` as they air;
+- a story keeps the picture it airs with (`PictureDesk.pin`): a decision made again later never changes the picture
+  under an episode's credit; a story whose file an earlier story of its episode shows takes its own next cleared
+  picture (`spread`), and with none left it shows its board;
 - `/api/pictures/ahead` (operator) and a log line every 15 minutes: decided, with a picture, Wikimedia requests a
   story, the pause, a fresh story's wait, what is left by tier. `PICTURES_AHEAD=off` goes back to deciding within the
   budget (the round-8 way).
+
+Measured live on 17 Oct (`PORT=8733`, real feeds, 90 minutes, 13 news programmes, 166 stories aired): 28.9 % aired
+with a cleared picture (the live station: 0 %), against 31.0 % for the desk's own decisions on the same stories; 164 of
+166 had their decision ready when their episode was made; a story new to the news desk waited 3 s for its decision
+(median), 99 s (90 %); 401 Wikimedia requests, 79 answered 429 and waited out (the queue paused half the run). The
+details: `docs/roadmap/critique/cleared-pictures.md`, round 9.
 
 **The station's own event loop** (round 9): SEVEN DAYS's readiness grouped the whole week with the news desk's
 `sameStory` at every `/api/next`; on 5,600 airings that held the event loop 60 % of the time (every programme "ready
