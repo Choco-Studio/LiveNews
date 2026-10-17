@@ -81,7 +81,7 @@ describe('ImageCache', () => {
     const [{ url, init }] = fetchImpl.calls;
     assert.equal(url, URL_A);
     assert.equal(init.redirect, 'manual', 'each hop is checked against private addresses');
-    assert.match(init.headers['user-agent'], /LiveNewsBot/);
+    assert.match(init.headers['user-agent'], /GLOBIT24\//, 'the channel\'s own user-agent (server/robots.js)');
     assert.equal(init.headers.accept, 'image/*');
     assert.ok(init.signal instanceof AbortSignal);
   });

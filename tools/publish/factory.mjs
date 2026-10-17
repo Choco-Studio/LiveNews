@@ -6,7 +6,7 @@
 //
 //   node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6]
 //        [--moments <id,id>] [--all] [--queue data/publish] [--masters <dir>] [--keep-masters] [--parallel]
-//        [--pictures <dir>]
+//        [--pictures <dir>] [--sources <dataDir>]
 //
 // --pictures: a folder with the episode's pictures (<storyId>.jpg|png|webp), so the clips show them as they aired, with
 // their credits; without it the stories show their maps and boards.
@@ -126,12 +126,17 @@ say(`timeline: ${timeline.segments.length}/${episode.segments.filter((s) => Stri
 
 // the verbatim rule's sources (the archive's title and summary, the article when the compliance desk cached it): the
 // gate measures each clip's own stories' aired words against them, and holds a clip that copies (verbatim.md)
-const sourcesOf = compliance.archiveGetStory({ dataDir: path.join(root, 'data') });
+// (--sources <dataDir>: the archive and article cache of another data folder, for an edition the station's own archive
+// never kept: a replay from a sport snapshot)
+const sourcesOf = compliance.archiveGetStory({ dataDir: path.resolve(opt('sources', path.join(root, 'data'))) });
 const all = detectMoments(episode, { timeline });
 // a moment that tells a story whose aired words copy its source is never chosen (the gate would hold its clip): the
-// summary lists it as refused (`--all` or `--moments` still make it, to look at)
-const copied = new Set((compliance.lintEpisode(episode, { getStory: sourcesOf }).violations || []).map((v) => v.storyId));
-markCopied(all, copied);
+// summary lists it as refused (`--all` or `--moments` still make it, to look at); so is one whose story's sources are
+// not at hand (the gate refuses it: sources-missing)
+const lint = compliance.lintEpisode(episode, { getStory: sourcesOf });
+const copied = new Set((lint.violations || []).map((v) => v.storyId));
+const blind = new Set(compliance.storiesWithoutSources({ episode, kind: 'episode' }, sourcesOf));
+markCopied(all, copied, { unverified: blind });
 // a moment that shows a picture not cleared for publication (or any moment of a private preview) is never chosen and
 // never queued, whatever the flags: the summary lists it as refused
 markUncleared(all, episode, { audit: compliance.auditItem });
@@ -144,6 +149,7 @@ for (const m of all) {
   m.hook = ownHook(m, { kicker: seg.kicker, location: seg.location, category: seg.category }, sources);
 }
 if (copied.size) say(`verbatim: ${copied.size} of the episode's stories copy their sources; their moments are not chosen`);
+if (blind.size) say(`verbatim: ${blind.size} of the episode's stories have no sources at hand (not in the archive: --sources); their moments are not chosen and the gate refuses them`);
 const pub = new Set(publishable(all, { phase: 1 }).map((m) => m.id));
 // the choice: the best of each kind first (variety), then by score; a moment must have aired whole in the recording
 const chosen = [];

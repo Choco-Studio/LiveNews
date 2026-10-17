@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { guardedFetch, readCapped } from './net.js';
 import { MIN_WIDTH, imageSize } from './pictures.js';
 import { wikimediaAgent } from './wikimedia.js';
+import { USER_AGENT } from './robots.js';
 
 // One picture at most this big (a 1200 px news photo is 0.2-0.6 MB), and all of them together at most
 // MAX_TOTAL in memory (least recently used go first): a 24/7 box shares its memory with the voice workers.
@@ -167,7 +168,7 @@ export class ImageCache {
     if (!/^https?:\/\//i.test(url)) throw new Error('invalid URL');
     const { res } = await guardedFetch(this.fetch, url, {
       timeoutMs: 10000,
-      headers: { 'user-agent': /^https:\/\/[^/]*\b(?:wikimedia\.org|staticflickr\.com)\//i.test(url) ? this.wikimediaAgent : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' },
+      headers: { 'user-agent': /^https:\/\/[^/]*\b(?:wikimedia\.org|staticflickr\.com)\//i.test(url) ? this.wikimediaAgent : USER_AGENT, accept: 'image/*' },
       ...(this.lookup ? { lookup: this.lookup } : {}),
     });
     const cancel = async () => {

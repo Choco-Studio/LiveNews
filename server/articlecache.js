@@ -8,7 +8,8 @@
 //            the desk's own rules, the first paragraphs: article.js caps it at 2,400 characters)
 //   feed     else the feed's own full text (content:encoded) when the feed gave one (news.js parseItem: feedText)
 // A story with neither (a feed of headlines and teasers, a page that refused the desk) keeps its title and summary in
-// the archive and nothing here.
+// the archive and nothing here. A page the outlet's robots.txt keeps from us (server/robots.js) was never read: only
+// its feed's text is kept, and an article text kept for it earlier is replaced or removed.
 //
 // Lean on disk: text only (no HTML, no picture, no page), at most ARTICLE_MAX characters, one small JSON file per
 // article in <dataDir>/compliance/articles/<articleKey(link)>.json { link, text, via, source, at } (the file name
@@ -43,7 +44,8 @@ export function sourceTextOf(story, { max = ARTICLE_MAX } = {}) {
     const stop = Math.max(head.lastIndexOf('. '), head.lastIndexOf('.\n'), head.lastIndexOf('? '), head.lastIndexOf('! '));
     return stop > max * 0.6 ? head.slice(0, stop + 1) : head;
   };
-  if (typeof story.body === 'string' && story.body.trim().length >= 80) return { text: cut(story.body), via: `article${story.bodyVia ? `:${story.bodyVia}` : ''}` };
+  // a page the outlet's robots.txt keeps from us (news.js pageRefused) never gives its article text, only the feed's
+  if (story.pageRefused !== 'robots' && typeof story.body === 'string' && story.body.trim().length >= 80) return { text: cut(story.body), via: `article${story.bodyVia ? `:${story.bodyVia}` : ''}` };
   if (typeof story.feedText === 'string' && story.feedText.trim().length >= 80) return { text: cut(story.feedText), via: 'feed' };
   return null;
 }
@@ -79,19 +81,26 @@ export class ArticleCache {
 
   /**
    * Keep a story's words (its article text, else its feed's full text). An article already kept is never replaced by
-   * a feed's text; the same text again only refreshes the file's date (a story told again stays as long as the archive
-   * keeps it).
+   * a feed's text, unless the outlet's robots.txt now keeps the page from us; the same text again only refreshes the
+   * file's date (a story told again stays as long as the archive keeps it).
    */
   save(story) {
     if (!this.dir || !story?.link || this.skip?.(story)) return null;
     const got = sourceTextOf(story, { max: this.max });
-    if (!got) return null;
+    // the outlet's robots.txt keeps the page from us: an article text kept before (an older reading, the audit) goes,
+    // replaced by the feed's text when there is one
+    const refused = story.pageRefused === 'robots';
+    if (!got && !refused) return null;
     try {
-      fs.mkdirSync(this.dir, { recursive: true });
       const f = this.file(story.link);
       const old = this.read(story.link);
-      const oldIsArticle = !!old?.text && /^article/.test(old.via || '');
-      if (old?.text === got.text || (oldIsArticle && got.via === 'feed')) {
+      const oldIsArticle = !!old?.text && !/^feed/.test(old.via || '');
+      if (!got) {
+        if (oldIsArticle) fs.unlinkSync(f);
+        return null;
+      }
+      fs.mkdirSync(this.dir, { recursive: true });
+      if (old?.text === got.text || (oldIsArticle && got.via === 'feed' && !refused)) {
         const t = new Date(this.now());
         fs.utimesSync(f, t, t);
       } else {

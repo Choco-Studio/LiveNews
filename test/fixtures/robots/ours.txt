@@ -1,0 +1,16 @@
+﻿Disallow: /orphan-rule-before-any-group
+# A group for us, beside the general one: ours is obeyed, combined across both of our groups
+User-agent: *
+Disallow: /members/
+
+User-agent: GLOBIT24
+Disallow: /sport/
+Crawl-delay: 2
+Sitemap: https://ours.test/sitemap.xml
+Allow: /sport/results
+
+User-agent: SomeOtherBot
+Disallow: /
+
+user-agent: globit
+disallow: /culture/*/gallery$

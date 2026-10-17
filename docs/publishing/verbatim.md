@@ -97,15 +97,19 @@ format this audit already uses:
 The cache fetches nothing, and no page is read that the channel did not already read. The archive writes the cache
 as it records each story an episode tells (`Archive({ articles })`, when the episode is made), so only the stories
 the channel tells are kept. It stores text only, at
-most 6,000 characters, cut at a sentence. An article kept is never replaced by a feed's text. A story told again
+most 6,000 characters, cut at a sentence. An article kept is never replaced by a feed's text, unless the outlet's
+robots.txt now keeps the page from us (below). A story told again
 refreshes its file. A file not written or refreshed for 14 days (the archive's own span) is removed, checked at most
 once an hour. `archiveGetStory` reads the cache, so the factory, the upload, the publisher, its re-check and the posts
 writer all measure against it. With it, a post can carry an aired line that the article proves is the channel's own
 words (`posts.js` `newsLine`).
 
-`ARTICLE_CACHE=off` keeps nothing, and a feed marked `"cache": false` in the feeds file is never kept. The news desk's
-reader does not consult robots.txt or terms before it reads a page, and the cache keeps only what that reader read, so
-it adds no reading of its own. Keeping the extracts is item 11 of the lawyer's list (`compliance.md` §9).
+`ARTICLE_CACHE=off` keeps nothing, and a feed marked `"cache": false` in the feeds file is never kept. Since round 6
+the news desk's reader obeys each outlet's robots.txt (`server/robots.js`, RFC 9309; `compliance.md` §6.1): a page the file keeps from us is never opened, the story keeps its feed's text and pictures
+(`story.pageRefused = 'robots'`), and the cache keeps only the feed's text for it, replacing or removing an article
+text kept for that link before. The audit below (`tools/compliance/verbatim-audit.mjs`) opens pages under the same
+rules and drops a cached article text whose page robots.txt now keeps from us. The cache still adds no reading of its
+own. Keeping the extracts is item 11 of the lawyer's list, the outlets' terms item 12 (`compliance.md` §9).
 
 **The live stream's net: the launch report.** The stream has no publish step, so `launchReport()` (`node tools/compliance/cli.mjs launch`) measures what aired. `archiveSample()` reads the last 300 real stories of `data/archive` and checks each one's reading and analysis against its title and summary, and against its article when this audit has cached it in `data/compliance/articles`. Launch is blocked while more than 5 % of those stories break the rule. On 17 Oct 2026 the rate is 80.3 % against title and summary alone (241 of 300), and 99 % with the articles (297 of 300, 280 articles cached). It takes about a third of a second.
 

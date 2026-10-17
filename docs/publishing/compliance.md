@@ -11,6 +11,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
   - Antes de publicar algo con una recreación hace falta tu visto bueno.
 - **Elecciones:** desde 30 días antes de una votación nacional, ningún político de ese país se recrea. Su cita sigue en pantalla como tarjeta de cita, así que no se pierde nada. Ahora mismo afecta a Estados Unidos (votan el 3 de noviembre), Brasil, Bulgaria, Serbia e Israel. A España le afecta desde el 30 de octubre, por las generales del 29 de noviembre. El día antes de votar y el mismo día no publicamos nada sobre esa votación.
 - **Quejas y retiradas:** cada queja queda apuntada en un registro. Se retira todo lo publicado en todas las plataformas (también los clips sacados del programa) y se bloquea para el futuro, en 24 horas como máximo (6 horas si es sobre elecciones o sobre un menor o una víctima).
+- **Las webs de los medios:** antes de abrir la página de un artículo (para leer su principio o buscar su foto), el canal mira el robots.txt de esa web y obedece lo que dice; si no nos deja, la noticia se cuenta solo con el feed del medio. Hoy ninguno de los 17 sitios nos cierra sus artículos (§6.1). Queda para el abogado si las condiciones de uso de cada medio permiten lo que hacemos (§9, punto 12).
 - **Marcado legible por máquina:** cada vídeo y cada imagen exportados llevan credenciales C2PA firmadas que dicen "hecho con IA" y se leen de vuelta para comprobarlas. Funciona aquí. Para el lanzamiento falta un certificado de una autoridad reconocida.
 - **Hay que corregir antes de lanzar:**
   1. **El redactor de reserva lee los artículos casi palabra por palabra.** El 89 % de lo que dice en antena es copia literal. Esto plantea un problema de derechos de autor, y YouTube no paga por "lecturas de noticias de otros". El sistema de publicación ya bloquea esos programas, y el equipo del redactor tiene la regla y la herramienta para medirlo (`docs/publishing/verbatim.md`).
@@ -410,6 +411,67 @@ Everything the feature already does stays:
 | Fixture pictures and pages (offline demo) | original | none | never published (`publish: false`) |
 | Lab voice and music samples | original | none | never on air |
 
+### 6.1 The outlets' pages: robots.txt
+
+The news desk reads two things from an outlet: its **feed** (which the outlet publishes to be read, and which the
+operator subscribed to) and, for a story, its **article page**: the first paragraphs for the writer
+(`news.js` `readArticle`), and the page's or its AMP page's picture when the feed gave none or a small one
+(`pagePictures`, `resolveImage`, also for another outlet's report of the same event). Since round 6 every page read
+obeys the outlet's robots.txt (`server/robots.js`, RFC 9309). The feeds are not checked.
+
+- **Which rules.** The group naming our token (`GLOBIT24`, or `GLOBIT`; any case, with or without a version or a
+  hyphen), all such groups combined; else the `*` groups; else none. Tokens are compared exactly, never as substrings:
+  a group for "bot", "news" or "Mozilla" is not ours. The longest matching Allow or Disallow decides, an Allow wins a
+  tie, and `*` and `$` work as the RFC says, on the path and the query.
+- **Which answers.** A file (2xx) is obeyed. A 4xx means no file: everything allowed (a 404 or 410 for the day, any
+  other 4xx, such as a bot shield's 403, for the hour). A 5xx, a 429, a network failure, a timeout or more than five
+  redirects means everything is disallowed until the next try, 30 minutes later.
+- **The cache.** A file is kept about 24 hours, in memory and in `data/robots/` (one small JSON file per origin with
+  only the rules that apply to us; an origin not read for a week is forgotten). Each origin's file is read once at a
+  time, however many stories ask.
+- **Crawl-delay** in the group we obey spaces our page requests to that origin; a page whose turn is more than
+  3 seconds off is left for the reader's next pass.
+- **A refused page is never requested**, on any redirect hop either. The story keeps its feed's text and pictures and
+  is marked `pageRefused: 'robots'` (shown in the desk view); the article cache keeps only the feed's text for it, and
+  an article text kept for that link before is replaced or removed. An unreachable robots.txt only defers the page.
+- **Beyond the RFC.** An origin whose page answers 401, 403 or 429 is not asked for another page for six hours (30
+  minutes after a 429). A page is opened at its own address, without the tags a feed adds to count its visits
+  (`utm_*`, the BBC's `at_medium`/`at_campaign`, DW's `maca`, Al Jazeera's `traffic_source`, click ids): `news.js`
+  `pageUrl`. The robots.txt check applies to that address.
+- **The user-agent** is `Mozilla/5.0 (compatible; GLOBIT24/1.0; +https://github.com/choco-studio/livenews)`: the
+  channel's name and the repository, never an e-mail. It replaced `LiveNewsBot/0.1` in the news desk, the picture
+  downloads and the tools.
+- **The tools** that open pages go through the same door: the sport snapshot and the length tools (through the
+  desk's `fetchText`), and the verbatim audit (`tools/compliance/verbatim-audit.mjs`), which also drops a cached
+  article text whose page robots.txt now keeps from us.
+
+**Today's outlets, read live** (17 Oct, about 18:00 UTC; `node tools/compliance/robots-report.mjs --sample 2`):
+
+- 31 feeds, 393 stories with an article link, **17 hosts**. Every file was read. None names `GLOBIT24` or `GLOBIT`:
+  the `*` group applies everywhere. The files name 458 product tokens between them, and none of them is ours or close
+  to a word of our user-agent. Most of the named groups shut out AI-training and data crawlers by name.
+- **No host keeps an article address from us.** No `*` group of those 17 sets a Crawl-delay. France 24's `*` group
+  has no rule at all; the others keep search, previews, APIs, scripts and the like (1 to 107 rules).
+- Two feeds gave no story today. ESA's `*` group sets **Crawl-delay: 2**, which the desk honours. CBC's robots.txt
+  timed out from here (its feed too): its pages wait until the file answers.
+- **Al Jazeera** keeps the tagged copies of its pages from every crawler (`Disallow: /*?traffic_source=`, and the same
+  for `fbclid`, `gb`, `q` and `playlist`), and its feed tags every link `?traffic_source=rss`. As tagged, all 25 of
+  today's links (and 238 of the 1,430 links in the archive) would be refused; at their own address, all are open, and
+  that is how the desk opens them.
+- **Sky News** answers our robots.txt request with a 403 from its bot shield, and its pages answer 403 too. The RFC
+  reads that as "allowed", but nothing is read there, as before; now one try per six hours instead of one per story.
+  The desk never poses as a browser.
+- **Euronews** answered the first read of two runs with a 406 and the next with its file (its `*` group keeps only
+  `/api/` and scripts). A 406 counts as "no file" for one hour, then the file is read again.
+- **The pictures.** The desk downloads a picture its feed names, or one an open page names, without asking the
+  picture host's robots.txt (a picture is not a page the desk crawls, and the story keeps its feed's pictures, as
+  asked). Read for the record: today's feed pictures live on 15 hosts (`i.guim.co.uk`, `ichef.bbci.co.uk`,
+  `s.abcnews.com`, Sky's `365dm.com` and others), and none of their files keeps a picture from us (two have no file,
+  one answers 403).
+- **What the writer loses: nothing today** (0 of 393 stories). Had the desk opened the feed's tagged links, Al
+  Jazeera's 25 stories would have lost their article text (about 1,900 characters on average where a page is read, 34
+  pages sampled) and been written from a 100-character summary: Al Jazeera's feed gives no full text.
+
 ## 7. Takedown and correction workflow
 
 **1. Receive.**
@@ -553,14 +615,31 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
    - text only, at most 6,000 characters, for 14 days;
    - never published, and used only to check that what the channel publishes does not copy the outlet.
 
-   The news desk's article reader does **not** consult an outlet's robots.txt or terms before reading a page. The
-   cache fetches nothing of its own, but keeps what the reader read. Confirm that keeping these extracts is allowed:
+   Since round 6 the news desk's reader obeys each outlet's robots.txt (§6.1): a page it keeps from us is never read,
+   and the cache keeps only the feed's text for that story. The cache fetches nothing of its own, but keeps what the
+   reader read. Confirm that keeping these extracts is allowed:
    - for verifying the channel's own output: the text and data mining exception (Art. 4 DSM, with its opt-out
      honoured), or the temporary copies exception (Art. 5(1) InfoSoc);
-   - for each outlet whose terms forbid it.
+   - for each outlet whose terms forbid it (item 12).
 
    The switches are `ARTICLE_CACHE=off` (nothing kept) and `"cache": false` on a feed in `config/feeds.json` (that
-   outlet never kept). Whether the reader itself should honour robots.txt is for the news desk and the lawyer.
+   outlet never kept).
+12. **The outlets' terms, beyond robots.txt.** The reader obeys robots.txt (§6.1), and on 17 Oct no outlet keeps an
+   article address from us. But robots.txt is not the whole answer:
+   - an outlet's terms of use may forbid automated reading, or reuse of its text, even where its robots.txt allows
+     it. Do those terms bind a reader that never signed or clicked them, and which outlets' terms forbid what we do?
+     (Today's 31 feeds come from 17 organisations; their terms have not been read for this.)
+   - most of today's files shut out AI-training crawlers by name. Our reader is not one (it reads a story's first
+     paragraphs for a writer that rewrites them, and keeps them to check the channel does not copy), and its token is
+     not named, so the `*` group applies. Does a reservation aimed at those crawlers, or a general "no text and data
+     mining" in the terms, count as an Art. 4(3) DSM opt-out against our use?
+   - the desk opens a page without the feed's tracking tags (§6.1: Al Jazeera keeps the tagged copies from crawlers,
+     not the articles). Confirm that this reading of the file is sound.
+   - Sky News's bot shield refuses our robots.txt request and our pages (403). The RFC reads a 4xx as "allowed", but
+     the desk reads nothing there. Confirm that it should keep trying (once per six hours) rather than never.
+   - the feeds themselves and the pictures are read without robots.txt (a feed is published to be read; a picture is
+     not a page). On 17 Oct no picture host's file kept a picture from us. Confirm that a feed's terms allow
+     broadcasting from it with credit.
 
 **What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 
