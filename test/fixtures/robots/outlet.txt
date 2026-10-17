@@ -1,0 +1,21 @@
+# An outlet that keeps search, previews and its API from every crawler, and shuts out two named bots
+Sitemap: https://outlet.test/sitemap.xml
+
+User-agent: *
+Disallow: /search/
+Allow: /search/$
+Disallow: /preview/*
+Disallow: /api
+Disallow: /*.json$
+Disallow: /*?share=
+Disallow: /*&share=
+Disallow: /news/live/
+Allow: /news/live/summary
+Disallow:
+
+User-agent: GPTBot
+User-agent: CCBot
+Disallow: /
+
+User-agent: Googlebot
+Allow: /

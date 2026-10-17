@@ -38,7 +38,12 @@ const one = (extra, description) => parseFeed(rss(item('A picture story', 'https
 /** Fake fetch over a url -> html/status table; remembers what was asked. */
 function routes(table) {
   const asked = [];
+  const robotsRead = []; // the outlets' robots.txt (server/robots.js), read before a page; not counted as pages
   const fetchImpl = async (url) => {
+    if (/^https?:\/\/[^/]+\/robots\.txt$/.test(url) && !(url in table)) {
+      robotsRead.push(url);
+      return new Response('not found', { status: 404 });
+    }
     asked.push(url);
     const spec = table[url];
     if (typeof spec === 'number') return new Response('x', { status: spec });
@@ -46,6 +51,7 @@ function routes(table) {
     return new Response('not found', { status: 404 });
   };
   fetchImpl.asked = asked;
+  fetchImpl.robotsRead = robotsRead;
   return fetchImpl;
 }
 const noNetwork = async (url) => {

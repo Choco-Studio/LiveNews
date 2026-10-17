@@ -18,6 +18,7 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { USER_AGENT } from '../../server/robots.js';
 import { wikimediaAgent } from '../../server/wikimedia.js';
 import { imageSize } from '../../server/pictures.js';
 
@@ -49,7 +50,7 @@ async function download(url) {
   for (let attempt = 0; attempt < 6; attempt++) {
     if (wm && Date.now() < pauseUntil) await wait(pauseUntil - Date.now());
     try {
-      const res = await fetch(url, { headers: { 'user-agent': wm || /staticflickr\.com\//.test(url) ? agentWm : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' }, signal: AbortSignal.timeout(20000) });
+      const res = await fetch(url, { headers: { 'user-agent': wm || /staticflickr\.com\//.test(url) ? agentWm : USER_AGENT, accept: 'image/*' }, signal: AbortSignal.timeout(20000) });
       if (res.status === 429 || res.status === 503) {
         const ask = Number(res.headers.get('retry-after')) || 30;
         // (an original's download refused for ten minutes is skipped: the desk serves renditions, not originals)

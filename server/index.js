@@ -5,6 +5,7 @@ import { config, configWarnings, ROOT } from './config.js';
 import { findPlaces } from './gazetteer.js';
 import { NewsDesk } from './news.js';
 import { ArticleCache } from './articlecache.js';
+import { Robots } from './robots.js';
 import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
@@ -40,7 +41,8 @@ const MIME = {
 };
 
 const usage = new UsageTracker(config.dataDir);
-const newsDesk = new NewsDesk();
+// the outlets' robots.txt, read before any of their pages is opened, kept a day in memory and in data/robots
+const newsDesk = new NewsDesk({ robots: new Robots({ dir: path.join(config.dataDir, 'robots') }) });
 // Real photos for stories still without one: a FILE photo of the story's place (Wikimedia Commons by default)
 // One polite queue for every Wikimedia service the picture desks ask (server/wikimedia.js: its limits are per client)
 const wikimedia = new WikimediaClient({ contact: config.pictures.contact });
