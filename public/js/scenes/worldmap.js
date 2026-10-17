@@ -1584,6 +1584,19 @@ function pinConflict(others, n, cx, cy, bx, by, bw, bh, right, vert) {
   return hits;
 }
 
+// the place label last drawn, in the canvas's pixels (a clip's captions keep clear of it: clip/graphics.js); read once
+let MAP_LABEL = null;
+export function takeMapLabel() {
+  const b = MAP_LABEL;
+  MAP_LABEL = null;
+  return b;
+}
+// a rectangle the context names keep out of, whole or not at all (a clip's captions moved to the top: clip/graphics.js)
+let KEEP_OUT = null;
+export function mapKeepOut(rect) {
+  KEEP_OUT = rect || null;
+}
+
 /**
  * The place label: an ink plate beside the marker, the name at 2x with an accent rule under it
  * and the coordinates in micro type, joined to the marker by a 1 px silver leader. It wipes out
@@ -1599,6 +1612,7 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc, country = 
     rt.labelFor = L;
   }
   const { x: bx, y: by, right, vert } = L.pos;
+  MAP_LABEL = { x: ox + bx, y: oy + by, w: L.bw, h: L.bh, cw: rt.w, ch: rt.h };
   const e = easeOutQuint(clamp(tl / 0.36, 0, 1));
   // leader: level with the marker when the plate is beside it, else an elbow up or down to it;
   // a plate straight above or below gets a vertical leader to its edge
@@ -1809,6 +1823,8 @@ function drawContext(rt, ctx, ox, oy, view, cx, cy, box, place, tc, pins, lat, l
     const r = list[i];
     const p = seg(tc, i * 0.08, 0.3);
     if (p <= 0) continue;
+    const K = KEEP_OUT;
+    if (K && ox + r.x - 1 < K.x + K.w && ox + r.x + r.w + 1 > K.x && oy + r.y - 1 < K.y + K.h && oy + r.y + r.h > K.y) continue;
     const off = Math.round((1 - easeOutQuint(p)) * 6);
     ctx.save();
     try {

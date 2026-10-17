@@ -1,17 +1,23 @@
 import { AudioEngine } from './audio.js';
 import { Renderer, W, H } from './studio.js';
 import { Director } from './director.js';
+import { clipOptions, clipSizes, installClip } from './clip/index.js';
 
 const params = new URLSearchParams(location.search);
+// ?clip=1 / ?format=vertical: the publishing desk's recordings (clip/index.js); nothing changes on air without them
+const clipOpts = clipOptions(params);
+const sizes = clipSizes(clipOpts);
 const canvas = document.getElementById('screen');
-canvas.width = W;
-canvas.height = H;
+canvas.width = sizes.page.w;
+canvas.height = sizes.page.h;
+// the renderer's picture: the page's canvas, or (vertical) an offscreen 384x216 one the compositor composes from
+const source = clipOpts.vertical ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : canvas;
 
 const audio = new AudioEngine({ lang: 'en' });
 // The v2 presenters and studio are the channel's default (owner, 3 Oct); ?v2=0 (or false/off/no) airs the old
 // renderer. ?perf=1 logs the v2 shot's p50/p95 every 10 s.
 const v2 = params.has('v2') ? !/^(0|false|off|no)$/i.test(params.get('v2').trim()) : true;
-const renderer = new Renderer(canvas, audio, { v2, perf: params.get('perf') === '1' });
+const renderer = new Renderer(source, audio, { v2, perf: params.get('perf') === '1' });
 
 const channel = await fetch('/api/channel')
   .then((r) => r.json())
@@ -21,13 +27,14 @@ document.title = `${channel.name} · Live`;
 const player = new Director({ audio, channel, v2, music: params.get('beds') !== '0' });
 const scene = player.scene;
 scene.subtitles = params.get('subs') !== '0';
+const clip = clipOpts.on ? await installClip({ canvas, renderer, audio, channel, opts: clipOpts }) : null;
 
 // --- integer scaling so pixels stay square and sharp -----------------------
 function fit() {
-  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const s = Math.min(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
   const scale = s >= 1 ? Math.floor(s) : s;
-  canvas.style.width = `${W * scale}px`;
-  canvas.style.height = `${H * scale}px`;
+  canvas.style.width = `${canvas.width * scale}px`;
+  canvas.style.height = `${canvas.height * scale}px`;
 }
 window.addEventListener('resize', fit);
 fit();
@@ -46,10 +53,12 @@ function loop() {
   const t = performance.now() / 1000;
   try {
     renderer.render(t, scene);
+    clip?.frame(t, scene); // (vertical: the page's picture composed from the renderer's; never throws)
   } catch (err) {
     try {
       renderer.guard.recover(renderer, t);
       renderer.graphics.draw(renderer.ctx, t, scene); // never throws
+      clip?.frame(t, scene);
     } catch {
       /* the reset frame stays */
     }

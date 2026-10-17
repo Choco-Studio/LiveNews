@@ -1237,6 +1237,7 @@ function drawBoard(ctx, t, data, seg, since, layers) {
   let done = null;
   if (said.length && said.every((id) => ST.spoken.has(id))) done = Math.max(...said.map((id) => ST.spoken.get(id))) + 1.6;
   const W8 = { since, spoken: ST.spoken, hot: ST.seg?.board === board ? currentHot() : null, hotAt: ST.lastHotAt, done, anySaid: ST.spoken.size > 0 };
+  ST.view8 = { t, board, ...W8 }; // (weatherView: a clip's vertical frame sets the same board again)
   t0 = now();
   if (board.kind === 'hotcold') drawHotCold(ctx, t, board, W8);
   else if (board.kind === 'outlook') drawOutlook(ctx, t, board, W8);
@@ -1246,6 +1247,16 @@ function currentHot() {
   let last = null, at = -Infinity;
   for (const [id, x] of ST.spoken) if (x > at) [last, at] = [id, x];
   return last;
+}
+
+/**
+ * What the weather centre drew at render time t, for a clip's vertical frame (public/js/clip/vweather.js): the shot,
+ * the presenter's screen x, and the board with its countdown state when a board is up. null for another frame's t.
+ */
+export function weatherView(t) {
+  if (ST.lastT !== t) return null;
+  const v = ST.view8 && ST.view8.t === t ? ST.view8 : null;
+  return { shot: ST.shot?.shot || null, presenterX: Number.isFinite(ST.presenter?.x) ? ST.presenter.x : null, board: v?.board || null, state: v };
 }
 
 export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK, beatsFor, closeupTarget };

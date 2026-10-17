@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: WORLD WEATHER in the vertical picture</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1000px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { image-rendering: pixelated; display: block; background: #000; }
+  figcaption { padding: 4px 0; color: #8a8fa3; }
+</style>
+</head>
+<body>
+<h1>WORLD WEATHER's boards set again for the vertical stage (clip/vweather.js)</h1>
+<p>HOT &amp; COLD and THE NEXT THREE DAYS in the 216 x 176 stage at moments of the countdown (?scale=1|2|4).</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { drawVerticalWeatherBoard } from '/js/clip/vweather.js';
+import { groundOf } from '/js/clip/vertical.js';
+
+const qs = new URLSearchParams(location.search);
+const scale = Number(qs.get('scale') || 2);
+const BOX = { x: 0, y: 0, w: 216, h: 176 };
+const place = (id, name, value, kind) => ({ id, name, value, kind });
+const HOTCOLD = { kind: 'hotcold', hot: [place('khartoum', 'KHARTOUM', 41, 'partly'), place('ahvaz', 'AHVAZ', 41, 'cloudy'), place('doha', 'DOHA', 39, 'clear'), place('mumbai', 'MUMBAI', 38, 'partly'), place('riyadh', 'RIYADH', 37, 'clear')], cold: [place('vostok', 'VOSTOK STATION', -58, 'snow'), place('yakutsk', 'YAKUTSK', -9, 'cloudy'), place('ulaanbaatar', 'ULAANBAATAR', -6, 'clear'), place('nuuk', 'NUUK', -3, 'snow'), place('oslo', 'OSLO', 1, 'rain')] };
+const day = (max, min, kind) => ({ max, min, kind });
+const OUTLOOK = { kind: 'outlook', days: [{ name: 'TUE' }, { name: 'WED' }, { name: 'THU' }], cities: [
+  { id: 'new-york', name: 'NEW YORK', days: [day(22, 12, 'cloudy'), day(19, 11, 'rain'), day(17, 9, 'partly')] },
+  { id: 'london', name: 'LONDON', days: [day(15, 9, 'rain'), day(14, 8, 'cloudy'), day(16, 10, 'partly')] },
+  { id: 'tokyo', name: 'TOKYO', days: [day(24, 18, 'clear'), day(23, 17, 'partly'), day(21, 16, 'rain')] },
+  { id: 'sydney', name: 'SYDNEY', days: [day(21, 13, 'partly'), day(25, 14, 'clear'), day(19, 12, 'storm')] },
+  { id: 'sao-paulo', name: 'SAO PAULO', days: [day(28, 18, 'storm'), day(26, 17, 'rain'), day(27, 18, 'cloudy')] },
+] };
+const cases = [
+  ['hot & cold · the first place named', HOTCOLD, 4, { since: 0, spoken: new Map([['doha', 2.5]]), hot: 'doha', hotAt: 2.5, done: null, anySaid: true }],
+  ['hot & cold · every place said, the gap', HOTCOLD, 20, { since: 0, spoken: new Map([['doha', 2.5], ['ahvaz', 4], ['khartoum', 5.5], ['ulaanbaatar', 8], ['yakutsk', 9.5], ['vostok', 11]]), hot: 'vostok', hotAt: 11, done: 12.6, anySaid: true }],
+  ['the next three days · London said', OUTLOOK, 6, { since: 0, spoken: new Map([['new-york', 2], ['london', 4.5]]), hot: 'london', hotAt: 4.5, done: null, anySaid: true }],
+];
+const grid = document.getElementById('grid');
+for (const [label, board, t, state] of cases) {
+  const c = Object.assign(document.createElement('canvas'), { width: 216, height: 176 });
+  c.style.width = `${216 * scale}px`;
+  c.style.height = `${176 * scale}px`;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(groundOf(216, 176), 0, 0);
+  drawVerticalWeatherBoard(g, t, board, state, BOX);
+  const f = document.createElement('figure');
+  const cap = document.createElement('figcaption');
+  cap.textContent = label;
+  f.append(c, cap);
+  grid.append(f);
+}
+void P;
+window.__vweather = true;
+</script>
+</body>
+</html>

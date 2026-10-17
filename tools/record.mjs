@@ -42,6 +42,9 @@
 // --progressive  render the sound while the frames are taken, two seconds at a time and always a second
 //            behind the page's clock (OfflineAudioContext suspend/resume), instead of all at the end: a busy
 //            music bed over several minutes renders in minutes, not an hour; the same sound
+// --lossless a master for the publishing desk (tools/publish): the frames as they are, lossless RGB H.264 (libx264rgb,
+//            crf 0) in an .mkv, no chroma subsampling, --scale applied by nearest neighbour as ever (1: the page's own
+//            pixels); the clips are cut, titled and scaled from it, so nothing is ever encoded twice lossily
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -815,9 +818,10 @@ function writeWav(file, chans, sr) {
 
 const args = ['-v', 'error', '-y', '-framerate', String(opts.fps), '-i', path.join(dir, 'f%06d.png')];
 if (wavFile) args.push('-i', wavFile);
-args.push('-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'medium');
-if (wavFile) args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-map', '0:v', '-map', '1:a');
-args.push('-movflags', '+faststart', opts.out);
+if (opts.lossless) args.push(...(opts.scale !== 1 ? ['-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`] : []), '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24');
+else args.push('-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'medium');
+if (wavFile) args.push(...(opts.lossless ? ['-c:a', 'flac'] : ['-c:a', 'aac', '-b:a', '192k']), '-ar', '48000', '-map', '0:v', '-map', '1:a');
+args.push(...(opts.lossless ? [] : ['-movflags', '+faststart']), opts.out);
 await new Promise((resolve, reject) => {
   const ff = spawn('ffmpeg', args, { stdio: 'inherit' });
   ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`))));
