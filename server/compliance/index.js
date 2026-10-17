@@ -87,6 +87,15 @@ export function preflight(item = {}, opts = {}) {
       else warnings.push(msg);
     }
   } else if (item.episode) warnings.push('verbatim: no getStory given, the story texts were not checked against their sources');
+  // the offline fallback writer (server/providers/mock.js, on air when no AI writer answers: no key, the provider down or
+  // out of quota) reads its sources out: an item that tells its news (the item's own stories, else its episode's) is never
+  // published, whatever the lint finds against the texts at hand (server/ownwords.js; verbatim.md §7)
+  const told = Array.isArray(item.storyIds) ? item.storyIds.filter(Boolean) : (item.episode?.segments || []).filter((s) => s?.type === 'story' && s.storyId).map((s) => s.storyId);
+  if (item.episode && writtenOffline(item.episode) && told.length) {
+    const msg = 'written by the offline fallback writer (no AI writer answered): it reads its sources out, and is never published';
+    if ((opts.verbatim || 'block') === 'block') v('offline-writer', msg);
+    else warnings.push(msg);
+  }
   // a text post: the same rule on its own words (links and markup aside) against its story's sources; an outlet's
   // headline is allowed only as an attributed citation (quotedSpans), the post's other words must be the channel's
   if (kind === 'text') {
@@ -116,6 +125,9 @@ export function preflight(item = {}, opts = {}) {
   if (!editorialContact(env)) v('editorial-contact-missing', 'EDITORIAL_CONTACT (and EDITORIAL_RESPONSIBLE) must be set: every description names who answers for the channel');
   return { ok: violations.length === 0, violations, warnings, disclosure, credits: audit.credits, description: describe(item, { credits: audit.credits }), recreations };
 }
+
+/** Was this episode written by the offline fallback writer (the extractive one: server/providers/mock.js)? */
+export const writtenOffline = (episode) => String(episode?.provider || '').toLowerCase() === 'mock';
 
 /** A post's words as a reader sees them: no links (their slugs repeat the headline), no markup, entities decoded. */
 export function postWords(text) {

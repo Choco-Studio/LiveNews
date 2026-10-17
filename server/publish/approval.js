@@ -53,6 +53,7 @@ export const groupOf = (it) => (it.kind === 'clip' ? `clip|${it.source?.momentId
 export const RULE_ES = Object.freeze({
   verbatim: 'Copia palabras del medio: el texto o la voz repiten sus frases. No sale hasta que el canal lo cuente con sus propias palabras.',
   'sources-missing': 'No están a mano los textos del medio para esta noticia, así que no se puede comprobar que no los copia. No sale.',
+  'offline-writer': 'Escrito sin IA: copia demasiado de la fuente. Lo escribió el redactor de reserva (sin clave de IA, o con la IA caída o sin saldo) y nunca se publica.',
   demo: 'Son datos de prueba (demostración): nunca se publican.',
   'flag-missing': 'Falta la marca de «contenido generado por IA» que exige la red.',
   'flag-unavailable': 'Esta red no tiene marca de IA automática: hay que ponerla a mano o no publicar aquí.',

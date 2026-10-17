@@ -381,7 +381,7 @@ Everything the feature already does stays:
 | Platform flags | `flag-missing`, `flag-unavailable` |
 | Elections | `election-hold`, `election-silence` |
 | Register and review | `blocked`, `review-missing` |
-| Content | `demo`, `rights-missing`, `not-publishable`, `verbatim` |
+| Content | `demo`, `rights-missing`, `not-publishable`, `verbatim`, `offline-writer` (an episode the offline fallback writer wrote: never published, `verbatim.md` §7) |
 | Files and text | `unmarked`, `file-missing`, `text-disclosure-missing` |
 | Responsibility | `editorial-contact-missing` |
 

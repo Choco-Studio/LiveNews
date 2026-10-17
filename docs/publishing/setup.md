@@ -208,3 +208,49 @@ Su estado (si emite, cuántas veces se ha reiniciado, el título puesto) se guar
   aquella ronda ya no existe y sigue.
 - **El directo se ha parado**: mira `data/publish/live-status.json`. Si pone «cooling», el vigilante se ha dado un
   descanso de 10 minutos tras muchos reinicios: algo falla en el canal y hay que mirarlo.
+
+## 10. El redactor con IA: la clave y la prueba
+
+Sin una clave de IA, el canal sigue emitiendo con el **redactor de reserva**, que copia casi palabra por palabra las
+noticias de los medios. Esos programas **nunca se publican**. En la página de aprobación aparecen retenidos con el
+motivo «Escrito sin IA: copia demasiado de la fuente».
+
+Con la clave, el redactor de IA cuenta cada noticia con sus propias palabras. El sistema mide cada noticia y le pide
+que reescriba lo que copia. Si aun así no lo consigue, la acorta o la quita del programa: nunca sale una copia.
+
+**Dónde va la clave.** La pones tú, y nunca en un chat (ni conmigo ni con nadie):
+
+1. En el servidor, abre el archivo de claves del canal: `nano /etc/globit24.env`.
+2. Añade estas dos líneas. La clave la copias tú de la web de tu proveedor de IA:
+
+       OPENAI_API_KEY=tu-clave
+       PROVIDERS=openai,mock
+
+3. Guarda el archivo y protégelo para que solo lo lea el administrador: `chmod 600 /etc/globit24.env`.
+4. Reinicia el canal para que lea la clave. Quien te ayuda con el servidor sabe cómo.
+
+Si alguna vez pegas la clave donde no debías, bórrala en la web del proveedor y crea otra.
+
+**La prueba del redactor.** Solo crea archivos: no publica ni emite nada. Tarda unos 10–20 minutos:
+
+    node --env-file=/etc/globit24.env tools/writer/try.mjs --episodes 2
+
+Hace dos programas de verdad de cada informativo con las noticias del momento. Deja un informe en
+`data/writer-trial/<fecha>/report.txt`. Lo importante:
+
+| Línea del informe | Qué significa | Qué debe salir |
+|---|---|---|
+| `breaking the verbatim rule as aired` | Noticias que copiarían al medio | **0** |
+| `copied share per story` y `longest run` | Cuánto se parece cada noticia al texto del medio | Menos del 20 %, y como mucho 12 palabras seguidas |
+| `own words: … rewritten, … cut, … dropped` | Noticias que la IA tuvo que reescribir, acortar o quitar | Pocas quitadas |
+| `editor (review faults)` | Lo que corrigió el editor de la IA al comprobar los datos con las fuentes | — |
+| `by mock (OFFLINE…)` | La IA no respondió: la clave, el saldo o la red | Ninguno |
+| `cost a month = …` | Lo que costaría un mes emitiendo 24 horas | — |
+
+**El coste.** El informe no sabe lo que cobra tu proveedor. Te da una fórmula: pon en ella el precio por millón de
+tokens de tu proveedor. Un ejemplo con precios inventados: si el informe dice
+`cost a month = 300 × P_in + 0 × P_cached + 60 × P_out` y el proveedor cobrara 0,10 € por millón de tokens de entrada
+y 0,50 € por millón de salida, el mes costaría 300 × 0,10 + 60 × 0,50 = 60 €.
+
+**Si la IA se cae o se queda sin saldo**, el canal no se para: sigue con el redactor de reserva. Esos programas se
+quedan retenidos con el motivo «Escrito sin IA». Cuando la IA vuelve, el canal la usa otra vez él solo.
