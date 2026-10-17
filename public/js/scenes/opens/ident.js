@@ -21,6 +21,7 @@ import { landMip, cityLights } from '../worldmap.js';
 import { u32, clamp, easeInOutSine, bayer, mk, clockIn, stepDown, HAS_DOM } from '../../gfx/index.js';
 // (bayer(x, y) is precomputed per pixel in the sphere table: no per-frame divisions)
 import { mulberry32 } from '../../util.js';
+import { drawIdentLine } from '../../graphics/disclosure.js';
 
 const W = 384;
 const H = 216;
@@ -206,6 +207,7 @@ function field() {
     const sy = Math.floor(rnd() * 132);
     const b = rnd();
     if (sx > 60 && sx < 324 && sy > 26 && sy < 124) continue; // the wordmark's area stays calm
+    if (sx > 30 && sx < 354 && sy >= 120) continue; // and the statement's line under it
     d[sy * W + sx] = cols[b > 0.93 ? 2 : b > 0.6 ? 1 : 0];
   }
   x.putImageData(img, 0, 0);
@@ -257,7 +259,11 @@ export function drawIdentScene(ctx, dt, opts = null) {
     return;
   }
   drawLogo(ctx, W / 2, LOGO_Y, { variant: 'full', scale: LOGO_SCALE, slogan: true, align: 'center' });
+  // the channel's statement under the wordmark, still with it (graphics/disclosure.js; compliance.md §3): the
+  // ident airs at every break, so every viewer meets it within minutes, however late they join
+  drawIdentLine(ctx, W / 2, IDENT_LINE_Y);
 }
+const IDENT_LINE_Y = 124; // under the wordmark (y 42-118), above the horizon (y ~146 in the middle)
 
 /** Background jobs (one per timer slice) so the first ident never stutters. */
 export const IDENT_WARM = HAS_DOM ? [field, table, dimLogo] : [];

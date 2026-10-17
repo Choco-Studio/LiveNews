@@ -24,7 +24,8 @@ import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
 import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
-import { drawRecreation } from './recreation.js';
+import { drawRecreation, recreationTop } from './recreation.js';
+import { FRAME, MARK_TIMING, nounOf } from './disclosure.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -509,7 +510,8 @@ export class Graphics {
   /** Bottom edge (or { top }) of the caption block: 6 px above the strap's top, wherever it is. */
   captionPlace(t, scene) {
     if (this.captionsOnTop(scene)) return TOP_PLACE;
-    const above = (this.strap.cur && !scene.recreation ? this.strap.top(t) : STRAP.tagY) - CAPTION.gap;
+    // (a recreation's name super may stand taller in a clip's narrow window: its role and name wrap)
+    const above = (this.strap.cur && !scene.recreation ? this.strap.top(t) : scene.recreation ? recreationTop(scene.recreation) : STRAP.tagY) - CAPTION.gap;
     BOTTOM_PLACE.bottom = Math.round(lerp(CAPTION.bottomFree, above, this.liftAt(t)));
     return BOTTOM_PLACE;
   }
@@ -548,6 +550,11 @@ export class Graphics {
     TOP_ROW.programIn = this.tagIn;
     TOP_ROW.programOut = this.tagOut;
     TOP_ROW.clock = zoneTime(STUDIO_TZ, this.now()).label;
+    // the AI mark (graphics/disclosure.js) first opens once the programme's name has left the top row (one thing at
+    // a time), or as the graphics come on when there is no name to wait for (or one that stays: NEWS IN 60)
+    const named = program && this.tagIn !== null && this.pg.tagHold !== Infinity && !FRAME.active;
+    TOP_ROW.markFrom = named ? (this.tagOut !== null ? this.tagOut : this.tagIn + this.pg.tagHold) + 0.35 : this.topAt + MARK_TIMING.delay;
+    TOP_ROW.noun = nounOf(scene.program?.id);
     drawTopRow(ctx, t, TOP_ROW);
     if (mode === 'news' && scene.remote) drawLinkGraphics(ctx, t, scene, this.accentOf(scene));
     // a montage frame over its place's footage (studio.js decides card.vid): FILE and the clip's credit
@@ -560,7 +567,8 @@ export class Graphics {
       else drawStrap(ctx, t, this.strap);
       drawCaptions(ctx, t, this.captions, this.captionPlace(t, scene));
     }
-    if (this.band.on || this.band.outAt !== null) drawTicker(ctx, t, this.ticker, this.band.inAt, this.band.outAt);
+    // (a clip's frame carries no ticker: it is cut from a programme, the band's headlines are not its own)
+    if ((this.band.on || this.band.outAt !== null) && !FRAME.active) drawTicker(ctx, t, this.ticker, this.band.inAt, this.band.outAt);
   }
 
   programTag(scene) {
@@ -581,6 +589,6 @@ export class Graphics {
 }
 
 // Reused per frame (no allocations in steady state).
-const TOP_ROW = { onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '' };
+const TOP_ROW = { onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '', markFrom: 0, noun: 'NEWS' };
 const TOP_PLACE = Object.freeze({ top: CAPTION.top });
 const BOTTOM_PLACE = { bottom: CAPTION.bottomFree };
