@@ -59,23 +59,46 @@ export function drawPreviewTag(ctx, y) {
   drawText(ctx, text, right - tw - 4, y + 2, { color: P.yellow, font: 'micro' });
 }
 
+/**
+ * The right edge of the headline frame's tag under the bug, in the credit's row (scenes/cards.js drawHeadlineFrame: at
+ * x 13, the micro words and 10 px, then the montage's pips, 11 px a story and 4 px), plus the gap a credit keeps from
+ * it; 0 where no such tag is on screen. (Round 8: a long credit ran up against TOP STORIES' pips.)
+ */
+export function headlineTagRight(scene) {
+  const shot = scene?.shot;
+  if (shot === 'montage') {
+    const n = Math.max(1, Math.min(12, Math.floor(scene.rundown?.length || 1)));
+    return 13 + measureText('TOP STORIES', 1, 'micro') + 10 + n * 11 + 4 + CREDIT_GAP;
+  }
+  if (shot === 'tease' && (scene.card?.items || []).filter(Boolean).length < 2) return 13 + measureText('STILL TO COME', 1, 'micro') + 10 + CREDIT_GAP;
+  return 0;
+}
+const CREDIT_GAP = 8;
+
+// where the credits drawn this frame end (0: none): the captions at the top of a montage frame start under them
+// (graphics/index.js captionPlace)
+export const CREDITS = { bottom: 0 };
+
 /** Draw the credits of the pictures on screen (under the clock, one line each). Returns how many were drawn. */
 export function drawPictureCredits(ctx, scene) {
   if (scene?.remote && (scene.fileCredit || scene.shot === 'twoway')) return 0; // a link's own FILE credit is there
   let y = TOP.y + TOP.h + 3;
   let n = 0;
+  CREDITS.bottom = 0;
+  const left = headlineTagRight(scene);
   for (const id of picturesOnScreen(scene)) {
     const c = pictureCreditOf(scene, id);
     if (!c?.credit) continue;
     // (a picture of the event itself, a NASA photograph of that day's launch, says PHOTO, not FILE)
     // (a FILE picture of an earlier event says its year in the tag: "FILE 2023")
-    const lines = drawFileCredit(ctx, c.credit, y, /^FILE\b/i.test(c.credit) ? /^FILE(?: \d{4})?/i.exec(c.credit)[0].toUpperCase() : 'PHOTO');
+    const lines = drawFileCredit(ctx, c.credit, y, /^FILE\b/i.test(c.credit) ? /^FILE(?: \d{4})?/i.exec(c.credit)[0].toUpperCase() : 'PHOTO', { left });
     y += 11 + 9 * ((lines || 1) - 1);
     if (c.uncleared) {
       drawPreviewTag(ctx, y);
       y += 11;
     }
     n++;
+    CREDITS.bottom = y - 1;
   }
   return n;
 }

@@ -27,11 +27,22 @@ function fakeCtx() {
     drawImage() {
       this.images++;
     },
+    createImageData(w, h) {
+      return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+    },
+    putImageData() {},
+    getImageData(x, y, w, h) {
+      return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+    },
+    createLinearGradient() {
+      return { addColorStop() {} };
+    },
+    fillText() {},
   };
 }
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => fakeCtx() }) };
 
-const { picturesOnScreen, pictureCreditsOf, drawPictureCredits } = await import('../public/js/graphics/picture.js');
+const { picturesOnScreen, pictureCreditsOf, drawPictureCredits, headlineTagRight, CREDITS } = await import('../public/js/graphics/picture.js');
 const { P } = await import('../public/js/palette.js');
 
 const pic = { small: {}, full: {}, card: {}, tile: {} };
@@ -130,5 +141,29 @@ describe('the credit drawn', () => {
     // the preview tag sits under both lines
     const tag = ctx.fills.filter((f) => f.c === P.black).pop();
     assert.ok(tag.y >= plates[1].y + plates[1].h, JSON.stringify({ tag, plates }));
+  });
+  test('beside the montage\'s TOP STORIES tag and its pips a long credit runs on two lines, never touching it; the captions start under it (round 8)', async () => {
+    const { drawHeadlineFrame } = await import('../public/js/scenes/cards.js');
+    const credit = 'FILE · PRESS SERVICE OF THE PRESIDENT OF UKRAINE · CC BY 4.0 · PIXELATED';
+    const rundown = [1, 2, 3, 4, 5, 6].map((i) => ({ storyId: `m${i}`, imageCredit: credit, imageLabel: 'FILE' }));
+    const scene = { shot: 'montage', images: new Map([['m3', pic]]), card: { index: 2, pic: {} }, rundown };
+    // the tag's own plate, as the headline frame draws it
+    const frame = fakeCtx();
+    drawHeadlineFrame(frame, 4, 4, { index: 2, total: 6, headline: 'A headline', source: 'X', image: null });
+    const tagPlate = frame.fills.filter((f) => f.y === 25 && f.h === 11 && f.x === 13).sort((a, b) => b.w - a.w)[0];
+    assert.ok(headlineTagRight(scene) >= tagPlate.x + tagPlate.w + 6, `${headlineTagRight(scene)} vs ${tagPlate.x + tagPlate.w}`);
+    const ctx = fakeCtx();
+    drawPictureCredits(ctx, scene);
+    const plates = ctx.fills.filter((f) => f.c === P.ink);
+    assert.equal(plates.length, 2, 'two lines');
+    assert.ok(plates.every((f) => f.x >= tagPlate.x + tagPlate.w + 6), JSON.stringify(plates));
+    assert.ok(CREDITS.bottom >= plates[1].y + plates[1].h - 1);
+    // the compliance desk's AI plate lives in the top row beside the logo (graphics/bug.js): the credit is a row under it
+    const { TOP } = await import('../public/js/graphics/layout.js');
+    assert.ok(plates.every((f) => f.y > TOP.y + TOP.h + 1), 'never in the AI plate\'s row');
+    // the full frame has the whole row: one line
+    const full = fakeCtx();
+    drawPictureCredits(full, { shot: 'full', storyId: 'm3', images: scene.images, rundown });
+    assert.equal(full.fills.filter((f) => f.c === P.ink).length, 1);
   });
 });

@@ -6,6 +6,7 @@
 //
 //   new FaceStore({ dir }).verdict(url) -> faceVerdict | null (never read)
 //   .want(url, why)  queue a picture for the reader;  .queue() the queued pictures;  .record(url, reading)
+//   .reloadQueue()   read the queue file again (the reader, while the desk adds to it);  .save({ queue })
 //   faceVerdict(reading) -> { faces, share, smile, sober, foreground, why }
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,8 +64,14 @@ export class FaceStore {
     this.wanted = new Map();
     this.mtime = 0;
     this.load();
+    this.reloadQueue();
+  }
+
+  /** Read the queue file again: what the desk queued since (the reader runs beside the station). */
+  reloadQueue() {
+    if (!this.queueFile) return;
     try {
-      for (const [url, why] of Object.entries(JSON.parse(fs.readFileSync(this.queueFile, 'utf8'))?.queue || {})) this.wanted.set(url, why);
+      for (const [url, why] of Object.entries(JSON.parse(fs.readFileSync(this.queueFile, 'utf8'))?.queue || {})) if (!this.wanted.has(url)) this.wanted.set(url, why);
     } catch {}
   }
 
@@ -104,7 +111,8 @@ export class FaceStore {
     this.wanted.delete(url);
   }
 
-  save() {
+  /** Keep the readings (and the queue, unless { queue: false }: the reader never writes over the desk's queue). */
+  save({ queue = true } = {}) {
     if (!this.file) return;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
@@ -115,7 +123,7 @@ export class FaceStore {
     } catch (err) {
       this.log.warn?.(`[pictures] could not keep face readings: ${err.message}`);
     }
-    this.saveQueue();
+    if (queue) this.saveQueue();
   }
 
   saveQueue() {

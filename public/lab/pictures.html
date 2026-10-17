@@ -12,6 +12,9 @@
   .grid { display: grid; grid-template-columns: repeat(3, 576px); gap: 10px 8px; padding: 6px 14px; }
   .grid canvas { width: 576px; height: 324px; }
   .grid .cap { width: 576px; font-size: 11px; }
+  .boards { display: grid; grid-template-columns: repeat(4, 384px); gap: 10px 10px; padding: 6px 14px; }
+  .boards canvas { width: 384px; height: 216px; }
+  .boards .cap { width: 384px; font-size: 10px; }
   canvas { width: 768px; height: 432px; image-rendering: pixelated; display: block; background: #000; }
   .big canvas { width: 1536px; height: 864px; }
   .cap { color: #9aa0b6; padding: 2px 0 0; white-space: pre-wrap; }
@@ -23,7 +26,8 @@
 <p>Each story on the channel's own headline board (cards.js drawHeadlineFrame, as the montage airs it), the picture
 pixelated by the channel's own pixelate.js at the full shot's size (416x234, 24 colours, the desk's focus), and the
 picture's credit drawn by graphics/picture.js. No picture: the place's map, as the montage airs it. window.__render(cases)
-draws a list; ?big=1 draws each at 4x.</p>
+draws a list; ?big=1 draws each at 4x; ?boards=1 draws the boards of the stories with neither a picture nor a place at
+air size (1x, as a phone shows the stream), each with a caption as the montage's narration puts one over it.</p>
 <div id="rows"></div>
 <script type="module">
 import { P } from '/js/palette.js';
@@ -33,11 +37,19 @@ import { drawHeadlineFrame } from '/js/scenes/cards.js';
 import { drawWorldMap, warmMapData } from '/js/scenes/worldmap.js';
 import { prepareLocator, drawLocator } from '/js/graphics/locator.js';
 import { drawTopicBoard } from '/js/graphics/topicboard.js';
-import { drawPictureCredits } from '/js/graphics/picture.js';
+import { drawPictureCredits, CREDITS } from '/js/graphics/picture.js';
+import { drawCaptions } from '/js/graphics/captions.js';
+import { drawTopRow } from '/js/graphics/bug.js';
+import { wrapLines } from '/js/font.js';
 
 const THEME = { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' };
 const big = new URLSearchParams(location.search).get('big') === '1';
 const grid = new URLSearchParams(location.search).get('grid') === '1';
+const boards = new URLSearchParams(location.search).get('boards') === '1';
+// ?plates=1: the top row with the AI plate beside the logo, over a picture with its credit (the montage's frame and the
+// full-frame story shot), as the graphics layer draws them on air
+const plates = new URLSearchParams(location.search).get('plates') === '1';
+const TITLES = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS DESK', 'money-minute': 'MONEY MINUTE', 'news-60': 'NEWS IN 60' };
 
 async function frame(c, v) {
   const cv = document.createElement('canvas');
@@ -70,17 +82,82 @@ async function frame(c, v) {
   // no picture and no place: the topic board, as the montage airs it (the rights desk's side only; before, the
   // montage's field)
   const topic = !card && !map && v === c.after;
-  if (topic) drawTopicBoard(ctx, { headline: c.title || c.headline, category: c.category, grave: !!c.grave }, { accent, dt: 9 });
+  if (topic) drawTopicBoard(ctx, { board: c.board || null, headline: c.title || c.headline, category: c.category, grave: !!c.grave }, { accent, dt: 9 });
   drawHeadlineFrame(ctx, 4, 4, { index: 0, total: 1, headline: c.headline, source: v?.source ?? c.source, category: c.category || 'general', image: card, backdrop: map || topic ? 'map' : null, programId: c.programme, accent });
+  // the narration's caption over the frame, where the montage puts it (graphics/captions.js, top: 46)
+  if (c.caption) drawCaptions(ctx, 9, { active: true, lines: wrapLines(String(c.caption).toUpperCase(), 254).slice(0, 2), prevLines: [], changeAt: 0, clearAt: null }, { top: 46 });
   if (card && v.credit) {
     drawPictureCredits(ctx, { shot: 'montage', card: { index: 0, pic: card }, rundown: [{ storyId: 'x', imageCredit: v.credit, imageLabel: 'FILE', imageUncleared: !!v.uncleared }], images: new Map([['x', { card }]]) });
   }
   return cv;
 }
 
+async function plateFrame(c, shot, moment) {
+  const cv = document.createElement('canvas');
+  cv.width = 384;
+  cv.height = 216;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const accent = THEME_ACCENT[THEME[c.programme]] || P.red;
+  const img = await loadImage(c.after.img);
+  const full = pixelate(img, 416, 234, { colors: 24, focusY: Number.isFinite(c.after.focus) ? c.after.focus : 0.4, fit: c.after.fit || 'cover' });
+  const card = document.createElement('canvas');
+  card.width = 384;
+  card.height = 216;
+  card.getContext('2d').drawImage(full, -16, -9);
+  const scene = { shot, storyId: 'x', card: { index: 2, pic: card }, rundown: [{ storyId: 'x' }, { storyId: 'y' }, { storyId: 'x', imageCredit: c.after.credit, imageLabel: 'FILE' }, { storyId: 'z' }, { storyId: 'w' }, { storyId: 'v' }], images: new Map([['x', { card, full: card }]]) };
+  scene.rundown[0] = scene.rundown[2];
+  if (shot === 'montage') drawHeadlineFrame(ctx, 4, 4, { index: 2, total: 6, headline: c.headline, source: c.after.source, category: c.category || 'general', image: card, programId: c.programme, accent });
+  else ctx.drawImage(card, 0, 0);
+  // the top row as graphics/index.js draws it: the name up for its hold, the AI plate opening after it
+  const t = moment === 'open' ? 3 : 1;
+  drawTopRow(ctx, t, { onAt: 0, replay: false, program: { title: TITLES[c.programme] || 'WORLD NOW', color: accent }, programIn: moment === 'open' ? null : 0, programOut: null, clock: '14:52', markFrom: moment === 'open' ? 0.5 : 99, noun: 'NEWS' });
+  drawPictureCredits(ctx, { shot, storyId: 'x', card: scene.card, rundown: scene.rundown, images: scene.images });
+  // (the narration's caption, where the montage puts it: under the credit)
+  // (graphics/index.js captionPlace: 6 px under a credit that runs on two lines)
+  if (shot === 'montage' && c.caption) drawCaptions(ctx, 9, { active: true, lines: wrapLines(String(c.caption).toUpperCase(), 254).slice(0, 2), prevLines: [], changeAt: 0, clearAt: null }, { top: Math.max(46, CREDITS.bottom ? CREDITS.bottom + 6 : 0) });
+  return cv;
+}
+
 window.__render = async (cases) => {
   const rows = document.getElementById('rows');
   rows.textContent = '';
+  if (plates) {
+    // each case on two programmes' look, two shots, two moments: the programme's name up (the AI plate closed), then
+    // the AI plate open into its words (the name gone: one thing at a time)
+    const box = document.createElement('div');
+    box.className = 'row big';
+    for (const c of cases) {
+      for (const [shot, moment] of c.plates || [['montage', 'open']]) {
+        const cv = await plateFrame(c, shot, moment);
+        const cap = document.createElement('div');
+        cap.className = 'cap';
+        cap.textContent = `#${c.n} [${c.programme}] ${shot} · ${moment === 'open' ? 'AI plate open' : 'programme name up, AI plate closed'} · ${c.after.credit}`;
+        box.append(cv, cap);
+      }
+    }
+    rows.append(box);
+    document.body.dataset.ready = '1';
+    return;
+  }
+  if (boards) {
+    // the boards at air size, four to a row, each with its story and what it shows
+    const box = document.createElement('div');
+    box.className = 'boards';
+    for (const c of cases) {
+      const cell = document.createElement('div');
+      cell.append(await frame(c, c.after));
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      const b = c.board || {};
+      cap.textContent = `#${c.n} [${c.programme}] ${c.grave ? 'GRAVE · ' : ''}${b.kind || '?'}\n${c.title.slice(0, 90)}`;
+      cell.append(cap);
+      box.append(cell);
+    }
+    rows.append(box);
+    document.body.dataset.ready = '1';
+    return;
+  }
   if (grid) {
     // the hand check: the cleared picks only, three to a row, each with its story and its subject
     const box = document.createElement('div');

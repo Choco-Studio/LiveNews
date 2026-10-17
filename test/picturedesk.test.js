@@ -74,7 +74,7 @@ const FACTS = {
   Q177567: { inst: 'tropical forest', imgs: ['Amazon Manaus forest.jpg'], coord: 'Point(-62 -3.4)', sitelinks: 150 },
   Q900020: { inst: 'human', imgs: ['Norman Hale 2015.jpg'], born: '1936-01-01T00:00:00Z', died: '2026-10-10T00:00:00Z', sitelinks: 22, occ: 'physicist', cty: 'United Kingdom' },
   Q1289807: { inst: 'taxon', imgs: ['Illustration from The Natural History of British Fishes (1802) by Edward Donovan.jpg'], sitelinks: 40 },
-  Q22686: { inst: 'human', imgs: ['Donald Trump official portrait.jpg'], born: '1946-06-14T00:00:00Z', sitelinks: 250, occ: 'politician|businessperson', pos: 'President of the United States', cty: 'United States' },
+  Q22686: { cat: 'Donald Trump', inst: 'human', imgs: ['Donald Trump official portrait.jpg'], born: '1946-06-14T00:00:00Z', sitelinks: 250, occ: 'politician|businessperson', pos: 'President of the United States', cty: 'United States' },
   Q8889: { inst: 'legislature|parliament', imgs: ['European Parliament logo.svg'], sitelinks: 150, cat: 'European Parliament' },
   Q55227530: { inst: 'social movement|advocacy group', imgs: [], sitelinks: 60, cat: 'Extinction Rebellion' },
   Q54109: { inst: 'government building|capitol building', imgs: ['US Capitol east side.jpg'], coord: 'Point(-77.01 38.89)', sitelinks: 120 },
@@ -110,12 +110,26 @@ const FILES = Object.fromEntries(
     file('Michael Olise 2025.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
     file('Norman Hale 2015.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
     file('Donald Trump official portrait.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('Donald Trump in the Oval Office 2025.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('Donald Trump and Xi Jinping 2025.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('Donald Trump at the Capitol 2025.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('Donald Trump 2024 portrait.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Gage Skidmore' }),
+    file('Donald Trump at a rally 2024.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Gage Skidmore' }),
+    file("Haven't We Had Enough of Donald Trump Yet.jpg", { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
+    file('Kill Trump banner in Tehran 2026.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
     file('US Capitol east side.jpg', { licence: 'Public domain', code: 'pd', artist: 'Architect of the Capitol' }),
     file('Zelenskyy smiling 2019.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'President.gov.ua' }),
   ].map((f) => [f.title, f])
 );
-const CATEGORIES = { 'Recep Tayyip Erdoğan': ['File:Erdogan at the podium 2025.jpg', 'File:Erdogan smiling 2024.jpg', 'File:Ankara skyline.jpg'] };
+const CATEGORIES = {
+  'Recep Tayyip Erdoğan': ['File:Erdogan at the podium 2025.jpg', 'File:Erdogan smiling 2024.jpg', 'File:Ankara skyline.jpg'],
+  'Donald Trump': ['File:Donald Trump in the Oval Office 2025.jpg', 'File:Donald Trump and Xi Jinping 2025.jpg', 'File:Donald Trump at the Capitol 2025.jpg', 'File:Donald Trump 2024 portrait.jpg', 'File:Donald Trump at a rally 2024.jpg', "File:Haven't We Had Enough of Donald Trump Yet.jpg", 'File:Kill Trump banner in Tehran 2026.jpg'],
+};
 const SEARCH = {
+  '"Donald Trump"': [
+    file('Melania Trump at the White House 2025.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('Donald Trump speaking in Phoenix 2023.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 2.0', code: 'cc-by-sa-2.0', artist: 'Gage Skidmore' }),
+  ],
   '"European Parliament" plenary session': [
     file('Clashes outside the European Parliament plenary session 2024.jpg', { licence: 'CC BY 4.0', artist: 'EP', description: 'Police and protesters clash' }),
     file('European Parliament plenary session hemicycle.jpg', { licence: 'CC BY 4.0', artist: 'EP', description: 'The hemicycle during a plenary session (no date)' }),
@@ -831,5 +845,68 @@ describe('NASA, what an item is, where a place is', () => {
     assert.equal(near(lisbon, { lat: 38.71, lon: -9.14 }), true);
     assert.equal(near(lisbon, { lat: 41.2, lon: -80.7 }), false, 'Lisbon, Ohio');
     assert.deepEqual(placeTitlesOf(lookupPlace('Georgia') || { kind: 'country', name: 'Georgia' }).slice(0, 2), ['Georgia', 'Georgia (country)']);
+  });
+});
+
+describe('portrait variety (round 8)', () => {
+  test('another crop of the same picture is no other portrait', async () => {
+    const { pictureStem } = await import('../server/picturedesk.js');
+    assert.equal(pictureStem('File:Foto oficial de Luiz Inácio Lula da Silva (ombros).jpg'), pictureStem('File:Foto_oficial_de_Luiz_Inácio_Lula_da_Silva_(estreita).jpg'));
+    assert.equal(pictureStem('File:Jim Chalmers at the 2026 Labor conference (3).jpg'), pictureStem('File:Jim Chalmers at the 2026 Labor conference (1).jpg'));
+    assert.notEqual(pictureStem('File:Donald Trump 2024.jpg'), pictureStem('File:Donald Trump 2023.jpg'), 'two years, two pictures');
+  });
+  const HOUR = 3600_000;
+  const trump = (id, title) => story(id, title, 'The US president said the plan would go ahead.');
+  // each portrait one face, big, alone (a smile is fine outside a grave story)
+  const portrait = { faces: [{ x: 0.3, y: 0.1, w: 0.3, h: 0.4, score: 0.98, emotions: { neutral: 0.6, happiness: 0.4 } }] };
+  async function readied(stories) {
+    const faces = new FaceStore({});
+    const m = makeDesk({ faces });
+    await m.desk.decide(stories, { budgetMs: 10_000 });
+    const queued = faces.queue().map((x) => x.url);
+    for (const url of queued) faces.record(url, /rally/.test(url) ? { faces: [{ x: 0.4, y: 0.5, w: 0.05, h: 0.06, score: 0.9, emotions: { neutral: 1 } }] } : portrait);
+    // (the first portrait aired meanwhile; the decision is made again within the hour, the rotation read)
+    m.advance(HOUR + 1);
+    await m.desk.decide(stories, { budgetMs: 10_000 });
+    return { ...m, faces, queued };
+  }
+  test('a public figure\'s other portraits are read by the face reader, never one of them with someone else or a crowd', async () => {
+    const s = trump('p1', 'Trump faces growing backlash over plans to import diesel from Russia');
+    const { desk, queued } = await readied([s]);
+    assert.ok(queued.some((u) => /Oval_Office/.test(u)), 'queued for the reader');
+    assert.ok(!queued.some((u) => /Xi_Jinping/.test(u)), 'a picture of two people is never asked');
+    assert.ok(!queued.some((u) => /Melania/.test(u)), 'nor one of someone else of the same surname');
+    assert.ok(!queued.some((u) => /banner|Enough/.test(u)), 'nor a sign or a banner about them');
+    assert.ok(queued.some((u) => /Phoenix/.test(u)), 'one found by their full name is');
+    const pick = desk.pickFor(s);
+    assert.match(pick.rights.title, /official portrait/, 'the first still leads');
+    const alts = pick.alts.map((a) => a.rights.title).join(' | ');
+    assert.match(alts, /Oval Office/);
+    assert.match(alts, /2024 portrait/);
+    assert.doesNotMatch(alts, /rally/, 'a face too small is no portrait');
+    assert.ok(pick.alts.every((a) => a.rights.cleared));
+  });
+  test('never the same file twice in an episode; a story keeps its portrait; across the day the one aired longest ago', async () => {
+    const ss = [trump('r1', 'Trump faces growing backlash over plans to import diesel from Russia'), trump('r2', 'Trump says tariffs on steel will rise next month'), trump('r3', 'Trump hosts the Japanese prime minister at the White House')];
+    const later = trump('r4', 'Trump signs an order on federal hiring');
+    const next = trump('r5', 'Trump meets governors on federal funding');
+    const last = trump('r6', 'Trump names a new ambassador to Canada');
+    const { desk, advance } = await readied([...ss, later, next, last]);
+    await desk.assign(ss, { budgetMs: 2000 });
+    const first = ss.map((s) => s.image);
+    assert.equal(new Set(first).size, 3, 'three stories, three portraits');
+    assert.ok(ss.every((s) => s.imageRights.cleared && /Donald Trump/.test(s.imageRights.subject.label)));
+    // the same stories again: each keeps the portrait it aired with (what airs never changes under it)
+    await desk.assign(ss, { budgetMs: 2000 });
+    assert.deepEqual(ss.map((s) => s.image), first);
+    advance(HOUR);
+    await desk.assign([later], { budgetMs: 2000 });
+    assert.ok(!first.includes(later.image), 'a new story: the portrait not aired yet today');
+    advance(HOUR);
+    await desk.assign([next], { budgetMs: 2000 });
+    assert.ok(![...first, later.image].includes(next.image), 'and the next one: the last portrait not aired yet');
+    advance(HOUR);
+    await desk.assign([last], { budgetMs: 2000 });
+    assert.equal(last.image, first[0], 'then the one aired longest ago, never the latest');
   });
 });

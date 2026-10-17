@@ -460,19 +460,149 @@ show another (Jamaica's deportation flights on the USA, "Ukraine says its Starsh
 finding for `server/news.js`); the topic board **7.0** (a deliberate pixel board, never empty; not higher: fourteen
 glyphs repeat, the grave board is only rings and the section's name, and that name repeats the headline's chip).
 
+## Round 8 — the right place, boards built on the story, portraits that rotate, the face reader under the station
+
+The coordinator's brief: coverage is now the owner's decision (a wire licence, or the free-licence ceiling), "do not
+chase it further"; this round is about what airs on the two stories in three that have no picture: **0 wrong places on
+the locator board; a topic board built around the story's own strongest element, at least 9 on its own visual score;
+a public figure's portraits rotating; the face reader run and watched by the station; the AI plate and a picture's
+credit never colliding**. Coverage stays as measured in round 7.
+
+**1. The place.** The locator board showed the news desk's place, and the news desk had read the wrong one: Jamaica's
+deportation flights lit the USA, a boat capsized off Djibouti lit Yemen, "Ukraine says its Starshield access is back"
+lit Russia, the surfers killed in Mexico lit the USA. The root was the gazetteer (`server/gazetteer.js`), not
+`server/news.js`: the producer now gives the board the place the headline names (`server/producer.js` `boardPlace`),
+and the gazetteer reads it the way an editor does:
+
+- the first country or city of the headline wins ("Jamaica accepts… flights from US"); "off <country>" is that
+  country's coast; "<country> says" is the speaking state, never a country its summary goes on to name; a country that
+  strikes another is shown where the strikes fell ("Russia strikes 9 Ukrainian regions"); a destination gives way to
+  where it happened ("…flee to China, arrested at LAX"); "from" counts only after a verb of leaving ("US withdraws all
+  B-1 bombers from British base");
+- a people's adjective on people says who they are, not where ("Australian, US surfers", "Israeli settlers"); a
+  country's court, police or government acting says where ("Mexican judge sentences…", "Albanian police fire tear
+  gas…", "according to a French prosecutor" in the lead); a people's territory is their country ("…100km into Russian
+  territory");
+- a name inside another name is no place: a currency ("US dollar"), a newspaper ("The New York Times"), a club
+  ("Manchester United"), a university ("Arizona State University"), "Baja California" (Mexico, not California);
+- 50 more countries (Djibouti, Eritrea, the Gambia, Bhutan, the Maldives, Belize, Guyana, Tajikistan…), the waters the
+  news names (the Strait of Hormuz, the Red Sea, the Black Sea, the Taiwan Strait, the Gulf of Aden, the Suez Canal),
+  Ceuta and Melilla, Cork, Galway, Limerick, Waterford, Tirana, Manhattan and Brooklyn, New South Wales ("NSW"),
+  Hampshire (never New Hampshire), "N. Ireland";
+- the news desk's more precise place stays only where the story names it ("Kyiv" under "Ukraine accuses SpaceX…"),
+  and a place the story never names is dropped rather than shown (the Pope's surgery was on Florida).
+
+**The hand check: every locator board of the three samples**, 248 of the 481 stories without a picture (sample 1: 139,
+sample 2: 57, sample 3: 52), read against its headline and lead: **0 wrong places** (53 changed from the news desk's,
+each now right; among them ten stories that had no place now show theirs: Russia for its territory, NSW, Manhattan,
+Waterford, Hampshire, Tirana, Albania, France twice, Thailand; and the surfers' story shows Mexico, not California). Four are debatable and follow the rule as written: "NATO's
+top US commander warns Russia" shows Russia, "EU warns platforms over livestreaming US execution" the USA, "Trump ousts
+Guilfoyle as US ambassador to Greece" Greece, a Chinese startup's funding China. Two right places are now dropped
+(safe: the topic board instead): "Tip-off foiled US teen suspect's plot…" and "Bad news for Trump…".
+
+**2. The topic board, rebuilt** (`public/js/boardspec.js` decides, `public/js/graphics/topicboard.js` draws, the
+producer puts the decision on each rundown item as `board`). "WORLD" alone in a ring looked failed, and the car glyph
+childish. The board is now the story's own strongest element, in the upper right where the locator puts its place,
+from y 74 to 123, clear of the captions above and the headline's chip below, right-aligned to graphics-safe; in order:
+
+| kind | what it shows | of the 233 boards of the three samples |
+| --- | --- | --- |
+| **the key figure** | the figure big (5–6×), what it counts beside it, its qualifier over it, behind the programme's accent rule: "139" MIGRANTS, "$1.3BN" ACQUISITION, "20" WEEKS, "AT LEAST 23" PROTESTERS; the headline's own, else the writer's stated figure; never a year, an age, a model number ("Tablet 12 Pro") or a sum with nothing to say what it is | 40 |
+| **a short quote card** | the channel's quote card in small: the ink plate, the accent quotation mark, the words (2× when they fit two lines), a rule, who said them; the story's own quote when its first sentence can be quoted whole (a cut or mid-sentence quote never), or the headline's ("IT WAS FAKE" - INDIAN VILLAGERS) | 32 |
+| **the named actor** | a wordmark plate: the name at 3× (2× in two lines when long), a rule, what it is from its Wikipedia description (POPE LEO XIV, HEAD OF THE CATHOLIC CHURCH; SPORTSBET, AUSTRALIAN ONLINE BOOKMAKER); a startup no encyclopaedia knows yet carries the story's topic under its name (LICUBE, FUSION POWER). Only a subject the picture desk found and would have shown, or a public figure no longer living named in full in an obituary (CYRIL HILSUM, BRITISH PHYSICIST): never a name it refused for who it is (an accused, a victim, a private person, someone else of that name). No logo, ever | 36 |
+| **the topic** | the headline's own words for it (AI SURVEILLANCE, HEATING OIL, BLACK HOLES, CARER'S ALLOWANCE, DEATH PENALTY), beside one of 25 new line glyphs on a tile: 24×24 at 2×, one-pixel strokes in silver with one accent detail (a chip, a phone, a gamepad, a shield, a globe, an orbit, an atom, a flask, a helix, a leaf, a paw, waves, a pulse line, a chart, a bolt, a house, a bag, a ballot box, scales, a book, a film strip, a steering wheel, a train, a plane, a medal); the writer's topic label only where the story's words bear it out (the feed's "SOFTWARE" under a carer's allowance story is dropped) | 105 (68 with a glyph) |
+| **the key phrase** | a wordmark of the headline's possessive phrase, never the words it opens with | 1 |
+| **nothing** | nothing the story says may stand alone ("TechCrunch Disrupt 2026: Day 2"): the section's glyph on its tile in fog, no words; under a grave story the field alone | 19 |
+
+Never a bare section word. Under a grave story (57 boards), and under a topic of harm or the courts whatever the
+story's other words (INQUEST, DEATH PENALTY, SENTENCING, FAMILY AND SEXUAL VIOLENCE), the board is sober: silver and
+fog only, no accent colour, no glyph, nothing moving but one wipe. Every one of the 233 real boards was drawn and
+measured inside its box (`geom` sweep: 0 outside); the sheets show each with a caption over it as the narration puts
+one. What the round's own sheets caught and fixed: a figure's shadow fell inside its slashed zero (now none); a
+three-line quote ran onto the chip row (a tighter plate); a two-line name's plate touched the captions; the topic
+tile reached into the captions' row (52 px, its foot 2 px lower); "PROTESTS" under students "rising up" for better
+education (EDUCATION now); "EMISSIONS" under a rocket's carbon composites (gone); a key phrase that only repeated the
+headline's first words.
+
+**The topic board's visual score: 9.0** at 4× and at air size (1×, as a phone shows the stream): the figure, the quote
+card and the wordmark are as designed as the channel's own cards and read at a glance; the topic tile is clean and
+adult. Not higher: a topic label often repeats a word of the headline under it, and one board in twelve has nothing
+the story says that may stand alone and shows a quiet glyph only. **The locator board: 8.5** (8.0 in round 7: the
+place is now right; a large country is still shown from far out).
+
+**3. Portrait variety** (`server/picturedesk.js` `rotate`, the producer). A public figure's first portrait (their
+Wikidata picture) now has up to five more beside it: their own Commons category's files and their photographs found by
+name, each with **their full name in its title** (a middle initial may stand between: "Donald J. Trump"; "Melania
+Trump" is never Donald Trump), no one else named in it, cleared, and read by the face reader as **a portrait of one
+person** (sober as well under a grave story). A story keeps the portrait it was given (what airs, and what `/api/img`
+serves, never changes under it); a story new to the air gets that person's portrait aired longest ago today; never
+one file that another story of the episode shows, and the producer takes off any picture file a second story of an
+episode would show (that story shows its board). A portrait for the rotation is also **recent** (dated in the
+last five years by the file: Trump's best-known Commons photographs are from 2011–2017, and are left out), **framed as
+a portrait** (the face a fifth of the height or more, and no other face at all: the face reader passed "Lula and Tony
+Blair" as one face, so the rule is now one face), **never another crop of a picture already in the pool** ("Foto
+oficial de Lula (ombros)" and "(estreita)" are one picture), never a sign, a banner, a sculpture or a match ("Kill
+Trump banner", "Andy Burnham sculpture", "Olise France v Senegal"), never a file naming someone else in any language
+("e", "y", "et", "und", "entre"), and a one-word name ("Raye") is never searched for a rotation. The year and the year
+before are searched too, so the pool finds recent pictures, not only the most famous old ones.
+
+**Measured** (`data/pictures-rotation`, a scratch measurement): every portrait story of the three samples (63) decided
+again with these rules, the face reader reading the new candidates in its watch mode, then aired as a day of
+episodes (six stories each, by programme, in the samples' order, an hour apart, 12 episodes), as the producer airs
+them:
+
+| public figure | airings | files on air, round 7 | files on air, round 8 | most airings of one file |
+| --- | --- | --- | --- | --- |
+| Donald Trump | 20 | 1 | **5** | 6 |
+| Volodymyr Zelenskyy | 7 | 1 | **4** | 2 |
+| Andy Burnham | 6 | 1 | **2** | 3 |
+| the 7 others seen twice | 2 each | 1 | 1–2 | 2 |
+
+**0 files twice in one episode** (none had to be taken off by the producer either). The hand check of every portrait
+in the pools (49, `sheets-r8/rotation-01..05.png`): **0 wrong person** (each checked by eye, and the uncertain ones by
+the file's own description and category: Alex Gibney at the 2026 Venice festival, Trump at a January 2026 cabinet
+meeting, Obama at the O2 in 2025), **0 misleading**; weak: two of Trump's five are crops of the same official
+photograph under different titles (the title rule cannot tell), and three are FILE pictures of him at an event
+(Davos, a cabinet meeting), framed as portraits. Not higher: Commons holds few recent cleared portraits of most public
+figures (Burnham two, Lula one once the crops are gone), and this machine's rate limits left 22 candidates unread
+(they rotate in once read: the decision is made again within the hour).
+
+**4. The face reader under the station** (`server/facereader.js`): a child process, `tools/pictures/faces.mjs --dir
+data/pictures --watch 60` (a new watch mode: the queue read again every minute, a picture that would not download tried
+again half an hour later, the desk's queue file never written over); started again when it stops after 5 s, 10 s,
+20 s… while it keeps failing at once (at most 30 minutes apart), 5 s again after a long run; its lines in the station's
+log; stopped with the station on exit, SIGINT and SIGTERM; `FACE_READER=off` never starts it. Tested with a fake
+child and with a real one that keeps exiting.
+
+**5. The AI plate and a picture's credit** (`sheets-r8/plates-01.png`: the longest credit of the samples, "FILE ·
+PRESS SERVICE OF THE PRESIDENT OF UKRAINE · CC BY 4.0 · PIXELATED", on WORLD NOW's and TECH BYTES' looks, the
+montage's frame with the programme's name up and with the AI plate open, and the full-frame shot). They never meet:
+the AI plate lives in the top row beside the logo (y 8–21), the credit a row under it, right-aligned under the clock
+(from y 25). But the montage's TOP STORIES tag and its pips share the credit's row, and a long credit ran up against
+the pips (2 px apart): **the credit moved**: beside the tag it runs on two lines (the author's, then the terms), 8 px
+clear of the tag, and the captions start 6 px under it (`graphics/picture.js` `headlineTagRight`, `CREDITS`;
+`graphics/index.js` `captionPlace`). The full-frame shot keeps its one line.
+
 ## Final table
 
-| category | r1 | r2 | r3 | r4 | r5 | r6 | **round 7** | why, in round 7 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | **8.5** | every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
-| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | **8.5** | 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
-| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | **3.5** | 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
-| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | **8.0** | the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
-| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | **8.5** | every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
-| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | **9.0** | the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
-| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | coverage |
+| category | r1 | r2 | r3 | r4 | r5 | r6 | r7 | **round 8** | why |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | 8.5 | **8.5** | round 8: unchanged; a rotation's portraits pass every check the first one does (cleared terms read from the source, credited, full name, one person read by the face reader); the boards draw no picture, only the story's own words, the writer's figures, an attributed quote and a Wikipedia description. Round 7: every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
+| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | 8.5 | **8.5** | round 8: the cleared picks as round 7 (judged on the picks: 0 wrong person, 0 misleading, 17 % weak); the board's place is scored on its own (0 wrong in 248, below). Round 7: 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
+| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | 3.5 | **3.5** | round 8: as measured in round 7 and not chased (the owner's decision: a wire licence, or the free-licence ceiling of 67 %). Round 7: 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
+| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | 8.0 | **8.5** | round 8: the floor for two stories in three is now the story's own element (topic board 9.0) or its right place (locator 8.5), and a public figure's portraits rotate; still a board, not a picture, for most of the news. Round 7: the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
+| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | 8.5 | **9.0** | round 8: the station runs the face reader and starts it again (backoff, off with `FACE_READER`, never outliving the station); a rotation never changes a picture under a story already on air; one file never under two stories of an episode. Round 7: every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
+| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | 9.0 | **9.0** | round 8: every place of the hand check that went wrong, every board kind and its box, the board's words from real headlines, the actor rules, the rotation and the producer's one-file rule, the supervisor with a fake child and a real one, the credit beside the tag. Round 7: the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
+| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | **3.5** | coverage |
 
-**The gate is not met: 3.5, not 9.7, and the coverage target is not met: 33.9 % against 75 %.** The round moved
+**Scored on their own (round 8)**: the board's place **0 wrong in 248** locator boards of three samples (round 7: 4
+wrong in 135 checked); the topic board **9.0**, the locator board **8.5**; portrait variety **7.5** (Trump on five files instead of one, the most-aired file six times in twenty, 0 twice in an episode, 0 wrong person in 49; held back by how few recent cleared portraits Commons has).
+
+**Round 8: the gate is not met (3.5: the coverage the owner is deciding). What airs on the stories without a picture
+now meets its own bar: the right place on every locator board checked, a topic board built on the story (9.0), a
+public figure's portraits rotating (7.5, short of recent free portraits).**
+
+Round 7: **the gate is not met: 3.5, not 9.7, and the coverage target is not met: 33.9 % against 75 %.** The round moved
 coverage by four to six points without a wrong person or a misleading picture, and replaced the flat field behind the
 other two thirds of the stories with designed boards; it did not, and under its own rules could not, reach 75 %: a
 third of the news is war, death, disaster and crime, where the brief forbids a FILE picture under a toll, a portrait of
@@ -487,12 +617,12 @@ What would close the gap, without giving any of this back:
    picture under the grave third of the news.
 2. **The lawyer's answers** (RIGHTS.md §8): ShareAlike (51 % of the picks), the face reader, identifiable people in
    FILE pictures.
-3. **The face reader on a schedule** beside the station (every 20 minutes, after the desk's decisions), so a grave
-   story's sober portrait airs in the same hour.
+3. ~~The face reader on a schedule~~: done in round 8, the station runs it and starts it again
+   (`server/facereader.js`).
 4. **Flickr's API with a commercial key** (owner action): the second Openverse tier (long-standing accounts) and the
    date taken; and **a registered Openverse key** for more than 200 requests a day.
-5. **The news desk's place** (`server/news.js`, another agent's file): the board shows the place the news desk gives;
-   in 4 of 135 checked it is not the place the headline names.
+5. ~~The news desk's place~~: done in round 8 in the gazetteer and the producer (the board shows the place the
+   headline names; 0 wrong in 248).
 
 ## What the owner's licence rules removed (17 Oct)
 
@@ -512,10 +642,11 @@ search results) and the outlet photos the 440 stories aired with:
 
 Rendered by `tools/pictures/sheet.mjs` with the channel's own client code (`public/lab/pictures.html`: the headline
 board as the montage airs it, `pixelate.js` at 416×234 and 24 colours with the desk's focus, the credit overlay, the
-locator and topic boards), into the measuring session's scratch directory (`…/scratchpad/pictures/sheets-r7/`), round
-6's sheets deleted:
-`s1-board-01.png` and `s1-board-big-01.png` (the locator board: before, the outlet photo; after, the board),
-`s1-topic-01.png` and `s1-topic-big-01.png` (the topic board, with and without its glyph), `s1-grave-portraits-01.png`
+locator and topic boards), into the measuring session's scratch directory. Round 8 (`…/scratchpad/pictures/sheets-r8/`,
+round 7's board sheets deleted): `s1-boards-01..09.png`, `s2-boards-01..03.png`, `s3-boards-01..03.png` (every topic
+board of the three samples at air size, 1×, each with a caption over it as the narration puts one),
+`s1-boards-big-01..03.png` (each kind at 4×, under an ordinary and a grave story), `plates-01.png` (the AI plate and
+the longest credit on WORLD NOW and TECH BYTES). Round 7 (`…/scratchpad/pictures/sheets-r7/`): `s1-grave-portraits-01.png`
 and `s2-grave-portraits-and-seats-01.png` (every sober portrait under a grave story, and the seats),
 `s1-file-and-seats-01.png` (the FILE pictures of the same actor and the seats), `s3-all-picks-01..04.png` (every pick of
 the fresh sample), and `hand-check-r7.txt` (every verdict, three samples). Not kept in the repository (outlet photos
@@ -531,4 +662,6 @@ file whose licence proves wrong, the Free Art Licence's copyleft (as ShareAlike)
 transliterated user name, or running on two lines, is attribution "in any reasonable manner based on the medium"; and,
 new in round 7, the face reader under the EU AI Act and the GDPR, identifiable people in FILE pictures of events,
 Openverse's terms (its notice, its fee clause, anonymous use by a monetised channel) and Flickr pictures known only
-through Openverse's index. This critique is not legal advice.
+through Openverse's index; and, new in round 8, the actor's wordmark showing a few words of Wikipedia's short
+description ("HEAD OF THE CATHOLIC CHURCH": a statement of fact, too short to be a work, but Wikipedia's text is CC
+BY-SA). This critique is not legal advice.

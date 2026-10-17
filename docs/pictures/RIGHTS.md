@@ -15,7 +15,8 @@ from this machine), the relevance rules, how the desk copes with rate limits, th
 Code: `server/rights.js` (licences, the record, credits, the gate), `server/picturedesk.js` (the desk),
 `server/fileevents.js` (FILE pictures of the same actor, the seat of government), `server/openverse.js` (institutions'
 Flickr pictures through Openverse), `server/faces.js` and `tools/pictures/faces.mjs` (the face reader),
-`public/js/graphics/locator.js` and `topicboard.js` (the boards when nothing is cleared),
+`server/facereader.js` (the station runs the face reader and starts it again),
+`public/js/graphics/locator.js`, `public/js/boardspec.js` and `topicboard.js` (the boards when nothing is cleared),
 `server/wikimedia.js` (the polite Wikimedia client and the kept answers), `server/imagesearch.js` (the Commons search),
 `server/footage.js` (clips get records too), the producer's picture stage, `server/archive.js` (the gate on old
 entries), `server/index.js` (`/api/img` serves only airable pictures), `public/js/graphics/picture.js` (the on-screen
@@ -131,7 +132,7 @@ the lawyer (§8), not a rule.
 | — | **Flickr's own pages** (`www.flickr.com`) | 200 | **robots.txt: "User-agent: * / Disallow: /"** for every robot it does not name (read live 17 Oct) | — | — | — | **never read by the desk**: the licence, the account and the date come from Openverse's index; the picture itself from `live.staticflickr.com` (its robots.txt refuses nothing), with the desk's User-Agent. Flickr's API would give the account's age and size and the date taken, but needs a key, and commercial use needs Flickr's permission: owner action |
 | 3 | **the seat of government** of the country a story about government opens on (the White House, the Palace of Westminster, the Berlaymont: `SEATS`, each title checked 17 Oct) | as Wikidata and Commons | per file | per licence | per licence | per licence | yes (§4) |
 | 3 | **Commons FILE photos of the city or structure** (free-text search, `server/imagesearch.js`) | as Commons | per file | per licence | per licence | per licence | yes, strictly (§4) |
-| 4 | nothing cleared fits | — | — | — | — | — | **the locator board** (`public/js/graphics/locator.js`): the country drawn and lit on the channel's map, the city dot with its ring, the place's name on a plate, as the montage airs it; no place: **the topic board** (`public/js/graphics/topicboard.js`): the story's topic as one of the channel's pixel glyphs (a chip for AI, a rocket for space, a flask for science, a chart for the economy…) with its name on a plate, and under a grave story or a story of crime no glyph, the section's name only; never a picture of the event drawn |
+| 4 | nothing cleared fits | — | — | — | — | — | **the locator board** (`public/js/graphics/locator.js`): the country drawn and lit on the channel's map, the city dot with its ring, the place's name on a plate, as the montage airs it; the place is the one the headline names (its first country or city, "off <country>" its coast, the speaking state of "<country> says"), and the news desk's more precise place only where the story names it; no place: **the topic board** (`public/js/boardspec.js` decides, `public/js/graphics/topicboard.js` draws): the story's own strongest element, in this order: its key figure big ("139" MIGRANTS, "$1.3BN" ACQUISITION, with its qualifier, "AT LEAST"), a short quote card attributed ("IT WAS FAKE" - INDIAN VILLAGERS; a quote is never cut), the named actor as a wordmark plate with what it is (REPLIT, COMPANY AND ONLINE CODING ENVIRONMENT; the desk's own subject, never a name it refused, never a logo), the topic in the headline's words beside one of the channel's 25 line glyphs on a tile (AI SURVEILLANCE, HEATING OIL), the headline's key phrase; never a bare section word; under a grave story, or a topic of harm or the courts, silver and fog only, no glyph; never a picture of the event drawn |
 
 Pictures from heads of state and governments that publish under open licences (kremlin.ru and president.gov.ua CC BY
 4.0, the European Parliament CC BY 4.0, the White House as a federal work) reach the desk the same way: through their
@@ -246,6 +247,18 @@ The desk (`server/picturedesk.js`) never shows a picture that is not of the stor
   picture's height (a second face of 70 % its size or more is "two people"), detection score 0.85+, happiness 0.2 or
   less, surprise 0.4 or less, neutral plus sadness 0.45 or more. Checked on 23 portraits by eye before use, and every
   grave portrait of the measurement is in the hand check.
+- **A public figure's portraits rotate** (round 8: one portrait of Trump aired under 20 stories of the samples). Beside
+  the first portrait (their Wikidata picture), up to five more: files of their own Commons category and their
+  photographs on Commons found by name, each with their **full name in its title** (a middle initial may stand
+  between: "Donald J. Trump"; "Melania Trump" is never Donald Trump; a one-word name is never searched for it), no one
+  else named in it in any language ("and", "e", "y", "et", "und", "entre", "with", "+"), no sign, banner, poster,
+  sculpture, cartoon or match in its title, **dated in the last five years** by the file, not another crop of a picture
+  already kept, cleared, and read by the face reader as **a portrait of one person** (one sure face, a fifth of the
+  height or more, no other face at all); under a grave story each must be read sober, as the first. The search asks
+  their name, and their name with this year and last year (the most relevant files of a famous name are old ones). A story keeps the portrait it was given for as long as
+  its decision lives (what airs, and what `/api/img` serves, never changes under it); a story new to the air is given
+  that person's portrait aired longest ago today, and **never one file that another story of the episode shows**: the
+  producer takes off any picture a second story of the episode would show, which then shows its board.
 
 ## 5. Rate limits and robustness
 
@@ -271,6 +284,14 @@ Wikimedia's limits (mediawiki.org "Wikimedia APIs/Rate limits", read 17 Oct 2026
 Measured from this machine, whose address is shared with other agents: Wikimedia answered 429 on about one request in
 four with Retry-After 10–56 s. The measurement tool waits pauses out; the station never does.
 
+**The face reader** is run by the station itself (`server/facereader.js`): a child process, `tools/pictures/faces.mjs
+--dir data/pictures --watch 60`, which reads the queue the desk writes, again every minute, and never writes over it.
+When it stops, for any reason, it is started again after 5 s, then 10 s, 20 s… while it keeps failing at once (at most
+30 minutes apart), and after 5 s again once it has run ten minutes; its lines go to the station's log; it is stopped
+with the station (on exit, SIGINT and SIGTERM). It serves its page on a free port of its own, never the station's. A
+portrait the reader has not read never airs where its expression or its being a portrait matters: the first portrait
+airs meanwhile, and a decision waiting on the rotation's portraits is made again within the hour.
+
 **Openverse** (`server/openverse.js`): its own queue, one request at a time, 3.2 s apart (under 20 a minute), at most
 `OPENVERSE_DAILY` a day (150 by default, under the 200 announced), the day's count kept with the desk's answers so a
 restart does not reset it; a 429 pauses it for what Retry-After asks (a minute at least), until the next UTC day when
@@ -287,10 +308,10 @@ public figure whose Commons pictures were all read and none is sober, and for a 
 | `WIKIMEDIA_CONTACT` | the project URL | the operator's email or URL in the User-Agent (without one Wikimedia allows 10 requests a minute) |
 | `OPENVERSE` | `1` | `0`: Openverse is not asked |
 | `OPENVERSE_DAILY` | `150` | Openverse requests a day at most (0–190; the anonymous allowance is 200) |
+| `FACE_READER` | `1` | `0`: the station does not run the face reader (a grave story's portrait then never airs, and portraits do not rotate) |
 
-The face reader runs beside the station: `NODE_USE_ENV_PROXY=1 node tools/pictures/faces.mjs --dir data/pictures`
-(after a measurement: `--dir <its out>`), on a schedule or by hand; until it has read a grave story's portraits, that
-story airs on its locator board.
+After a measurement the face reader is run by hand: `NODE_USE_ENV_PROXY=1 node tools/pictures/faces.mjs --dir <its
+out>` (once over the queue; `--watch <s>` keeps it running).
 
 Outlet photos are not looked for at all by default (their article pages are not read for pictures), never served by
 `/api/img` (404 "no image"), and old archive entries keep theirs aside (`outletImage`): SEVEN DAYS and PAY ATTENTION
@@ -364,6 +385,10 @@ This is engineering, not legal advice. Before monetised publication, a media law
     and its date are enough evidence, and that fetching the file from `live.staticflickr.com` respects Flickr's terms.
 17. **The seat of government under a story about government** and **a curated surname list** (`SURNAMES`) are
     editorial rules, not legal ones: listed here so the lawyer sees every way a person's picture can reach the screen.
+18. **The topic board's words** (round 8): a named actor's wordmark shows a few words of Wikipedia's short description
+    ("HEAD OF THE CATHOLIC CHURCH"): a statement of fact, too short to be a work, though Wikipedia's text is CC BY-SA;
+    a quote card quotes the story's own quote, attributed, never cut; and the rotation airs a public figure's portrait
+    of an event (a speech, a meeting) as a FILE portrait under other stories.
 
 ## 9. Paid wire photos (a later upgrade)
 

@@ -124,6 +124,26 @@ describe('the picture stage with the rights desk', () => {
     assert.equal(ctx.episode.picturesCleared, false);
     assert.equal(ctx.episode.picturePreview, true);
   });
+  test('never one picture file under two stories of an episode: the second shows its board', async () => {
+    const same = 'https://thumb.wikimedia.org/a/1280px-Donald_Trump_official_portrait.jpg';
+    const { producer, ctx } = setup({ decisions: { s1: [cleared(same)], s2: [cleared(same)] } });
+    await producer.assets(ctx);
+    assert.equal(ctx.episode.segments[0].hasImage, true);
+    assert.equal(ctx.episode.rundown[0].hasImage, true);
+    assert.equal(ctx.episode.segments[1].hasImage, false);
+    assert.equal(ctx.episode.rundown[1].hasImage, false);
+    assert.equal(ctx.episode.pictureRights.length, 1);
+  });
+  test('a story with neither a picture nor a place carries its board: its strongest element, never a bare section word', async () => {
+    const { producer, ctx, stories } = setup();
+    stories.get('s2').title = 'Council approves a £35m budget for schools';
+    ctx.episode.rundown[1].headline = 'Council approves a £35m budget for schools';
+    ctx.episode.segments[1].quote = { text: 'This is a good day.', by: 'The mayor' };
+    await producer.assets(ctx);
+    assert.deepEqual(ctx.episode.rundown[1].board, { kind: 'figure', value: '£35M', label: 'BUDGET', qual: null, grave: false });
+    // (a story with a picture has no board)
+    assert.equal(ctx.episode.rundown[0].board, undefined);
+  });
   test('a cleared picture that will not download: the desk gives the next cleared one', async () => {
     const images = {
       sources: new Map(),

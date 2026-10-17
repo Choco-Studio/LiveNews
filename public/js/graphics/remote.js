@@ -32,14 +32,16 @@ function tagRight(ctx, text, right, y, accent, { micro = false } = {}) {
 
 /**
  * FILE and a clip's credit, right-aligned under the clock at `y` (a link's footage, a montage frame's; a story's
- * picture, graphics/picture.js). `tag` is FILE unless the picture is of the event itself (PHOTO).
+ * picture, graphics/picture.js). `tag` is FILE unless the picture is of the event itself (PHOTO). `left`: the leftmost
+ * x the credit may reach (the montage's TOP STORIES tag shares its row): a credit that would come nearer runs on two
+ * lines instead, the author's and the terms'.
  */
-export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3, tag = 'FILE') {
+export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3, tag = 'FILE', { left = 0 } = {}) {
   const right = W - TOP.x;
   const x = tagRight(ctx, tag, right, y, null);
   const text = String(credit || '').replace(/^FILE(?: \d{4})?\s*·\s*/i, '').toUpperCase();
   if (!text) return 1;
-  const lines = creditLines(text, (t) => measureText(t, 1, 'micro'));
+  const lines = creditLines(text, (t) => measureText(t, 1, 'micro'), left > 0 ? Math.min(CREDIT_LINE_PX, x - 7 - left) : CREDIT_LINE_PX);
   lines.forEach((line, i) => {
     const cw = measureText(line, 1, 'micro');
     rect(ctx, x - cw - 7, y + 1 + i * 9, cw + 6, 9, P.ink);
