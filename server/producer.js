@@ -15,6 +15,7 @@ import { QuizDesk } from './quiz/edition.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
+import { airable, compactRights, currentRights, pictureMode } from './rights.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -103,8 +104,12 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, log = console }) {
     this.config = config;
+    // the rights-aware picture desk (server/picturedesk.js): every picture on air is one the channel may publish, with
+    // its rights record; without it (tests, older callers) the news desk's own pictures air as before
+    this.pictureDesk = pictureDesk;
+    this.pictureMode = pictureMode(config?.pictures?.rights);
     // the channel's memory of what it aired (server/archive.js): every news episode is recorded, SEVEN DAYS is
     // written from it
     this.archive = archive;
@@ -150,7 +155,7 @@ export class Producer {
     this.analysisTurn = 0;
     this.stages = [
       // The picture desk works before the writer, so the writer knows which candidates have a picture.
-      { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
+      { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' || !!this.pictureDesk },
       // FULL TIME: its stories made ready before the writer sees them (time words from today, no verdicts on players,
       // scorelines and fixtures read) and balanced across sports (server/sport/prepare.js)
       { name: 'sport-desk', run: (ctx) => this.sportDesk(ctx), enabled: (ctx) => ctx.program.kind === 'sport' },
@@ -870,7 +875,14 @@ export class Producer {
 
   /** Pictures for the candidates: article pages, then other outlets' reports of the same event (within a budget). */
   async pictures(ctx) {
-    const pictures = await this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    const desk = this.pictureDesk;
+    // the outlets' own photos are looked for only where they may still be shown: without the rights desk, or in a private
+    // preview (PICTURE_RIGHTS=preview). By default they never air, so their article pages are not read for them.
+    const outlets = typeof this.news.findPictures === 'function' && (!desk || this.pictureMode === 'preview');
+    const found = outlets ? await this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 }) : {};
+    // the rights desk: each candidate carries a cleared picture (with its rights record) or none, before the writer
+    // chooses (the writer knows which stories have a picture)
+    const pictures = desk ? { ...found, cleared: await this.clearPictures(ctx.candidates) } : found;
     // the story dossier: the article text of the candidates the writer is most likely to make main stories (wave 3
     // §3.1: depth for programmes of 8-10 minutes, never padding)
     if (typeof this.news.readArticles !== 'function') return pictures;
@@ -881,12 +893,50 @@ export class Producer {
   }
 
 
+  /**
+   * The rights desk for these stories, within the picture budget; then, in the background, the rest of the news desk
+   * a few stories at a time (decisions are kept, so the next episodes find theirs ready and Wikimedia is asked little).
+   */
+  async clearPictures(stories) {
+    const stats = await this.pictureDesk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    this.warmPictures();
+    return stats;
+  }
+
+  warmPictures() {
+    if (this.pictureWarm || typeof this.news?.stories?.values !== 'function') return;
+    const pool = [...this.news.stories.values()].filter((s) => s && !s.local).slice(-300);
+    const step = async (i) => {
+      if (i >= pool.length) return;
+      const batch = pool.slice(i, i + 12);
+      await this.pictureDesk.decide(batch, { budgetMs: 60_000 });
+      // (applied at once: the next selection sees which stories have a cleared picture, NEWS IN 60 picks by it)
+      for (const s of batch) this.pictureDesk.apply(s);
+      // (a pause after a rate limit: the rest waits for the next episode)
+      if (!this.pictureDesk.wm?.paused) await step(i + 12);
+    };
+    this.pictureWarm = step(0)
+      .catch(() => {})
+      .finally(() => (this.pictureWarm = null));
+  }
+
   async assets(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
-    if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
-    else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
+    const desk = this.pictureDesk;
+    const mode = this.pictureMode;
+    if (!desk || mode === 'preview') {
+      if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+      else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
+    }
+    const cleared = desk ? await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 }) : null;
     const verified = this.images ? await this.verifyPictures(stories) : null;
-    const story = (id) => this.news.get(id);
+    // (an archived story is a fresh object at every look: the desk's kept decision is put on it each time)
+    const story = (id) => {
+      const s = this.news.get(id);
+      if (desk && s && !s.local) desk.apply(s);
+      return s;
+    };
+    const rightsOnAir = new Map();
     // Every picture on air carries its credit (`imageCredit`, and `imageCreditVia`: media:credit | jsonld |
     // site_name | outlet). Until the graphics draw "PHOTO: <credit>" from it, a picture that is not the
     // outlet's own (lent by another outlet, or an agency's) also shows its credit where the source is
@@ -894,17 +944,28 @@ export class Producer {
     // `outlet` always keeps the outlet's own name for renderers that draw the credit themselves.
     const apply = (item) => {
       const s = story(item.storyId);
-      item.hasImage = !!s?.image;
+      // with the rights desk, a picture airs only with a cleared rights record for that very picture (or, in a private
+      // preview, an outlet's photo marked as not cleared)
+      item.hasImage = desk ? airable(s, { mode }) : !!s?.image;
       const outlet = item.outlet || item.source || s?.source || '';
       if (outlet) item.outlet = outlet;
-      delete item.imageCredit;
-      delete item.imageCreditVia;
-      delete item.imageCreditLine;
+      for (const k of ['imageCredit', 'imageCreditVia', 'imageCreditLine', 'imageLabel', 'imageLicence', 'imageFocus', 'imageFit', 'imageUncleared']) delete item[k];
       item.source = outlet;
-      if (!s?.image) return;
-      const c = pictureCredit(s, this.images?.sources?.get?.(s.id));
+      if (!item.hasImage) return;
+      const rights = desk ? currentRights(s) : null;
+      // the credit each licence asks for, drawn while the picture is on screen ("FILE · AUTHOR · CC BY-SA 4.0 · PIXELATED")
+      const c = rights && rights.source !== 'outlet' ? { credit: rights.credit, via: 'rights' } : pictureCredit(s, this.images?.sources?.get?.(s.id)) || { credit: s.source, via: 'outlet' };
       item.imageCredit = c.credit;
       item.imageCreditVia = c.via;
+      if (rights) {
+        item.imageLabel = rights.label;
+        item.imageLicence = rights.licence?.id || null;
+        if (!rights.cleared) item.imageUncleared = true;
+        rightsOnAir.set(item.storyId, { storyId: item.storyId, ...compactRights(rights) });
+      }
+      if (Number.isFinite(s.imageFocus)) item.imageFocus = s.imageFocus;
+      // (a person's portrait keeps the whole head on screen: pixelate.js portraitDraw)
+      if (s.imageFit === 'portrait') item.imageFit = 'portrait';
       const line = creditLine(c.credit);
       if (line) item.imageCreditLine = line;
       // The stop-gap rides on the source only on segments and rundown items whose picture is shown; it never
@@ -918,8 +979,15 @@ export class Producer {
       if (seg.type !== 'cross') planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
     }
     for (const item of ctx.episode.rundown) apply(item);
+    if (desk) {
+      // what a description or a publisher needs: every picture on air with its full attribution, and whether all are
+      // cleared (false only in a private preview: such an episode is never to be published)
+      ctx.episode.pictureRights = [...rightsOnAir.values()];
+      ctx.episode.picturesCleared = ctx.episode.pictureRights.every((r) => r.cleared);
+      if (mode === 'preview') ctx.episode.picturePreview = true;
+    }
     const borrowed = stories.filter((s) => s.image && s.imageFrom).length;
-    return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };
+    return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}), ...(cleared ? { cleared: cleared.cleared, uncleared: stories.filter((s) => s.image && !currentRights(s)?.cleared).length } : {}) };
   }
 
   /**
@@ -939,7 +1007,8 @@ export class Producer {
       return !st || st.emotion === 'serious' || st.emotion === 'sad' || isGrave(st.text);
     };
     const montage = rundown.filter((r) => teased.has(r.storyId) && !r.hasImage && r.location?.place && !grave(r.storyId));
-    const asFootage = (clip) => ({ id: clip.id, credit: clip.credit, duration: clip.duration, width: clip.width, height: clip.height, start: clip.start });
+    // (a clip's rights record carries the credit its licence asks for, the modification said: footage is pixelated too)
+    const asFootage = (clip) => ({ id: clip.id, credit: clip.rights?.credit || clip.credit, duration: clip.duration, width: clip.width, height: clip.height, start: clip.start, ...(clip.rights ? { rights: clip.rights } : {}) });
     let found = 0;
     let shown = 0;
     // the links first (the desk asks Commons one request at a time), then the montage
@@ -961,6 +1030,18 @@ export class Producer {
     let timer;
     await Promise.race([Promise.all(jobs), new Promise((resolve) => (timer = setTimeout(resolve, this.config.footage?.budgetMs ?? 20000)))]);
     clearTimeout(timer);
+    // the clips join the episode's list of pictures and their attributions (a description credits them too)
+    if (Array.isArray(ctx.episode.pictureRights)) {
+      const seen = new Set(ctx.episode.pictureRights.map((r) => r.url));
+      for (const x of [...segments, ...rundown]) {
+        const r = x.footage?.rights;
+        if (r && !seen.has(r.url)) {
+          seen.add(r.url);
+          ctx.episode.pictureRights.push({ storyId: x.storyId, footage: true, ...r });
+        }
+      }
+      ctx.episode.picturesCleared = ctx.episode.pictureRights.every((r) => r.cleared);
+    }
     return { links: links.size, footage: found, montage: shown };
   }
 
@@ -985,11 +1066,19 @@ export class Producer {
         }
         if (!entry.error) return;
         dropped++;
+        // a cleared picture that would not download: the desk's next cleared picture of the story, or none
+        const ours = this.pictureDesk ? currentRights(s) : null;
+        if (ours && ours.source !== 'outlet') {
+          this.pictureDesk.failed(s, entry.error);
+          continue;
+        }
         if (typeof this.news.pictureFailed !== 'function') {
           s.image = null;
           return;
         }
         this.news.pictureFailed(s, { reason: entry.error });
+        // (a lender's photo the news desk put in its place never airs by default: the desk's decision goes back on)
+        if (this.pictureDesk) this.pictureDesk.apply(s);
       }
     };
     const budget = this.config.pictureVerifyMs ?? 12000;

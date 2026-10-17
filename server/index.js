@@ -17,6 +17,9 @@ import { writeWeather } from './weatherwriter.js';
 import { FootageDesk } from './footage.js';
 import { IdentityDesk } from './guests/identity.js';
 import { Archive } from './archive.js';
+import { PictureDesk } from './picturedesk.js';
+import { WikimediaClient } from './wikimedia.js';
+import { airable } from './rights.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -32,9 +35,16 @@ const MIME = {
 const usage = new UsageTracker(config.dataDir);
 const newsDesk = new NewsDesk();
 // Real photos for stories still without one: a FILE photo of the story's place (Wikimedia Commons by default)
-newsDesk.imageSearch = new ImageSearch(config.imageSearch);
+// One polite queue for every Wikimedia service the picture desks ask (server/wikimedia.js: its limits are per client)
+const wikimedia = new WikimediaClient({ contact: config.pictures.contact });
+// The FILE-photo search (Wikimedia Commons by default): the rights desk's last source, and the orchestrator's tool
+const imageSearch = new ImageSearch({ ...config.imageSearch, wikimedia });
+// The rights desk (docs/pictures/RIGHTS.md): only pictures the channel may publish air, each with its rights record.
+// The outlets' own photos stand in only in a PRIVATE preview (PICTURE_RIGHTS=preview), marked on screen.
+const pictureDesk = new PictureDesk({ dir: config.pictures.dir, wikimedia, search: imageSearch, mode: config.pictures.rights, enabled: config.pictures.desk });
+if (config.pictures.rights === 'preview') console.warn('[pictures] PRIVATE PREVIEW (PICTURE_RIGHTS=preview): outlet photos may air marked NOT CLEARED; never publish this output');
 // Pictures of local (offline fixture) feeds are served from their own folders only.
-const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
+const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots, contact: config.pictures.contact });
 const chain = new ProviderChain(createProviders(config), usage);
 // Neural presenter voices (VOICE_ENGINE=kokoro), synthesised ahead of air; browser voices otherwise.
 const voice = createVoiceService(config, { root: ROOT });
@@ -67,9 +77,11 @@ const audit = (entry) => {
 };
 // the channel's memory of what it aired (14 days, data/archive): SEVEN DAYS is written from it, and a story the
 // desk has let go keeps its picture for the weekly
-const archive = new Archive({ dir: path.join(config.dataDir, 'archive') });
+// (pictures: an archived picture airs again only with its cleared rights record; the outlet photos of older entries
+// stay in a private preview)
+const archive = new Archive({ dir: path.join(config.dataDir, 'archive'), pictures: config.pictures.rights });
 newsDesk.archive = archive;
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive });
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk });
 // (DRAFTS_ON_AIR: a draft programme on air for a test or a recording, never the official line-up)
 const station = new Station({ config, newsDesk, producer, chain, ...(config.draftsOnAir.length ? { channel: () => withDraftsOnAir(loadChannel(), config.draftsOnAir) } : {}) });
 if (config.draftsOnAir.length) console.warn(`[channel] test mode: drafts on air: ${config.draftsOnAir.join(', ')}`);
@@ -120,7 +132,11 @@ async function serveImage(res, id) {
   // or on it with other candidates (the director preloads it from here)
   const kept = producer.quizPicture(id);
   const story = kept ? null : newsDesk.get(id);
-  if (!kept && !story?.image) return sendJson(res, 404, { error: 'no image' });
+  // (only a picture the channel may publish: its cleared rights record is for that very picture; a private preview
+  // also serves an outlet's photo. The desk's kept decision goes back on first: a feed refresh may have lent the story
+  // an outlet's photo since the episode was made)
+  if (story) pictureDesk.apply(story);
+  if (!kept && !(story?.image && airable(story, { mode: config.pictures.rights }))) return sendJson(res, 404, { error: 'no image' });
   const entry = kept || (await images.get(id, story.images || [story.image]));
   // The detail (paths, upstream errors) stays in the server log; the client only learns it failed.
   if (entry.error) return sendJson(res, 502, { error: 'image unavailable' });
@@ -193,8 +209,8 @@ const server = http.createServer(async (req, res) => {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
       const q = String(url.searchParams.get('q') || '').slice(0, 120);
       if (!q.trim()) return sendJson(res, 400, { error: 'q is required' });
-      if (!newsDesk.imageSearch.enabled) return sendJson(res, 503, { error: 'image search is off (IMAGE_SEARCH)' });
-      return sendJson(res, 200, { query: q, results: (await newsDesk.imageSearch.search(q)).slice(0, 8) });
+      if (!imageSearch.enabled) return sendJson(res, 503, { error: 'image search is off (IMAGE_SEARCH)' });
+      return sendJson(res, 200, { query: q, results: (await imageSearch.search(q)).slice(0, 8) });
     }
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);

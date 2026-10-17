@@ -244,11 +244,24 @@ function htmlPictures(html, push) {
     at = gt + 1;
     found++;
     const a = attrsOf(s.slice(i, gt + 1));
+    // the picture's own credit in its figure (NASA's articles: <div class="hds-credits">NASA/Jane Doe</div>, "Image
+    // credit: US Navy"): the rights desk clears NASA's and US federal pictures only on such a credit (server/picturedesk.js)
+    const credit = name === 'img' ? figureCredit(s, lower, gt + 1) : null;
+    const own = credit ? { credit, creditVia: 'html' } : {};
     const set = largestSrcset(a.srcset || a['data-srcset']);
-    if (set) push(set.url, { w: set.w || Number(a.width) || 0, h: set.w ? 0 : Number(a.height) || 0, via: 'inline' });
+    if (set) push(set.url, { w: set.w || Number(a.width) || 0, h: set.w ? 0 : Number(a.height) || 0, via: 'inline', ...own });
     const src = a['data-src'] || a['data-original'] || a['data-lazy-src'] || a.src;
-    if (src && name === 'img') push(src, { w: Number(a.width) || 0, h: Number(a.height) || 0, via: 'inline' });
+    if (src && name === 'img') push(src, { w: Number(a.width) || 0, h: Number(a.height) || 0, via: 'inline', ...own });
   }
+}
+
+/** The credit written in a picture's figure, after its <img> and before the next one (a class "hds-credits", "Credit: X"). */
+function figureCredit(s, lower, from) {
+  const next = lower.indexOf('<img', from);
+  const end = Math.min(s.length, from + 1500, next > 0 ? next : Infinity);
+  const chunk = s.slice(from, end);
+  const m = /class=["'][^"']*\bhds-credits\b[^"']*["'][^>]*>\s*([^<]{2,160})</i.exec(chunk) || /\b(?:image |photo |picture )?credits?\s*:\s*(?:<[^>]{0,80}>\s*){0,3}([^<]{2,160})/i.exec(chunk);
+  return m ? cleanCredit(m[1]) : null;
 }
 
 const text = (v) => (v === undefined || v === null ? '' : typeof v === 'object' ? text(Array.isArray(v) ? v[0] : v['#text']) : String(v));
@@ -283,9 +296,9 @@ export function cleanCredit(raw) {
  */
 export function feedCandidates(item, { link = null, baseDir = null } = {}) {
   const out = [];
-  const push = (ref, { w = 0, h = 0, via, credit = null }) => {
+  const push = (ref, { w = 0, h = 0, via, credit = null, creditVia = 'media:credit' }) => {
     const r = resolveRef(ref, { base: link, baseDir });
-    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via, ...(credit ? { credit, creditVia: 'media:credit' } : {}) });
+    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via, ...(credit ? { credit, creditVia } : {}) });
   };
   // Media RSS credits: on the picture itself, on its media:group, or on the item.
   const creditOf = (node) => cleanCredit(text(node?.['media:credit']) || text(node?.['media:copyright']));

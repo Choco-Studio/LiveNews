@@ -9,13 +9,18 @@
 //   archive.story(id)                   an archived story (for its picture once the news desk has let it go)
 import fs from 'node:fs';
 import path from 'node:path';
+import { compactRights, currentRights } from './rights.js';
 
 const DAY = 86400_000;
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 export class Archive {
-  constructor({ dir = null, days = 14, now = () => Date.now(), log = console } = {}) {
+  constructor({ dir = null, days = 14, now = () => Date.now(), log = console, pictures = null } = {}) {
     this.dir = dir;
+    // the picture rights mode (server/rights.js): 'cleared' shows an archived picture again only with its cleared rights
+    // record (an older entry's outlet photo is kept aside as `outletImage`); 'preview' shows them all; null (tests,
+    // older callers) leaves the entries as written
+    this.pictures = pictures;
     this.days = days;
     this.now = now;
     this.log = log;
@@ -46,6 +51,12 @@ export class Archive {
 
   keep(e) {
     if (!e?.id || !Number.isFinite(e.at)) return;
+    if (this.pictures === 'cleared' && e.image && !(e.imageRights?.cleared && e.imageRights.url === e.image) && !/^file:/i.test(e.image)) {
+      // an outlet's photo (every entry before the rights desk): never shown again by default (SEVEN DAYS, PAY ATTENTION)
+      e.outletImage = e.image;
+      e.image = null;
+      delete e.images;
+    }
     this.entries.push(e);
     this.byId.set(e.id, e);
     if (e.image) this.pictured.set(e.id, e);
@@ -84,6 +95,8 @@ export class Archive {
         category: seg.category || s.category || null,
         image: s.image || null,
         ...(Array.isArray(s.images) && s.images.length ? { images: s.images.slice(0, 3) } : {}),
+        // the picture's rights record as it aired (its credit, licence, author, page): shown again only if cleared
+        ...(s.image && currentRights(s) ? { imageRights: compactRights(currentRights(s)) } : {}),
         link: s.link || null,
         ...(Array.isArray(s.kw) ? { kw: s.kw.slice(0, 24) } : {}),
         text: clip(seg.text, 700),
@@ -126,7 +139,7 @@ export class Archive {
     // (the story's picture is the one it aired with, even when a later retelling, NEWS IN 60's, carried none: /api/img
     // serves it, as PAY ATTENTION's PICTURE THIS asks it)
     const pic = e?.image ? e : this.pictured.get(id);
-    return e ? { id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, image: pic?.image ?? null, images: pic?.images, link: e.link, kw: e.kw, archived: true } : null;
+    return e ? { id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, image: pic?.image ?? null, images: pic?.images, ...(pic?.imageRights ? { imageRights: pic.imageRights, imageCredit: pic.imageRights.credit } : {}), link: e.link, kw: e.kw, archived: true } : null;
   }
 
   /**

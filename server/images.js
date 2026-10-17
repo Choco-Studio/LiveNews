@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { guardedFetch, readCapped } from './net.js';
 import { MIN_WIDTH, imageSize } from './pictures.js';
+import { wikimediaAgent } from './wikimedia.js';
 
 // One picture at most this big (a 1200 px news photo is 0.2-0.6 MB), and all of them together at most
 // MAX_TOTAL in memory (least recently used go first): a 24/7 box shares its memory with the voice workers.
@@ -50,11 +51,14 @@ export function badPictureSize(body) {
 }
 
 export class ImageCache {
-  constructor({ fetchImpl = fetch, localRoots = () => [], log = console, now = () => Date.now(), lookup = null } = {}) {
+  constructor({ fetchImpl = fetch, localRoots = () => [], log = console, now = () => Date.now(), lookup = null, contact = undefined } = {}) {
     this.fetch = fetchImpl;
     this.log = log;
     this.now = now;
     this.lookup = lookup; // DNS for the private-address guard (tests inject one)
+    // Wikimedia's robot policy refuses a generic agent (HTTP 429 "does not comply with our robot policy"): its pictures
+    // are asked for with the picture desk's own agent, which names the operator (WIKIMEDIA_CONTACT)
+    this.wikimediaAgent = wikimediaAgent(contact);
     this.localRoots = typeof localRoots === 'function' ? localRoots : () => localRoots;
     this.cache = new Map(); // id -> { type, body } | { error }
     this.keys = new Map(); // id -> the candidate list the entry was made from
@@ -163,7 +167,7 @@ export class ImageCache {
     if (!/^https?:\/\//i.test(url)) throw new Error('invalid URL');
     const { res } = await guardedFetch(this.fetch, url, {
       timeoutMs: 10000,
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' },
+      headers: { 'user-agent': /^https:\/\/[^/]*\bwikimedia\.org\//i.test(url) ? this.wikimediaAgent : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' },
       ...(this.lookup ? { lookup: this.lookup } : {}),
     });
     const cancel = async () => {

@@ -2,6 +2,7 @@
 // and commercial breaks), calls the camera shots, graphics and subtitles,
 // and keeps the channel running forever.
 import { pixelate, loadImage } from './pixelate.js';
+import { pictureCreditsOf } from './graphics/picture.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION, TEASE_TILE, boardTitle } from './scenes/cards.js';
 import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
@@ -793,19 +794,28 @@ export class Director {
     const teased = new Set((episode.segments?.find((sg) => sg.type === 'intro')?.teases || []).filter(Boolean));
     ids.sort((a, b) => (teased.has(b) ? 1 : 0) - (teased.has(a) ? 1 : 0));
     const tiled = new Set((episode.segments || []).flatMap((sg) => (sg.stillToCome?.length > 1 ? sg.stillToCome.map((x) => x.storyId) : [])));
+    // where each picture is pixelated from (server picture desk: a portrait keeps the head, the top of the frame)
+    const focus = new Map();
+    const fits = new Map();
+    for (const x of [...(episode.segments || []), ...(episode.rundown || [])]) {
+      if (x?.storyId && Number.isFinite(x.imageFocus)) focus.set(x.storyId, x.imageFocus);
+      if (x?.storyId && x.imageFit === 'portrait') fits.set(x.storyId, 'portrait');
+    }
     for (const id of ids) {
       try {
         const img = await loadImage(`/api/img/${id}`);
         await frame();
-        const small = pixelate(img, SMALL.w, SMALL.h, { colors: 16 });
+        const focusY = focus.get(id);
+        const fit = fits.get(id) || 'cover';
+        const small = pixelate(img, SMALL.w, SMALL.h, { colors: 16, focusY, fit });
         await frame();
-        const full = pixelate(img, FULL.w, FULL.h, { colors: 24 });
+        const full = pixelate(img, FULL.w, FULL.h, { colors: 24, focusY, fit });
         const card = document.createElement('canvas');
         card.width = 384;
         card.height = 216;
         card.getContext('2d').drawImage(full, -16, -9);
         // STILL TO COME's tile: the whole picture pixelated at the tile's own size (never a scaled-down card)
-        const tile = tiled.has(id) ? pixelate(img, TEASE_TILE.w, TEASE_TILE.h, { colors: 16 }) : null;
+        const tile = tiled.has(id) ? pixelate(img, TEASE_TILE.w, TEASE_TILE.h, { colors: 16, focusY, fit }) : null;
         this.images.set(id, { small, full, card, tile });
       } catch (err) {
         console.warn('[director] image', id, err.message);
@@ -918,6 +928,8 @@ export class Director {
       s.program = episode.program;
       s.replay = !!episode.replay;
       s.rundown = episode.rundown || [];
+      // the credit of each picture the rights desk cleared (graphics/picture.js draws it while the picture is on screen)
+      s.pictureCredits = pictureCreditsOf(episode);
       s.progressPlan = null;
       s.lowerThird = null;
       s.subtitle = null;

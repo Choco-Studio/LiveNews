@@ -24,10 +24,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { guardedFetch, readCapped } from './net.js';
-import { fileCredit } from './imagesearch.js';
+import { fileCredit, COMMONS_MEDIA, clearedLicence } from './imagesearch.js';
+import { rightsRecord, compactRights } from './rights.js';
 
 export const FOOTAGE_LIMITS = { minSeconds: 8, maxSeconds: 1200, maxBytes: 14 * 1024 * 1024, minWidth: 300, aspect: 1.3 };
-const FREE_LICENCE = /^(cc0|public domain|pd\b|pd-|cc[ -]by(-sa)?(\s|$|-)\s*\d?)/i;
 // what a clip of the place must not be
 const NOT_FOOTAGE =
   /\b(interview|lecture|speech|talk|talks|conference|presentation|press|trailer|teaser|game|games|match|goal|goals|highlights|song|music|musical|concert|dance|dancing|tutorial|how to|animation|animated|map|maps|webinar|podcast|ceremony|funeral|wedding|protest|protests|rally|march|parade|election|debate|campaign|commercial|advert|advertisement|documentary|film|movie|episode|news|report|tv|broadcast|cctv|dashcam|crash|accident|police|military|army|soldiers?|war|fire|fires|wildfire|flood|floods|flooding|storm|hurricane|typhoon|cyclone|earthquake|quake|tsunami|eruption|riot|attack|explosion|360|vr|3d|game ?play|minecraft|simulator|rendering|cgi|slideshow|screencast|logo|intro)\b/i;
@@ -79,7 +79,9 @@ export function parseCommonsVideos(data) {
     if (!vi) continue;
     const md = vi.extmetadata || {};
     const licence = stripHtml(md.LicenseShortName?.value);
-    if (!FREE_LICENCE.test(licence)) continue;
+    // the rights desk's licences only (server/rights.js): never NonCommercial, never NoDerivatives (clips are pixelated)
+    const licenceId = clearedLicence(licence, stripHtml(md.License?.value), stripHtml(md.LicenseUrl?.value));
+    if (!licenceId) continue;
     const ders = Array.isArray(vi.derivatives) ? vi.derivatives : [];
     let pick = null;
     for (const key of DERIVATIVES) {
@@ -103,6 +105,8 @@ export function parseCommonsVideos(data) {
       title: String(pg.title || '').replace(/^File:/, '').replace(/\.[a-z0-9]{3,4}$/i, ''),
       description: stripHtml(md.ImageDescription?.value).slice(0, 200),
       licence,
+      licenceId,
+      author: stripHtml(md.Artist?.value) || null,
       page: vi.descriptionurl || null,
       credit: fileCredit(md.Artist?.value, licence),
     });
@@ -112,7 +116,7 @@ export function parseCommonsVideos(data) {
 
 /** Does a clip pass the gates: its place named in its title, landscape, long enough, nothing it must not be. */
 export function usableFootage(c, name) {
-  if (!c?.src || !/^https:\/\/upload\.wikimedia\.org\//.test(c.src)) return false;
+  if (!c?.src || !COMMONS_MEDIA.test(c.src)) return false;
   if (!(c.duration >= FOOTAGE_LIMITS.minSeconds && c.duration <= FOOTAGE_LIMITS.maxSeconds)) return false;
   if (!(c.width >= FOOTAGE_LIMITS.minWidth) || !(c.height > 0) || c.width / c.height < FOOTAGE_LIMITS.aspect) return false;
   const text = `${c.title} ${c.description}`;
@@ -142,7 +146,7 @@ function commonsUrl(q) {
     gsrlimit: '20',
     prop: 'videoinfo',
     viprop: 'url|size|mime|derivatives|extmetadata',
-    viextmetadatafilter: 'Artist|LicenseShortName|ImageDescription',
+    viextmetadatafilter: 'Artist|LicenseShortName|License|LicenseUrl|ImageDescription',
     origin: '*',
   };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, v);
@@ -261,6 +265,8 @@ export class FootageDesk {
       // past the opening titles a clip often has (a fifth of it, at most half a minute in; the deck also skips a
       // title card or a fade to black it lands on, and turns back before the closing credits)
       start: Math.round(Math.min(30, c.duration * 0.2) * 10) / 10,
+      // its rights record (server/rights.js): the credit its licence asks for, the modification said
+      ...(c.licenceId ? { rights: compactRights(rightsRecord({ source: 'wikimedia-commons', via: 'commons:footage', licence: c.licenceId, author: c.author, title: c.title, page: c.page, url: c.src, checkedAt: this.now() })) } : {}),
     };
     if (this.file(id)) return this.meta.get(id);
     if (this.now() < this.pausedUntil) throw new Error('paused after a 429');

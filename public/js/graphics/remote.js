@@ -30,15 +30,33 @@ function tagRight(ctx, text, right, y, accent, { micro = false } = {}) {
   return x;
 }
 
-/** FILE and a clip's credit, right-aligned under the clock at `y` (a link's footage, a montage frame's). */
-export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3) {
+/**
+ * FILE and a clip's credit, right-aligned under the clock at `y` (a link's footage, a montage frame's; a story's
+ * picture, graphics/picture.js). `tag` is FILE unless the picture is of the event itself (PHOTO).
+ */
+export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3, tag = 'FILE') {
   const right = W - TOP.x;
-  const x = tagRight(ctx, 'FILE', right, y, null);
+  const x = tagRight(ctx, tag, right, y, null);
   const text = String(credit || '').replace(/^FILE\s*·\s*/i, '').toUpperCase();
-  if (!text) return;
-  const cw = measureText(text, 1, 'micro');
-  rect(ctx, x - cw - 7, y + 1, cw + 6, 9, P.ink);
-  drawText(ctx, text, x - cw - 4, y + 3, { color: P.fog, font: 'micro' });
+  if (!text) return 1;
+  const lines = creditLines(text, (t) => measureText(t, 1, 'micro'));
+  lines.forEach((line, i) => {
+    const cw = measureText(line, 1, 'micro');
+    rect(ctx, x - cw - 7, y + 1 + i * 9, cw + 6, 9, P.ink);
+    drawText(ctx, line, x - cw - 4, y + 3 + i * 9, { color: P.fog, font: 'micro' });
+  });
+  return lines.length;
+}
+
+// One line of credit beside the tag holds about 60 micro characters (server/rights.js CREDIT_MAX_CHARS): a longer
+// credit runs on two, the author on the first and the licence and PIXELATED on the second.
+export const CREDIT_LINE_PX = 236;
+/** The lines a credit (without its FILE tag) is drawn on: one, or the author's and the terms'. */
+export function creditLines(text, measure, maxPx = CREDIT_LINE_PX) {
+  const t = String(text || '');
+  if (measure(t) <= maxPx) return [t];
+  const parts = t.split(' · ');
+  return parts.length > 1 ? [parts[0], parts.slice(1).join(' · ')] : [t];
 }
 
 /**
