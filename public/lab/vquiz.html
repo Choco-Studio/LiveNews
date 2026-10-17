@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: PAY ATTENTION in the vertical picture</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1100px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { image-rendering: pixelated; display: block; background: #000; }
+  figcaption { padding: 4px 0; color: #8a8fa3; max-width: 432px; }
+</style>
+</head>
+<body>
+<h1>PAY ATTENTION's boards set again for the vertical picture (clip/vquiz.js), the quiz lab's real cases</h1>
+<p>Each board in the tall stage (216 x 216) at the moment ?moment= (open, reading, countdown, locks, step4, reveal, settled; default reveal) or ?t=, ?scale=1|2|4, ?only=id.</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import * as Q from '/js/scenes/cards-quiz.js';
+import { warmMapData } from '/js/scenes/worldmap.js';
+import { VQUIZ } from '/js/clip/vquiz.js';
+import { quizCases } from '/lab/quiz-cases.js';
+
+warmMapData();
+const qs = new URLSearchParams(location.search);
+const scale = Number(qs.get('scale') || 2);
+const moment = qs.get('moment') || 'reveal';
+const tOverride = qs.get('t') !== null ? Number(qs.get('t')) : null;
+const only = qs.get('only');
+const NOW = Date.parse('2026-10-13T20:20:00Z');
+const BOX = { x: 0, y: 0, w: 216, h: 216 };
+
+// generated test pictures (the lab only): a dark field and a few shapes per kind
+function picture(kind) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 288;
+  const g = c.getContext('2d');
+  const hue = { device: 220, phone: 260, rocket: 20, ice: 190, owl: 40, corridor: 300 }[kind] ?? 200;
+  const grad = g.createLinearGradient(0, 0, 0, 288);
+  grad.addColorStop(0, `hsl(${hue},40%,14%)`);
+  grad.addColorStop(1, `hsl(${hue},30%,38%)`);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 512, 288);
+  g.fillStyle = `hsl(${(hue + 160) % 360},60%,60%)`;
+  g.beginPath();
+  g.arc(256, 140, 70, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ddd';
+  g.fillRect(150, 210, 212, 30);
+  return c;
+}
+const pics = Object.fromEntries(['device', 'ice', 'corridor', 'rocket', 'owl', 'phone'].map((k) => [k, picture(k)]));
+const box = (fn) => (ctx, t, o) => fn(ctx, t, o, BOX);
+const VQ = {
+  ...Q,
+  drawQuestionBoard: box(VQUIZ.picture),
+  drawLettersBoard: box(VQUIZ.letters),
+  drawWhereBoard: box(VQUIZ.where),
+  drawHowManyBoard: box(VQUIZ.howmany),
+  drawTodayBoard: box(VQUIZ.today),
+  drawScoresStrip: (ctx, t, o) => (o.compact ? null : VQUIZ.final(ctx, t, o, BOX)),
+  drawDoubleCard: box(VQUIZ.double),
+  drawTableBoard: box(VQUIZ.table),
+  drawRoundCard: box(VQUIZ.round),
+};
+const cases = quizCases({ Q: VQ, pics, HN: Q.HALF_NOTE, NOW });
+const grid = document.getElementById('grid');
+const canvases = [];
+for (const [id, caption, c] of cases) {
+  if (only && only !== id) continue;
+  if (id === 'strip') continue;
+  const cv = document.createElement('canvas');
+  cv.width = 216;
+  cv.height = 216;
+  cv.style.width = `${216 * scale}px`;
+  cv.style.height = `${216 * scale}px`;
+  const f = document.createElement('figure');
+  const cap = document.createElement('figcaption');
+  cap.textContent = `${id} · ${caption}`;
+  f.append(cv, cap);
+  grid.append(f);
+  canvases.push([cv, c]);
+}
+function draw() {
+  for (const [cv, c] of canvases) {
+    const g = cv.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = P.ink;
+    g.fillRect(0, 0, 216, 216);
+    const t = tOverride ?? c.moments[moment] ?? c.len;
+    c.draw(g, t);
+  }
+}
+// the map data loads in the background: draw again once it has
+draw();
+setTimeout(draw, 800);
+setTimeout(draw, 2000);
+window.__vquiz = { draw };
+</script>
+</body>
+</html>

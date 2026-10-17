@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: clip cards (hook titles, end cards)</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1000px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; align-items: flex-start; }
+  canvas { image-rendering: pixelated; display: block; background: #222; }
+  figcaption { padding: 4px 0; color: #8a8fa3; }
+  #screen { position: fixed; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<h1>Clip cards: the hook title and the end card, both formats (docs/publishing/vertical.md §5)</h1>
+<p>The publishing desk renders these through window.__clipLab (tools/publish/factory.mjs). ?run=end&amp;format=vertical&amp;programme=PAY%20ATTENTION&amp;theme=quiz plays the end card on its own clock with the channel's ident (for tools/record.mjs).</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { THEME_ACCENT } from '/js/cast.js';
+import { drawHook, drawEndCard, sizeOf, END_CARD_SECONDS } from '/js/clip/cards.js';
+import { markReady } from '/js/clip/mark.js';
+
+await markReady;
+
+const qs = new URLSearchParams(location.search);
+const mk = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
+const accentOf = (spec) => spec.accent || THEME_ACCENT[spec.theme] || P.red;
+
+function hookCanvas(spec) {
+  const { w, h } = sizeOf(spec.format);
+  const c = mk(w, h);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  drawHook(g, { format: spec.format, lines: spec.lines, programme: spec.programme, accent: accentOf(spec), profile: spec.profile || 'normal' });
+  return c;
+}
+function endCanvas(spec, t) {
+  const { w, h } = sizeOf(spec.format);
+  const c = mk(w, h);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live !== false });
+  return c;
+}
+window.__clipLab = {
+  seconds: END_CARD_SECONDS,
+  hook: (spec) => hookCanvas(spec).toDataURL('image/png'),
+  end: (spec, t) => endCanvas(spec, t).toDataURL('image/png'),
+};
+
+const run = qs.get('run');
+if (run === 'end') {
+  // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
+  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '' };
+  const { w, h } = sizeOf(spec.format);
+  const screen = mk(w, h);
+  screen.id = 'screen';
+  document.body.append(screen);
+  const g = screen.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const t0 = performance.now();
+  const frame = () => {
+    requestAnimationFrame(frame);
+    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec) });
+  };
+  frame();
+  if (qs.get('sting') === '1') {
+    const { AudioEngine } = await import('/js/audio.js');
+    const audio = new AudioEngine({ lang: 'en' });
+    await audio.unlock();
+    audio.sfx('ident', { startAt: t0 + 80 });
+  }
+} else {
+  // the gallery: every card at 2x
+  const grid = document.getElementById('grid');
+  const add = (c, label) => {
+    const f = document.createElement('figure');
+    c.style.width = `${c.width * 2}px`;
+    c.style.height = `${c.height * 2}px`;
+    const cap = document.createElement('figcaption');
+    cap.textContent = label;
+    f.append(c, cap);
+    grid.append(f);
+  };
+  const cases = [
+    { format: 'vertical', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz' },
+    { format: 'horizontal', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz' },
+    { format: 'vertical', lines: ['UNIT-8 HAS A', 'THOUGHT'], programme: 'COSMOS DESK', theme: 'space' },
+    { format: 'vertical', lines: ['PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz', profile: 'tall' },
+    { format: 'vertical', lines: ['FULL ROUND'], programme: 'PAY ATTENTION', theme: 'quiz', profile: 'tall' },
+    { format: 'horizontal', lines: ['PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz', profile: 'tall' },
+    { format: 'vertical', lines: ['ARCTIC SEA ICE HITS ANOTHER', 'TROUBLING LOW'], programme: 'COSMOS DESK', theme: 'space' },
+    { format: 'horizontal', lines: ['NEANDERTHAL REMAINS MAY BE', 'EARLIEST HUMAN ANCESTOR FIND', 'KILLED BY A SPEAR'], programme: 'COSMOS DESK', theme: 'space' },
+  ];
+  for (const c of cases) add(hookCanvas(c), `hook · ${c.format} · ${c.lines.join(' / ')}`);
+  for (const c of cases.slice(0, 2)) for (const t of [0.3, 1.2, 2.4]) add(endCanvas(c, t), `end card · ${c.format} · ${t}s`);
+}
+</script>
+</body>
+</html>

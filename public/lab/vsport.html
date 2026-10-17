@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: FULL TIME in the vertical picture</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1000px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; }
+  figure { margin: 0; }
+  canvas { image-rendering: pixelated; display: block; background: #000; }
+  figcaption { padding: 4px 0; color: #8a8fa3; max-width: 432px; }
+</style>
+</head>
+<body>
+<h1>FULL TIME's RESULT card and SCORE CENTRE set again for the vertical stage (clip/vsport.js)</h1>
+<p>The sport lab's own cases (lab/sport.html) in the 216 x 176 stage, settled (?scale=1|2|4, ?dt=seconds).</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { drawVerticalScoreline, drawVerticalScoreboard } from '/js/clip/vsport.js';
+import { groundOf } from '/js/clip/vertical.js';
+
+const qs = new URLSearchParams(location.search);
+const scale = Number(qs.get('scale') || 2);
+const dt = Number(qs.get('dt') || 9);
+const BOX = { x: 0, y: 0, w: 216, h: 176 };
+const SC = [
+  ['two rows (no home claim)', { score: { a: 'Coventry', b: 'Newcastle', sa: 4, sb: 1, winner: 'Coventry', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['home and away', { score: { a: 'Coventry', b: 'Newcastle', sa: 4, sb: 1, winner: 'Coventry', home: 'Coventry', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['a draw', { score: { a: 'Starfield City', b: 'Ledgerton Rovers', sa: 2, sb: 2, draw: true, sport: 'football' }, source: 'Pixelburg Sport' }],
+  ['the longest names, home and away, an away win', { score: { a: 'Brighton & Hove Albion', b: 'Wolverhampton Wanderers', sa: 3, sb: 0, winner: 'Brighton & Hove Albion', home: 'Wolverhampton Wanderers', draw: false, sport: 'football' }, source: 'Sky Sports' }],
+  ['women\'s rugby, a stage', { score: { a: 'Saltmarsh Sirens', b: 'Kestrel Vale Women', sa: 31, sb: 12, winner: 'Saltmarsh Sirens', draw: false, sport: 'rugby', stage: 'SEMI-FINAL' }, source: 'Pixelburg Sport' }],
+  ['three figures', { score: { a: 'Portland Trail Blazers', b: 'London Lions', sa: 119, sb: 66, winner: 'Portland Trail Blazers', draw: false, sport: 'basketball' }, source: 'Sky Sports' }],
+];
+const ROWS = [
+  { a: 'Northgate County', b: 'Saltmarsh', sa: 3, sb: 2, sport: 'football' },
+  { a: 'Brightwater Wanderers', b: 'Kestrel Vale', sa: 0, sb: 0, draw: true, sport: 'football' },
+  { a: 'Millbrook', b: 'Ashcombe', sa: 2, sb: 1, sport: 'football' },
+  { a: 'Bitport Comets', b: 'Harbourside Herons', sa: 98, sb: 91, sport: 'basketball', day: 'SUN' },
+  { a: 'Harbourside Hawks', b: 'Millbrook Foxes', sa: 24, sb: 17, sport: 'rugby' },
+  { a: 'Bills', b: 'Rams', sa: 37, sb: 34, sport: 'american-football', day: 'MON' },
+];
+const cases = [
+  ...SC.map(([n, o]) => [`RESULT · ${n}`, (g) => drawVerticalScoreline(g, dt, o, BOX, P.orange)]),
+  ['SCORE CENTRE · three rows', (g) => drawVerticalScoreboard(g, dt, { scores: ROWS.slice(0, 3), title: "TODAY'S RESULTS", source: 'Pixelburg Sport' }, BOX, P.orange)],
+  ['SCORE CENTRE · six rows', (g) => drawVerticalScoreboard(g, dt + 6, { scores: ROWS, title: 'THE WEEKEND\'S RESULTS', source: 'Pixelburg Sport / Sky Sports' }, BOX, P.orange)],
+];
+const grid = document.getElementById('grid');
+for (const [label, draw] of cases) {
+  const c = Object.assign(document.createElement('canvas'), { width: 216, height: 176 });
+  c.style.width = `${216 * scale}px`;
+  c.style.height = `${176 * scale}px`;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(groundOf(216, 176), 0, 0);
+  draw(g);
+  const f = document.createElement('figure');
+  const cap = document.createElement('figcaption');
+  cap.textContent = label;
+  f.append(c, cap);
+  grid.append(f);
+}
+window.__vsport = true;
+</script>
+</body>
+</html>

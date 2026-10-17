@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: programme thumbnails</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 12px 16px 4px; }
+  p { margin: 0 16px 10px; color: #8a8fa3; max-width: 1000px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 16px; }
+  canvas { image-rendering: pixelated; display: block; width: 768px; height: 432px; }
+</style>
+</head>
+<body>
+<h1>A full programme's thumbnail (clip/thumb.js; docs/publishing/vertical.md §6)</h1>
+<p>The publishing desk composes these through window.__thumbLab.compose(spec) with one of the programme's own frames (tools/publish/upload.mjs). Here: a generated stand-in frame.</p>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { THEME_ACCENT } from '/js/cast.js';
+import { drawThumb, thumbLines } from '/js/clip/thumb.js';
+import { markReady } from '/js/clip/mark.js';
+
+await markReady;
+const mk = () => Object.assign(document.createElement('canvas'), { width: 384, height: 216 });
+const load = (src) => new Promise((resolve, reject) => {
+  const im = new Image();
+  im.onload = () => resolve(im);
+  im.onerror = reject;
+  im.src = src;
+});
+async function compose(spec) {
+  const c = mk();
+  const g = c.getContext('2d');
+  const frame = spec.frame ? await load(spec.frame) : null;
+  const lead = spec.lead || '';
+  const lines = Array.isArray(spec.lines) ? spec.lines : thumbLines(lead) || thumbLines(lead, { chars: 16, max: 3 }) || thumbLines(spec.fallback || '') || [];
+  drawThumb(g, { frame, programme: spec.programme, lines, accent: spec.accent || THEME_ACCENT[spec.theme] || P.red, kicker: spec.kicker || '', side: spec.side || 'left' });
+  return c.toDataURL('image/png');
+}
+window.__thumbLab = { compose, thumbLines };
+// the gallery: a stand-in frame
+const stand = mk();
+const sg = stand.getContext('2d');
+sg.fillStyle = '#1b2440';
+sg.fillRect(0, 0, 384, 216);
+sg.fillStyle = '#3a4a7a';
+sg.fillRect(240, 40, 90, 140);
+sg.fillStyle = '#e0b090';
+sg.fillRect(268, 60, 34, 40);
+const url = stand.toDataURL();
+// the studio's own grammar: the presenter left, the wall right (the type then goes right)
+sg.fillStyle = '#1b2440';
+sg.fillRect(0, 0, 384, 216);
+sg.fillStyle = '#3a4a7a';
+sg.fillRect(30, 40, 90, 176);
+sg.fillStyle = '#e0b090';
+sg.fillRect(58, 60, 34, 40);
+const studio = stand.toDataURL();
+for (const spec of [
+  { programme: 'COSMOS DESK', theme: 'space', lead: 'A rare family of barn owls moves to Manhattan', kicker: 'FULL PROGRAMME · 17 OCT' },
+  { programme: 'COSMOS DESK', theme: 'space', lead: 'Long-serving ABC broadcaster Robyn Williams to leave Science Show after 51 years', kicker: 'FULL PROGRAMME · 17 OCT', side: 'right', frame: studio },
+  { programme: 'PAY ATTENTION', theme: 'quiz', lines: ['THE NEWS QUIZ', 'PLAY ALONG'], kicker: 'WEEK OF 13 OCT' },
+]) {
+  const im = await load(await compose({ frame: url, ...spec }));
+  const c = mk();
+  c.getContext('2d').drawImage(im, 0, 0);
+  document.getElementById('grid').append(c);
+}
+window.__thumbReady = true;
+</script>
+</body>
+</html>

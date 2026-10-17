@@ -2885,7 +2885,8 @@ const KICKER_CATS = { general: '', world: 'WORLD', tech: 'TECHNOLOGY', science: 
  *     locator map (seg.location), the figure (seg.numbers[0] / seg.fact) or the kicker plate;
  *   - MONEY MINUTE's MCU-R (scene.framing 'mcu-r'): the figure panel, unless the story's plan
  *     already shows the figure on a card (then the kicker plate), money-minute.md §3.5;
- *   - a new-style scene.wall ({ mode: 'idle'|'picture'|'map'|'figure'|'plate', ... }) passes through.
+ *   - a new-style scene.wall ({ mode: 'idle'|'rest'|'picture'|'map'|'figure'|'plate', ... }) passes through ('rest':
+ *     a clip's vertical single, cropped tall: the programme's art without its words, publishing/vertical.md §3.1).
  * The plate carries what the strap below it does not: the kicker (the bibles' "kicker plate") over
  * the story's PLACE, never the source (the strap's tag and the ticker show the outlet already), and a
  * story's plate is set in body 1x (`story: true`). The current segment is read from
@@ -2928,7 +2929,7 @@ export function wallFromScene(scene, styleIn) {
   const place = String(seg?.location?.place || '').trim();
   const content = label0 && !FEATURE_LABELS.has(label0.trim().toUpperCase()) ? label0 : '';
   const plate = { mode: 'plate', label: content && place ? content : '', sub: place, story: true };
-  if (mode === 'idle' || mode === 'picture' || mode === 'map' || mode === 'figure' || mode === 'plate') {
+  if (mode === 'idle' || mode === 'rest' || mode === 'picture' || mode === 'map' || mode === 'figure' || mode === 'plate') {
     out = { ...w };
     if (mode === 'picture' && !out.image) out.image = img;
   } else if (mode === 'logo' || mode === 'rundown' || type === 'intro' || type === 'outro' || type === 'chat' || type === 'idle' || (!mode && !seg)) {
