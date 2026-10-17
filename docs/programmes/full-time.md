@@ -77,7 +77,9 @@ sources do not say, and nothing a viewer sees is a guess.
   No other programme takes the category.
 - **A story's sport** comes from its link first (`/sport/football/`, `/cricket/`, `/nfl/story/`, `/formula1/`: every sport
   feed but the Guardian's puts it there, measured 13 Oct), then from its words (competitions, positions, events). The
-  sport drives the strap's tag, the balance rules, the scoreline reader and the transitions.
+  sport drives the strap's tag, the balance rules, the scoreline reader and the transitions. Rugby carries its code
+  (`/rugby-league/`, `/rugby-union/` in the link, else "Super League", "Rugby League World Cup", "Premiership Rugby",
+  "Champions Cup"…): the tag, the transition and, when a story never says it, the copy ("In rugby league, …") name it.
 - **Women's sport** is known from the link (ESPN's `/wnba/`, `/womens-college-basketball/`, BBC's `/womens-football/`…),
   "women's" in the headline or summary, or a women's competition or team by name (WSL, NWSL, WNBA, Women's World Cup,
   Women's Super League, Women's Six Nations, Lionesses, Matildas, Red Roses…).
@@ -157,10 +159,26 @@ stages of its own, in `server/producer.js`:
   questions, crossheads run into a sentence, a sentence that leaned on one that went, a count that points back, a person
   with two first names in one story, a tangent about another sport all go; a long two-clause sentence is told as two; a
   one-line standfirst is filled out from the article); a story whose headline and copy name different results is not told;
-  then the balance (§3.2), whose first stories are the edition and the rest the pool for SCORE CENTRE and COMING UP.
+  each story carries its code for rugby (league or union, from the link, else the article's words), its result in words
+  when the headline or standfirst says who won ("Struggling Norwich beaten by Portsmouth"), and **the people the source
+  names in full** (surname to first name, from the title, standfirst and article; a word that is a team, a role, a month,
+  a demonym or a sentence's first word is never a first name, and a surname two people share is left out); a one-line
+  report that only gives a result is kept for SCORE CENTRE, never told as a story; then the balance (§3.2), whose first
+  stories are the edition and the rest the pool for SCORE CENTRE and COMING UP. An undated feed item is dated when it was
+  first seen, never when it was read again (a Saturday report read on Sunday is Saturday's).
+- **The writer** (both): a story about a match says who won and, when the source gives it, the final score, first (the
+  source's sentence with the score, else the result in words, else the headline as a sentence); a person's first mention
+  is the whole name the source gives ("Billy Loughnane", "Brian McDermott", "Enzo Maresca"); a description ("the
+  Spaniard", "the Argentina international", "the 24-year-old"), a "both", a "who later…" or a "however" never comes
+  before what it points back to (`server/sport/leans.js`, shared by the writer, the shape and the gate).
 - **`sport`, after the validator** (`server/sport/shape.js`): the shape for the day and the hour (§4), whichever writer
   wrote: the same event's stories told together, sports in groups, who reads what, hand-overs, transitions, signposts,
   SCORE CENTRE, COMING UP, the greeting, Rosa's hello, the memory, the sign-off, the straps and the intro's headlines.
+  It repairs whichever writer wrote: a lede that leans on what was not told gives way to the first sentence that stands;
+  a result story without its result gets the source's score sentence (or its result line); a surname at first mention
+  gets its first name; a headline or strap cut mid-thought ("McDermott seeks fix as England fight") ends at its last
+  whole clause; a women's story whose copy never says so is told "In women's rugby union, …"; and with more than five
+  stories, a story left with one sentence goes (§3.3).
 
 ### 3.5 Scorelines: only what can be read with certainty
 
@@ -192,6 +210,28 @@ Forms measured on the 55 sentences with "x-y" in the 13 Oct feeds, and the past 
 | A defeat B in the Nations League (4-1) | A beat B, four one |
 | X leads/guides/fires A to a 37-34 victory over B | A beat B, thirty-seven thirty-four |
 | Buffalo Bills 37–34 Los Angeles Rams (a summary's first line) | Buffalo Bills beat Los Angeles Rams, thirty-seven thirty-four |
+| WXV: Canada 24-21 England. (a summary's first line after a label) | Canada beat England, twenty-four twenty-one |
+| X scored twice to lift A off the bottom with a 3-2 victory over B | A beat B, three two |
+| X's strike earned A a 1-1 draw at B; snatch A a 1-0 win at B | A drew with B, one all |
+| … saw A take all three points from a 1-0 Championship victory over B | A beat B, one nil |
+| A … on their way to a 41-17 win over B | A beat B, forty-one seventeen |
+| A returned to winning ways as a 3-1 victory over B moved them … | A beat B, three one |
+| … as A dropped points with a 0-0 draw against B | A drew with B, nil-nil |
+
+**The headline and the copy together** (the first real matchday, 17 Oct: a Saturday's reports gave no score in a form
+above, and SCORE CENTRE had none). When the headline says who won in words ("Struggling Norwich beaten by Portsmouth",
+"Improved display helps Aberdeen beat St Mirren", "Cameron equaliser earns point for Dundee United") and a sentence of
+the copy gives one final score with a result noun ("a 1-0 triumph at Carrow Road"), the two are read as one result when
+the score agrees with the words, every team the sentence names is one of the two, and nothing in it is another match's
+("last week", "already", "earlier this season") or not final (§3.5's rule 2). A ground is never a team (Carrow Road,
+Anfield, Ascot: a name ending in Road, Park, Stadium, Lane…), nor is a person ("Lyall Cameron's strike earned Dundee
+United…" gives Dundee United, never Cameron).
+
+**The article page's own headline** is read the same way when nothing else gives the score: "Champions Cup: Connacht
+45-36 Saracens - Hosts score seven tries in pool victory" (BBC Sport's page, its `og:title`) under the feed's "Seven-try
+Connacht beat Saracens in Champions Cup". It counts only when the feed's headline names the same winner in words (or the
+same draw), and never from a live page, a preview, ratings or odds. The story then says it: the first sentence that says
+"A beat B" takes the score ("Connacht beat Saracens 45-36 in their opening Champions Cup pool game").
 
 Never a score: "6-4 shot" (odds), "1-4 Texans" and "0-7 in overtime" (records), "2-0 NLCS lead" (a series), "2027-28"
 (a season), "105-1" (cricket), "2-1 down at half-time".
@@ -234,7 +274,7 @@ are different programmes. A shape fixes the order; a segment without material is
 | Greeting | Kai, then Rosa | "Good evening, and welcome to FULL TIME. I'm Kai Sprite, with Rosa Rally." (morning, afternoon or evening by the channel's clock; both named, as every two-hander on the channel: step 7) / Rosa's hello (a bank of its own) | 8 s |
 | **Lead** | Kai | 3–5 sentences, with its board: the scoreline card for a match (landing on the bed's crowd swell); otherwise WHO'S WHO, WHAT WE KNOW, IN PROPORTION or WHAT HAPPENS NEXT | 40 s |
 | **THE BREAKDOWN** | Kai asks, Rosa answers | Rosa's answer is context of one kind, 1–3 of the story's own sentences Kai has not read: **the record or the wait** ("first … since", "record", "unbeaten", "in 25 years"), **the table** ("top", "bottom", "relegation zone", "points clear"), **what's next** (a dated step ahead), or **what they said** (an attributed quote). Kai's question fits that kind ("How long has that been coming?", "Where does that leave them?", "What's next for them?", "What are they saying?"). No context of a kind, no BREAKDOWN: the story is simply told. After the lead, and after one more main story on long days | 30 s each |
-| **SCORE CENTRE** | Kai | 3–6 readable results (§3.5) from the last 24 h (on a Monday before 14:00, since Saturday 06:00), shown as **the stadium's scoreboard** filling the frame: the LED board on its gantry over the stand, a floodlight either side, one row flipping in on a tick as each is read. Grouped by sport ("In the Premier League…" only when the source names it, else "In football…", then "Elsewhere…"). Each line is built from the scoreline (§3.5), names and score marked in the voice plan, a short beat before the score. Title: LAST NIGHT'S RESULTS when every result's story says "last night" or was filed 17:00–02:00 the evening before an airing before 14:00; TODAY'S RESULTS when all were filed today; THE WEEKEND'S RESULTS on a Monday before 14:00 with Saturday and Sunday stories; otherwise THE LATEST RESULTS. A row from another day carries the day (SUN) | 35 s |
+| **SCORE CENTRE** | Kai | 3–6 readable results (§3.5) from the last 24 h (on a Monday before 14:00, since Saturday 06:00), shown as **the stadium's scoreboard** filling the frame: the LED board on its gantry over the stand, a floodlight either side, one row flipping in on a tick as each is read. Grouped by sport ("In the Premier League…" only when the source names it, else "In football…", then "Elsewhere…"). Each line is built from the scoreline (§3.5), names and score marked in the voice plan, a short beat before the score. Title: TODAY'S RESULTS when all were filed today; THE WEEKEND'S RESULTS on a Monday before 14:00 with Saturday and Sunday stories; LAST NIGHT'S RESULTS before 14:00 when every result's story says "last night" or was filed 20:00–02:00 the evening before; YESTERDAY'S RESULTS when all were filed yesterday (a Saturday's 3pm results on the Sunday morning); otherwise THE LATEST RESULTS. A row from another day carries the day (SUN), never under a title that already says the day | 35 s |
 | **AROUND THE GROUNDS** | Kai and Rosa in turn | 4–7 more stories (the edition is twelve stories: step 4 measured the bible's first budgets, ten stories, at 5.1–5.4 minutes against its own 6–8), each 2–3 sentences, each led by its sport's tag and transition; a scoreline card when the story has one | 25 s each |
 | **THE NUMBER** | Rosa | One figure a story states, with a unit or a label ("25 YEARS", "£10.6M", "39 GAMES UNBEATEN"): the channel's number of the day. Never a score, a record ("1-4"), an age, a shirt number or a date | 15 s |
 | **MOMENT OF THE DAY** | Rosa, then a chat | The lighter story: a record, a catch, a milestone, an auction. Never grave. When the source gives the distance of a goal or a kick ("from 30 yards", "from the spot", "a 45-yard field goal"), **THE MOMENT ON THE BOARD**: a chalk tactics board, top-down, the pitch's lines in chalk, and only what the source states: a dotted chalk line from that distance to the goal, its length written beside it ("30 YARDS"). No players, no direction, no keeper: a diagram of a fact, not a replay. A distance is stated in a few stories a day, so the board is an occasional treat; otherwise the moment stands on its picture | 30 s |
@@ -249,8 +289,11 @@ are different programmes. A shape fixes the order; a segment without material is
 
 - **Lines.** Every spoken frame has a bank, picked by hash and the channel's recent-lines memory so none repeats within
   six hours station-wide: greetings (10), results intros by shape (8), Kai's questions by kind (12), sport transitions (at
-  least 6 each for football, F1, tennis, cricket, rugby, US sports, combat sports, cycling and "the rest": "To the track…",
-  "On the court…"), moment intros (8), coming-up intros (6), sign-offs (10).
+  least 6 each for football, F1, tennis, cricket, rugby, rugby league, rugby union, racing, darts, snooker, ice hockey, US
+  sports, combat sports, cycling and "the rest": "To the track…", "On the court…"; never a bare "Some basketball." or
+  "Something else now."), moment intros (8), coming-up intros (6), sign-offs (10). Rosa's hello is by the time of day
+  (morning, afternoon, evening) and the shape (a results day's own), and greets Kai by name or the viewer; never a bare
+  "Hello. Let's get started.".
 - **No catchphrases.** Nothing Rosa or Kai says is a signature line.
 - **Chats** (at most four exchanges an edition: Rosa's hello, two BREAKDOWNs, the memory) aim at numbers, waits, weather
   and the presenters themselves, never at a real person.
@@ -367,9 +410,10 @@ are different programmes. A shape fixes the order; a segment without material is
 
     Critique, with the A/B's evidence: `docs/roadmap/critique/full-time-sound.md` (final round 9.8; the owner chooses
     between the two sting candidates by ear).
-- **Graphics**: the strap's tag is the sport (FOOTBALL, F1, TENNIS, CRICKET, RUGBY, BASKETBALL, BASEBALL, BOXING, CYCLING,
-  GOLF, ATHLETICS; NFL, NBA, MLB only when the link says the league: the London Lions against the Trail Blazers is
-  BASKETBALL); the **scoreline card** (vertical rows or the horizontal home–away board, §3.5; scores at 3x; FT, DRAW and a
+- **Graphics**: the strap's tag is the sport (FOOTBALL, F1, TENNIS, CRICKET, RUGBY LEAGUE, RUGBY UNION, BASKETBALL,
+  BASEBALL, BOXING, CYCLING, GOLF, ATHLETICS; RUGBY only when neither the link nor the words say the code: two different
+  games, and England's Rugby League World Cup is not rugby union's; NFL, NBA, MLB only when the link says the league: the
+  London Lions against the Trail Blazers is BASKETBALL); the **scoreline card** (vertical rows or the horizontal home–away board, §3.5; scores at 3x; FT, DRAW and a
   stage tag such as FIRST LEG when the source says it); the **stadium scoreboard** for SCORE CENTRE (rows with the sport's
   icon); the **COMING UP** calendar (a leaf a date); **THE MOMENT ON THE BOARD** (chalk on a dark green board); eleven
   sport icons at 11 × 11, drawn pixel by pixel (ball, racket, car side-on, bat and ball, oval ball, helmet, basketball,

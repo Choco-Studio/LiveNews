@@ -59,5 +59,11 @@ export async function snapDesk(root, dir) {
     return html;
   };
   await desk.refresh();
+  // (a feed's undated item keeps when the desk first saw it, server/news.js `firstSeen`: read later, the snapshot's items were
+  // first seen at its moment, never at the air time; Sky Sports' and ESPN's items carry no date, and a Sunday-morning edition
+  // of the Saturday snapshot once called Saturday's results "Today's results", 17 Oct)
+  const t0 = fs.existsSync(`${dir}/T0`) ? Date.parse(fs.readFileSync(`${dir}/T0`, 'utf8').trim()) : NaN;
+  const now = Date.now();
+  if (Number.isFinite(t0) && now > t0) for (const s of desk.stories?.values?.() || []) if (s.undated && s.firstSeen > t0) s.firstSeen = t0 - (now - s.firstSeen);
   return desk;
 }
