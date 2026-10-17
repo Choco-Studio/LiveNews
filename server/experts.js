@@ -15,7 +15,7 @@
 //   expertFor(story, experts)    the expert whose desk a story belongs to (or null), with the match's strength
 //   introLine / questionLine / followLine / thanksLine / answerFrame   the lines, varied: with a turn (the station's
 //                                count of analyses) each kind cycles through all its forms before one comes back
-import { AHEAD } from './correspondents.js';
+import { AHEAD, missesQuestion } from './correspondents.js';
 
 /**
  * The desks. `words` are the story words of the desk (headline, summary and kicker are searched; a whole word or
@@ -172,8 +172,11 @@ export function introLine(e, seed, turn) {
 export const GRAVE_ASK = ['what is the background to this?', 'what do we know so far?', 'what more do we know?', 'what is the picture so far?', 'what else do we know at this stage?'];
 
 /** The presenter's first question, addressed by first name (one sentence, a question); a grave story's are sober. */
-export function questionLine(e, seed, question = null, turn, { grave = false } = {}) {
-  const q = question || choose(grave ? GRAVE_ASK : EXPERT_DESKS[e.desk]?.ask || ['what should we make of it?'], seed, turn, grave ? 'grave-ask' : 'ask');
+// (and one its answers give: "what is behind it?" only when they say what is, round 6)
+export function questionLine(e, seed, question = null, turn, { grave = false, answer = null } = {}) {
+  const pool = grave ? GRAVE_ASK : EXPERT_DESKS[e.desk]?.ask || ['what should we make of it?'];
+  const fitting = answer == null ? pool : pool.filter((q) => !missesQuestion(q, answer));
+  const q = question || choose(fitting.length ? fitting : pool, seed, turn, grave ? 'grave-ask' : 'ask');
   return `${e.first}, ${q}`;
 }
 

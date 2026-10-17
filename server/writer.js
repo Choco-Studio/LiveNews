@@ -9,7 +9,7 @@ import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cue
 import { isBreaking, plainTitle } from './news.js';
 import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, outletView, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
-import { askLine, deskOf, followLine, presenceClaim, thanksLine, throwLine } from './correspondents.js';
+import { askLine, deskOf, followLine, missesQuestion, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 import { EXPERT_DESKS, expertFor, introLine as expertIntro, questionLine as expertQuestion, followLine as expertFollow, thanksLine as expertThanks, expertKicker } from './experts.js';
 import { NEXT_LIMITS, SHARE_LIMITS, WHO_LIMITS, normalizeNext, normalizeShare, normalizeWho, saysPerson, saysShare, saysWhen } from './boards.js';
 
@@ -492,7 +492,9 @@ const TRAIL_PREP = /^(?:in|on|at|for|by|before|after|during|across|near|from|ove
 const TIME_START = /^(?:next|this|last|every)$/i;
 const TIME_NOUN = /^(?:week|weekend|month|year|night|day|morning|evening|season|time|summer|winter|spring|autumn|decade|century|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)s?\b/i;
 // A head may not end on these: a possessive, a negation, a participle or adjective that needs its complement.
-const CUT_BAD_END = /(?:['’]s|s['’]|\b(?:not|never|no|trapped|stuck|caught|based|located|involved|interested|known|aimed|designed|linked|tied|related|compared|able|unable|likely|poised|ready|keen|eager|set|meant|supposed|valued|priced|worth|bound|destined|headed|subject|prone|home|more|less|most|least|than|kills|injures|wounds|hurts|picked|tipped|chosen|selected|puts|leaves|keeps|sends|sets|condemns|criticises|criticizes|slams|hails|praises|blames|describes|labels|brands|live|work|run|sit|stand|go|come|move|stay|remain|turn|look|head))$/i;
+// (round 6: nor a time that needs what it is the time of: "He met Keir Starmer at Downing Street the day[ after Trump…
+// berated the Ukrainian president]", Guardian 13 Oct)
+const CUT_BAD_END = /(?:\bthe\s+(?:day|week|month|year|morning|night|evening|weekend|time|moment|same|first|last|next)|['’]s|s['’]|\b(?:not|never|no|trapped|stuck|caught|based|located|involved|interested|known|aimed|designed|linked|tied|related|compared|able|unable|likely|poised|ready|keen|eager|set|meant|supposed|valued|priced|worth|bound|destined|headed|subject|prone|home|more|less|most|least|than|kills|injures|wounds|hurts|picked|tipped|chosen|selected|puts|leaves|keeps|sends|sets|condemns|criticises|criticizes|slams|hails|praises|blames|describes|labels|brands|live|work|run|sit|stand|go|come|move|stay|remain|turn|look|head))$/i;
 // Prepositions that open a clause of their own: what follows may carry its own verb ("after Opec cuts output").
 const SUBORDINATOR = /^(?:after|before|since|until|as|while|when|because|if|though|although|despite|amid)$/i;
 /**
@@ -1098,6 +1100,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // never on a word that cannot end a clause: "…to Europe's biggest conservation charity, a move that will[, it is hoped,
     // secure…]" once aired as "…, a move that will." (ABC News 14 Oct, NEWS IN 60, round 5)
     if (/\b(?:a|an|the|that|which|who|whom|whose|to|of|will|would|can|could|may|might|must|shall|should|is|are|was|were|be|been|being|has|have|had|do|does|did|and|or|but|its|their|his|her|our|my|your|with|for|from|by|than|very|not)$/i.test(head)) continue;
+    // (nor on a time that needs what it is the time of: "He met Keir Starmer at Downing Street the day[ after Trump…
+    // berated the Ukrainian president…]", Guardian 13 Oct, round 6)
+    if (/\bthe\s+(?:day|week|month|year|morning|night|evening|weekend|time|moment)$/i.test(head)) continue;
     // nor on a clause after a dash that has no verb yet: "Bedbugs causing travel chaos is not unusual - less than two weeks
     // ago[, several Southeastern train services… were cancelled…]" (BBC 12 Oct, round 5)
     const dashTail = head.split(/\s[-–—]\s/).at(-1);
@@ -2437,6 +2442,25 @@ export function normalizeBulletin(
   if (intro && introSeg.type === 'intro') {
     const aired = new Set(rundown.map((r) => r.storyId));
     const list = teaseList.filter((st) => aired.has(st.id));
+    // (never a story that does not air: one the checks dropped after the intro was written leaves the intro with it, its
+    // cues kept; "Ukraine strikes Yandex data centre in third attack on Russian tech giant." once opened three WORLD NOWs
+    // that never told it, 12 Oct, round 6; a line that also fits an aired story stays)
+    const lines = sentencesOf(introSeg.text);
+    const byAll = inferTeases(lines, stories.map((st) => ({ id: st.id, text: sourceOf(st), feature: null })), names.concat(people));
+    const byAired = inferTeases(lines, list, names.concat(people));
+    const gone = lines.map((t, i) => !!byAll[i] && !aired.has(byAll[i]) && !byAired[i]);
+    if (gone.some(Boolean) && gone.some((g) => !g)) {
+      const kept = [];
+      let carry = '';
+      lines.forEach((t, i) => {
+        if (gone[i]) carry += (String(t).match(/^(?:\s*\[[^\]]*\])+\s*/) || [''])[0];
+        else {
+          kept.push(`${carry}${carry ? String(t).replace(/^(?:\s*\[[^\]]*\])+\s*/, '') : t}`);
+          carry = '';
+        }
+      });
+      introSeg.text = kept.join(' ');
+    }
     const teases = inferTeases(sentencesOf(introSeg.text), list, names.concat(people));
     if (teases.some(Boolean)) introSeg.teases = teases;
   }
@@ -2565,6 +2589,9 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
   chosen.sort((a, b) => b.i - a.i);
   const order = [...chosen].sort((a, b) => a.i - b.i);
   const slots = Object.fromEntries(order.map((x, k) => [`R${k + 1}`, x.c.id]));
+  // (one correspondent twice in an edition is handed over in other words the second time: "Our Europe correspondent Rhea
+  // Raster has more." once came twice in one WORLD NOW, round 6)
+  const thrown = new Set();
   for (const x of chosen) {
     const slot = `R${order.indexOf(x) + 1}`;
     const { seg, d, desk, c } = x;
@@ -2572,7 +2599,10 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
     // the presenter's introduction: no toss to the other presenter at its end, then the hand-over
     const said = sentencesOf(seg.text);
     if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
-    seg.text = `${said.join(' ')} ${throwLine(c, desk, key)}`;
+    let toss = throwLine(c, desk, key);
+    for (let k = 1; thrown.has(toss) && k < 8; k++) toss = throwLine(c, desk, `${key}~${k}`);
+    thrown.add(toss);
+    seg.text = `${said.join(' ')} ${toss}`;
     seg.link = slot;
     // no line twice: not the presenter's, not another of the piece's
     const piece = [];
@@ -2584,11 +2614,19 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
     const answer = d.cross.answer.filter((t) => !crossRepeats(t, [...said, ...piece]));
     // a piece of three with nothing left to answer keeps two and answers with its last line
     if (!answer.length && piece.length >= 3) answer.push(piece.pop());
-    const ask = d.cross.ask ? `${c.first}, ${d.cross.ask}` : askLine(c, key, answer.map(stripTags).join(' '));
+    // (a prompt the answer does not answer is asked again in words it fits: "what comes next?" answered with what has been
+    // never airs, round 6)
+    const answerText = answer.map(stripTags).join(' ');
+    const ask0 = d.cross.ask ? `${c.first}, ${d.cross.ask}` : askLine(c, key, answerText);
+    const ask = missesQuestion(ask0, answerText) ? askLine(c, key, answerText) : ask0;
     // a long programme's second prompt and answer (what comes next, else what more is known), never the first one's
     // words again and never a line already said
     const answer2 = answer.length ? (d.cross.answer2 || []).filter((t) => !crossRepeats(t, [...said, ...piece, ...answer])) : [];
-    const ask2 = answer2.length ? (d.cross.follow ? `${c.first}, ${d.cross.follow}` : followLine(c, key, answer2.map(stripTags).join(' '), ask)) : null;
+    const answer2Text = answer2.map(stripTags).join(' ');
+    const ask2a = answer2.length ? (d.cross.follow ? `${c.first}, ${d.cross.follow}` : followLine(c, key, answer2Text, ask)) : null;
+    // (and a second exchange whose answer still misses is dropped)
+    const ask2b = ask2a && missesQuestion(ask2a, answer2Text) ? followLine(c, key, answer2Text, ask) : ask2a;
+    const ask2 = ask2b && !missesQuestion(ask2b, answer2Text) ? ask2b : null;
     const shared = {
       storyId: seg.storyId,
       headline: seg.headline,
@@ -2701,7 +2739,10 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1, tu
     if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
     // a grave story's question is sober (decision 3): the writer's own only when it asks for the background or what
     // happens now, else the grave list's
-    seg.text = `${said.join(' ')} ${expertIntro(e, key, t)} ${expertQuestion(e, key, d.heavy && !/\b(?:background|know so far|happens? (?:now|next)|the response|how did we get here)\b/i.test(d.analysis.question || '') ? null : d.analysis.question, t, { grave: !!d.heavy })}`;
+    // (and never one the answers miss: "what is behind it?" only when they say what is, round 6)
+    const answered = d.analysis.answer.map(stripTags).join(' ');
+    const asked = d.heavy && !/\b(?:background|know so far|happens? (?:now|next)|the response|how did we get here)\b/i.test(d.analysis.question || '') ? null : d.analysis.question;
+    seg.text = `${said.join(' ')} ${expertIntro(e, key, t)} ${expertQuestion(e, key, asked && !missesQuestion(asked, answered) ? asked : null, t, { grave: !!d.heavy, answer: answered })}`;
     seg.link = slot;
     // (the introduction and the question are the hand-over: the director brings the two-way up with the first)
     seg.linkKind = 'expert';
@@ -2741,9 +2782,13 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1, tu
     const emotion = seg.emotion === 'happy' ? 'neutral' : seg.emotion;
     const part = (name, anchor, text) => ({ type: 'cross', part: name, anchor, emotion, text: clip(text, LIMITS.text), cues: [], ...shared });
     const parts = [part('piece', slot, answer.map(stripTags).join(' '))];
-    if (answer2.length) {
-      parts.push(part('ask', seg.anchor, d.analysis.follow ? `${e.first}, ${d.analysis.follow}` : expertFollow(e, key, answer2.map(stripTags).join(' '), t)));
-      parts.push(part('answer', slot, answer2.map(stripTags).join(' ')));
+    // (a follow-up the second answer misses is asked again in words it fits, else the second exchange is dropped, round 6)
+    const answer2Text = answer2.map(stripTags).join(' ');
+    const follow0 = answer2.length ? (d.analysis.follow ? `${e.first}, ${d.analysis.follow}` : expertFollow(e, key, answer2Text, t)) : null;
+    const follow1 = follow0 && missesQuestion(follow0, answer2Text) ? expertFollow(e, key, answer2Text, t) : follow0;
+    if (answer2.length && follow1 && !missesQuestion(follow1, answer2Text)) {
+      parts.push(part('ask', seg.anchor, follow1));
+      parts.push(part('answer', slot, answer2Text));
     }
     parts.push(part('thanks', seg.anchor, expertThanks(e, key, t)));
     // an analysis chat after the story would only say again what the expert just said
