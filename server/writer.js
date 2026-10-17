@@ -147,6 +147,9 @@ function sportRule(program, solo, a = 'A', b = 'B') {
   if (program.kind !== 'sport') return '';
   return `
 - Results: say a score only as the candidate states it as final, in figures ("4-1"), with both teams named as the candidate names them; never a half-time, aggregate, series or live score as a result, never a score the candidate does not give.
+- A story about a match says who won (or that it was drawn) and, when the candidate gives one, the final score; never a match report that only tells the moments around it.
+- A person's first mention is the whole name the candidate gives ("Billy Loughnane", not "Loughnane"); a description ("the Spaniard", "the Everton defender", "the 24-year-old") or a "both", "later", "however" only after what it points back to has been said.
+- A headline is a whole thought, never cut mid-phrase; rugby league and rugby union are named as such, never just "rugby".
 - Nobody is judged: no praise or blame of a player, a manager, a referee or a team ("brilliant", "poor", "wasteful", "deserved", "should have"); facts, and the words of the people involved inside quotation marks with their speaker.
 - Never betting, odds, gossip, rumours or transfer talk.
 - Time words are as the candidates give them: never "tonight" or "tomorrow" for a game the candidate dates otherwise.${solo ? '' : `
@@ -1103,6 +1106,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // (nor on a time that needs what it is the time of: "He met Keir Starmer at Downing Street the day[ after Trump…
     // berated the Ukrainian president…]", Guardian 13 Oct, round 6)
     if (/\bthe\s+(?:day|week|month|year|morning|night|evening|weekend|time|moment)$/i.test(head)) continue;
+    // nor before the rest of a counted list: "…fit for Chelsea's next three matches - they face Tottenham and Manchester
+    // United in the Premier League[, with a Carabao Cup tie at Liverpool in between]" named two of three (BBC Sport 17 Oct)
+    if (/\b(?:two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:[a-z]+\s+)?(?:matches|games|fixtures|ties|races|events|tests|rounds|tournaments)\b/i.test(head) && /\p{Lu}/u.test(t.slice(end))) continue;
     // nor on a clause after a dash that has no verb yet: "Bedbugs causing travel chaos is not unusual - less than two weeks
     // ago[, several Southeastern train services… were cancelled…]" (BBC 12 Oct, round 5)
     const dashTail = head.split(/\s[-–—]\s/).at(-1);

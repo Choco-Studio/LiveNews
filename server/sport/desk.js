@@ -66,12 +66,33 @@ const TAGS = { football: 'FOOTBALL', cricket: 'CRICKET', rugby: 'RUGBY', f1: 'F1
 
 /**
  * The strap's tag: the league only when the link says the league (ESPN's "/nfl/"), otherwise the sport (the London Lions
- * against the Portland Trail Blazers is BASKETBALL, not NBA); 'SPORT' when nothing says.
+ * against the Portland Trail Blazers is BASKETBALL, not NBA); 'SPORT' when nothing says. Rugby says its code when the link
+ * or the words do: England against Tonga at the Rugby League World Cup is RUGBY LEAGUE, Connacht against Saracens in the
+ * Champions Cup RUGBY UNION (17 Oct: both on one evening, one tag for both told neither).
  */
 export function sportTag(story) {
   const link = String(story?.link || '');
   for (const [re, tag] of LEAGUES) if (re.test(link)) return tag;
-  return TAGS[sportOf(story)] || 'SPORT';
+  const sport = sportOf(story);
+  if (sport === 'rugby') {
+    const code = rugbyCode(story);
+    return code === 'league' ? 'RUGBY LEAGUE' : code === 'union' ? 'RUGBY UNION' : 'RUGBY';
+  }
+  return TAGS[sport] || 'SPORT';
+}
+
+// rugby's two codes, by the link first (BBC "/sport/rugby-league/", "/sport/rugby-union/"), then the words
+const LEAGUE_WORDS = /\b(?:rugby league|super league|nrl|state of origin|rugby league world cup|kangaroos|kiwis|wolfpack|challenge cup final at wembley)\b/i;
+const UNION_WORDS = /\b(?:rugby union|champions cup|european challenge cup|challenge cup pool|six nations|premiership rugby|the prem\b|prem club|united rugby championship|urc|top 14|red roses|all blacks|springboks|wallabies|pumas|british (?:and|&) irish lions|autumn nations|rugby world cup|world rugby|fly-half|lineout|line-out|scrum-half)\b/i;
+/** 'league' or 'union' for a rugby story, or null when neither its link nor its words say which. */
+export function rugbyCode(story) {
+  const link = String(story?.link || '');
+  if (/\/rugby-league\//.test(link)) return 'league';
+  if (/\/rugby-union\//.test(link)) return 'union';
+  const words = `${story?.title || ''}. ${story?.summary || ''}`;
+  const league = LEAGUE_WORDS.test(words);
+  const union = UNION_WORDS.test(words.replace(/rugby league world cup/gi, ' '));
+  return league && !union ? 'league' : union && !league ? 'union' : null;
 }
 
 const WOMEN_PATH = /\/(?:wnba|womens-[a-z-]+|women)\//;

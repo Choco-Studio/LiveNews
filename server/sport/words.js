@@ -84,15 +84,41 @@ const EVAL_ADV = /\b(?:superbly|brilliantly|sublimely|wonderfully|magnificently|
 const EVAL_ADV_AFTER = /\b(?:superbly|brilliantly|sublimely|wonderfully|magnificently|majestically|beautifully|expertly|clinically|exquisitely|stunningly|sensationally|fantastically|gloriously|masterfully|impressively|excellently|remarkably|deftly|delightfully|woefully|dismally|abjectly|sloppily|poorly|dreadfully|awfully|terribly|horribly|ineptly|feebly|limply|lethargically|spinelessly|disgracefully|embarrassingly)\b/iu;
 // an act ("a brilliant goal"): the verdict goes and the act stays; a state ("a woeful start", "a poor season"): the
 // verdict is all the phrase says, so the sentence goes
-const ACT = 'goals?|winners?|equali[sz]ers?|openers?|hat-tricks?|braces?|assists?|strikes?|finish(?:es)?|headers?|saves?|catch(?:es)?|efforts?|wins?|victor(?:y|ies)|defeats?|comebacks?|innings|knocks?|laps?|drives?|shots?|pass(?:es)?|tackles?|volleys?|free-kicks?|penalt(?:y|ies)|tries|try|touchdowns?|dunks?|serves?|aces?|one-twos?';
+const ACT = 'goals?|doubles?|trebles?|winners?|equali[sz]ers?|openers?|hat-tricks?|braces?|assists?|strikes?|finish(?:es)?|headers?|saves?|catch(?:es)?|efforts?|wins?|victor(?:y|ies)|defeats?|comebacks?|innings|knocks?|laps?|drives?|shots?|pass(?:es)?|tackles?|volleys?|free-kicks?|penalt(?:y|ies)|tries|try|touchdowns?|dunks?|serves?|aces?|one-twos?';
 const STATE = 'displays?|performances?|runs?|shows?|spells?|debut|half|start|season|form|night|afternoon|evening|outing|game|match|figure|player|character|manager|coach|side|team|defending|finishing';
 const EVAL_BEFORE = new RegExp(`\\b(an?\\s+|the\\s+|his\\s+|her\\s+|their\\s+|its\\s+)?((?:(?:${EVAL})(?:\\s*,\\s*|\\s+and\\s+|\\s+))+)((?:[\\p{L}\\d'’-]+\\s+){0,3}?(?:${ACT}))\\b`, 'giu');
-const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|maverick|flawed|fine|nightmare|dream)\\s+(?:[\\p{L}\\d-]+\\s+)?(?:${STATE})\\b`, 'iu');
+// (the soft words, "fine", "nightmare", "dream", judge only as an adjective after an article or a possessive, never as a
+// name: "Dream coach Karl Smesko was optimistic…", ESPN 17 Oct, is the Atlanta Dream's coach)
+const EVAL_STATE = new RegExp(`\\b(?:${EVAL}|divisive|polarising|polarizing|maverick|flawed)\\s+(?:[\\p{L}\\d-]+\\s+)?(?:${STATE})\\b`, 'iu');
+// (the soft words in lower case only: the hard list is matched case-blind)
+const SOFT_STATE = new RegExp(`(?<![\\p{L}])(?:fine|nightmare|dream)\\s+(?:[\\p{L}\\d-]+\\s+)?(?:${STATE})\\b`, 'u');
+// a verdict on a result's manner, the result kept: "Lyall Cameron's 79th-minute strike earned Dundee United a deserved 1-1
+// draw at St Johnstone" (Sky Sports 17 Oct) airs as "… a 1-1 draw …"; the whole sentence once went, and the story never said
+// its result
+const DESERVED = /\b(an?|the|their|his|her|its)\s+(?:thoroughly\s+|fully\s+|richly\s+|well[- ])?(?:deserved|deserving|undeserved|merited|unmerited)\s+(?=(?:\d{1,3}\s*[-–]\s*\d{1,3}\s+)?(?:[\p{L}-]+\s+)?(?:win|wins|victory|draw|point|points|lead|share|result|success|triumph|defeat|loss|equaliser|equalizer|winner)\b)/giu;
+// a verdict carried by a performance that did the deed: "Connacht produce a superb attacking performance to beat Saracens"
+// (BBC 17 Oct) airs as "Connacht beat Saracens"; "to come out on top with a show-stopping performance at Ascot" as "to come
+// out on top at Ascot" (Sky Sports 17 Oct)
+const PERFORMANCE_TO = new RegExp(`\\b(produces?|produced|producing|delivers?|delivered|puts?\\s+in|put\\s+in|turns?\\s+in|turned\\s+in|serves?\\s+up|served\\s+up)\\s+an?\\s+(?:(?:${EVAL}|show-stopping|showstopping|commanding|clinical|dominant|ruthless|sparkling|swashbuckling|vintage)\\s+)+(?:[\\p{L}-]+\\s+)?(?:performance|display|show|effort)\\s+to\\s+(beat|defeat|see\\s+off|overcome|edge|thrash|win|claim|secure|earn|reach|book|sink|down|stun)\\b`, 'iu');
+const PERFORMANCE_WITH = new RegExp(`\\s+with\\s+an?\\s+(?:(?:${EVAL}|show-stopping|showstopping|commanding|sparkling|swashbuckling|vintage)\\s+)+(?:[\\p{L}-]+\\s+)?(?:performance|display|show)\\b`, 'giu');
+const THIRD = { beat: 'beats', defeat: 'defeats', 'see off': 'sees off', overcome: 'overcomes', edge: 'edges', thrash: 'thrashes', win: 'wins', claim: 'claims', secure: 'secures', earn: 'earns', reach: 'reaches', book: 'books', sink: 'sinks', down: 'downs', stun: 'stuns' };
+const PAST = { beat: 'beat', defeat: 'defeated', 'see off': 'saw off', overcome: 'overcame', edge: 'edged', thrash: 'thrashed', win: 'won', claim: 'claimed', secure: 'secured', earn: 'earned', reach: 'reached', book: 'booked', sink: 'sank', down: 'downed', stun: 'stunned' };
+/** A sentence without a verdict on how a result came, the result kept (or unchanged). */
+export function withoutVerdictOnResult(t) {
+  let s = String(t || '').replace(DESERVED, '$1 ');
+  s = s.replace(PERFORMANCE_TO, (m, verb, act) => {
+    const a = act.toLowerCase().replace(/\s+/g, ' ');
+    if (/^(?:produced|delivered|put in|turned in|served up)$/i.test(verb.replace(/\s+/g, ' ')) || /^put\s+in$/i.test(verb)) return PAST[a] || a;
+    if (/^(?:produces|delivers|puts in|turns in|serves up)$/i.test(verb.replace(/\s+/g, ' '))) return THIRD[a] || a;
+    return a;
+  });
+  return s.replace(PERFORMANCE_WITH, '').replace(/\s{2,}/g, ' ');
+}
 // a verdict on a person outright ("Caicedo was outstanding", "the referee got it wrong", "they deserved it")
 // a verdict on a team or a player by name ("A wasteful Newcastle lost at Coventry despite having 19 shots", Sky Sports 13
 // Oct), read after the verdicts on acts are gone ("A stunning Sven Botman strike" keeps its act); case-sensitive
 const EVAL_NAME = new RegExp(`\\b(?:[Aa]n?|[Tt]he)\\s+(?:${EVAL})\\s+\\p{Lu}`, 'u');
-const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare|magnificence|majesty|mastery)\\b|\\b(?:got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
+const VERDICT = new RegExp(`\\b(?:was|were|is|are|looked|looks|been|being)\\s+(?:simply\\s+|absolutely\\s+|truly\\s+|utterly\\s+|so\\s+|quite\\s+|even\\s+|far\\s+|much\\s+)?(?:${EVAL}|better|worse|superior|inferior)\\b|\\b(?:profligacy|wastefulness|ineptitude|incompetence|brilliance|genius|heroics|masterclass|howler|shambles|calamity|nightmare|magnificence|majesty|mastery)\\b|\\b(?:stutter(?:ed|ing)|wilt(?:ed|ing)|crumbl(?:ed|ing)|chok(?:ed|ing)|froze (?:under|in|at|on)|self-destruct\\w*|only (?:themselves|himself|herself|ourselves) to blame|shot (?:themselves|himself|herself) in the foot|capitulat\\w*|bottled it|got it wrong|deserved|deserves|should have|shouldn['’]t have|ought to have|a disgrace|let (?:themselves|himself|herself) down|no excuse)\\b`, 'iu');
 
 // a verdict carried in a "with" phrase on an act ("Josh Allen came through with his usual late-game theatrics in leading
 // the Bills to a 37-34 overtime win", ESPN 13 Oct): the phrase goes and the act, the result, stays
@@ -114,8 +140,8 @@ export function withoutJudgement(sentence) {
       out.push(p); // a quotation, attributed by its sentence
       continue;
     }
-    p = p.replace(VERDICT_WITH, '');
-    if (VERDICT.test(p) || EVAL_STATE.test(p)) return null;
+    p = withoutVerdictOnResult(p.replace(VERDICT_WITH, ''));
+    if (VERDICT.test(p) || EVAL_STATE.test(p) || SOFT_STATE.test(p)) return null;
     p = p.replace(EVAL_ADV, '');
     if (EVAL_ADV_AFTER.test(p)) return null;
     p = p.replace(EVAL_BEFORE, (m, det, evals, noun) => {

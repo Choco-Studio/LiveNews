@@ -1054,6 +1054,10 @@ export class NewsDesk {
           continue;
         }
         titleKeys.set(key, s);
+        // (an undated item keeps when the desk first saw it, beside the age of each reading: FULL TIME dates a story's time
+        // words and its results by it, server/sport/prepare.js; a Sunday-morning edition once called Saturday evening's
+        // undated Sky Sports reports "Today's results", 17 Oct)
+        if (s.undated) s.firstSeen = s.published;
         this.stories.set(s.id, s);
         added++;
       }
@@ -1611,6 +1615,12 @@ export class NewsDesk {
         s.body = a.text;
         s.bodyVia = a.via;
       }
+      // the page's own headline when it is not the feed's: a match report's page often gives the score its feed title
+      // says in words ("Champions Cup: Connacht 45-36 Saracens - …" under "Seven-try Connacht beat Saracens…", BBC Sport
+      // 17 Oct; the sport desk reads it only when the two agree, server/sport/prepare.js)
+      const og = String(html || '').match(/<meta\b[^>]*\bproperty="og:title"[^>]*\bcontent="([^"]{8,200})"/i) || String(html || '').match(/<meta\b[^>]*\bcontent="([^"]{8,200})"[^>]*\bproperty="og:title"/i);
+      const page = og && decodeEntities(og[1]).replace(/\s+/g, ' ').trim();
+      if (page && page !== s.title) s.pageTitle = page;
     } catch (err) {
       if (!this.articleWarned) this.log.warn?.(`[news] article text ${s.source}: ${err.message}`);
       this.articleWarned = true;
