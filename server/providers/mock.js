@@ -16,6 +16,7 @@ import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { ROSA_MEMORIES, ROSA_NEEDLES } from '../sport/shape.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, compressSentence, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
+import { untold } from '../coherence.js';
 import { nextFrom, shareFrom, whoFrom } from '../boards.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 import { expertFor, answerFrame } from '../experts.js';
@@ -104,13 +105,39 @@ export function sentenceCase(title, info) {
 // (and a podcast's title, "Trump rewards Putin and betrays Ukraine with Russia diesel deal - The Latest", Guardian 14 Oct,
 // and a headline's own verdict, "Hegseth’s dubious low-T screening…", Ars Technica 13 Oct: features, after the news;
 // and a teaser, "They war-gamed dimming the Sun. It went even worse than you think.", Ars Technica 15 Oct)
-const FEATURE_TITLE = /^["“‘'][^"“”‘’']{8,}["”’']\s*(?:[:,–—-]\s+.*)?$|(?:^|[:–—]\s+|\s[–—-]\s+)(?:the (?:fight|battle|race|rise|fall|story|truth|secret|inside story|making|people|women|men|cost|price|toll|human cost|scale|lives) (?:to|of|behind|who|for)|how (?:\w+\s+){0,6}(?:became|turned|lost|won|changed|built|took|went)|why (?:\w+\s+){1,8}(?:is|are|was|were|has|have|does|do|can|can't|won't)|inside (?:the|a)\b|meet the\b|what (?:it'?s|it is) like)\b|^(?:Inside|Meet|Why|How|What)\b[^:]*\?$|\bthe big read\b|\b(?:long read|analysis|explainer|opinion|comment)\s*:|\b(?:fantasy|fantasies|folly|myth|delusion|sham|farce|madness|nonsense|fiasco|hypocrisy|charade|absurdity)\b|\bbest and worst\b|\bmost interesting\b|\bis the (?:best|worst)\b|\bhands-on\b|\breview:|\bis as (?:awesome|good|great|cool|bad|weird)\b|\s[–—-]\s+(?:can|will|could|should|is|are|does|do|did|why|how|what|who)\s+(?:\w+\s+){0,2}\w+|\s[–—-]\s+The Latest\s*$|\b(?:dubious|shameful|disgraceful|absurd|ridiculous|misguided|cynical)\b|\bthan you (?:think|might think|(?:would|['’]d) (?:expect|think))\b|\bwhat you need to know\b/i;
+// (round 5: a podcast's "This week in science: sea monsters…", NPR; "'Frankly shocking' risk-taking by motorists…", Sky News,
+// a quotation with no one saying it; "Ocarina of Time remake feels remarkably modern", a review, The Verge)
+// (and an analysis: "Analysis: Trump's global headaches worsen weeks before crucial elections", BBC 12 Oct, once told "it
+// looks like Trump is turning overseas for help" in the presenter's voice)
+const FEATURE_TITLE = /^["“‘'][^"“”‘’']{8,}["”’']\s*(?:[:,–—-]\s+.*)?$|(?:^|[:–—]\s+|\s[–—-]\s+)(?:the (?:fight|battle|race|rise|fall|story|truth|secret|inside story|making|people|women|men|cost|price|toll|human cost|scale|lives) (?:to|of|behind|who|for)|how (?:\w+\s+){0,6}(?:became|turned|lost|won|changed|built|took|went)|why (?:\w+\s+){1,8}(?:is|are|was|were|has|have|does|do|can|can't|won't)|inside (?:the|a)\b|meet the\b|what (?:it'?s|it is) like)\b|^(?:Inside|Meet|Why|How|What)\b[^:]*\?$|\bthe big read\b|\b(?:long read|analysis|explainer|opinion|comment)\s*:|\b(?:fantasy|fantasies|folly|myth|delusion|sham|farce|madness|nonsense|fiasco|hypocrisy|charade|absurdity)\b|\bbest and worst\b|\bmost interesting\b|\bis the (?:best|worst)\b|\bhands-on\b|\breview:|\bis as (?:awesome|good|great|cool|bad|weird)\b|\s[–—-]\s+(?:can|will|could|should|is|are|does|do|did|why|how|what|who)\s+(?:\w+\s+){0,2}\w+|\s[–—-]\s+The Latest\s*$|\b(?:dubious|shameful|disgraceful|absurd|ridiculous|misguided|cynical)\b|\bthan you (?:think|might think|(?:would|['’]d) (?:expect|think))\b|\bwhat you need to know\b|^this week in\b|^['‘"“][^'’"”]*\b(?:frankly|shocking|appalling|disgraceful|outrageous|disastrous|catastrophic|nightmare|scandalous|chaotic|madness|absurd|ridiculous|terrifying|horrific|heartbreaking|devastating)\b[^'’"”]*['’"”]\s+\p{Ll}|\bfeels (?:remarkably|surprisingly|incredibly|very|so)\b|^(?:Analysis|Comment|Opinion|Explainer|Viewpoint)\s*:/iu;
 // An outlet's promotion of its own event, offer or newsletter: no story
 // (nor a deals post: "$15 gets you Psychonauts 2…" and "Save 50% on your TechCrunch Disrupt 2026 ticket" aired once a
 // headline's "you" no longer made it a column, TECH BYTES 15 Oct)
-const PROMO_TITLE = /\b(?:final chance|last chance|save up to|ticket savings|tickets? (?:on sale|go on sale|now available)|register now|early[- ]bird|promo code|discount code|deal of the day|best deals?|sponsored|subscribe (?:now|today)|sign up (?:now|today|for our))\b|\bsave (?:up to )?[$£€]?\d|\b(?:half|\d+%) off\b|\bgets you\b|\bon sale\b|\blowest price\b|\bcheapest (?:price|ever)\b/i;
+const PROMO_TITLE = /\b(?:final chance|last chance|save up to|ticket savings|tickets? (?:on sale|go on sale|now available)|register now|early[- ]bird|promo code|discount code|deal of the day|best deals?|sponsored|subscribe (?:now|today)|sign up (?:now|today|for our))\b|\bsave (?:up to )?[$£€]?\d|\b(?:half|\d+%) off\b|\bgets you\b|\bon sale\b|\blowest price\b|\bcheapest (?:price|ever)\b|^Job opportunities\b|\bjob openings?\b|^TB \d{2}-\d{2}\b|\bwe(?:['’]re| are) hiring\b|\bTechCrunch Disrupt\b|\bDisrupt 20\d\d\b|\bStartup Battlefield\b/i;
 export const LABEL_TITLE = /^(?:["“‘'][^"“”‘’']{1,120}["”’'](?=\s*(?:[:,–—-]|says\b|said\b|$))|["“][^"“”]{1,160}["”](?=\s*(?:[:,–—-]|says\b|said\b|$))|(?:\p{Lu}[\p{L}’'.&-]*\s+){1,3}on\s+\p{Lu}|(?:Watch|Video|Listen|In pictures|Explained|Analysis|Live)\s*:|R\.?I\.?P\.?\s)/u;
+// A headline never said as the presenter's own: one that quotes words without saying whose ("British and Irish
+// governments ‘should negotiate paramilitary disbandment’", Guardian 14 Oct: the marks cannot be heard), or one that holds
+// the outlet's view of a motive ("Ken Paxton stirs vaccines skepticism to ingratiate himself with Maha movement"). The
+// tease and the opener take the article's sentence instead, which says who (round 5).
+export const unsignedTitle = (t) =>
+  // (words, three or more: a quoted name of two is a label, "‘Super app’ aimed at UK students…", Guardian 13 Oct)
+  (/(?<!\p{L})[‘“"](?:[^’”"\s]+\s+){2,}[^’”"]*[’”"]|(?<![\p{L}])'(?:[^'\s]+\s+){2,}[^']*'(?![\p{L}])/u.test(t) && !/^[^‘“"']*\b(?:says?|said|tells?|told|(?:warn|urge|claim|accuse|call|vow|pledge|promise|threaten|insist|admit|demand|condemn|describe|brand|label|dismiss|hail|praise|slam|blast|criticise|criticize|defend|reject|ask|deny|plead|apologise|apologize|announce|predict|confirm|reveal|argue|suggest|hit out|respond|reply|replie)(?:s|d|ed)?|denies|denied)\b/i.test(t) && !/^[^‘“"']{2,40}:/.test(t)) ||
+  /\bto ingratiate\b|\bin a bid to (?:distract|deflect|curry favou?r)\b/i.test(t);
+// An acronym the outlet writes with "the" more often than without ("the IEA said", "the UK economy"; never "NASA said"):
+// a headline made a sentence gives it its article ("IEA has warned…" -> "The IEA has warned…", round 5).
+function acronymArticle(line, info) {
+  const m = String(line).match(/^(\p{Lu}{2,6})\s+(?:is|are|was|were|has|have|had)\b/u);
+  if (!m) return line;
+  const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
+  const withThe = (text.match(new RegExp(`\\b[Tt]he\\s+${m[1]}\\b`, 'g')) || []).length;
+  const all = (text.match(new RegExp(`\\b${m[1]}\\b`, 'g')) || []).length;
+  return withThe >= 1 && withThe > all - withThe ? `The ${line}` : line;
+}
 export function spokenTitle(title, info) {
+  const out = spokenTitleOf(title, info);
+  return out === sentenceCase(String(title || '').trim(), info).replace(/[.!]+$/, '') ? out : acronymArticle(out, info);
+}
+function spokenTitleOf(title, info) {
   let t = sentenceCase(String(title || '').trim(), info).replace(/[.!]+$/, '');
   // (a topic label before a colon is the page's, not a sentence: "Fuel prices: Sébastien Lecornu promises €10 cut per
   // fill-up", Euronews 14 Oct, once aired whole; what follows it is the news, when it has a verb of its own)
@@ -183,7 +210,41 @@ function headlineSubject(subject, info) {
   const plural = (!named(last, hk) && /[^s'’]s$/i.test(last)) || /\band\b/.test(ws.slice(0, hk + 1).join(' '));
   if (plural || /^(?:The|A|An|This|Its|His|Her|Their)$/.test(ws[0]) || named(last, hk)) return { subject, plural };
   const det = articleFor(subject, text, true);
-  return det ? { subject: `${det} ${subject[0].toLowerCase()}${subject.slice(1)}`, plural } : null;
+  // (an acronym or a name keeps its capital: "BA flight forced to turn back…" once aired as "A bA flight is forced…", BBC
+  // 14 Oct)
+  // (and a people's name: "Saudi national charged…" once aired as "A saudi national has been charged…", NEWS IN 60 14 Oct)
+  const keepCase = /^\p{Lu}{2,}\b/u.test(subject) || named(ws[0], 0) || DEMONYM.test(ws[0].replace(/[^\p{L}-]/gu, ''));
+  return det ? { subject: `${det} ${keepCase ? subject : subject[0].toLowerCase() + subject.slice(1)}`, plural } : null;
+}
+// A sentence that opens on an earlier time is background, never a story's first line: "Last week, a BA flight bound for
+// Chicago spent five hours circling…" once opened "BA flight forced to turn back over cracked window" (BBC 14 Oct), its
+// own flight never told, and "Founded in 1615, the Enfants Rouges market…" a fire's story (France 24 12 Oct), round 5.
+const BACKGROUND_OPEN = /^(?:Last (?:week|month|year|summer|winter|spring|autumn|weekend)|Earlier this (?:week|month|year)|(?:And )?[Ii]n (?:January|February|March|April|May|June|July|August|September|October|November|December|(?:19|20)\d\d)\b|Previously\b|Founded in\b|Back in\b|Years ago\b|Decades ago\b|Since (?:(?:19|20)\d\d|then)\b|Before that\b)/;
+// What a headline says happened, by kind: a sentence that says any word of the kind tells it ("flames ravaging" tells "Fire
+// ravages…"). A word of no kind is told by its own stem.
+const EVENT_KINDS = [
+  /\b(?:fires?|blazes?|flames?|burn\w*|ravag\w*|infernos?|ablaze|gutted)\b/i,
+  /\b(?:kill\w*|dead|deaths?|dies|died|dying|fatal\w*|lives)\b/i,
+  /\b(?:attack\w*|strikes?|struck|raids?|shell\w*|bomb\w*|drones?|missiles?)\b/i,
+  /\b(?:explo\w*|blasts?)\b/i,
+  /\b(?:arrest\w*|detain\w*|custody|held)\b/i,
+  /\b(?:charg\w*|indict\w*|accus\w*)\b/i,
+  /\b(?:jail\w*|prison\w*|sentenc\w*|convict\w*)\b/i,
+  /\b(?:shot|shoot\w*|gun\w*|stab\w*)\b/i,
+  /\b(?:flood\w*|storms?|hurricanes?|typhoons?|cyclones?|earthquakes?|quakes?|landslides?)\b/i,
+  /\b(?:crash\w*|collaps\w*|derail\w*|capsiz\w*|sank|sinks?)\b/i,
+  /\b(?:resign\w*|quits?|steps? down|stepped down|sack\w*|ousted|fired)\b/i,
+  /\b(?:evacuat\w*|fled|flee\w*)\b/i,
+];
+const EVENT_WORD = /\b(?:fires?|blazes?|ravag\w*|destroy\w*|kill\w*|dies|died|attack\w*|explo\w*|crash\w*|collaps\w*|flood\w*|earthquake|quake|arrest\w*|charged|jailed|sentenced|convicted|shot|shooting|stabb\w*|resign\w*|sacked|ousted|evacuat\w*|detain\w*)\b/gi;
+/** The headline's events no sentence in `told` says, or [] (a headline with no event word says no event). */
+function eventsUnsaid(title, told) {
+  const words = String(title).match(EVENT_WORD) || [];
+  const text = told.join(' ');
+  return words.filter((w) => {
+    const kind = EVENT_KINDS.find((k) => k.test(w));
+    return kind ? !kind.test(text) : !new RegExp(`\\b${w.slice(0, 5)}`, 'i').test(text);
+  });
 }
 // Nouns a headline drops the article of that always count ("Fire destroys…", "Man arrested…", "Saudi minister vows…")
 const COUNT_NOUN = /^(?:minister|man|woman|boy|girl|child|teenager|baby|judge|court|firm|company|startup|study|report|survey|fire|blaze|blast|explosion|storm|quake|earthquake|plane|jet|ship|boat|ferry|train|bus|car|lorry|truck|driver|pilot|teacher|doctor|nurse|officer|soldier|student|worker|leader|lawmaker|senator|mayor|councillor|official|spokesperson|spokesman|spokeswoman|group|charity|union|bank|hospital|school|university|museum|zoo|team|club|rocket|probe|satellite|telescope|volcano|tornado|hurricane|cyclone|flood|landslide|bridge|dam|mine|factory|plant|refinery|pipeline|businessman|businesswoman|tycoon|billionaire|fugitive|suspect|activist|journalist|lawyer|politician|executive|soldier|officer|migrant|refugee|priest|archbishop|bishop|singer|actor|actress|rapper|footballer|player|coach|athlete|student|scientist|researcher|campaigner|protester|hitman|gang|boss)$/;
@@ -244,6 +305,10 @@ function headlinePassive(t, words, info) {
   // (never after a relative pronoun: "The skincare scheme that led to consumer complaints…", NPR 14 Oct, is a label whose
   // verb is the relative's, and once aired as "…that has been led to…")
   if (words.slice(0, 5).some((w) => /^(?:that|which|who|whose|where)$/i.test(w))) return null;
+  // (nor one whose predicate is a "not" later on: "Mourners killed by Kenya police at ex-PM's national farewell not part of
+  // violence" says the mourners were not part of it, and once aired as "Mourners have been killed by… not part of violence",
+  // BBC 12 Oct, round 5)
+  if (words.slice(2).some((w) => /^(?:not|no longer|never)$/i.test(w))) return null;
   // (a longer subject that ends on someone's whole name is that person: "Former Irish Olympic swimming coach and child
   // abuser George Gibney jailed for 15 years", RTÉ 14 Oct -> "… George Gibney has been jailed for 15 years")
   const kn = words.findIndex((w, j) => j >= 2 && j <= 12 && HEAD_PARTICIPLE.test(w) && AFTER_PARTICIPLE.test(words[j + 1] || '') && /^\p{Lu}\p{Ll}/u.test(words[j - 1]) && /^\p{Lu}\p{Ll}/u.test(words[j - 2]));
@@ -265,7 +330,9 @@ function headlinePassive(t, words, info) {
 // never our presenters' words.
 // (and the reader addressed: "You might not have known that it was Hamilton who...", Ars Technica 9 Oct)
 // ("Let’s break down exactly what happened", "Learn more about...": the outlet talking to its reader, TechCrunch 12 Oct)
-const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me|[Yy]ou(?:['’](?:re|ve|ll|d))?|[Yy]our|[Ll]et['’]s)\b|(?:^|[^\w.])I (?=[a-z])|^(?:Learn|Find out|Read|Discover|Watch|Subscribe|Sign up|Click|Join us|Don['’]t miss|Check out|Here['’]s)\b/;
+// (and an advice column's imperative: "Pick a day when there is a good breeze, and heat the house…" once opened a WORLD NOW
+// story in the station's voice, Guardian 14 Oct, round 5)
+const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me|[Yy]ou(?:['’](?:re|ve|ll|d))?|[Yy]our|[Ll]et['’]s)\b|(?:^|[^\w.])I (?=[a-z])|^(?:Learn|Find out|Read|Discover|Watch|Subscribe|Sign up|Click|Join us|Don['’]t miss|Check out|Here['’]s)\b|^(?:Imagine|Picture this|Pick|Buy|Try|Check|Make sure|Look (?:out )?for|Consider|Remember|Avoid|Choose|Be sure|Don['’]t forget|Think about)\b(?![-'’])(?!\s+(?:now|of|is|are|was|were|has|have|had|will|would|can|could)\b)/;
 export const ownVoice = (t) => FIRST_PERSON.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
 // A headline in a columnist's own voice: "I don’t miss the camera on the Ray-Ban Meta Audio glasses", "We tried…", "Here’s
 // why…". A headline that addresses its reader is news told to them ("Google wants to host your personal vibe-coded apps",
@@ -304,7 +371,9 @@ const CURIOUS = /\b(?:discover\w*|uncover\w*|rare|unexpected|surpris\w*|new spec
 const WHY =
   /\b(?:aims? to|so that|to help|in order to|which means|means that|(?:will|would|could|can|should) (?:help|cut|save|reduce|let|allow|make|carry|light|power|create|protect|improve|speed|bring|give|lower|ease|keep|feed|connect|double|halve)|to (?:cut|reduce|protect|improve|cool|save|ease|lower))\b/i;
 // The sentence already says who says it: no "X reports" on top.
-const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announced|told|officials|estimates?)\b/i;
+// (and what figures or a study show: "UK van drivers face extra £2.5bn in diesel costs this year, figures show, Guardian
+// Business reports." once aired twice, round 5)
+const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announced|told|officials|estimates?|shows?|showed|shown|found|finds|suggests?|suggested|warns?|warned|claims?|claimed)\b/i;
 // Live pages: lines that point at the outlet's own coverage are not news.
 // (and a press release's logistics: "The crew members will discuss their science mission during a news conference at
 // 3:30 p.m. EDT...", NASA 9 Oct)
@@ -312,7 +381,7 @@ const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announce
 // smoke rise from a Petro Dolphin oil tanker…", "…is seen…"; an outlet's standing policy, "The Associated Press doesn't name
 // victims of alleged sexual violence"; a credit, "…contributed to this report"; real news 12-14 Oct)
 // (and the page's own pictures: "The maps below show the average concentration of Antarctic sea ice…", NASA 12 Oct)
-const LIVE_BOILERPLATE = /\bfollow (?:the day['’]s news|our live|all the latest) live\b|\b(?:maps?|charts?|graphics?|images?|videos?|photos?|tables?|graphs?|pictures?)\s+(?:below|above)\b|\b(?:shown|pictured|seen) (?:below|above)\b|\bsee (?:below|above)\b|\bBREAKING NEWS UPDATE\b|^(?:Photos?|Watch|Video|Listen|Gallery|In pictures)\s*:|\b(?:is|are) seen\b|\bpictured\b|\bin this (?:photo|picture|image|handout|undated)\b|^Plumes? of\b|\bdoes(?:n['’]t| not) (?:name|identify) (?:victims|people|minors)\b|\bcontributed to this report\b|^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b|\bdoes not (?:offer|accept) (?:or accept )?money\b|\bfor coverage or interviews\b|\b(?:news|press) conference\b|\bmedia (?:briefing|teleconference)\b|\bwill (?:air|stream) live\b|\bNASA\+|^Update[sd]?\b[^:]{0,40}:|\b(?:article|story|post) (?:was|has been) updated\b/i;
+const LIVE_BOILERPLATE = /\bfollow (?:the day['’]s news|our live|all the latest) live\b|\b(?:maps?|charts?|graphics?|images?|videos?|photos?|tables?|graphs?|pictures?)\s+(?:below|above)\b|\b(?:shown|pictured|seen) (?:below|above)\b|\bsee (?:below|above)\b|\bBREAKING NEWS UPDATE\b|^(?:Photos?|Watch|Video|Listen|Gallery|In pictures)\s*:|\b(?:is|are) seen\b|\bpictured\b|\bin this (?:photo|picture|image|handout|undated)\b|^Plumes? of\b|\bdoes(?:n['’]t| not) (?:name|identify) (?:victims|people|minors)\b|\bcontributed to this report\b|^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b|\bdoes not (?:offer|accept) (?:or accept )?money\b|\bfor coverage or interviews\b|\b(?:news|press) conference\b|\bmedia (?:briefing|teleconference)\b|\bwill (?:air|stream) live\b|\bNASA\+|^Update[sd]?\b[^:]{0,40}:|\b(?:article|story|post) (?:was|has been) updated\b|\b(?:has|have|brings us|with) the (?:latest|details|full story)\.?$|\bcoverage (?:begins|starts|will begin|will start)\b|\bis (?:speaking|talking|giving evidence|addressing [\w ]{2,30}) now\b|^(?:Some )?more (?:[A-Za-z-]+ )?reaction (?:to|from)\b|^(?:This|The|These)\s+(?:[\w-]+\s+){0,3}(?:image|images|photo|photograph|picture|view|map|animation|visuali[sz]ation|mosaic|composite)\b[^.]{0,120}\b(?:shows?|reveals?|captures?|depicts?)\b|^(?:Opaque|Bright|Dark|White|Red|Blue|Yellow|Green|Orange|Purple)\s+(?:white\s+)?(?:areas?|regions?|patches|dots|lines|streaks)\s+(?:indicate|show|represent|mark)\b|\bTechCrunch Disrupt\b|\bStartup Battlefield\b|\bDisrupt 20\d\d\b|\bBattlefield 200\b|\b[\w.+-]+@[\w-]+\.[\w.-]+\b|\bdownload the (?:pdf|full|report|paper)\b/i;
 
 // The strap's kicker is the story's topic (server/topics.js, shared with the desk's programme beats).
 
@@ -515,20 +584,27 @@ function midStory(order, roundup, lighter, number) {
 // TECH BYTES, THE CATCH: Ada asks what a remaining summary sentence answers; Max answers with it.
 // Each question has several phrasings: a 24/7 rotation must not hear the same one every half hour.
 const CATCH = [
-  { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => [`[glasses] ${max}, the question everyone asks. What does it cost?`, '[glasses] And the price tag?', `[chin] ${max}, what will all this cost?`] },
+  // (a price said, not a word: "Open-weight models can be significantly more cost-efficient…" once answered "what will all this
+  // cost?", TechCrunch 15 Oct)
+  { test: /[$£€]\s?\d|\b\d[\d,.]*\s*(?:dollars|euros|pounds)\b|\bpriced at\b|\bcosts?\s+(?:about\s+|around\s+|just\s+|only\s+)?(?:[$£€]|\d)|\bprice (?:tag|of|is|will)\b|\bfree to (?:try|play|use)\b/i, q: (max) => [`[glasses] ${max}, the question everyone asks. What does it cost?`, '[glasses] And the price tag?', `[chin] ${max}, what will all this cost?`] },
   // (not how long something stops: "paused its bug bounty program until next year" has no launch to wait for, 5 Oct)
   { test: /(?<!\b(?:until|till|through|for the rest of)\s)\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => ['[chin] And when does it reach actual people?', '[chin] When can anyone actually use it?', '[glasses] And the timetable?'] },
   // what happens now: a deadline, a plan, an appeal ("The task force will reportedly have 120 days to create a report")
   // (not any "will": "The line will carry 40,000 passengers a day" is the story's figure, not what comes next)
-  { test: /\b(?:plans? to|(?:is|are) expected to|(?:is|are) set to|will (?:now|next|then|decide|vote|rule|review|report|consider|appeal)|next (?:week|step|steps)|within \d+ (?:days|weeks|months)|(?:have|has) \d+ (?:days|weeks|months) to|deadline|appeal\w*)\b/i, q: () => ['[chin] And what happens now?', '[chin] So what comes next?', '[glasses] And from here?'] },
+  // (nor an appeal already decided: "…rejected after an appeal by the developer was dismissed" once answered "And from
+  // here?", BBC 12 Oct, round 5)
+  { test: /\b(?:plans? to|(?:is|are) expected to|(?:is|are) set to|will (?:now|next|then|decide|vote|rule|review|report|consider|appeal)|next (?:week|step|steps)|within \d+ (?:days|weeks|months)|(?:have|has) \d+ (?:days|weeks|months) to|deadline|(?:will|could|may|can|plans? to|intends? to|expected to) (?:\w+ )?appeal|right to appeal|lodge an appeal|appeal hearing)\b/i, q: () => ['[chin] And what happens now?', '[chin] So what comes next?', '[glasses] And from here?'] },
   // who it touches, when the story says who
-  { test: /\b(?:users|customers|owners|drivers|patients|developers|consumers|subscribers|players|parents|families|small businesses|people who)\b/i, q: () => ['[chin] And who does this actually affect?', '[glasses] Who is this for, exactly?', '[chin] So who notices the difference?'] },
+  // (never answered by money: "Who is this for, exactly?" once had Netflix's revenue and its 325 million subscribers, 15 Oct)
+  { test: /^(?!.*\b(?:revenue|income|profits?|earnings|sales)\b)(?!.*[$£€]\s?\d).*\b(?:users|customers|owners|drivers|patients|developers|consumers|subscribers|players|parents|families|small businesses|people who)\b/i, q: () => ['[chin] And who does this actually affect?', '[glasses] Who is this for, exactly?', '[chin] So who notices the difference?'] },
   // where the law stands, when a court, a regulator or a law is in it
   // (a court or a regulator deciding, not a word: "beyond “specific rules or new laws,”" answers nothing)
   { test: /\b(?:ruled|ruling|court|judge|unconstitutional|unlawful|illegal|precedent|warrant|regulators? (?:say|said|ruled|approved|fined|ordered))\b/i, q: () => ['[steeple] And where does the law stand?', '[steeple] And the legal position?', '[chin] So where does that leave the rules?'] },
   { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => ['[chin] How does it actually work?', '[chin] Walk me through how it works.', '[glasses] And the clever part is?'] },
   // the catch itself, last: a "but" is in most stories
-  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
+  // (a limit, not any "but": "…costs $179.99 and has a sleek feel like the Fitbit Air but with an OLED display" once
+  // answered "So what is the catch?", The Verge 12 Oct)
+  { test: /\b(?:however|although|not yet|no longer|limited to|only (?:works|available|in|for|on)|isn['’]t (?:yet|available|clear)|won['’]t|can['’]t|doesn['’]t|but (?:not|no|it|the|there|that|users|critics|some|many|experts|analysts))\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
 ];
 // FULL TIME, THE BREAKDOWN (docs/programmes/full-time.md §4): Kai asks the question a story's context answers and Rosa
 // answers with that sentence of the story: the record or the wait, the table, what comes next, what they said. Never
@@ -629,7 +705,9 @@ UNIT8_LINES.SPACE = UNIT8_LINES.ASTRONOMY;
 // UNIT-8 after the lead, when the lead has no figure to repeat.
 const UNIT8_NOTED = ['[nod] Logged, Dr Reyes.', '[nod] Filed under remarkable.', '[nod] Recorded. I will be thinking about that one.', '[nod] Understood, Dr Reyes. Logged.', '[nod] Entered in the record. With a small flag.'];
 // (nine: a COSMOS told at the depth its length needs asks UNIT-8 more often, and four rotations once heard one twice)
-const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.', 'Thank you. Exactly right, UNIT-8.', '[nod] Quite so, UNIT-8.', 'Clear as always, UNIT-8.', '[nod] Thanks, UNIT-8. That helps.', 'Good. Thank you, UNIT-8.', '[nod] Well put, UNIT-8.'];
+// (the name in the first sentence: "Thank you. Exactly right, UNIT-8." and "Good. Thank you, UNIT-8." aired cut after their comma in
+// the replays, "Thank you. Exactly right,"; the cut was not traced, round 5)
+const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.', 'Exactly right, UNIT-8. Thank you.', '[nod] Quite so, UNIT-8.', 'Clear as always, UNIT-8.', '[nod] Thanks, UNIT-8. That helps.', 'Good, UNIT-8. Thank you.', '[nod] Well put, UNIT-8.'];
 // The tail of UNIT-8's restatement ("40,000. Logged."): one shape per episode, rotated across episodes.
 const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'I will not forget it.'];
 // Nova hands the number of the day to UNIT-8 (it is his story), not in the same words every time.
@@ -771,14 +849,19 @@ function lowerFirstWord(text, info) {
   // the headline ends a sentence of its own: "...space station. Astronauts on..." is not a name mid-sentence
   const story = `${String(info.s.title).replace(/[.!?]*$/, '.')} ${info.s.summary || ''} ${info.s.body || ''}`;
   // (in words, not in a link: "…/hurricane-isaias-gulf-coast…" once made "Also coming up: isaias becomes…", 10 Oct)
-  const lowers = story.match(new RegExp(`(?<![\\p{L}\\-/#@.])${word.toLowerCase()}(?![\\p{L}\\-/])`, 'gu'))?.length || 0;
+  // (the word without its possessive: "Rivian’s startup Mind Robotics…" and "Flox's edge devices…" once went out as "rivian’s" and
+  // "flox's" after "And finally:", the article writing "Rivian" and "Flox" mid-sentence, round 5)
+  const lowers = story.match(new RegExp(`(?<![\\p{L}\\-/#@.])${base.toLowerCase()}(?![\\p{L}\\-/])`, 'gu'))?.length || 0;
   // A name is written with its capital in the middle of a sentence somewhere in the story; a common word is not.
-  const mids = story.match(new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'gu'))?.length || 0;
+  const mids = story.match(new RegExp(`[\\p{Ll},;:]\\s+${base}(?![\\p{L}])`, 'gu'))?.length || 0;
   const lower = lowers > mids;
   const midSentence = mids > 0;
   // (a first and a last name: "Meredith Whittaker says...", BBC 9 Oct, once went out as "meredith Whittaker")
-  const fullName = new RegExp(`^${word}\\s+\\p{Lu}\\p{Ll}+(?:\\s|,|['’]s)`, 'u').test(text) && !COMMON_START.test(text) && !lower;
+  const fullName = new RegExp(`^${word}\\s+\\p{Lu}\\p{Ll}+(?:\\s|,|:|['’]s)`, 'u').test(text) && !COMMON_START.test(text) && !lower;
   if (fullName) return text;
+  // (a name with its acronym, "Cerebras CEO pushes back…", "Blueprints AI developed software…", went out as "cerebras CEO" and
+  // "blueprints AI", TechCrunch 13-15 Oct; and "Faisal Islam: What surprise praise…" as "faisal Islam")
+  if (new RegExp(`^${word}\\s+\\p{Lu}{2,5}\\b`, 'u').test(text) && !COMMON_START.test(text)) return text;
   return lower || COMMON_START.test(text) || !midSentence ? word.toLowerCase() + text.slice(word.length) : text;
 }
 // A person by surname (or first name) alone, never heard in the story: "Scully said the organisation may have to
@@ -825,6 +908,12 @@ function strangers(t, told, info) {
     if (COMMON_PROPER.test(name) || NOT_A_NAME.has(name) || DEMONYM.test(name) || GROUP_WORD.test(name) || lookupPlace(name) || told.includes(name) || info.s.title.includes(name)) continue;
     out.push(name);
   }
+  // (and a surname with its particle, "al-Jahalin said", Al Jazeera 14 Oct, the community's representative never named)
+  for (const m of String(t).matchAll(/(?<![\p{L}-])((?:al|el|ad|ash|as|at|az|ibn|bin|abu|bint)-\p{Lu}[\p{L}’'-]+)/gu)) {
+    const name = m[1].replace(/[’']s$/, '');
+    if (told.includes(name) || info.s.title.includes(name) || out.includes(name)) continue;
+    out.push(name);
+  }
   return out;
 }
 function introduceNames(t, told, info) {
@@ -836,7 +925,10 @@ function introduceNames(t, told, info) {
   // (a common noun opening a sentence is no name: "Water companies in England..." once became "Yorkshire Water companies...",
   // Guardian 9 Oct; a word the article also writes in lower case is a common word)
   const common = lead && new RegExp(`(?<![\\p{L}])${lead.toLowerCase()}(?![\\p{L}])`, 'u').test(source0);
-  if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && !info.s.title.includes(lead)) {
+  // (a strap's whole name is not said: "Goldberg was a regular Al Jazeera contributor…" once opened a story under "Israeli
+  // academic and Al Jazeera contributor Ori Goldberg dies", Al Jazeera 12 Oct, round 5)
+  const strapWhole = lead && new RegExp(`\\p{Lu}\\p{Ll}+\\s+${lead.replace(/[’']s$/, '')}(?![\\p{L}])`, 'u').test(info.s.title);
+  if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && (!info.s.title.includes(lead) || strapWhole)) {
     const source = source0;
     // (the possessive too: "Helen Barber" given in the article makes "Barber’s claim…" "Helen Barber’s claim…")
     const bare = lead.replace(/[’']s$/, '');
@@ -887,7 +979,11 @@ const withArticle = (t) => {
 function dropToldAside(t, told) {
   const said = new Set(contentWords(told.join(' ')).map(senseStem));
   // (only an apposition or a relative clause: ", bringing dangerous winds, storm surge and heavy rain" is a list's start)
-  const out = String(t).replace(/(?<=\p{L}),\s+((?:a|an|the|who|which|whose)\s[^,]{4,90}),\s+/gu, (m, aside) => {
+  const out = String(t).replace(/(?<=\p{L}),\s+((?:a|an|the|who|which|whose)\s[^,]{4,90}),\s+/gu, (m, aside, at, whole) => {
+    // (never the head of a list the sentence goes on with: "…to restore the site[, which has the world's southernmost Post
+    // Office,] museum, and more than 1,000 gentoo penguins" once restored the penguins, BBC 15 Oct)
+    const rest = whole.slice(at + m.length);
+    if (/^[^,.;]{1,40},\s+(?:and|or)\b|^[^,.;]{1,30}\s+(?:and|or)\s/.test(rest) && !/^(?:the|a|an|it|they|he|she|this|that)\b/.test(rest)) return m;
     const words = contentWords(aside);
     return words.length >= 2 && words.every((w) => said.has(senseStem(w))) ? ' ' : m;
   });
@@ -935,7 +1031,7 @@ const openingOf = (t) => {
   return [SAME_SENSE.get(w[0]) || w[0], w[1]].join(' ');
 };
 // A people's name keeps its capital mid-sentence: "Coming up: German logistics group Rhenus..." (once "german", 9 Oct)
-const DEMONYM = /^(?:American|British|English|Scottish|Welsh|Irish|French|German|Dutch|Belgian|Swiss|Austrian|Italian|Spanish|Portuguese|Greek|Turkish|Russian|Ukrainian|Polish|Czech|Hungarian|Romanian|Swedish|Norwegian|Danish|Finnish|Icelandic|European|African|Asian|Arab|Chinese|Japanese|Korean|Indian|Pakistani|Bangladeshi|Indonesian|Thai|Vietnamese|Filipino|Malaysian|Australian|Canadian|Mexican|Brazilian|Argentine|Chilean|Colombian|Peruvian|Cuban|Israeli|Palestinian|Iranian|Iraqi|Syrian|Saudi|Egyptian|Nigerian|Kenyan|Ethiopian|Ghanaian|Kazakh|Uzbek|Afghan|Sudanese|Libyan|Moroccan|Algerian|Tunisian|Lebanese|Jordanian|Qatari|Emirati|Taiwanese|Mongolian|Nepalese|Sri Lankan|Venezuelan|Haitian|Jamaican|Congolese|Somali|Ugandan|Tanzanian|Zimbabwean|Zambian|Senegalese|Malian|Latin|Western|Eastern|Northern|Southern|Middle)$/;
+const DEMONYM = /^(?:American|British|English|Scottish|Welsh|Irish|French|German|Dutch|Belgian|Swiss|Austrian|Italian|Spanish|Portuguese|Greek|Turkish|Russian|Ukrainian|Polish|Czech|Hungarian|Romanian|Swedish|Norwegian|Danish|Finnish|Icelandic|European|African|Asian|Arab|Chinese|Japanese|Korean|Indian|Pakistani|Bangladeshi|Indonesian|Thai|Vietnamese|Filipino|Malaysian|Australian|Canadian|Mexican|Brazilian|Argentine|Chilean|Colombian|Peruvian|Cuban|Israeli|Palestinian|Iranian|Iraqi|Syrian|Saudi|Egyptian|Nigerian|Kenyan|Ethiopian|Ghanaian|Kazakh|Uzbek|Afghan|Sudanese|Libyan|Moroccan|Algerian|Tunisian|Lebanese|Jordanian|Qatari|Emirati|Taiwanese|Mongolian|Nepalese|Sri Lankan|Venezuelan|Haitian|Jamaican|Congolese|Somali|Ugandan|Tanzanian|Zimbabwean|Zambian|Senegalese|Malian|Latin|Western|Eastern|Northern|Southern|Middle|Britons?|Brits?|Saudis?)$/;
 // (a pronoun after an opening phrase too: "Once completed, it will house GM’s new Battery Cell Development Center", "Together,
 // they offer an unprecedented view...", The Verge 12 Oct, both aired as their stories' first words)
 // (and after a short time or place phrase: "On Tuesday they will oversee the club's first home game", Guardian 13 Oct)
@@ -1019,7 +1115,7 @@ const CONNECTIVE_START = /^(?:But|And|So|Yet|Still|However|Instead|Meanwhile|Als
 const TIME_BACK = /\b(?:at the time\b(?! of)|(?:that|the) same (?:year|day|week|month|time|night|morning)|that (?:year|day|week|month|night|morning)|the following (?:year|day|week|month|morning)|later that (?:year|day|week|month|night))\b/i;
 // (nor one that points back with "this" or "these" before its first comma: "CHIME can use this hydrogen signal to trace
 // how matter is spread...", ScienceDaily 9 Oct, before the sentence that says what the signal is)
-const POINTS_BACK = /^[^,;:]{0,60}?\b(?:this|these|those)\s+(?!(?:week|weekend|month|year|morning|afternoon|evening|summer|winter|spring|autumn|time|season|is|was|are|were)\b)[a-z]|^That\s+(?!(?:is|was|has|had|would|could|will|may|might|said|says|same)\b)[a-z]+\s/i;
+const POINTS_BACK = /^[^,;:]{0,60}?\b(?:this|these|those)\s+(?!(?:week|weekend|month|year|morning|afternoon|evening|summer|winter|spring|autumn|time|season|is|was|are|were)\b)[a-z]|^That\s+(?!(?:is|was|has|had|would|could|will|may|might|said|says|same)\b)[a-z]+\s|^That['’]s\b/i;
 // (a later sentence opens no story with a pronoun either: "On Tuesday they will oversee the club’s first home Champions League
 // game" opened a FULL TIME story, Guardian 13 Oct)
 // (one that adds to words not heard: "Mohsen Rezaei added that Iran is no longer responding…" once opened a WORLD NOW story,
@@ -1043,7 +1139,7 @@ const orphanPlural = (t) => {
 // the toll is likely to be huge." once opened WORLD NOW's lead on an Indonesian wildfire; the article counted orangutans,
 // the viewer heard people, Guardian 14 Oct)
 const ASKS_BACK = /^(?:How many|How much|How long|How far|Why|What|Whether|Who|Where|When)\b[^.]{0,60}?\b(?:is|are|was|were|remains?)\s+(?:still\s+)?(?:unclear|unknown|not (?:yet )?(?:known|clear))/i;
-const selfStanding = (info, t) => !ASKS_BACK.test(String(t).trim()) && !ONE_OF_LIST.test(String(t).trim()) && !ADDED_LEAN.test(String(t).trim()) && !ANSWERS_BACK.test(String(t)) && !orphanPlural(t) && !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && !echoesBefore(info, t) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t) && !PRONOUN_START.test(t));
+const selfStanding = (info, t) => !untold(t, String(info.s.title)) && !ASKS_BACK.test(String(t).trim()) && !ONE_OF_LIST.test(String(t).trim()) && !ADDED_LEAN.test(String(t).trim()) && !ANSWERS_BACK.test(String(t)) && !orphanPlural(t) && !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && !echoesBefore(info, t) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t) && !PRONOUN_START.test(t));
 /**
  * Two sentences that say the same thing in other words: most of the shorter one's content words are in the
  * other ("A UCLA study links faster brain aging to specific gut bacteria" / "A new UCLA study suggests that the
@@ -1176,11 +1272,19 @@ export const decodeEntities = (t) =>
 const TITLE_ONLY = /^(?:the\s+)?(?:Dr|Mr|Mrs|Ms|Miss|Prof|Professor|Sir|Dame|Lord|Lady|Rev|Judge|Officer|Sgt|Capt|Gen)\.?$/i;
 export function study(story, { cap = 9 } = {}) {
   const title = plainTitle(story.title) || story.title;
-  const s = { ...story, title };
+  // (the outlet's own title kept: its label, "Analysis:", "Opinion:", says what kind of page it is, round 5)
+  const s = { ...story, title, rawTitle: story.title };
   // (an outlet's typo in a headline name is said right: "Woodfood" for Woodford, Guardian 12 Oct)
   // (a wire story's dateline is the page's, never said: "CEUTA, Spain -- Many of the migrants…", "CAIRO -- A projectile…",
   // ABC News 14 Oct; "Boston, Massachusetts, United States – A United States federal court…", Al Jazeera 13 Oct)
   if (s.summary) s.summary = undateline(decodeEntities(s.summary));
+  // (a programme's blurb: "In tonight's edition, Joseph Kabila has been named leader… Also, Africa's largest ever IPO… And
+  // Formula 1 will return to Africa… in Rwanda." aired whole as the Kabila story, on a map of Rwanda, France 24 14 Oct:
+  // its first item is the story, without the programme's words; the rest are other stories)
+  for (const k of ['summary', 'body']) {
+    const m = String(s[k] || '').match(/^\s*In (?:tonight|today|this week)['’]s (?:edition|programme|program|episode|show|bulletin),?\s+/i);
+    if (m) s[k] = (sentencesIn(String(s[k]).slice(m[0].length))[0] || '').replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  }
   if (s.body) s.body = undateline(decodeEntities(s.body));
   const whole = `${s.summary || ''} ${s.body || ''}`;
   if (s.summary) s.summary = fixNameTypos(s.summary, title, whole);
@@ -1309,7 +1413,8 @@ function sameNews(a, b) {
   const na = names(a);
   const shared = [...names(b)].filter((w) => na.has(w)).length;
   // (the headlines' own words: the ones they write in lower case, never a name again)
-  const own = (t) => contentWords(String(t).split(/\s+/).filter((w) => /^[\p{Ll}\d]/u.test(w)).join(' ')).map(senseStem);
+  // (never a word with a number in it, whose stem drops the number: "topic1" and "topic2" are no word in common)
+  const own = (t) => contentWords(String(t).split(/\s+/).filter((w) => /^[\p{Ll}\d]/u.test(w) && !/\p{L}\d|\d\p{L}/u.test(w)).join(' ')).map(senseStem);
   const wa = new Set(own(a.s.title));
   const common = new Set(own(b.s.title).filter((w) => wa.has(w))).size;
   if (shared >= 4 || (shared >= 2 && common >= 2)) return true;
@@ -1324,6 +1429,15 @@ function sameNews(a, b) {
   const la = ledeWords(a);
   const commonLede = [...ledeWords(b)].filter((w) => la.has(w)).length;
   if (shared >= 2 && specific.length >= 1 && commonLede >= 2 && a.s.category !== 'sport' && b.s.category !== 'sport') return true;
+  // (one company's news from two outlets, its name the headlines' first word: "Netflix is laying off around 1,000 employees"
+  // and "Netflix to lay off 1,000 staff"; "Facebook will let you customize your feed algorithm using AI" and "Facebook is giving
+  // users more control over its algorithm", The Verge and TechCrunch 15 Oct, aired as two stories of one TECH BYTES)
+  const subjectOf = (x) => String(x.s.title).match(/^\p{Lu}[\p{L}’'-]+/u)?.[0];
+  const sa = subjectOf(a);
+  if (sa && sa === subjectOf(b) && a.s.source !== b.s.source && !NOT_A_NAME.has(sa) && !lookupPlace(sa) && !DEMONYM.test(sa) && !COMMON_START.test(sa) && !EVERYDAY_NAME.test(sa) && a.s.category !== 'sport') {
+    const nums = (x) => numbersIn(String(x.s.title)).filter((n) => n.scaled >= 100).map((n) => n.scaled);
+    if (nums(a).some((v) => nums(b).includes(v)) || common >= 2 || (common >= 1 && commonLede >= 3)) return true;
+  }
   // (the same distinctive figure and a word of what it is about: "…cover UK’s £35bn spending pressures" and "Healey faces £35bn
   // Budget challenge…", Guardian and BBC 12 Oct, aired as two stories of one MONEY MINUTE)
   const figs = (x) => numbersIn(`${x.s.title}`).filter((n) => (n.currency || n.unit || n.percent) && n.scaled >= 1000).map((n) => n.scaled);
@@ -1381,7 +1495,10 @@ function runningOrder(infos, n, program, featured = new Set(), { deep = false, d
   const fresh = (i) => !featured.has(i.s.id);
   let lighter = null;
   if (features.includes('lighter') && slots >= 1) {
-    const ok = (i) => !i.breaking && !i.grave && !i.live;
+    // (never a war: "Both Russia and Ukraine are using AI-powered drones on the battlefield" closed five WORLD NOW editions of
+    // the round-5 replay as "And finally", with "That is the most cheerful thing I have read all day." after it: a
+    // curiosity's flag let it through)
+    const ok = (i) => !i.breaking && !i.grave && !i.live && i.kicker !== 'CONFLICT';
     const own = (i) => !primary || i.s.category === primary;
     // (FULL TIME: the moment of the day is a story the sport desk marked as one, never a cricket report closing the show)
     // (WORLD NOW's is light by what it is about, not by a technology in it: "Nvidia… donates $250m to UK for AI safety
@@ -1389,7 +1506,7 @@ function runningOrder(infos, n, program, featured = new Set(), { deep = false, d
     // (and of a kind its closing exchange is written for, docs/programmes/world-now.md: history, the sky, wildlife, the sea,
     // green cities, culture, a tram or a train; or a curiosity; never hard news: "Both Russia, Ukraine are using AI-powered
     // drones", "Europe’s satellite sovereignty push faces funding test", "IMF raises forecast…", each once closed it, 12-14 Oct)
-    const soft = (i) => program?.id !== 'world-now' || (!i.hard && (i.curious || ['HISTORY', 'ASTRONOMY', 'SPACE', 'WILDLIFE', 'OCEANS', 'GREEN CITIES', 'CULTURE', 'TRANSPORT'].includes(i.kicker)));
+    const soft = (i) => program?.id !== 'world-now' || (!i.hard && (!HARD_NEWS.has(i.kicker) || i.kicker === 'TRANSPORT') && (i.curious || ['HISTORY', 'ASTRONOMY', 'SPACE', 'WILDLIFE', 'OCEANS', 'GREEN CITIES', 'CULTURE', 'TRANSPORT'].includes(i.kicker)));
     const tiers = program?.id === 'full-time' ? [(i) => ok(i) && !!i.s.moment] : [(i) => ok(i) && soft(i) && own(i) && i.curious, (i) => ok(i) && own(i) && i.light && soft(i), (i) => ok(i) && soft(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category), (i) => ok(i) && i.light && soft(i)];
     for (const strict of [true, false]) for (const t of tiers) lighter ||= take((i) => t(i) && (!strict || fresh(i)));
     if (lighter) slots--;
@@ -1670,12 +1787,16 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   // Revolutionary Guards ‘almost certainly’ behind RAF Fairford threats, says Burnham" / "UK PM says RAF base incidents
   // ‘likely coordinated’", both pairs once aired in one WORLD NOW, 13 Oct: the desk's clustering had let them through)
   const studied = stories.map((s) => study(s, { cap: level >= 1 ? 14 : 9 }));
-  const found = studied.filter((i, k) => (!i.live || i.sentences.length) && !studied.slice(0, k).some((o) => sameNews(o, i)));
+  // (of two reports of one event, the one with more to tell stays, the desk's first when they tell as much: "Google makes it
+  // easier to launch your vibe-coded apps", The Verge, with nothing to tell, once kept TechCrunch's report of the same news
+  // and its expert off TECH BYTES, 13 Oct, round 5)
+  const usable = (i) => !i.live || i.sentences.length;
+  const found = studied.filter((i, k) => usable(i) && !studied.some((o, j) => j !== k && usable(o) && (j < k ? sameNews(o, i) : sameNews(i, o)) && (o.sentences.length > i.sentences.length || (o.sentences.length === i.sentences.length && j < k))));
   // (a reader's letter or a column, its headline in the first person, "BT charged me for more than a year", Guardian
   // consumer column 14 Oct, is no news report: only when the desk has nothing else)
   // (and a feature's headline, a label and its long read, "Lobbying, lawyers and a media blitz: the fight to kill…", "‘People
   // sell their best stuff on Vinted’ – how charity shops became a dumping ground…", Guardian 14 Oct: no news line to tell)
-  const plain = (i) => !columnVoice(i.s.title) && !FEATURE_TITLE.test(i.s.title);
+  const plain = (i) => !columnVoice(i.s.title) && !FEATURE_TITLE.test(i.s.title) && !FEATURE_TITLE.test(i.s.rawTitle || i.s.title);
   // (and an outlet's promotion is no story at all: "TechCrunch Disrupt 2026 starts tomorrow: Your final chance to secure up
   // to $100 ticket savings", TechCrunch 12 Oct, aired as TECH BYTES' eleventh story)
   const news = found.filter((i) => !PROMO_TITLE.test(i.s.title));
@@ -1693,7 +1814,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   // marks, "This is a moral outrage, and it is a direct result of decisions made by Tory and Labour governments", read in
   // the presenter's voice in a WORLD NOW on a thin desk, Guardian live 14 Oct)
   const fresh = all.filter((i) => !i.live);
-  let pool = fresh.length >= Math.min(all.length, fewest) ? fresh : all;
+  // (never on NEWS IN 60, whose item is a sentence or two: "That’s 300 people a week, 300 lives destroyed…", a politician's
+  // words on a Guardian live page, once aired as its item in the presenter's voice, round 5; the minute runs short instead)
+  let pool = quick || fresh.length >= Math.min(all.length, fewest) ? fresh : all;
   // A picture on every item (NEWS IN 60's bible): after the top story, the stories with a picture come first, and
   // among them those whose headline fits the programme's strap; the others only when the desk has no more.
   if (program?.pictures === 'every' && pool.length > 1) {
@@ -1812,14 +1935,15 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const quoted = /^["“‘']/.test(info.s.title);
       // (nor one that points back at what the viewer has not heard: "On Tuesday, a report detailing the results of that
       // investigation was published", a WORLD NOW headline, 14 Oct)
-      if (!selfStanding(info, t) || /\b(?:that|this|these|those|such)\s+(?!is\b|was\b|are\b|were\b)[a-z]+/i.test(t.split(/[,;]/).slice(0, 2).join(' ')) || /\balso\b/.test(t) || (!quoted && /^[^,]{0,40}\b(?:says|said|told)\b/.test(t)) || asks(t) || DEFINES.test(t)) continue;
+      // (nor one that names someone the viewer has not met: "…, al-Jahalin said, …" once teased WORLD NOW, round 5)
+      if (!selfStanding(info, t) || strangers(t, '', info).length || /\b(?:that|this|these|those|such)\s+(?!is\b|was\b|are\b|were\b)[a-z]+/i.test(t.split(/[,;]/).slice(0, 2).join(' ')) || /\balso\b/.test(t) || (!quoted && /^[^,]{0,40}\b(?:says|said|told)\b/.test(t)) || asks(t) || DEFINES.test(t)) continue;
       const short = wordCount(t) <= 16 ? t : dropAside(t, 16) || trimClause(t, 16, 6, { keep: info.keep });
       if (short) return { t, short };
     }
     return null;
   };
   const said = (info) => {
-    if (LABEL_TITLE.test(info.s.title)) {
+    if (LABEL_TITLE.test(info.s.title) || unsignedTitle(info.s.title)) {
       const pick = info.teased ? { short: info.teased } : teaseSentence(info);
       if (pick) {
         info.teased = pick.short;
@@ -2162,11 +2286,20 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // not among the original five...", under "Americans Hall and Woodford win Nobel Prize in economics", Euronews 12 Oct,
       // aired without the winners: the headline, said as a sentence, opens)
       const unsaid = (info.keep || []).filter((n) => !info.sentences.some((t) => t.includes(n)));
-      const namesUnsaid = !isNumber && unsaid.length >= 2 && unsaid.length * 2 >= (info.keep || []).length;
+      // (nor one that never says what the headline says happened: "Founded in 1615, the Enfants Rouges market is the oldest
+      // covered food market in Paris." once told "Fire ravages oldest covered food market in Paris" on NEWS IN 60, the one
+      // sentence with the flames too long for its minute, France 24 12 Oct, round 5)
+      const tellable = info.sentences.filter((t) => wordCount(t) <= maxWords + 2 || !!dropAside(t, maxWords) || !!trimClause(t, maxWords, 6, { keep: info.keep }));
+      // (only when the sentence that says it cannot be told: the outlet's lede is trusted to say its news in its own words)
+      const eventUnsaid = !isNumber && !isLighter && info.sentences.length > 0 && !tellable.includes(info.sentences[0]) && hasFiniteVerb(spokenTitle(s.title, info)) && eventsUnsaid(s.title, tellable).length > 0 && eventsUnsaid(s.title, info.sentences).length === 0;
+      const namesUnsaid = (!isNumber && unsaid.length >= 2 && unsaid.length * 2 >= (info.keep || []).length) || eventUnsaid;
       // (never on someone's words with nothing yet said about them: "“This is virtue signalling,” said Nigel Biggar." once
       // opened a story on a memorial's planning fight, Guardian 14 Oct)
       const quoteFirst = (t) => /^["“‘]/.test(String(t).trim());
-      const skipHeadline = first && !namesUnsaid && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && !quoteFirst(first) && wordCount(first) >= 6));
+      // (nor one that shares no word with the headline: "Coconut crabs, also known as Robber crabs, emerge at night…" once
+      // told "Crew searching for Amelia Earhart arrives" on NEWS IN 60, its news never said, round 5)
+      const sharesTitle = (t) => contentWords(t).some((w) => contentWords(s.title).some((x) => x.slice(0, 5) === w.slice(0, 5)));
+      const skipHeadline = first && !namesUnsaid && !BACKGROUND_OPEN.test(first) && (leadAfterIntro || restates(first, s.title) || sharesTitle(first)) && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && !quoteFirst(first) && wordCount(first) >= 6));
       let opener = spokenTitle(s.title, info);
       // the summary's first sentence cannot open ("It is hoped the prospective sale..."): a later one that tells the
       // news and stands on its own opens instead of the headline ("Conservationists have said they are planning to
@@ -2187,13 +2320,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         const score = (t) => titleShare(t) + names.filter((n) => t.includes(n)).length;
         // (a lede that ends on who said it reads whole: "..., experts have said.")
         const fitsOpener = (t) => wordCount(t) <= maxWords + 2 || (!quick && wordCount(t) <= maxWords + 5 && /,\s+(?:[\w’'-]+\s+){0,3}(?:said|says|say|have said|has said|warned|added)\.?$/.test(t)) || !!dropAside(t, maxWords + 1) || !!trimClause(t, maxWords + 1, 8, { keep: info.keep });
-        const tellsNews = (t) => selfStanding(info, t) && !echoes(t) && !asks(t) && !DEFINES.test(t) && !/\(/.test(t) && wordCount(t) >= 8 && fitsOpener(t) && titleShare(t) >= 2;
+        const tellsNews = (t) => selfStanding(info, t) && !BACKGROUND_OPEN.test(t) && !echoes(t) && !asks(t) && !DEFINES.test(t) && !/\(/.test(t) && wordCount(t) >= 8 && fitsOpener(t) && titleShare(t) >= 2;
         const best = !isNumber && !isLighter ? info.sentences.filter((t) => !used.has(t) && tellsNews(t)).sort((a, b) => score(b) - score(a) || info.sentences.indexOf(a) - info.sentences.indexOf(b))[0] : null;
         // (the sentence that tells the news, a little long, before a background one that fits: "The Trump administration is
         // suspending Microsoft, Adobe, and several other technology companies from a program..." over "H-1B visas are
         // designed for highly skilled positions...", TechCrunch 9 Oct)
         // (never in NEWS IN 60, whose sentences keep to its word budget)
-        const strongest = !isNumber && !isLighter && !quick ? info.sentences.filter((t) => !used.has(t) && selfStanding(info, t) && !echoes(t) && !asks(t) && !DEFINES.test(t) && !/\(/.test(t) && wordCount(t) >= 8 && titleShare(t) >= 2).sort((a, b) => score(b) - score(a) || info.sentences.indexOf(a) - info.sentences.indexOf(b))[0] : null;
+        const strongest = !isNumber && !isLighter && !quick ? info.sentences.filter((t) => !used.has(t) && selfStanding(info, t) && !BACKGROUND_OPEN.test(t) && !echoes(t) && !asks(t) && !DEFINES.test(t) && !/\(/.test(t) && wordCount(t) >= 8 && titleShare(t) >= 2).sort((a, b) => score(b) - score(a) || info.sentences.indexOf(a) - info.sentences.indexOf(b))[0] : null;
         const long = strongest && strongest !== best && score(strongest) >= (best ? score(best) + 2 : 3) ? (wordCount(strongest) <= maxWords + 6 ? strongest : trimClause(strongest, maxWords + 6, 8, { keep: info.keep })) : null;
         const alt = long ? pickSentence((t) => t === strongest) && long : best ? pickSentence((t) => t === best) : null;
         if (alt) opener = alt;
@@ -2201,7 +2334,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       }
       if (skipHeadline && !chosen) {
         // Never a pronoun as the first word of a story: the opener must say who or what.
-        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && selfStanding(info, t)))) || null;
+        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && selfStanding(info, t) && !BACKGROUND_OPEN.test(t)))) || null;
         // (the lead only: any other story opens on its first standing sentence below, and keeps its exchange; this
         // once freed the kept-back sentence of every story that could open on its summary, so THE CATCH, UNIT-8 ASKS
         // and WORLD NOW's added detail aired only where a headline opened)
@@ -2215,7 +2348,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // France's, its own news never told, Euronews 14 Oct; a story whose sentences never touch its headline opens on it)
         // (and never one that leans: "Inside those buildings, which total half a million square feet…" once opened a story on
         // GM's factory, TechCrunch 12 Oct)
-        opener ||= pickSentence((t) => selfStanding(info, t) && !quoteFirst(t) && titleShare(t) >= 1) || spokenTitle(s.title, info);
+        opener ||= pickSentence((t) => selfStanding(info, t) && !BACKGROUND_OPEN.test(t) && !quoteFirst(t) && titleShare(t) >= 1) || spokenTitle(s.title, info);
       }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;
@@ -2280,7 +2413,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // nobody saying them, "'It's definitely tight trying to budget on maternity leave'", BBC 14 Oct; a page's label
       // before a colon)
       // (the number of the day's too: "Our number of the day: £20m. Campaigners have claimed minister attempting to…", BBC 12 Oct)
-      if (opener && opener === spokenTitle(s.title, info) && (/^(?:The|A|An)\s+[^,.;]{2,60}?\s(?:that|which|who)\s/.test(opener) || /^["“‘']/.test(opener) || /:\s/.test(opener) || !hasFiniteVerb(opener) || /\b(?:have|has) (?:claimed|said|warned)\s+(?:the\s+)?\p{Ll}+\s+\p{Ll}+ing\b/u.test(opener))) {
+      if (opener && opener === spokenTitle(s.title, info) && (unsignedTitle(s.title) || /^(?:The|A|An)\s+[^,.;]{2,60}?\s(?:that|which|who)\s/.test(opener) || /^["“‘']/.test(opener) || /:\s/.test(opener) || !hasFiniteVerb(opener) || /\b(?:have|has) (?:claimed|said|warned)\s+(?:the\s+)?\p{Ll}+\s+\p{Ll}+ing\b/u.test(opener))) {
         // (nor one whose reported clause lost its verb: "Campaigners have claimed minister attempting to undermine 'Holiday
         // Hunger Bill'", BBC 12 Oct)
         // (one that fits the opener's breath: the IFS story once opened on a 49-word sentence this way, Guardian 12 Oct)
@@ -2382,6 +2515,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // ("Over 300 other people were wounded…" after the dead it was counting from, never told, ABC News 14 Oct)
         const leansBack = PRONOUN_START.test(t0) || POINTS_BACK.test(t0) || /^(?:[^,]{0,40}\s)?(?:those|these|such)\s+(?!(?:days|years|months|weeks|times)\b)[a-z]/i.test(t0.split(',')[0]) || /^[^,;]{0,30}\b(?:other|another|the remaining|the rest of the|the remainder)\s+(?:\d|[a-z]+)/i.test(t0) || /\b(?:something|anything) similar\b|\bthe same (?:thing|way|move|approach)\b|^Similarly\b/i.test(t0) || ANSWERS_BACK.test(t0) || ONE_OF_LIST.test(t0) || ASKS_BACK.test(t0.trim());
         if (leansBack && !said(info.prevOf.get(t0))) return null;
+        // (the coherence gate, server/coherence.js: "those questions", "the temporary shutdown", "a second attack", "also",
+        // a reporter's "here", "the witness" with nothing said before them: real news 12-16 Oct, round 5)
+        if (untold(t0, `${toldText} ${s.title}`, { prevSaid: said(info.prevOf.get(t0)) })) return null;
         // (and "the project", "the deal", "the move" with no project, deal or move yet said: "The project is intended to open
         // new markets…" once followed a sentence about Alberta's premier, its pipeline never told, ABC News 14 Oct)
         // (a picture or a post the page shows: "…says the chart is actually measuring requests…", The Verge 12 Oct)
@@ -2518,6 +2654,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           break;
         }
       }
+      // (the kept-back line is told after the story: it may lean only on what the story said, "One more line from the
+      // report: the department did not directly answer those questions." once followed a story that asked none, 14 Oct)
+      if (reserved && untold(reserved, `${[...parts].join(' ')} ${s.title}`, { prevSaid: used.has(info.prevOf.get(reserved)) && [...parts].join(' ').includes(String(info.prevOf.get(reserved)).slice(0, 30)) })) reserved = null;
       if (reserved && catchFor) {
         info.catchAnswer = { line: reserved, q: catchFor.q };
         asked.add(catchFor);
@@ -2591,12 +2730,17 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
               // Nasa picked him", BBC 12 Oct)
             ].filter((o) => o && !/\b(?:when|as|and|or|after|before|while|but|than|to|of|in|on|at|for|with|by|from|that|which|who|if|so)$/i.test(o) && !/^[\d.,]+$/.test(o));
             const restated = options.find((o) => !airedBefore(`${o}.`, aired)) || null;
-            const shapes = UNIT8_RESTATE.filter((x) => !unitShapes.has(x));
-            const shape = shapes.length ? pickLine(shapes, `${key}~u8n`, info) : UNIT8_RESTATE[0];
-            unitShapes.add(shape);
-            unitRestates++;
-            planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${shape}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
-            planned.push({ anchor: other(unit), text: next === number ? pickLine(NOVA_TO_NUMBER, `${key}~nn`, info) : pickLine(NOVA_THANKS, `${key}~nt`, info) });
+            // (after any story but the lead, nothing to restate is no exchange: "100 years. Recorded, with interest." / "Thanks,
+            // UNIT-8. That helps." is the bible's restatement, a note with nothing to restate only filler, COSMOS 12 Oct, round 5;
+            // after the lead the bible's exchange stays, a flat acknowledgement)
+            if (restated || slot === 'lead') {
+              const shapes = UNIT8_RESTATE.filter((x) => !unitShapes.has(x));
+              const shape = shapes.length ? pickLine(shapes, `${key}~u8n`, info) : UNIT8_RESTATE[0];
+              unitShapes.add(shape);
+              unitRestates++;
+              planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${shape}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
+              planned.push({ anchor: other(unit), text: next === number ? pickLine(NOVA_TO_NUMBER, `${key}~nn`, info) : pickLine(NOVA_THANKS, `${key}~nt`, info) });
+            }
           } else if (pid === 'cosmos' && slot === 'lighter' && anchor !== (idOf('B') === 'unit8' ? 'B' : partner)) {
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             planned.push({ anchor: unit, text: pickLine(UNIT8_LINES[info.kicker] || UNIT8_LINES.any, `${key}~u8`, info) });
@@ -2654,8 +2798,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // wildlife or a light one; on TECH BYTES every story is "light" by topic, so a security flaw or a court ruling
     // there gets its board too)
     if (program?.boards?.includes('known') && !inRoundup && !isNumber && !isLighter && !quick && (k === 0 || info.grave || info.breaking || (HARD_NEWS.has(info.kicker) && !info.curious && (!info.light || pid === 'tech-bytes')))) {
-      const known = knownPoints(info.sentences);
-      if (known.length >= 2) story.known = known;
+      // (a point that leans on one not on the board never goes up: "The last stint was in 2018 / The two were unharmed in
+      // the incident", 14 Oct)
+      const known = knownPoints(info.sentences.filter((x) => !['sequel', 'here', 'person'].includes(untold(x, `${s.title} ${info.sentences.join(' ')}`))));
+      // (never a story's plot as what we know: "War reduced Japan to zero / Two years have passed since then" went up for a
+      // TV series' trailer, Ars Technica 12 Oct)
+      const fiction = /\b(?:trailer|season|series|episode|film|movie|novel|sequel|remake|prequel|showrunner|premiere)\b/i.test(s.title) || ['CULTURE', 'GAMING'].includes(info.kicker);
+      if (known.length >= 2 && !fiction) story.known = known;
     }
     // FROM → TO: a figure the story itself says moved (it airs only if the presenter says both values)
     if (program?.boards?.includes('change') && !inRoundup && !isNumber) {

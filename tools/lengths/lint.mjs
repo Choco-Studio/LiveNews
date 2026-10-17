@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const { isFragment, hasFiniteVerb, SENTENCE_WORDS } = await import(path.join(here, '../../server/writer.js'));
 const { sentencesOfText, kindOf } = await import(path.join(here, 'measure.mjs'));
+const { untold } = await import(path.join(here, '../../server/coherence.js'));
 
 // a verb a sentence of news has: an auxiliary, a past form (regular, or one of the common irregular ones), a present
 // form in -s after its first word
@@ -60,10 +61,24 @@ export function lintEdition(ep, src = () => null, inside = []) {
   const max = (SENTENCE_WORDS[pid] || 22) + 2;
   const add = (cls, i, text) => out.push({ cls, seg: i, text: String(text).slice(0, 220) });
   const storySegs = segs.map((s, i) => ({ s, i })).filter((x) => x.s.type === 'story');
+  // the coherence gate's reading (server/coherence.js): what the edition has said of each story so far, and each source
+  // sentence's place in its source, so a line that leans on its own source sentence before it, said, is no flag
+  const toldOf = new Map();
+  const sourceOf = new Map();
+  const sourceSentences = (id) => {
+    if (!sourceOf.has(id)) {
+      const x = src(id);
+      sourceOf.set(id, x ? sentencesOfText(`${x.summary || ''} ${String(x.body || '').replace(/\n+/g, ' ')}`).map(keyOf) : []);
+    }
+    return sourceOf.get(id);
+  };
+  let lastStory = null;
   segs.forEach((s, i) => {
     const kind = kindOf(s, i, segs);
     if (kind === 'intro' || kind === 'outro') return;
     const lines = sentencesOfText(s.text);
+    const story = s.storyId || (s.type === 'chat' && kind !== 'signpost' ? lastStory : null);
+    if (s.storyId) lastStory = s.storyId;
     lines.forEach((t, j) => {
       const p = plain(t);
       if (BOILERPLATE.test(p)) add('boilerplate', i, p);
@@ -92,6 +107,19 @@ export function lintEdition(ep, src = () => null, inside = []) {
       const heard = prior && /(?<=[\p{Ll},;:]\s)\p{Lu}\p{Ll}+/u.test(prior);
       if (opener && kind !== 'in-their-words' && !heard && (LEANS.test(body) || STRANGER_REF.test(body))) add('leans', i, p);
       if (s.type === 'cross' && s.kind === 'restage' && /^(?:I agree|Yes|No|That|This|It|They|He|She|We did|Absolutely)\b/.test(p)) add('quote-context', i, p);
+      // a line lifted from a source that leans on what the programme never said ("those questions", "the shutdown",
+      // "a second attack", "also", "here", "the witness")
+      if (story && kind !== 'in-their-words' && !formula && !/\?\s*$/.test(p) && !(s.type === 'cross' && (s.kind === 'restage' || s.part === 'ask' || s.part === 'thanks'))) {
+        const told = (toldOf.get(story) || []).join(' ');
+        const sents = sourceSentences(story);
+        const k = keyOf(body);
+        const at = sents.findIndex((x) => x.length > 20 && (k.includes(x.slice(0, 40)) || x.includes(k.slice(0, 40))));
+        const prev = at > 0 ? sents[at - 1] : null;
+        const prevSaid = !!prev && keyOf(told).includes(prev.slice(0, 40));
+        const cls = untold(body, `${src(story)?.title || s.headline || ''} ${told}`, { prevSaid });
+        if (cls) add(`untold-${cls}`, i, p);
+      }
+      if (story) toldOf.set(story, [...(toldOf.get(story) || []), p]);
     });
     // a speaker's words in a presenter's voice: a sentence from inside a quotation, its quotation marks gone
     // ("It’s one of the biggest commitments in history for anything, ABC News reports.", Trump's words, 14 Oct); judged on

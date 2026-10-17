@@ -314,6 +314,7 @@
       ],
       "style": "Technology magazine show for grown-ups. Max reads the lead with interest, never hype; then THE CATCH: Ada asks the question viewers are thinking and Max answers it, both strictly from the summary. For every story say plainly what it means for ordinary people, only where the summary says so. Plain, adult register: no 'game-changer', 'revolutionary', 'mind-blowing', 'wow', exclamation marks or puns. Humour only in chats, aimed at hype and jargon, never at people.",
       "storyLength": "lead story 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; sentences average 10 to 15 words, never more than 22",
+      "storyCharsDeep": 640,
       "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says, and Max answers. They needle each other like old colleagues, deadpan, never cute. A first-name toss only before a question; \"Thanks, Max\" or \"Thanks, Ada\" at most once.",
       "headlineMax": 45,
       "intro": "teaser",

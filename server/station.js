@@ -84,6 +84,7 @@ export class Station {
     this.onAir = null;
     this.pinsDone = new Set();
     this.airMade = {}; // programme id -> air of its recent episodes (s), for the clock's estimates
+    this.airRecent = {}; // programme id -> the air of its last few episodes (s), for a run planned before a mark
     this.pinOf = new WeakMap(); // a queued episode the clock placed -> its mark
     this.owed = []; // rotation programmes the clock passed to fit one before a mark: made next, in order
   }
@@ -130,6 +131,18 @@ export class Station {
     if (this.airMade[programId]) return this.airMade[programId];
     const t = channel.programs[programId]?.targetSeconds;
     return Array.isArray(t) ? (t[0] + t[1]) / 2 : 300;
+  }
+
+  /**
+   * A programme's length as a run before a mark must allow for it: halfway between its estimate and the longest of its
+   * last four episodes. An edition as long as the news allows is short one day and long the next: TECH BYTES ran 127 s
+   * and 470 s on 12-16 Oct, and a run planned on the average of short ones put a 400 s edition three minutes before the
+   * half hour, NEWS IN 60 271 s late. Planned on the longest alone, the bulletin went 210 s early instead; halfway, the
+   * replays of rounds 3-4 keep it within 192 s of its mark both ways (tools/lengths/clock.mjs).
+   */
+  airBefore(channel, programId) {
+    const est = this.airEstimate(channel, programId);
+    return (est + Math.max(est, ...(this.airRecent[programId] || []))) / 2;
   }
 
   /**
@@ -211,7 +224,7 @@ export class Station {
     // jumps ahead of the rotation costs 45 s, so the order only changes for a real gain. Re-planned at every choice.
     const { adsPerBreak = 2, minProgrammeBetween = 0 } = channel.breaks || {};
     const len = (id) => {
-      const air = this.airEstimate(channel, id);
+      const air = this.airBefore(channel, id);
       return air + breakAir({ ads: air < minProgrammeBetween ? 1 : adsPerBreak }); // the programme and the break after it
     };
     const pool = cands.slice(0, 5);
@@ -340,6 +353,7 @@ export class Station {
         this.lastMade = programId;
         const air = episodeAir(episode);
         this.airMade[programId] = this.airMade[programId] ? 0.5 * this.airMade[programId] + 0.5 * air : air;
+        this.airRecent[programId] = [...(this.airRecent[programId] || []), air].slice(-4);
         if (choice?.mark) this.pinOf.set(episode, choice.mark);
         this.queue.push(episode);
       } catch (err) {

@@ -178,11 +178,16 @@ export function questionLine(e, seed, question = null, turn, { grave = false } =
 }
 
 /** The presenter's follow-up, fitted to what the answer says: what comes next, else what else matters. */
+// (round 5: "Clara, what comes next?" was answered by a quotation's "We will…", and "when will we know more?" by an answer
+// with no date in it: what is ahead is judged outside quotation marks, and "when" only where the answer dates it)
+const DATED = /\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|next (?:week|month|year)|later this (?:week|month|year)|by (?:the end of )?\d{4}|in \d{4}|within \d+ (?:days|weeks|months))\b/;
 export function followLine(e, seed, answer = '', turn) {
-  const list = AHEAD.test(answer)
-    ? [`And ${e.first}, what happens next?`, `${e.first}, what comes next?`, `What should we watch for, ${e.first}?`, `And what comes after that, ${e.first}?`, `${e.first}, when will we know more?`, `So what happens now, ${e.first}?`]
+  const plainAnswer = String(answer).replace(/“[^”]*”|"[^"]*"/g, ' ');
+  const ahead = AHEAD.test(plainAnswer);
+  const list = ahead
+    ? [`And ${e.first}, what happens next?`, `${e.first}, what comes next?`, `What should we watch for, ${e.first}?`, `And what comes after that, ${e.first}?`, ...(DATED.test(plainAnswer) ? [`${e.first}, when will we know more?`] : []), `So what happens now, ${e.first}?`]
     : [`${e.first}, what else should people know?`, `And what else stands out, ${e.first}?`, `${e.first}, anything else we should know?`, `What else is worth knowing, ${e.first}?`, `And ${e.first}, what else is in the detail?`, `${e.first}, is there more to it?`];
-  return choose(list, seed, turn, AHEAD.test(answer) ? 'ahead' : 'more');
+  return choose(list, seed, turn, ahead ? 'ahead' : 'more');
 }
 
 /** The presenter's thanks. */

@@ -271,7 +271,11 @@ function capFirst(s) {
 
 /** The presenter's hand-over to the recreation, stating where the words come from (WAVE3 §6.3). */
 export function provenanceLine(booking, outlet, seed = '') {
-  const role = String(booking.role || 'speaker').replace(/^(?:the|a|an)\s+/i, '');
+  // (a role that opened its sentence keeps no capital: "Computer scientist Raphael Wimmer" once aired as "Raphael Wimmer, the
+  // Computer scientist", The Verge 12 Oct, round 5; a people's name keeps it, "Ukrainian president")
+  const role = String(booking.role || 'speaker')
+    .replace(/^(?:the|a|an)\s+/i, '')
+    .replace(/^(\p{Lu})(\p{Ll}+)(?=\s+\p{Ll})/u, (w, a, b) => (/(?:an|ese|ish|i|ch)$/.test(b) ? w : a.toLowerCase() + b));
   // (a role that has its own determiner keeps it: "Elgin’s President", "Ukrainian President" takes "the")
   const det = /^[\p{L}.-]+['’]s\s/u.test(role) ? '' : 'the ';
   const end = booking.name ? (booking.role ? `${booking.name}, ${det}${role}` : booking.name) : `${det}${role}`;

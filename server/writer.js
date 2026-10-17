@@ -425,6 +425,14 @@ function clip(textValue, max) {
 }
 
 // Shorten at a word boundary, without ellipsis (for short labels).
+// A quote card's speaker is never cut inside the name: "NASA Administrator Jared Isaacman" once showed as "NASA
+// Administrator Jared" (NASA 14 Oct). Words come off the front, where the role is, and the name stays whole.
+export function clipSpeaker(value, max = LIMITS.by) {
+  const toks = clean(value, 400).split(/\s+/).filter(Boolean);
+  while (toks.length > 1 && toks.join(' ').length > max) toks.shift();
+  const t = toks.join(' ');
+  return t.length <= max ? t : null;
+}
 function clipWords(value, max) {
   const t = clean(value, 400);
   if (t.length <= max) return t;
@@ -1087,6 +1095,13 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     const head = t.slice(0, at).trim().replace(/\s*[–—]$/, '');
     const n = head.split(/\s+/).length;
     if (n > max || n < min) continue;
+    // never on a word that cannot end a clause: "…to Europe's biggest conservation charity, a move that will[, it is hoped,
+    // secure…]" once aired as "…, a move that will." (ABC News 14 Oct, NEWS IN 60, round 5)
+    if (/\b(?:a|an|the|that|which|who|whom|whose|to|of|will|would|can|could|may|might|must|shall|should|is|are|was|were|be|been|being|has|have|had|do|does|did|and|or|but|its|their|his|her|our|my|your|with|for|from|by|than|very|not)$/i.test(head)) continue;
+    // nor on a clause after a dash that has no verb yet: "Bedbugs causing travel chaos is not unusual - less than two weeks
+    // ago[, several Southeastern train services… were cancelled…]" (BBC 12 Oct, round 5)
+    const dashTail = head.split(/\s[-–—]\s/).at(-1);
+    if (dashTail !== head && !hasFiniteVerb(`X ${dashTail}`)) continue;
     // never inside a quotation or a parenthesis ("a bid for a “partial[, progressive return to lessons”]"), nor inside an
     // aside between dashes ("four friends – Hannah, played by Dunham, Marnie[, played by Williams… – living in…]")
     if (unbalanced(head)) continue;
@@ -1122,6 +1137,10 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // nor a noun that waits for its "when" or "where": "…cost his department £20m a year at a time[ when budgets are
     // stretched]" (BBC 12 Oct, aired as "…at a time.")
     if (/\b(?:at a time|at the time|at a moment|at the moment|a time|a period|a point|the point|the stage|the place|the day|the year|the moment)$/i.test(head) && /^\s*(?:when|where|while)\b/i.test(t.slice(at))) continue;
+    // never the predicate of what someone said: "Poland's Prime Minister Donald Tusk said a man accused of plotting an
+    // assassination attack against him[ and his defence minister has been detained]" (round 5, aired without its verb)
+    const saidWhat = head.match(/\b(?:said|says|told|announced|confirmed|reported)\s+(?:that\s+)?(.+)$/i);
+    if (saidWhat && !/\b(?:is|are|was|were|has|have|had|will|would|can|could|may|might|must|should|did|does|do)\b/i.test(saidWhat[1]) && /\b(?:is|are|was|were|has|have|had|will|would|can|could|may|might)\b/i.test(t.slice(end))) continue;
     // never a name the story is about: "...violated a woman’s Fourth Amendment rights [when using Flock to search
     // for her license plate]" under "Federal judge calls Flock ‘indiscriminate mass surveillance’" (4 Oct)
     if (keep.some((k) => t.includes(k) && !head.includes(k))) continue;
@@ -1710,7 +1729,7 @@ function normalizeNumbers(list, source) {
     if (!label || !claimGrounded(`${value} ${label}`, source)) continue;
     if (out.some((o) => o.value === value)) continue;
     // The qualifier is the source's ("about 1.2 million" stays ABOUT), whatever the writer sent.
-    const qualifier = sourceQualifier(value, source);
+    const qualifier = sourceQualifier(value, source, label);
     out.push({ value, label, ...(qualifier && QUALIFIERS.includes(qualifier) ? { qualifier } : {}) });
     if (out.length >= MAX_NUMBERS) break;
   }
@@ -2364,7 +2383,7 @@ export function normalizeBulletin(
     if (d.next && main && d.feature !== 'lighter' && saysWhen(text, d.next.when)) out.next = d.next;
     const who = d.who && main && d.feature !== 'lighter' ? d.who.filter((p) => saysPerson(text, p.name)) : null;
     if (who?.length >= 2) out.who = who;
-    if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipWords(d.quote.by, LIMITS.by) : null };
+    if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipSpeaker(d.quote.by, LIMITS.by) : null };
     if (d.map && !inRoundup) out.map = d.map;
     if (d.feature) out.feature = d.feature;
     if (inRoundup) out.roundup = d.roundup;
