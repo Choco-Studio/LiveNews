@@ -688,13 +688,200 @@ person's illness, or read sad on air.
 
 **Round 4: 9.8**
 
+## Round 5: the desk's own list, and the panel again
+
+Round 4 was merged at 9.8 (ad18e7c). Since then main gained the cleared-pictures desk (ca5155c): a compact rights
+record on every picture (`imageRights`), the locator and topic boards for a story without a picture, and outlet photos
+only in a private preview. The coordinator's round 5 came from this desk's own list. The verbatim limit stays the
+writer team's and is not counted against this desk, but it is reported where it bites.
+
+### What was asked, and what was done
+
+1. **WORLD WEATHER's map shots in vertical** (they were a window on the horizontal frame, and "MEXICO C…" was cut).
+   - They are now composed again for the stage by the weather centre's own code (`drawWeatherVertical`, `vertical.md`
+     §3.6): the world, each zone and the warning.
+   - Every word is inside x 8–188 and the stage, checked word by word on the world, three zones and the warning, frame
+     by frame.
+   - The world camera follows the voice. It opens on the first place named and pans to each place, high or low named
+     next, and the one being named is lit in the column.
+   - The cause of the crop was found too. `weatherView` read `ST.shot.shot` (the shot is a string), so it always
+     reported no shot. The world graphic fell through to a window at the wall presenter's mark, and the close-up's
+     window was centred on the wall presenter, not the close-up's.
+   - The world time-lapse is a clip moment of its own (`weather-map`, THE NEXT 24 HOURS).
+2. **The article cache** (`server/articlecache.js`, `verbatim.md` §4).
+   - The archive keeps, beside each story it records, the text the news desk already read: the article (at most
+     2,400 characters), or else the feed's full text (`content:encoded`).
+   - Text only, at most 6,000 characters, expired after 14 days, written when the episode telling the story is made.
+     Nothing is fetched for it.
+   - `archiveGetStory` reads it, so the factory, the upload, the publisher, the re-check and the posts writer all
+     measure against it.
+   - **Reported plainly:** the news desk's article reader does not consult robots.txt or terms. The cache adds no
+     reading, but it keeps what was read. `ARTICLE_CACHE=off` and a feed's `"cache": false` switch it off, and keeping
+     the extracts is item 11 of the lawyer's list (`compliance.md` §9).
+3. **The re-check of what waits** (`recheck.js`, `tools/publish/recheck.mjs`, `pipeline.md` §4.1).
+   - Each publisher round first runs the gate again on everything pending, approved or scheduled. It runs against the
+     current rules, the register, the archive and articles as they are now, and each picture's record judged again
+     under today's licence terms (`rights.js` `rejudge`, which never clears what was not cleared).
+   - What no longer passes is held, its slot given back. The approval page says *Retenido al revisarlo otra vez antes
+     de publicar*, with each reason in Spanish.
+   - An item the re-check held that passes again goes back to the owner, never straight out.
+4. **Pictures in clips** (`vertical.md` §3.7).
+   - The credit is drawn in the tall frame wherever a picture or a link's file footage is on the stage. Before this
+     round a vertical clip carried **no credit at all**, because the horizontal graphics draw the credits and a
+     vertical master does not draw them.
+   - A story with no picture gets its locator or topic board, prepared for the tall backdrop.
+   - A moment that shows a picture not cleared, or any moment of a private preview, is never chosen or queued
+     (`markUncleared`), even with `--all`. A whole-programme upload with one is not queued either.
+5. **The first real FULL TIME edition:** see the end of this round.
+
+### What ran
+
+- WORLD WEATHER (13:20, demo data) in vertical, every moment, the master kept: four clips, including the new world
+  time-lapse. They are never queued: the gate refuses demo data, as it should.
+- COSMOS DESK (17 Oct, 07:30) made into a **demo edition with pictures**, because the offline material carries none.
+  The pictures are the repository's own fixture art (`config/fixtures/img`), served by the factory's new `--pictures`,
+  with DEMO credits. It was recorded three ways, so that every case reaches the stage:
+  - the montage's teased stories without pictures (a place, and a story without a place);
+  - a cleared FILE picture on a teased story (the headline frame's credit);
+  - a cleared picture with a credit long enough to wrap, on the story the director shows full frame, and an outlet
+    photo not cleared on a teased story, as a private preview would carry.
+
+  In each run the factory refused the two moments that show the uncleared photo. It queued none of the others,
+  because they copy their sources (the writer team's limit) or are not light.
+
+  COSMOS DESK's director showed a full-frame picture for only one story in each run. Most of its stories stay on
+  their map or their reader, whatever the picture, so the full-frame credit was judged on that one story.
+- The re-check on a copy of round 4's queue (35 items, the real module), then again with a demo copyright takedown in a
+  scratch register.
+- The 4x sheets, with the platforms' covered zones tinted.
+
+### First pass: what the panel found
+
+**Standards editor.**
+
+1. **A takedown did not hold the clips made from the story.** The re-check's first run with a demo copyright takedown
+   on one of PAY ATTENTION's question stories checked 35 items, and all 35 passed. The gate read the register only for
+   the episode's story list, and a quiz episode has none: its questions carry their stories. Also, the factory, the
+   posts and the upload never gave the gate the register at all.
+2. **No credit on any vertical clip.** The cleared-pictures desk draws each picture's credit in the horizontal graphics,
+   and a vertical master draws no horizontal graphics.
+3. **The article reader does not honour robots.txt.** Item 2 asked the cache to respect it "exactly as the existing
+   readers do". They do not consult it. Nothing new is read for the cache, but keeping the text is a new copy.
+
+**Pixel artist.**
+
+4. **The first vertical credit was in the micro face**, below the compliance desk's own floor for a vertical label (the
+   body face, 35 px on 1920).
+5. **The locator's name covered its own dot.** At 216 px there is no room either side of a place at the column's
+   middle for "CALIFORNIA, USA". The name was pushed back over the dot.
+6. **A white tick on the world's clock plate.** The named city's bracket corner was drawn over the clock (after HOURS).
+
+**Senior broadcast director.**
+
+7. **The close-up's window was centred on the wrong man** (the wall presenter's mark, not the close-up's), the same
+   `weatherView` fault as item 1 of the brief.
+
+**Platform growth specialist.**
+
+8. **The world time-lapse, the weather's most watchable minute, was never a clip.**
+
+**Standards editor, on robustness.**
+
+9. **A long-running publisher measured against a stale archive.** It read the archive's stories once per process.
+
+**Standards editor, on PAY ATTENTION.**
+
+10. **PICTURE THIS's pictures were never checked.** The gate counts a picture only on a segment flagged `hasImage`. A
+    quiz question's picture comes from the archive and carried no rights record at all, so no check ever saw it. In a
+    private preview, where the archive offers outlet photos, an outlet's photo could have gone out in a quiz clip.
+
+### Fixes after the first pass
+
+- **1.** `preflight` reads the register on the item's own stories (`storyIds`: a clip's, a post's), once per story.
+  The publisher's gate view, the factory, the posts and the upload all pass it, with the register. The same takedown
+  now holds five items: the question on four networks, and its round. A test covers a quiz clip, a post, and a news
+  clip counted once.
+- **2, 4.** `drawVerticalCredit`: FILE (FILE 2023, PHOTO) and the credit in the body face, white and silver on black.
+  It sits under the source plate inside the safe column, wrapped at whole parts and words and never cut, with PREVIEW ·
+  NOT CLEARED in yellow under it in a preview. A test checks the column, the face, the plates, and every letter of a
+  long credit at three widths.
+- **3.** Reported, not hidden. The switches are added, and the lawyer's list has the question. Whether the reader
+  should honour robots.txt is the news desk's and the lawyer's call.
+- **5.** `locator.js` `placeLayout`: with no room either side, the name goes under the dot. A test checks that the dot
+  is never under its name.
+- **6.** The vertical maps reserve their plates first and draw them again last, so nothing lands on them.
+- **7.** `weatherView` reports the shot, and the close-up's own presenter for the close-up.
+- **8.** `weather-map`: THE NEXT 24 HOURS / AROUND THE WORLD.
+- **9.** The archive is rebuilt at each round's start (`Publisher.recheck()`).
+- **10.** The quiz desk carries the archived picture's rights record onto the question (`desk.js`, `rounds.js`). The
+  compliance audit counts a PICTURE THIS picture like any other (`credits.js` `auditItem`), and the factory refuses a
+  moment that shows one without a cleared record. A local fixture's own file is the operator's, as before.
+
+### Second pass: the sheets, the re-check, the queue
+
+**The 4x sheets** (the channel's pixel at 4x; the platforms' covered zones tinted red):
+
+- `vertical-4x-weather-maps.png` shows:
+  - the world opening on the low near Greenland and panning to the high over Siberia, lit in the column;
+  - the weather-map clip as delivered, its hook (THE NEXT 24 HOURS / AROUND THE WORLD) over the title band;
+  - North America with MEXICO CITY whole; South America; Europe; Africa and the Middle East; Asia; Oceania;
+  - the warning panel centred under the storm;
+  - the close-up's window for comparison.
+- `vertical-4x-pictures.png` shows:
+  - the locator (CALIFORNIA, USA, its name under the dot) and the topic board (HEALTH) behind the montage's headline;
+  - a cleared FILE picture in the headline frame with its credit (FILE · DEMO PHOTOGRAPHER · CC BY-SA 4.0 ·
+    PIXELATED, on two lines);
+  - the same frame with an outlet photo: PHOTO · BBC SCIENCE and PREVIEW · NOT CLEARED;
+  - a full-frame picture with the long credit wrapped in three lines under the source, whole.
+- `approval-recheck-held.png`: a card the re-check held, with its reason in Spanish and the register's own message
+  under it.
+
+In every frame, every word is inside x 8–188 and above row 300. Under the tint there is only map, picture or ground.
+
+**The re-check** on round 4's queue (the real module): 35 checked and 35 still pass, as nothing had changed. With the
+demo takedown: 5 held, each with "Hay un aviso en el registro…". Nothing was scheduled or sent.
+
+### The final table
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Clip quality | 9.8 | Under the verbatim rule the offline material still gives no news clip (the writer team's: `verbatim.md` §5). The weather's clips are demo data, never queued. A clip can still open on a board's first wiping frames |
+| Vertical design | 9.8 | The weather's maps are composed natively, without the presenter (the close-up keeps him). Pictures and their credits are proven on a demo edition (fixture art, DEMO credits), not on real cleared pictures. A montage headline past four lines drops to 1x |
+| Text posts | 9.8 | The article cache is in place and tested, but it fills only as the channel airs with this code: today's posts still carry no aired line. A five-word aired headline under the six-word floor still passes as the channel's |
+| Pipeline robustness | 9.8 | The re-check holds what changed while waiting, and takedowns reach quiz clips. The gate audits pictures across the whole episode, so one uncleared picture holds every clip of its episode (on the safe side). The live supervisor is proven into files only |
+| Compliance integration | 9.8 | Credits in vertical, the register on every item, licences judged again, uncleared pictures never queued. The article reader does not honour robots.txt (the lawyer's list, item 11). C2PA signing is not set up |
+| Tests | 9.8 | 136 publishing tests (131 in round 4), plus the article cache, the register on an item's stories and the config switch. Rendering is still judged by eye on the sheets: the stray bracket on the clock and the name over the dot were seen there first |
+
+**Round 5: 9.8**
+
+### After the merge with the pictures desk's round 8
+
+The coordinator's branch gained the pictures desk's round 8 during this round (984cadf). Its topic board shows the
+story's own figure, quote, actor or topic, where round 7 showed a glyph, and its geometry is the horizontal frame's
+(right-aligned to x 365, rows 74–123). The merge keeps that board as it is on air. It adds a `frame` option, so the
+vertical headline frame sets the same board in the safe column: right-aligned to x 184, between rows 30 and 112 of
+the backdrop, above the tallest headline plate. A description that does not fit the narrow box is left out rather than
+cut. The vertical test now draws a figure, a quote, an actor and a section tile in the tall frame. It checks that every word
+is in the column and that the board stays above the headline. `vertical-3x-topic-boards-round8.png` shows the four
+in the headline frame (the topic board on `vertical-4x-pictures.png` is round 7's, drawn before the merge).
+
+### FULL TIME's first real edition: not yet
+
+The real weekend results reach the archive with the sport snapshots of 17 Oct at 18:40 UTC and 18 Oct at 17:50 UTC.
+When this round ended (17 Oct, before 18:40 UTC), neither was in. `data/sport-snapshots` held only the three of 13 Oct,
+and today's archive held no FULL TIME story. So no real FULL TIME edition went through the factory this round. Its
+vertical boards are proven on the sport lab's cases and round 4's demo edition only. When a snapshot lands, the
+edition is made from it (`tools/sport/edition.mjs <snapshot> <air time> <out>`). It then goes through the factory in
+vertical with every moment and the master kept (`--formats vertical --all --keep-masters --no-queue`), and is judged
+on a 4x sheet before any of its clips is approved.
 
 ---
 
 ## Notes for the compliance desk (integration)
 
 The publishing desk calls the compliance desk only through `server/publish/compliance.js`. The two branches met on
-17 Oct 2026 (bb7df4f), and the desk loads the real module. The five points, the first two settled in round 4:
+17 Oct 2026 (bb7df4f), and the desk loads the real module. The first two points below were settled in round 4, and
+the last two were added in round 5:
 
 1. **The vertical picture is composed again, not cropped** (settled in round 4). The factory and the publisher pass
    `frame: { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } }`.
@@ -715,6 +902,15 @@ The publishing desk calls the compliance desk only through `server/publish/compl
 5. **Text posts open with "AI-generated:".** The queue keeps that prefix through the owner's edits, and the stub and
    the real `preflight` both refuse a post without it. `EDITORIAL_CONTACT` and `EDITORIAL_RESPONSIBLE` must be set, or
    the real `preflight` refuses everything. The owner's guide (`docs/publishing/setup.md` §4) lists them.
+6. **The register on an item's own stories** (round 5, in `server/compliance/index.js` `preflight`). An item may carry
+   `storyIds`, the stories it tells, and each is checked with `isBlocked({ storyId })`. A story the episode also lists
+   is skipped, since `checkClip` reads it there. Without this, a takedown of a story never reached a quiz clip (its
+   episode lists no stories) or a text post. The publishing desk passes `storyIds` and the register from the factory,
+   the posts, the upload, the publisher and the re-check.
+7. **Picture records judged again** (round 5, `server/rights.js` `rejudge`). The re-check rebuilds each cleared compact
+   record with `rightsRecord` under today's `LICENCES` and keeps the stricter verdict. A record that was not cleared is
+   never cleared again. `credits.js` `pictureRecord` then reads the result as before. `auditItem` now also counts a
+   PICTURE THIS question's picture (`seg.quiz.question`, with the `imageRights` the quiz desk copies from the archive).
 
 ## What remains before launch
 
@@ -734,27 +930,25 @@ The publishing desk calls the compliance desk only through `server/publish/compl
 
 5. C2PA signing set up (`c2patool` and a signing identity). The compliance module is merged; notes 1 and 2 above are
    settled.
-6. Real pictures in the stories (the cleared-pictures desk). Offline, the light stories show the studio, boards and maps
-   only, and a story clip would hold better with its picture.
+6. Real cleared pictures through the factory (the cleared-pictures desk's are merged; the offline material carries
+   none). The vertical credit, the boards and the never-queued rule are proven on a demo edition only.
 7. **The writer composing its own sentences** (`verbatim.md` §5, the writer team's). Until it does, the verbatim
    rule holds most news: on 17 Oct 10 of COSMOS DESK's 11 stories broke it (12 of WORLD NOW's 13, all 6 of NEWS IN
    60's, 10 of SEVEN DAYS' 15), so the factory made no COSMOS DESK clip and its upload is held. PAY ATTENTION, whose
    questions are quoted and credited, is unaffected.
-8. The articles' cache (`data/compliance/articles`, the compliance desk's audit). Until it is filled, a text post
-   carries no line of the channel's aired text, because no aired sentence can be checked against the article it may
-   come from: a post is the channel's label and the outlet's headline cited.
-9. The writer's kickers and map places: on 17 Oct the channel said VOLCANO for black-hole "eruptions", JUSTICE · USA for
-   a trial in Mexico and EDUCATION for a school shooting. This desk leaves out any label a story's own words do not
-   bear out, but the channel aired them.
+8. Whether the news desk's article reader should honour robots.txt and each outlet's terms, and whether the article
+   cache may keep its extracts (`compliance.md` §9, item 11). The cache keeps only what the reader read, and can be
+   switched off (`ARTICLE_CACHE=off`, a feed's `"cache": false`).
+9. The writer's kickers and map places: on 17 Oct the channel said VOLCANO for black-hole "eruptions" (fixed in
+   `topics.js` since), JUSTICE · USA for a trial in Mexico and EDUCATION for a school shooting. This desk leaves out any
+   label a story's own words do not bear out, but the channel aired them.
 
 **This desk's, next:**
 
-10. WORLD WEATHER's map shots in the vertical picture (each continent's map and the "graphic" world map): a window on
-    the horizontal frame whose labels can reach the feeds' right band and be cut at the edge. Not a moment the
-    factory picks yet.
-11. FULL TIME's first real edition (when the weekend's results are in the archive) through the factory and judged in
-    vertical before its clips are approved. Until then its four vertical boards are proven on the sport lab's cases
-    and a demo edition.
-12. A re-gate of the queue (`tools/publish`): a clip queued before a rule changed is checked again only when it is
-    published.
+10. FULL TIME's first real edition through the factory and judged in vertical before its clips are approved (see
+    round 5's last note).
+11. The article cache's first days on air: measure how many aired stories it covers and how many posts then carry an
+    aired line.
+12. A clip-scoped picture audit at the gate (today one uncleared picture anywhere in an episode holds all its clips; the
+    factory already scopes its own refusal to what a moment shows).
 13. After two weeks of numbers (`plan.md` §7), the weights of the kinds of moment (`moments.js` `KIND_BASE`).

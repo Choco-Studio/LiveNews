@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// The publisher's round (server/publish/publisher.js): give every approved item its time, then publish what is due,
+// The publisher's round (server/publish/publisher.js): the gate again on everything waiting (recheck.js: what no
+// longer passes is held), then give every approved item its time, then publish what is due,
 // each through the compliance gate again, the C2PA mark and its network's adapter. A DRY RUN unless all five
 // switches are on (docs/publishing/setup.md §7); the outbox (data/publish/outbox.jsonl) says what was sent, or would
 // have been, and which switch was off.
@@ -21,6 +22,10 @@ let clock = at ?? Date.now();
 const now = () => clock;
 const queue = new PublishQueue({ dir: path.resolve(opt('queue', path.join(root, 'data', 'publish'))), now });
 const publisher = new Publisher({ queue, now, dataDir: path.join(root, 'data'), log: (m) => console.log(m) });
+// the gate again on everything waiting, before anything is scheduled (tools/publish/recheck.mjs does this alone)
+const re = publisher.recheck();
+console.log(`re-check: ${re.checked} waiting · ${re.held.length} held now${re.released.length ? ` · ${re.released.length} back to the owner` : ''}`);
+for (const it of re.held) console.log(`  held  ${it.platform.padEnd(9)} ${it.title} · ${(it.compliance?.violations || []).map((v) => v.rule).join(', ')}`);
 const scheduled = queue.schedule(now());
 console.log(`${scheduled.length} newly scheduled · compliance: ${usingStub ? 'the stub (dry run only)' : 'the real module'}`);
 let due = queue.due(now());

@@ -10,12 +10,16 @@
 //
 //   drawVerticalWeatherBoard(ctx, t, board, state, box) -> true when it drew (state: the weather centre's own,
 //   scenes/weather/index.js weatherView: { since, spoken: Map(id -> t), hot, hotAt, done, anySaid })
+//
+// The map shots (the world, a zone, a warning) are composed by the weather centre itself at the stage's size
+// (scenes/weather/index.js drawWeatherVertical); only the close-up is a window on the horizontal frame.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { tempColor } from '../scenes/weather/field.js';
 import { drawIcon } from '../scenes/weather/icons.js';
-import { weatherView } from '../scenes/weather/index.js';
+import { weatherView, drawWeatherVertical } from '../scenes/weather/index.js';
 import { groundOf } from './vertical.js';
+import { VW, SAFE } from './layout.js';
 
 const easeOut = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : 1 - (1 - u) ** 4);
 const clamp01 = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u);
@@ -190,8 +194,9 @@ export function drawVerticalWeatherBoard(ctx, t, board, state, box) {
 }
 
 /**
- * Give the vertical compositor its weather stage: the board set again when one is up, else the horizontal frame's
- * window centred on the presenter (he stands at either side of the wall, never in the middle).
+ * Give the vertical compositor its weather stage: the board set again when one is up; the world, a zone or a warning
+ * composed again at the stage's size (scenes/weather/index.js drawWeatherVertical: the map the stage's full width,
+ * every word in the safe column); the close-up, the horizontal frame's window centred on the presenter.
  */
 export function installWeather(comp) {
   comp.weather = (t, scene, box) => {
@@ -201,7 +206,8 @@ export function installWeather(comp) {
       comp.ctx.drawImage(groundOf(box.w, box.h), box.x, box.y);
       return drawVerticalWeatherBoard(comp.ctx, t, v.board, v.state, box);
     }
-    if (Number.isFinite(v.presenterX) && v.shot !== 'mcu' && v.shot !== 'graphic') {
+    if (drawWeatherVertical(comp.ctx, t, { x: 0, y: box.y, w: VW, h: box.h }, { x0: SAFE.x, x1: SAFE.right })) return true;
+    if (Number.isFinite(v.presenterX)) {
       comp.middle(scene, v.presenterX);
       return true;
     }

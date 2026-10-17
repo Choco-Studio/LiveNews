@@ -359,6 +359,31 @@ export function airable(story, { mode = 'cleared' } = {}) {
   return mode === 'preview';
 }
 
+/**
+ * A compact record judged again under today's terms (LICENCES and the rules above, which a lawyer's reading can
+ * tighten): what a clip waiting in the publishing queue is checked against before it goes out (server/publish/
+ * recheck.js). Never more than it was: a record that was not cleared stays not cleared (the compact form does not
+ * carry every reason it had, an image generator's mark among them). -> a compact record
+ */
+export function rejudge(compact, { now = Date.now() } = {}) {
+  if (!compact || typeof compact !== 'object') return compact;
+  if (!compact.cleared) return compact;
+  const again = compactRights(rightsRecord({
+    source: compact.source,
+    licence: compact.licence,
+    author: compact.author,
+    page: compact.page,
+    url: compact.url,
+    restrictions: compact.restrictions || [],
+    label: compact.label,
+    year: compact.year ?? null,
+    checkedAt: (typeof compact.checkedAt === 'number' ? compact.checkedAt : Date.parse(compact.checkedAt)) || now,
+    localOk: compact.source === 'operator',
+  }));
+  if (again.cleared) return compact;
+  return { ...compact, cleared: false, why: `${again.why || 'not cleared'} (judged again ${new Date(now).toISOString().slice(0, 10)})` };
+}
+
 /** The compact form an episode, the archive and the client carry (what a description or an audit needs). */
 export function compactRights(record) {
   if (!record) return null;

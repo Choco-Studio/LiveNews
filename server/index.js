@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config, configWarnings, ROOT } from './config.js';
 import { findPlaces } from './gazetteer.js';
 import { NewsDesk } from './news.js';
+import { ArticleCache } from './articlecache.js';
 import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
@@ -97,7 +98,18 @@ const audit = (entry) => {
 // desk has let go keeps its picture for the weekly
 // (pictures: an archived picture airs again only with its cleared rights record; the outlet photos of older entries
 // stay in a private preview)
-const archive = new Archive({ dir: path.join(config.dataDir, 'archive'), pictures: config.pictures.rights });
+// the article cache: what the news desk already read for each story it airs (never a fetch of its own), except the
+// feeds marked "cache": false
+const uncachedFeeds = (() => {
+  try {
+    const doc = JSON.parse(fs.readFileSync(config.feedsFile, 'utf8'));
+    return new Set((Array.isArray(doc) ? doc : doc?.feeds || []).filter((f) => f?.cache === false).map((f) => f.name));
+  } catch {
+    return new Set();
+  }
+})();
+const articles = config.articleCache ? new ArticleCache({ dir: path.join(config.dataDir, 'compliance', 'articles'), skip: (s) => uncachedFeeds.has(s?.source) }) : null;
+const archive = new Archive({ dir: path.join(config.dataDir, 'archive'), pictures: config.pictures.rights, articles });
 newsDesk.archive = archive;
 const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk });
 // (DRAFTS_ON_AIR: a draft programme on air for a test or a recording, never the official line-up)

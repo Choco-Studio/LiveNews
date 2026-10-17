@@ -13,6 +13,10 @@ The publishable clips go to the queue, waiting for the owner. Everything is a dr
 
     node tools/publish/factory.mjs --episode <episode.json> --out <dir> [--formats vertical,horizontal] [--max 6]
          [--moments <id,id>] [--all] [--queue data/publish] [--keep-masters] [--parallel] [--seconds n]
+         [--pictures <dir>]
+
+`--pictures` serves the episode's pictures (`<storyId>.jpg|png|webp`) to the recorder, so its clips show them as they
+aired, with their credits.
 
 `tools/publish/material.mjs` makes episodes from the archive offline, with recorded voices, for measuring and
 rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the recorder.
@@ -48,6 +52,7 @@ guess at the words.
 | quiz-round | a whole round, its card to its last reveal: the longer clip TikTok rewards | 7 |
 | weather-board | WORLD WEATHER's HOT AND COLD and THE NEXT THREE DAYS | 6.5 |
 | weather-story | the weather warning (usually grave) | 6.5 |
+| weather-map | WORLD WEATHER's world: the next 24 hours as a time-lapse, the highs, lows and places named (THE NEXT 24 HOURS) | 6.5 |
 | sport-result | FULL TIME: a result with its score card, the SCORE CENTRE | 7 |
 | lead | a programme's lead, told with its board | 6 |
 | known | a story told over WHAT WE KNOW | 6.5 |
@@ -93,6 +98,11 @@ when that fits, else the whole headline in the body face. A running-order label 
   the episode first (`lintEpisode` against the archive's titles and summaries, and the articles when cached): a moment
   that tells a story whose aired words copy their source is refused (`verbatim`) and not chosen, because the gate
   would hold its clip. `--all` and `--moments` still make it, to look at.
+- **Never a picture that is not cleared** (`markUncleared`, round 5). Some moments show a picture without a cleared
+  rights record (the compliance desk's `auditItem`): their own segments, the stories their cold open's montage or a
+  STILL TO COME shows, or PAY ATTENTION's PICTURE THIS, whose question carries the archived picture's record. Such a moment is refused (`pictures: …`), and so is every moment of an episode made as a private
+  preview (`PICTURE_RIGHTS=preview`). It is never chosen, even with `--all`, and never queued, even with `--moments`
+  (which makes it only to look at). The upload of a whole programme with such a picture is never queued either.
 
 ## 3. The timeline (`server/publish/timeline.js`)
 

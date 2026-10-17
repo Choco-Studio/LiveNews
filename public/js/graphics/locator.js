@@ -14,6 +14,9 @@
 //   drawLocator(ctx, board, loc, { accent, dt }) -> draws it: the map, the dot (its ring pops once) and the name
 //   (wiped in), in the programme's accent.
 //   locatorPlan(loc, { w, h }) -> the board without drawing: { pixels (Uint32 0xAABBGGRR), w, h, pin, region, zoom }
+// Any size: a clip's vertical frame prepares its own (clip/vertical.js), with `anchor` (where the place sits, as shares
+// of the board) and `frame` (the box the name's plate keeps to: the platforms' safe column), and draws it at its
+// stage's corner (`x`, `y`).
 //
 // The country is found on the rendered map itself: every plain land pixel (the map's tint pass), then a 4-connected
 // fill from the place's pixel that stops at borders and coasts (they are drawn 1 px wide and 8-connected, so a
@@ -101,17 +104,20 @@ function regionAt(mask, w, h, px, py) {
 }
 
 /** The view that puts (lat, lon) at the board's anchor, at this zoom. */
-function viewFor(lat, lon, zoom, w, h) {
+function viewFor(lat, lon, zoom, w, h, anchor = ANCHOR) {
   const s = (w / 360) * zoom;
   const kx = Math.min(1, Math.max(0.5, Math.cos((lat * Math.PI) / 180)));
-  return { lat: lat + (ANCHOR.y * h - h / 2) / s, lon: lon - (ANCHOR.x * w - w / 2) / (s * kx), zoom };
+  return { lat: lat + (anchor.y * h - h / 2) / s, lon: lon - (anchor.x * w - w / 2) / (s * kx), zoom };
 }
+
+/** The box a board's name keeps to: the channel's margins, under the TOP STORIES tag, over the headline block. */
+const frameOf = (w, h) => ({ x0: 13, x1: w - 13, y0: 40, y1: Math.round(h * 0.46) });
 
 /**
  * The board without drawing: the map's pixels with the country lit and its neighbours dimmed, the place's pixel and
  * the lit region. null while the map data is loading or without a place.
  */
-export function locatorPlan(loc, { w = 384, h = 216 } = {}) {
+export function locatorPlan(loc, { w = 384, h = 216, anchor = ANCHOR, frame = null } = {}) {
   const lat = Number(loc?.lat);
   const lon = Number(loc?.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
@@ -119,7 +125,7 @@ export function locatorPlan(loc, { w = 384, h = 216 } = {}) {
   let zoom = small ? 14 : startZoom(loc);
   let found = null;
   for (let pass = 0; pass < 6; pass++) {
-    const v = viewFor(lat, lon, zoom, w, h);
+    const v = viewFor(lat, lon, zoom, w, h, anchor);
     const mask = new Uint8Array(w * h);
     const first = viewMapPixels(w, h, v, (la, lo, x, y) => ((mask[y * w + x] = 1), 0), `locator-mask|${lat}|${lon}|${zoom}`);
     if (!first) return null;
@@ -153,16 +159,16 @@ export function locatorPlan(loc, { w = 384, h = 216 } = {}) {
   };
   const out = viewMapPixels(w, h, v, lit, `locator-lit|${lat}|${lon}|${found.zoom}`);
   if (!out) return null;
-  return { pixels: new Uint32Array(out.u32), w, h, pin: { x: Math.round(pin.x), y: Math.round(pin.y) }, region: region ? { x0: region.x0, y0: region.y0, x1: region.x1, y1: region.y1, n: region.n } : null, zoom: found.zoom, view };
+  return { pixels: new Uint32Array(out.u32), w, h, pin: { x: Math.round(pin.x), y: Math.round(pin.y) }, region: region ? { x0: region.x0, y0: region.y0, x1: region.x1, y1: region.y1, n: region.n } : null, zoom: found.zoom, view, frame: frame || frameOf(w, h) };
 }
 
 const cache = new Map();
 /** The lit map of a place, prepared once (cached): { canvas, plan }, or null while the map data loads. */
-export function prepareLocator(loc, { w = 384, h = 216 } = {}) {
+export function prepareLocator(loc, { w = 384, h = 216, anchor = ANCHOR, frame = null } = {}) {
   if (!loc || !Number.isFinite(Number(loc.lat)) || !Number.isFinite(Number(loc.lon))) return null;
-  const key = `${loc.lat}|${loc.lon}|${loc.scope || ''}|${loc.place || ''}|${w}x${h}`;
+  const key = `${loc.lat}|${loc.lon}|${loc.scope || ''}|${loc.place || ''}|${w}x${h}|${anchor.x},${anchor.y}|${frame ? Object.values(frame).join(',') : ''}`;
   if (cache.has(key)) return cache.get(key);
-  const plan = locatorPlan(loc, { w, h });
+  const plan = locatorPlan(loc, { w, h, anchor, frame });
   if (!plan) return null;
   const canvas = document.createElement('canvas');
   canvas.width = w;
@@ -178,9 +184,9 @@ export function prepareLocator(loc, { w = 384, h = 216 } = {}) {
 }
 
 /** Draw a prepared board: the lit map, the dot (its ring pops once, 0.25-0.6 s) and the name (wiped in from 0.2 s). */
-export function drawLocator(ctx, board, loc, { accent = P.red, dt = 9 } = {}) {
-  ctx.drawImage(board.canvas, 0, 0);
-  drawPlace(ctx, board.plan, loc, accent, dt);
+export function drawLocator(ctx, board, loc, { accent = P.red, dt = 9, x = 0, y = 0 } = {}) {
+  ctx.drawImage(board.canvas, x, y);
+  drawPlace(ctx, board.plan, loc, accent, dt, x, y);
 }
 
 const name = (s) =>
@@ -192,20 +198,26 @@ const name = (s) =>
 
 /** The dot and the name: a city's dot and its name beside it; a country's name over its middle. */
 export function placeLayout(plan, loc, measure = (t, font) => measureText(t, 1, font)) {
+  const F = plan.frame || frameOf(plan.w, plan.h);
   const city = loc?.scope !== 'country';
   const title = name(loc?.place);
   const sub = city && loc?.country && name(loc.country) !== title ? name(loc.country) : '';
   const tw = Math.max(measure(title, 'body'), sub ? measure(sub, 'micro') : 0);
   const bw = tw + 12;
   const bh = sub ? 21 : 13;
-  const { w, h } = plan;
   let x;
   let y;
   if (city) {
     // beside the dot, on the side with room (never over the TOP STORIES tag, never down into the headline block)
-    const right = plan.pin.x + 9 + bw <= w - 13;
+    const right = plan.pin.x + 9 + bw <= F.x1;
+    const left = plan.pin.x - 9 - bw >= F.x0;
     x = right ? plan.pin.x + 9 : plan.pin.x - 9 - bw;
     y = plan.pin.y - Math.round(bh / 2);
+    // (a narrow board, the vertical frame's: no room on either side, the name goes under the dot, never over it)
+    if (!right && !left) {
+      x = plan.pin.x - Math.round(bw / 2);
+      y = plan.pin.y + 10;
+    }
   } else {
     const r = plan.region;
     const cx = r ? Math.round((r.x0 + r.x1) / 2) : plan.pin.x;
@@ -213,15 +225,17 @@ export function placeLayout(plan, loc, measure = (t, font) => measureText(t, 1, 
     x = cx - Math.round(bw / 2);
     y = cy - Math.round(bh / 2);
   }
-  x = Math.max(13, Math.min(w - 13 - bw, x));
-  y = Math.max(40, Math.min(Math.round(h * 0.46) - bh, y));
+  x = Math.max(F.x0, Math.min(F.x1 - bw, x));
+  y = Math.max(F.y0, Math.min(F.y1 - bh, y));
   return { city, title, sub, x, y, bw, bh };
 }
 
-function drawPlace(ctx, plan, loc, accent, dt = 9) {
-  const L = placeLayout(plan, loc);
+function drawPlace(ctx, plan, loc, accent, dt = 9, ox = 0, oy = 0) {
+  const L0 = placeLayout(plan, loc);
+  const L = { ...L0, x: L0.x + ox, y: L0.y + oy };
   if (L.city) {
-    const { x, y } = plan.pin;
+    const x = plan.pin.x + ox;
+    const y = plan.pin.y + oy;
     // the ring grows once from the dot (r 3 to 9 by 0.6 s) and settles at 6; then the accent square in its outline
     const k = Math.max(0, Math.min(1, (dt - 0.25) / 0.35));
     const r = dt < 0.25 ? 0 : dt < 0.6 ? Math.round(3 + 6 * k) : 6;

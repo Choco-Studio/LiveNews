@@ -116,6 +116,10 @@ export function auditItem(item) {
     if (seg.storyId && outlet) outlets.add(String(outlet).replace(/\s*\/\s*Photo:.*$/i, ''));
     if (seg.location || seg.map || (seg.visuals || []).some?.((v) => v?.kind === 'map')) maps = true;
     if (seg.hasImage) add({ kind: 'picture', where, storyId: seg.storyId || null, ...pictureRecord(seg) });
+    // PAY ATTENTION's PICTURE THIS (and DOUBLE OR NOTHING's picture): the archived story's picture, with the rights
+    // record it aired with (server/quiz/desk.js imageRights)
+    const q = seg.quiz?.question;
+    if (q?.type === 'picture' && q.image && !/^file:/i.test(q.image)) add({ kind: 'picture', where, storyId: q.imageId || q.key || null, ...pictureRecord({ imageRights: q.imageRights, imageCredit: q.imageCredit, source: q.aired?.source }) });
     if (seg.footage) add({ kind: 'footage', where, storyId: seg.storyId || null, ...footageRecord(seg.footage) });
   }
   if (maps) add({ kind: 'map', class: 'natural-earth', ok: !!cls('natural-earth'), credit: cls('natural-earth')?.credit || null });

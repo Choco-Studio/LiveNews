@@ -117,3 +117,19 @@ test('preflight: a text post may not copy its source (MAX_RUN 12, MAX_SHARE 0.2)
   // no sources given: not checked, and said so
   assert.ok(preflight({ kind: 'text', text: cited }, { env }).warnings.some((w) => /no source texts/.test(w)));
 });
+
+test('preflight and the register: a withdrawn story holds every item that tells it, a quiz clip (no stories on its episode) and a post included', () => {
+  const register = { isBlocked: ({ storyId }) => (storyId === 's9' ? 'takedown: a copyright complaint' : null), review: () => null };
+  const env = { EDITORIAL_CONTACT: 'editor@example.org' };
+  // a quiz question's clip: its episode lists no stories, the clip tells s9
+  const quiz = { id: 'q1', provider: 'quiz', program: { id: 'pay-attention', title: 'PAY ATTENTION' }, storyIds: [], segments: [{ type: 'quiz', text: 'How many?' }] };
+  const held = preflight({ kind: 'short', episode: quiz, storyIds: ['s9'], platforms: [] }, { register, env, requireReview: false });
+  assert.ok(held.violations.some((v) => v.rule === 'blocked' && /s9/.test(v.message)), JSON.stringify(held.violations));
+  assert.ok(!preflight({ kind: 'short', episode: quiz, storyIds: ['s1'], platforms: [] }, { register, env, requireReview: false }).violations.some((v) => v.rule === 'blocked'));
+  // a text post on the story
+  const post = preflight({ kind: 'text', text: 'AI-generated: Our words.', storyIds: ['s9'] }, { register, env });
+  assert.ok(post.violations.some((v) => v.rule === 'blocked'));
+  // once only, when its episode lists the story too (checkClip reads it there)
+  const news = { ...quiz, storyIds: ['s9'], segments: [{ type: 'story', storyId: 's9', text: 'Told.' }] };
+  assert.equal(preflight({ kind: 'short', episode: news, storyIds: ['s9'], platforms: [] }, { register, env, requireReview: false }).violations.filter((v) => v.rule === 'blocked').length, 1);
+});

@@ -18,7 +18,8 @@ which is never in git.
 | `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4) |
 | `tools/publish/upload.mjs` | A whole programme for YouTube: video, thumbnail, title, description, chapters (`plan.md` §5); `--video` queues one made earlier |
 | `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3) |
-| `tools/publish/run.mjs` | The publisher's round: schedule what is approved, publish what is due (§4) |
+| `tools/publish/run.mjs` | The publisher's round: re-check what waits, schedule what is approved, publish what is due (§4) |
+| `tools/publish/recheck.mjs` | The re-check alone: the gate again on everything waiting; what no longer passes is held (§4.1) |
 | `tools/publish/live.mjs` | The 24/7 stream kept up, and its title (§6) |
 | `tools/publish/material.mjs` | Episodes from the archive, offline, with recorded voices (for rehearsal and measurement) |
 | `tools/publish/playback-server.mjs` | One saved episode served to the recorder |
@@ -85,7 +86,8 @@ network's mode and the time zone).
 
 ## 4. The publisher (`publisher.js`)
 
-For each item whose time has come:
+Each round first re-checks everything waiting (§4.1), then schedules what is approved. Then, for each item whose time
+has come:
 
 1. **The ledger** (above).
 2. **The compliance gate**, again, at the moment of publishing (`compliance.preflight`). It gets the clip's episode,
@@ -108,6 +110,30 @@ For each item whose time has come:
 5. **The record.** The ledger (real or dry), the outbox (`outbox.jsonl`: what was sent or would have been, with
    secrets redacted, and which switch was off), and the item's status. A retryable failure goes back to the schedule,
    three times at most.
+
+### 4.1 The re-check of what waits (`recheck.js`, `tools/publish/recheck.mjs`)
+
+A clip, an upload or a post can wait days in the queue while the rules move under it. A takedown may arrive in the
+compliance register, a story may be withdrawn, a person may ask not to be re-staged. A picture's licence may be read
+again (`server/rights.js` `rejudge`). The article cache (`verbatim.md` §4) may now hold the article a post's line must
+be measured against. An election period may begin.
+
+Before each round, the publisher runs the gate again on every item that is pending, approved or scheduled
+(`Publisher.recheck()`, at the start of `run()` and of `tools/publish/run.mjs`). It runs against:
+- the current rules;
+- the register as it is now, on the item's own stories too (`storyIds`). Before round 5 the gate read only the
+  episode's story list, which a quiz episode does not have, so a takedown of a story did not hold the quiz clips made
+  from it. The factory, the posts and the upload now give the gate the register too;
+- the archive and its articles as they are now;
+- each picture's rights record judged again under today's licence terms (`refreshRights`). A record is never cleared
+  by judging it again if it was not cleared before.
+
+What no longer passes is **held**. Its slot is given back, and its history says `held` by `recheck` and what its status
+was. The approval page shows it as *Retenido al revisarlo otra vez antes de publicar (algo cambió mientras esperaba)*,
+with each reason in Spanish (`RULE_ES`) and the desk's English message under it. A held item is never approved over.
+An item the re-check held that passes again (the complaint was closed) goes back to the owner as **pending**, never
+straight out. `node tools/publish/recheck.mjs [--queue …] [--data …] [--at …] [--json]` runs it by hand and prints the
+reasons in Spanish. It never schedules, publishes or sends anything.
 
 **One publisher at a time.** A round takes `data/publish/publisher.lock`, which holds its process id. Without it, a round
 started by hand while the scheduled one runs would race it to the same items. A second round is refused while that

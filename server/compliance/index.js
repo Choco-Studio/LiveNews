@@ -40,7 +40,8 @@ export const VERBATIM_LAUNCH_RATE = 0.05;
 /**
  * The publish-time gate of one item. Refuses (ok: false) on any violation; the publisher uploads nothing then.
  * `item` = checkClip's clip plus { kind, text (a post), sourceTexts (a post's story sources: the outlet's title, summary
- * and article), files: [paths of the exported files] }.
+ * and article), storyIds (the stories the item tells: the register's withdrawn stories hold it), files: [paths of the
+ * exported files] }.
  * `opts` = { register, calendar, getStory (verbatim sources), now, dataDir, verbatim: 'block'|'warn',
  *            requireReview, env }
  * -> { ok, violations, warnings, disclosure, credits, description, recreations }
@@ -62,6 +63,16 @@ export function preflight(item = {}, opts = {}) {
   } else {
     disclosure = disclosureFor({ ...item, kind });
     if (kind === 'text' && !/^AI-generated:/.test(String(item.text || '').trim())) v('text-disclosure-missing', 'a text post starts with "AI-generated:" (disclosure.textPost builds it)');
+  }
+  // the register on the item's own stories (`storyIds`: a clip's, a post's): a story withdrawn holds every item that
+  // tells it, a quiz question's clip (its episode lists no stories) and a text post included
+  if (opts.register?.isBlocked) {
+    const checked = VIDEO.has(kind) ? new Set(item.episode?.storyIds || []) : new Set();
+    for (const sid of new Set((Array.isArray(item.storyIds) ? item.storyIds : []).filter(Boolean))) {
+      if (checked.has(sid)) continue; // (checkClip has read it from the episode)
+      const b = opts.register.isBlocked({ storyId: sid });
+      if (b) v('blocked', `story ${sid}: ${b}`);
+    }
   }
   // the rights of every asset (exports are always strict)
   const audit = item.episode ? auditItem(item) : { assets: [], missing: [], credits: [] };

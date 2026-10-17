@@ -106,6 +106,10 @@ export const config = {
   recentLinesHours: bounded('RECENT_LINES_HOURS', 6, 0, 48),
   // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
   feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
+  // The article cache (server/articlecache.js): the text the desk already read for each aired story, kept 14 days for the
+  // verbatim checks of clips and posts. ARTICLE_CACHE=off keeps nothing; a feed with "cache": false in the feeds file is
+  // never kept (an outlet whose terms forbid keeping copies)
+  articleCache: env('ARTICLE_CACHE', 'on').toLowerCase() !== 'off',
   dataDir: path.join(ROOT, 'data'),
   // Presenter voices: 'kokoro' synthesises every segment ahead of air with local neural voices
   // (tools/voice, server/voice; .env.example turns it on); 'browser' (the default, or Kokoro missing)

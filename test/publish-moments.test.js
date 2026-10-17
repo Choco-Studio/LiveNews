@@ -142,6 +142,46 @@ test('a moment whose story copies its source is not publishable in any phase (th
   assert.equal(all[0].copied, undefined);
 });
 
+test('a moment that shows a picture not cleared is never chosen nor queued, in any phase; nor any moment of a private preview', async () => {
+  const { markUncleared, picturesShown } = await import('../server/publish/moments.js');
+  const { auditItem } = await import('../server/compliance/credits.js');
+  const cleared = (id) => ({ source: 'commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url: `https://upload.wikimedia.org/${id}.jpg`, credit: 'FILE · JANE DOE · CC BY 4.0 · PIXELATED', label: 'FILE', cleared: true });
+  const outlet = { source: 'outlet', licence: null, credit: 'BBC', cleared: false, why: "an outlet's own photo" };
+  const episode = {
+    segments: [
+      { type: 'intro', text: 'Tonight.', teases: ['s2', 's3'] },
+      { type: 'story', storyId: 's1', hasImage: true, imageRights: cleared('a') },
+      { type: 'story', storyId: 's2', hasImage: true, imageRights: outlet, imageUncleared: true },
+      { type: 'story', storyId: 's3', hasImage: false, stillToCome: [{ storyId: 's2' }] },
+      { type: 'story', storyId: 's4', hasImage: false },
+    ],
+    rundown: [{ storyId: 's1', hasImage: true, imageRights: cleared('a') }, { storyId: 's2', hasImage: true, imageRights: outlet, imageUncleared: true }, { storyId: 's3', hasImage: false }],
+  };
+  // what each part shows: the montage's teased stories, a story's own picture, a STILL TO COME's
+  assert.deepEqual(picturesShown(episode, 0, 0).map((x) => x.storyId), ['s2']);
+  assert.deepEqual(picturesShown(episode, 1, 1).map((x) => x.storyId), ['s1']);
+  assert.deepEqual(picturesShown(episode, 3, 3).map((x) => x.storyId), ['s2']);
+  assert.deepEqual(picturesShown(episode, 4, 4), []);
+  const m = (id, from, to) => ({ id, kind: 'story', from, to, storyIds: [], light: true, grave: false, scores: { sense: 9 } });
+  for (const audit of [auditItem, null]) {
+    const all = markUncleared([m('open', 0, 0), m('s1', 1, 1), m('s2', 2, 2), m('tease', 3, 3), m('plain', 4, 4)], episode, { audit });
+    for (const phase of [1, 2, 3]) assert.deepEqual(publishable(all, { phase }).map((x) => x.id), ['s1', 'plain'], `phase ${phase}${audit ? '' : ' (no audit)'}`);
+    assert.match(all[2].refused, /^pictures: a picture not cleared for publication \(story s2\)/);
+  }
+  // PAY ATTENTION's PICTURE THIS: the archived story's picture with the record it aired with (none: refused; and the
+  // gate's own audit counts it too)
+  const pic = (imageRights) => ({ type: 'quiz', part: 'frame', text: 'Which headline goes with this picture?', quiz: { round: 'picture', question: { type: 'picture', key: 'k1', imageId: 'a1', image: 'https://upload.wikimedia.org/x.jpg', ...(imageRights ? { imageRights } : {}), aired: { source: 'BBC News' } } } });
+  const quiz = { segments: [pic(null), pic(cleared('x'))], rundown: [] };
+  const qs = markUncleared([m('bare', 0, 0), m('cleared', 1, 1)], quiz, { audit: auditItem });
+  assert.deepEqual(qs.map((x) => !!x.uncleared), [true, false]);
+  assert.equal(auditItem({ segments: [pic(null)] }).missing.filter((a) => a.kind === 'picture').length, 1);
+  assert.equal(auditItem({ segments: [pic(cleared('x'))] }).missing.length, 0);
+  // a private preview: nothing from it is ever published, whatever it shows
+  const preview = markUncleared([m('s1', 1, 1), m('plain', 4, 4)], { ...episode, picturePreview: true }, { audit: auditItem });
+  assert.equal(publishable(preview, { phase: 3 }).length, 0);
+  assert.match(preview[1].refused, /private preview/);
+});
+
 test('a clip\'s burned-in title is never the outlet\'s headline passed off as the channel\'s (ownHook)', () => {
   const title = 'Evacuation orders as fast-moving California wildfire burns homes';
   const sources = [title, 'Evacuation orders in California are in effect due to a rapidly growing wildfire.'];

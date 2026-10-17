@@ -6,6 +6,10 @@
 //
 //   node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6]
 //        [--moments <id,id>] [--all] [--queue data/publish] [--masters <dir>] [--keep-masters] [--parallel]
+//        [--pictures <dir>]
+//
+// --pictures: a folder with the episode's pictures (<storyId>.jpg|png|webp), so the clips show them as they aired, with
+// their credits; without it the stories show their maps and boards.
 //
 // How: a playback server (server/publish/playback.js) serves the page and the episode; the deterministic recorder
 // (tools/record.mjs) makes one lossless master per format in clip mode (?clip=1, ?format=vertical) with its report;
@@ -19,7 +23,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
-import { detectMoments, publishable, markCopied, ownHook } from '../../server/publish/moments.js';
+import { detectMoments, publishable, markCopied, markUncleared, ownHook } from '../../server/publish/moments.js';
 import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/platforms.js';
@@ -84,7 +88,7 @@ function recordSeconds(ep) {
 
 // ---------------------------------------------------------------- 1. the masters
 
-const pb = createPlaybackServer({ root });
+const pb = createPlaybackServer({ root, pictureDir: opt('pictures') ? path.resolve(opt('pictures')) : null });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 const seconds = Number(opt('seconds', recordSeconds(episode)));
@@ -128,6 +132,11 @@ const all = detectMoments(episode, { timeline });
 // summary lists it as refused (`--all` or `--moments` still make it, to look at)
 const copied = new Set((compliance.lintEpisode(episode, { getStory: sourcesOf }).violations || []).map((v) => v.storyId));
 markCopied(all, copied);
+// a moment that shows a picture not cleared for publication (or any moment of a private preview) is never chosen and
+// never queued, whatever the flags: the summary lists it as refused
+markUncleared(all, episode, { audit: compliance.auditItem });
+const uncleared = all.filter((m) => m.uncleared).length;
+if (uncleared) say(`pictures: ${uncleared} moment${uncleared === 1 ? '' : 's'} show a picture not cleared${episode.picturePreview ? ' (a private preview)' : ''}; never chosen or queued`);
 // (a hook that is the outlet's headline is never burned into a clip as the channel's title: ownHook)
 for (const m of all) {
   const seg = episode.segments.slice(m.from, m.to + 1).find((x) => x.headline && x.storyId) || {};
@@ -143,6 +152,7 @@ for (const m of all) {
   if (wanted && !wanted.has(m.id)) continue;
   if (!wanted && !flag('all') && !pub.has(m.id) && !episode.demo) continue;
   if (!wanted && !flag('all') && m.copied) continue;
+  if (m.uncleared && !wanted) continue; // (never, even with --all: only --moments makes one, to look at, never queued)
   const k = perKind.get(m.kind) || 0;
   const cap = m.kind === 'quiz-question' ? 4 : ['quiz-round', 'stories', 'montage', 'lead', 'number'].includes(m.kind) ? 1 : 2;
   if (!wanted && k >= cap) continue;
@@ -279,14 +289,14 @@ for (const m of chosen) {
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null });
         meta.texts[p] = t;
-        const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now(), getStory: compliance.clipGetStory(m.storyIds, sourcesOf) });
+        const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, storyIds: m.storyIds, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.clipGetStory(m.storyIds, sourcesOf) });
         meta.compliance[p] = { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub };
       }
       fs.writeFileSync(path.join(clipsDir, `${name}.json`), JSON.stringify(meta, null, 1));
       // the queue (dry run): a publishable moment, to the networks this phase uses and this clip fits
       const phaseNets = PHASE_PLATFORMS[settings.phase] || PHASE_PLATFORMS[1];
       meta.queued = [];
-      if (pub.has(m.id) && !flag('no-queue')) {
+      if (pub.has(m.id) && !m.uncleared && !flag('no-queue')) {
         const hash = sha256(file);
         for (const p of platforms.filter((x) => phaseNets.includes(x))) {
           const t = meta.texts[p];
@@ -330,7 +340,7 @@ const summary = {
   episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString(), demo: !!episode.demo },
   recorded: seconds,
   drift,
-  moments: all.map((m) => ({ id: m.id, kind: m.kind, start: m.start, end: m.end, duration: m.duration, scores: m.scores, hook: m.hook, light: m.light, grave: m.grave, refused: m.refused, copied: !!m.copied, publishable: pub.has(m.id) })),
+  moments: all.map((m) => ({ id: m.id, kind: m.kind, start: m.start, end: m.end, duration: m.duration, scores: m.scores, hook: m.hook, light: m.light, grave: m.grave, refused: m.refused, copied: !!m.copied, uncleared: !!m.uncleared, publishable: pub.has(m.id) })),
   failed,
   clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
 };

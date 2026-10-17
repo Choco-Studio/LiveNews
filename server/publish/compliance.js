@@ -3,7 +3,7 @@
 // stub is chosen ONLY when the module is not there at all: a real module that fails to load is an error, never a
 // silent fallback to the stub.
 //
-//   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), checkClip(clip, opts),
+//   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), auditItem(item), checkClip(clip, opts),
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
 //   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
@@ -27,6 +27,8 @@ export const complianceModule = mod;
 
 export const disclosureFor = (item) => mod.disclosureFor(item);
 export const creditsFor = (item) => mod.creditsFor(item);
+/** Every asset an item puts on screen with its rights record ({ assets, missing, credits }); the stub knows none. */
+export const auditItem = (item) => (mod.auditItem ? mod.auditItem(item) : { assets: [], missing: [], credits: [] });
 export const checkClip = (clip, opts = {}) => mod.checkClip(clip, opts);
 export const describe = (item, o = {}) => (mod.describe ? mod.describe(item, o) : [...mod.disclosureFor(item).description.lines, ...(o.credits?.length ? ['', 'Credits:', ...o.credits.map((c) => `· ${c}`)] : [])].join('\n'));
 export const textPost = (item, o = {}) => (mod.textPost ? mod.textPost(item, o) : `AI-generated: ${item.text}`);
@@ -34,7 +36,8 @@ export const buildManifest = (item, o = {}) => (mod.buildManifest ? mod.buildMan
 /** The verbatim measure of a text against its sources (the compliance desk's rule: runs of 12, a share of 20 %). */
 export const storyReport = (text, sources, o = {}) => mod.storyReport(text, sources, o);
 /**
- * The stories' sources as the archive keeps them, with the article where the compliance desk's audit cached it:
+ * The stories' sources as the archive keeps them, with the article where the article cache holds it (server/
+ * articlecache.js, filled as the channel airs; the compliance desk's audit writes the same files):
  * getStory(id) -> { title, summary, body } or null. The stub has no cache: body is always null there.
  */
 export const archiveGetStory = (o = {}) => (mod.archiveGetStory ? mod.archiveGetStory(o) : () => null);

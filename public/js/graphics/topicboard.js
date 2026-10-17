@@ -20,15 +20,19 @@
 // captions (y 46-70, centred) and of the headline's chip (from y 127), right-aligned to graphics-safe (x 365). Under a
 // grave story every board is sober: silver and fog only (no accent colour), no glyph, nothing moves but one wipe.
 //
-//   drawTopicBoard(ctx, item, { accent, dt }) -> the spec drawn   item: a rundown item (board, headline, category, grave)
+//   drawTopicBoard(ctx, item, { accent, dt, frame }) -> the spec drawn   item: a rundown item (board, headline, category,
+//                                                                  grave)
+// `frame` sets the board in another box (a clip's vertical stage: clip/vertical.js): { x, y, w, h } on the canvas, and
+// inside it the board's own box { right, top, bottom, maxW } (the platforms' safe column); without it, the horizontal
+// frame's geometry below.
 //   GLYPHS                                                         the line glyphs ('#' stroke, '+' accent, 'o' white, '.' shade)
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { balanceLines } from '../gfx/index.js';
 import { boardSpec } from '../boardspec.js';
 
-const W = 384;
-const H = 216;
+const WIDTH = 384;
+const HEIGHT = 216;
 // the board's box: right-aligned to graphics-safe, its foot clear of the headline's chip, its head clear of the captions
 export const BOX = Object.freeze({ right: 365, bottom: 123, top: 74, maxW: 300 });
 // a glyph's tile: the 48 px glyph and a 2 px margin, its foot 2 px lower than the board's (at the far right, clear of the
@@ -702,10 +706,11 @@ const SECTION_GLYPH = [
   [/^(?:politics)/, 'ballot'],
 ];
 
-// the field: stepped ink to black with a dot grid that brightens behind the board, made once
-let FIELD = null;
-function field() {
-  if (FIELD) return FIELD;
+// the field: stepped ink to black with a dot grid that brightens behind the board, made once per size
+const FIELDS = new Map();
+function field(W = WIDTH, H = HEIGHT, gx = GX, gy = GY) {
+  const key = `${W}x${H}|${gx},${gy}`;
+  if (FIELDS.has(key)) return FIELDS.get(key);
   const c = document.createElement('canvas');
   c.width = W;
   c.height = H;
@@ -718,13 +723,13 @@ function field() {
   });
   for (let y = 4; y < H; y += 8) {
     for (let x = 4; x < W; x += 8) {
-      const d = Math.hypot(x - GX, (y - GY) * 1.5);
+      const d = Math.hypot(x - gx, (y - gy) * 1.5);
       if (d > 170 && (x + y) % 16 !== 0) continue;
       g.fillStyle = d < 90 ? P.steel : P.slate;
       g.fillRect(x, y, 1, 1);
     }
   }
-  FIELD = c;
+  FIELDS.set(key, c);
   return c;
 }
 
@@ -772,7 +777,7 @@ function plate(ctx, x, y, w, h) {
 // layouts are worked out once per spec (a board is drawn every frame for seconds)
 const LAYOUTS = new WeakMap();
 
-function figureLayout(spec) {
+function figureLayout(spec, B = BOX) {
   const value = String(spec.value || '');
   const label = String(spec.label || '');
   const qual = String(spec.qual || '');
@@ -789,18 +794,18 @@ function figureLayout(spec) {
   const qw = qual ? measureText(qual, 1, 'micro') : 0;
   const side = Math.max(lab.w, qw);
   let scale = 6;
-  while (scale > 3 && measureText(value, scale) + (side ? 8 + side : 0) > BOX.maxW) scale--;
+  while (scale > 3 && measureText(value, scale) + (side ? 8 + side : 0) > B.maxW) scale--;
   const vw = measureText(value, scale);
   const w = vw + (side ? 8 + side : 0);
-  const x = BOX.right - w;
+  const x = B.right - w;
   const vh = 7 * scale;
-  return { kind: 'figure', value, scale, vw, vh, x, y: BOX.bottom - vh, w, lab, qual, qw, labX: x + vw + 8 };
+  return { kind: 'figure', value, scale, vw, vh, x, y: B.bottom - vh, w, lab, qual, qw, labX: x + vw + 8, bottom: B.bottom };
 }
 
-function quoteLayout(spec) {
+function quoteLayout(spec, B = BOX) {
   const text = `${spec.text || ''}`;
   // 2x when the words fit two lines of the plate, else 1x in up to three
-  const maxW = 236;
+  const maxW = Math.min(236, B.maxW - 34);
   let scale = 2;
   let lines = balanceLines(text, maxW, 2, 2);
   if (lines.length > 2 || lines.some((l) => l.endsWith('...'))) {
@@ -811,23 +816,23 @@ function quoteLayout(spec) {
   const textH = lines.length * lh - (lh - 7 * scale);
   const by = spec.by ? `- ${spec.by}` : '';
   const tw = Math.max(...lines.map((l) => measureText(l, scale)), by ? measureText(by, 1, 'micro') : 0);
-  const w = Math.min(BOX.maxW, tw + 24 + 10);
+  const w = Math.min(B.maxW, tw + 24 + 10);
   // (a quote of two lines at 2x or three at 1x sets its plate tighter, so it still ends above the headline's chip)
   const pad = textH > 20 ? { t: 6, g: 4, a: 3, b: 5 } : { t: 7, g: 5, a: 4, b: 6 };
   const h = pad.t + textH + pad.g + 1 + pad.a + 5 + pad.b;
-  return { kind: 'quote', lines, scale, lh, textH, by, w, h, pad, x: BOX.right - w, y: Math.max(BOX.top - 2, BOX.bottom + 2 - h) };
+  return { kind: 'quote', lines, scale, lh, textH, by, w, h, pad, x: B.right - w, y: Math.max(B.top - 2, B.bottom + 2 - h) };
 }
 
-function wordmarkLayout(name, about) {
+function wordmarkLayout(name, about, B = BOX) {
   // the name at 3x when it fits, else 2x (in two lines if need be), else 1x
   let scale = 3;
   let lines = [name];
-  if (measureText(name, 3) > BOX.maxW - 20 || (about && name.length > 16)) {
+  if (measureText(name, 3) > B.maxW - 20 || (about && name.length > 16)) {
     scale = 2;
-    lines = measureText(name, 2) <= BOX.maxW - 20 ? [name] : balanceLines(name, BOX.maxW - 20, 2, 2);
+    lines = measureText(name, 2) <= B.maxW - 20 ? [name] : balanceLines(name, B.maxW - 20, 2, 2);
     if (lines.length > 2 || lines.some((l) => l.endsWith('...'))) {
       scale = 1;
-      lines = balanceLines(name, BOX.maxW - 20, 1, 2);
+      lines = balanceLines(name, B.maxW - 20, 1, 2);
     }
   }
   if (about && lines.length > 1 && scale === 2) about = null; // (two lines of name leave no room for what it is)
@@ -835,24 +840,26 @@ function wordmarkLayout(name, about) {
   const nameH = lines.length * lh - (lh - 7 * scale);
   const aw = about ? measureText(about) : 0;
   const nw = Math.max(...lines.map((l) => measureText(l, scale)));
-  const w = Math.min(BOX.maxW, Math.max(nw, aw) + 20);
+  // (what it is, when it does not fit a narrow box, is left out rather than cut)
+  if (about && aw > B.maxW - 20) about = null;
+  const w = Math.min(B.maxW, Math.max(nw, about ? measureText(about) : 0) + 20);
   const h = about ? 6 + nameH + 4 + 1 + 4 + 7 + 6 : 8 + nameH + 5 + 1 + 7;
-  return { kind: 'wordmark', lines, scale, lh, nameH, about, w, h, x: BOX.right - w, y: Math.max(BOX.top - 2, BOX.bottom - h) };
+  return { kind: 'wordmark', lines, scale, lh, nameH, about, w, h, x: B.right - w, y: Math.max(B.top - 2, B.bottom - h) };
 }
 
-function topicLayout(spec) {
+function topicLayout(spec, B = BOX, T = TILE) {
   const label = String(spec.label || '');
-  const tile = TILE.size;
-  const tx = TILE.x;
-  const ty = TILE.y;
+  const tile = T.size;
+  const tx = T.x;
+  const ty = T.y;
   // the words at 2x beside the tile (in two lines when long), else 1x
   let scale = 2;
-  let lines = balanceLines(label, BOX.maxW - tile - 14, 2, 1);
+  let lines = balanceLines(label, B.maxW - tile - 14, 2, 1);
   if (lines.length > 1 || lines[0]?.endsWith('...')) {
     lines = balanceLines(label, 150, 2, 2);
     if (lines.length > 2 || lines.some((l) => l.endsWith('...'))) {
       scale = 1;
-      lines = balanceLines(label, BOX.maxW - tile - 14, 1, 2);
+      lines = balanceLines(label, B.maxW - tile - 14, 1, 2);
     }
   }
   const lh = scale === 2 ? 18 : 11;
@@ -861,17 +868,20 @@ function topicLayout(spec) {
   return { kind: 'topic', label, lines, scale, lh, textH, tw, tile, tx, ty, lx: tx - 12 - tw, ly: ty + Math.round((tile - textH) / 2) };
 }
 
-function layoutOf(spec) {
-  let L = LAYOUTS.get(spec);
+function layoutOf(spec, B = BOX, T = TILE) {
+  const key = B === BOX ? '' : `${B.right},${B.top},${B.bottom},${B.maxW}`;
+  let byBox = LAYOUTS.get(spec);
+  if (!byBox) LAYOUTS.set(spec, (byBox = new Map()));
+  let L = byBox.get(key);
   if (L) return L;
-  if (spec.kind === 'figure') L = figureLayout(spec);
-  else if (spec.kind === 'quote') L = quoteLayout(spec);
-  else if (spec.kind === 'actor') L = wordmarkLayout(String(spec.name || ''), spec.about || null);
-  else if (spec.kind === 'phrase') L = wordmarkLayout(String(spec.text || ''), null);
-  else if (spec.kind === 'topic' && spec.glyph && GLYPHS[spec.glyph]) L = topicLayout(spec);
-  else if (spec.kind === 'topic' && spec.label) L = wordmarkLayout(String(spec.label), null);
+  if (spec.kind === 'figure') L = figureLayout(spec, B);
+  else if (spec.kind === 'quote') L = quoteLayout(spec, B);
+  else if (spec.kind === 'actor') L = wordmarkLayout(String(spec.name || ''), spec.about || null, B);
+  else if (spec.kind === 'phrase') L = wordmarkLayout(String(spec.text || ''), null, B);
+  else if (spec.kind === 'topic' && spec.glyph && GLYPHS[spec.glyph]) L = topicLayout(spec, B, T);
+  else if (spec.kind === 'topic' && spec.label) L = wordmarkLayout(String(spec.label), null, B);
   else L = { kind: 'none' };
-  LAYOUTS.set(spec, L);
+  byBox.set(key, L);
   return L;
 }
 
@@ -889,41 +899,47 @@ export function specOf(item = {}) {
 }
 
 /** Draw the topic board for a rundown item with neither a picture nor a place. */
-export function drawTopicBoard(ctx, item = {}, { accent = P.red, dt = 9 } = {}) {
+export function drawTopicBoard(ctx, item = {}, { accent = P.red, dt = 9, frame = null } = {}) {
   const spec = specOf(item);
   const grave = !!(spec.grave || item.grave);
   const acc = grave ? P.fog : accent;
   const strong = grave ? P.silver : P.white;
-  const L = layoutOf(spec);
-  ctx.drawImage(field(), 0, 0);
+  // the board's box and tile: the horizontal frame's, or a frame's own (its box given inside the frame)
+  const fx = frame?.x ?? 0;
+  const fy = frame?.y ?? 0;
+  const B = frame ? { right: fx + frame.right, top: fy + frame.top, bottom: fy + frame.bottom, maxW: frame.maxW } : BOX;
+  const T = frame ? { size: TILE.size, inset: TILE.inset, x: B.right - TILE.size, y: B.bottom + 2 - TILE.size } : TILE;
+  const L = layoutOf(spec, B, T);
+  if (frame) ctx.drawImage(field(frame.w, frame.h, frame.right - 70, frame.bottom - 25), fx, fy);
+  else ctx.drawImage(field(), 0, 0);
   // one wipe, left to right over the board's box (0.1 to 0.45 s); the accent rules grow after it
   const wipe = ease((dt - 0.1) / 0.35);
   const rule = ease((dt - 0.3) / 0.35);
   if (L.kind === 'none') {
     const cat = String(item.category || '').toLowerCase();
     const glyph = grave ? null : (SECTION_GLYPH.find(([re]) => re.test(cat)) || [null, 'globe'])[1];
-    const shownTile = Math.round(TILE.size * wipe);
+    const shownTile = Math.round(T.size * wipe);
     if (glyph && shownTile > 0) {
       ctx.save();
       try {
         ctx.beginPath();
-        ctx.rect(TILE.x, TILE.y, shownTile, TILE.size + 2);
+        ctx.rect(T.x, T.y, shownTile, T.size + 2);
         ctx.clip();
-        plate(ctx, TILE.x, TILE.y, TILE.size, TILE.size);
-        drawGlyph(ctx, glyph, TILE.x + TILE.inset, TILE.y + TILE.inset, { scale: 2, colours: { '#': P.fog, '+': P.steel, o: P.silver, '.': P.slate }, outline: false });
+        plate(ctx, T.x, T.y, T.size, T.size);
+        drawGlyph(ctx, glyph, T.x + T.inset, T.y + T.inset, { scale: 2, colours: { '#': P.fog, '+': P.steel, o: P.silver, '.': P.slate }, outline: false });
       } finally {
         ctx.restore();
       }
     }
     return spec;
   }
-  const box = L.kind === 'figure' ? { x: L.x - 10, w: L.w + 10 } : L.kind === 'topic' ? { x: L.lx - 4, w: BOX.right - L.lx + 6 } : { x: L.x, w: L.w + 2 };
+  const box = L.kind === 'figure' ? { x: L.x - 10, w: L.w + 10 } : L.kind === 'topic' ? { x: L.lx - 4, w: B.right - L.lx + 6 } : { x: L.x, w: L.w + 2 };
   const shown = Math.round(box.w * wipe);
   if (shown <= 0) return spec;
   ctx.save();
   try {
     ctx.beginPath();
-    ctx.rect(box.x, BOX.top - 4, shown, BOX.bottom - BOX.top + 8);
+    ctx.rect(box.x, B.top - 4, shown, B.bottom - B.top + 8);
     ctx.clip();
     if (L.kind === 'figure') drawFigure(ctx, L, { acc, strong, grave, rule });
     else if (L.kind === 'quote') drawQuote(ctx, L, { acc, strong, grave, rule });
@@ -945,7 +961,7 @@ function drawFigure(ctx, L, { acc, strong, grave, rule }) {
   // (no shadow: at this size any shadow falls inside the figure's own counters, the slashed zero's above all)
   drawText(ctx, L.value, L.x, L.y, { color: strong, scale: L.scale });
   const lab = L.lab;
-  let y = BOX.bottom - lab.h;
+  let y = L.bottom - lab.h;
   for (let i = 0; i < lab.lines.length; i++) drawText(ctx, lab.lines[i], L.labX, y + i * (lab.scale === 2 ? 18 : 11), { color: lab.scale === 2 ? strong : P.silver, scale: lab.scale, shadow: P.black });
   if (L.qual) drawText(ctx, L.qual, L.labX, y - 9, { color: grave ? P.fog : P.silver, font: 'micro' });
 }

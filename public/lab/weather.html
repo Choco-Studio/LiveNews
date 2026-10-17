@@ -8,6 +8,8 @@
       body { margin: 0; background: #181425; color: #c0cbdc; font: 12px/1.4 monospace; }
       main { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
       #screen { width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+      #vstage { width: 432px; height: 352px; image-rendering: pixelated; background: #000; }
+      .row { display: flex; gap: 12px; align-items: flex-start; }
       .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: 1152px; }
       #text { max-width: 1152px; color: #feae34; min-height: 3em; }
       button, select { font: inherit; }
@@ -15,7 +17,10 @@
   </head>
   <body>
     <main>
-      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="row">
+        <canvas id="screen" width="384" height="216"></canvas>
+        <canvas id="vstage" width="216" height="176" title="the clip's vertical stage (x 8-188 is the safe column)"></canvas>
+      </div>
       <div class="bar">
         <select id="seg"></select>
         <button id="play">play the programme</button>
@@ -29,12 +34,24 @@
       // writer as on air), each segment on its own clock; marks, pins and the close-up's gestures fire as a voice
       // reading at 15 characters a second would reach them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots);
       // window.perfWeather(index, seconds) the weather frame's cost, window.flickerWeather(index, seconds) its flicker.
-      import { drawWeather, WALK } from '/js/scenes/weather/index.js';
+      import { drawWeather, drawWeatherVertical, WALK } from '/js/scenes/weather/index.js';
       import { warmMapData } from '/js/scenes/worldmap.js';
       import { Graphics } from '/js/graphics/index.js';
       const canvas = document.getElementById('screen');
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
+      // the clip's vertical stage for the map shots (216 x 176: the world, a zone, a warning composed again; blank for
+      // the close-up and the boards, which the clip's compositor sets itself)
+      const vctx = document.getElementById('vstage').getContext('2d');
+      vctx.imageSmoothingEnabled = false;
+      const drawV = (t) => {
+        vctx.fillStyle = '#000';
+        vctx.fillRect(0, 0, 216, 176);
+        if (drawWeatherVertical(vctx, t, { x: 0, y: 0, w: 216, h: 176 }, { x0: 8, x1: 188 })) {
+          vctx.fillStyle = 'rgba(255,0,0,0.22)';
+          vctx.fillRect(189, 0, 27, 176); // the feeds' buttons
+        }
+      };
       const res = await fetch('/api/tools/weather');
       const body = await res.json();
       if (!res.ok) {
@@ -88,6 +105,7 @@
           }
         }
         drawWeather(ctx, t, scene, null);
+        drawV(t);
         if (document.getElementById('gfx').checked) graphics.draw(ctx, t, scene);
       }
       sel.onchange = () => {
@@ -135,6 +153,7 @@
           const el = Math.min(seconds, k / 30);
           fire(el);
           drawWeather(ctx, base + el, scene, null);
+          drawV(base + el);
           // the captions page as on air (they never drop a line)
           scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
           if (gfx && k % 3 === 0) graphics.draw(ctx, base + el, scene);
