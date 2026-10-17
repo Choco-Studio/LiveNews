@@ -125,6 +125,18 @@ describe('a writer’s cross becomes a link', () => {
     assert.ok(!b.rundown.some((r) => r.type === 'cross') && b.storyIds.length === 4, 'the link adds no story');
   });
 
+  test('a writer’s prompt its answer does not answer is asked again in words the answer fits (round 6)', () => {
+    // ("Omar, what comes next?" once heard what had been, MONEY MINUTE 12 Oct)
+    const cross = {
+      piece: 'Freight trains were also affected, the operator says. The strike is the third this year in a long dispute over pay and working hours.',
+      ask: 'What happens next?',
+      answer: 'Many commuters switched to buses and car shares for the day.',
+    };
+    const b = run([strikeSeg({ cross }), ...fillerSegs(3)], [STRIKE, ...fillers(3)]);
+    const ask = b.segments.find((s) => s.part === 'ask');
+    assert.ok(ask && !/next|now\?/.test(ask.text), ask?.text);
+  });
+
   test('every line of a link is grounded; a line that claims presence or invents a fact never airs', () => {
     const cross = {
       piece: 'Freight trains were also affected, the operator says. I am standing outside the main station. The strike has cost 9 billion euros. Many commuters switched to buses and car shares for the day.',

@@ -470,12 +470,47 @@ const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:be
 // (a broadcaster's programme or show page is not a report: "Gaza: Still Reporting", an Al Jazeera documentary, aired on
 // NEWS IN 60 on 12 Oct)
 // (and Al Jazeera's programmes filed under its videos: "Gaza: Still Reporting", /video/witness/, 12 Oct, aired on NEWS IN 60)
+// A picture's page is no news (round 6): "Transporter-18 SmallSats Encapsulation" and "NASA’s Record-Setting Perseverance Rover
+// Team", NASA's image articles and photojournal, once aired as COSMOS stories with no verb, 13 Oct
+const PICTURE_PAGE = /^https?:\/\/(?:www\.|science\.)?nasa\.gov\/(?:image-article|image-detail|photojournal|gallery)\//i;
 const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\/|^https?:\/\/[^/]+\/(?:[a-z]{2}\/)?(?:programs?|programmes|tv-shows|shows|podcasts?|documentaries)\/|^https?:\/\/(?:www\.)?aljazeera\.com\/video\/(?:witness|the-stream|inside-story|101-east|people-power|fault-lines|al-jazeera-world|talk-to-al-jazeera|the-listening-post|counting-the-cost|upfront|the-bottom-line|featured-documentaries|al-jazeera-investigations|the-take|the-cure|earthrise|rewind|my-lebanon)\//i;
+// (round 6: advice, a page's own label, a columnist's question, a column in the first person, an outlet's event and a
+// match's predictions are no news either, and the fallback writer drops them too, server/providers/mock.js)
+// advice: "Energy bills through the roof? Five signs your house is leaking heat" (Guardian Business 13 Oct, MONEY MINUTE's
+// lead), its summary an instruction, "Pick a day when there is a good breeze…"
+const ADVICE_TITLE = /\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:signs|ways|tips|things|reasons|mistakes|tricks|hacks|habits|myths)\b|\b(?:tips|hacks) (?:for|to)\b|(?:^|[:?]\s*)how to\b/i;
+const ADVICE_SUMMARY = /^\s*(?:Pick|Buy|Try|Check|Make sure|Look (?:out )?for|Consider|Remember|Avoid|Choose|Be sure|Don['’]t forget|Think about|Imagine|Start by|Begin by|Keep an eye)\b/;
+// a page's own label ("Analysis: Trump's global headaches…", BBC 12 Oct), and a columnist's question under their name
+// ("Faisal Islam: What surprise praise for UK economy tells us about the Budget", BBC 14 Oct)
+const LABELLED = /^\s*(?:Analysis|Comment|Opinion|Viewpoint|Editorial|Column|Letters?|Leader)\s*[:|]|^\s*\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+){1,2}:\s+(?:What|Why|How|Is|Are|Can|Will|Should|Does|Do|Could|Would)\b|\btells? us\b/u;
+// a column's own voice, outside a quotation and before any "says": "I don’t miss the camera on the Ray-Ban Meta Audio
+// glasses" (The Verge 13 Oct, aired on TECH BYTES "according to The Verge"), "the Android tablet we needed" (a review);
+// not a report's "What we know about Russia's overnight strikes", a study's "challenges what we know", "we still don't
+// think it's conscious", nor everyone's "our cells", "our hills", nor a king's or a war's numeral ("World War I")
+const FIRST_PERSON_TITLE = /^(?:(?!\bsays?\b).)*(?:(?<![\p{L}’']|\b(?:War|Phase|Type|Class|Part|Act|Category|Stage|Grade|Level|Title|Section|Chapter|King|Queen|Pope|Charles|Elizabeth|Henry|James|George|William|Edward|Richard|Mary|Leo)\s)(?:I|I['’](?:m|ve|d|ll))(?![\p{L}’'.])|(?<![\p{L}’'])(?:[Mm]y|me)(?![\p{L}’'])|(?<![\p{L}’']|\b(?:[Ww]hat|[Tt]hings)\s)[Ww]e(?:['’](?:re|ve|ll|d))?(?![\p{L}’']|\s+(?:still|know)\b))/u;
+// an outlet's own event or offer ("TechCrunch Disrupt 2026 starts tomorrow: Your final chance to secure…") and a match's
+// predictions ("Atletico Madrid vs Manchester United: Champions League – Predictions, teams", Al Jazeera 13 Oct)
+const PROMOTION = /\bTechCrunch Disrupt\b|\bStartup Battlefield\b|\bDisrupt 20\d\d\b|\bsave (?:up to )?(?:\$\d+|\d+%)|\bfinal chance to\b|\bhalf off\b|[–—:-]\s*predictions\b|\bpredictions,\s+(?:teams|line-?ups)\b/i;
+// a headline that holds the outlet's own guess or framing: "The Yandex outage probably didn’t blitz Russian bots" (The Verge
+// 13 Oct, an analysis), round 6
+// (and "It looks like Apple Music is getting new icon", The Verge 14 Oct: the outlet's guess, told as news it is not)
+// (and a headline that is only someone's question in quotation marks, a long read's: "’How do you explain deletion of 130m
+// names?’", Guardian 14 Oct, aired as "’How do you explain the deletion of 130 million names?’ Why Indian voters are on the
+// streets. That was, until it was suddenly taken away")
+const QUOTED_QUESTION = /^\s*[‘’'"“”][^‘’"“”]{3,200}\?[’'"”]\s*$/;
+// (and a yes-or-no question as a headline, its question mark left off: "Was Burnham right to talk about Russian interference", BBC
+// 12 Oct; "Is it a plane or a tree", Guardian 12 Oct)
+// (never one its own answer follows: "Was Neanderthal life violent? This wound suggests lethal fighting was more common"; and a
+// podcast's page is no report, "Was Burnham right to talk about Russian interference in Brexit? – podcast")
+const ASKS_TITLE = /^(?!.*\?)(?:Was|Were|Is|Are|Can|Could|Should|Would|Does|Did|Has|Have)\s+(?!\p{Lu}\p{Ll}+\s+\p{Lu})\S+(?:\s+\S+){1,12}$|[–—-]\s*(?:podcast|video|audio)\s*$/u;
+const VIEW_TITLE = /\b(?:probably|a little unusual|ironically|in reality|making up for lost time|what could possibly go wrong)\b|^it (?:looks|seems) like\b/i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
   // FULL TIME's own rules for the sport feeds (server/sport/desk.js): gossip, odds, live pages, video pages, columns…
   if (s?.category === 'sport' && notSport(s)) return true;
-  return PROGRAMME_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));
+  const summary = String(s?.summary || '');
+  return PROGRAMME_PAGE.test(String(s?.link || '')) || PICTURE_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(summary) || NEWSCAST.test(t) || NEWSLETTER.test(summary) || NEWSLETTER.test(String(s?.body || '').slice(0, 200)) ||
+    ADVICE_TITLE.test(unquoted(t)) || ADVICE_SUMMARY.test(summary) || LABELLED.test(t) || FIRST_PERSON_TITLE.test(unquoted(t)) || PROMOTION.test(t) || VIEW_TITLE.test(unquoted(t)) || QUOTED_QUESTION.test(t) || ASKS_TITLE.test(unquoted(t).trim());
 };
 
 /** The figures of a headline by value ("$20bn" and "$20 billion" are one), years and small counts left out. */
@@ -559,6 +594,62 @@ export function sameSummary(a, b) {
   for (const w of wa) if (wb.has(w)) shared++;
   return shared / Math.min(wa.size, wb.size) >= 2 / 3 && shared / (wa.size + wb.size - shared) >= 0.5;
 }
+
+const REPORT_STOP = new Set('a an the of in on at to for by with from as and or but is are was were be been has have had will would can could may might says say said after over its their this that these those it into about more than new up out not no how why what who when where your you our we his her as one two'.split(' '));
+// words of a headline that say little of what happened: two science stories both "discover" something "hidden", two start-ups
+// both "raise" money for an "app"
+const REPORT_GENERIC = new Set('scientists researchers study studies discover discovers discovered find finds found reveal reveals revealed hidden first raises raise raised funding launch launches launched unveils unveiled announces announced report reports app apps startup start-up make makes made set year years people million billion thousand hundred percent week day month today plan plans warns warned call calls ai'.split(' '));
+const REPORT_NOT_NAME = /^(?:The|A|An|In|On|At|For|After|Before|And|But|Or|As|With|From|By|To|Of|It|Its|This|That|These|Those|He|She|They|We|I|AI|CEO|US|UK|EU|UN|TV|PM|MP|BBC|Mr|Mrs|Ms|Dr|Prime|President|Minister|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|Watch|Live|Video|Photos?|First|Thing|Police|Officials|Authorities|Government|Prosecutors|Researchers|Scientists|Experts|Residents|People|Champions|League|Premier|Cup|Republicans?|Democrats?)$/;
+const titleWords = (t) => String(t || '').toLowerCase().replace(/['’]s\b/g, '').split(/[^\p{L}\d-]+/u).filter((w) => w.length >= 2 && !REPORT_STOP.has(w) && !REPORT_GENERIC.has(w) && !/^\d/.test(w));
+const firstSentences = (t, n = 2) => String(t || '').split(/(?<=[.!?])\s+/).slice(0, n).join(' ');
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * One event in two reports, by what both of them say (round 6: two of one event in one edition is the same story told
+ * twice, which the desk's keyword test let through). The rule that joins them, or null:
+ * - 'quoted': a quoted name of two words or more that both ledes give: “Your Algorithm”, in TechCrunch's "Facebook is giving
+ *   users more control over their algorithm" and The Verge's "Facebook will let you customize your feed algorithm using
+ *   AI", 14 Oct, both in one TECH BYTES;
+ * - 'person': the same person named in both ledes, with a rare word of both headlines: "Archbishop Timothy Broglio" under
+ *   "Archbishop of US military condemns Pentagon plans…" and "US archbishop says Catholics in army should not
+ *   participate…", 13 Oct;
+ * - 'words': two words of what happened in both headlines and a name in both ledes that is no place: "IMF raises UK growth
+ *   forecast…" and "UK growth forecast upgraded…" ("…the prediction from the IMF…"), 13 Oct, both in one MONEY MINUTE;
+ *   never two hurricanes off one coast ("Hurricane Simon batters Mexico's Pacific Coast" / "Trudy strengthens to a
+ *   hurricane as system nears Mexico’s coast") nor two money-laundering cases in one country.
+ * Used by the desk's sameStory and by the fallback writer's own check (server/providers/mock.js), so the two agree.
+ */
+// (a name in every day's news joins nothing by itself: "Donald Trump" in a Houthi attack's lede and in the midterms')
+export const EVERYDAY_PERSON = /^(?:Donald Trump|Joe Biden|Keir Starmer|Andy Burnham|Vladimir Putin|Volodymyr Zelensky|Volodymyr Zelenskyy|Benjamin Netanyahu|Xi Jinping|Elon Musk|Emmanuel Macron|Narendra Modi|Kamala Harris|JD Vance)$/;
+export function sameReportRule(a, b) {
+  if (!a || !b) return null;
+  // (two matches' previews, "Atletico Madrid vs Manchester United…" and "Man City vs PSG…", are two matches)
+  if (/\bvs?\.?\s/i.test(`${a.title} ${b.title}`)) return null;
+  const lede = (s) => `${s.title || ''} ${firstSentences(s.summary)}`;
+  const [la, lb] = [lede(a), lede(b)];
+  const has = (t, n) => new RegExp(`(?<![\\p{L}])${escRe(n)}(?![\\p{L}])`, 'iu').test(t);
+  const quoted = (t) => [...t.matchAll(/[“"‘]((?:\p{Lu}[\p{L}’'-]*)(?:\s+\p{Lu}[\p{L}’'-]*){1,3})[”"’](?!\p{L})/gu)].map((m) => m[1]);
+  if (quoted(la).some((n) => has(lb, n)) || quoted(lb).some((n) => has(la, n))) return 'quoted';
+  const tb = new Set(titleWords(b.title));
+  const shared = [...new Set(titleWords(a.title))].filter((w) => tb.has(w));
+  // (a name is a word the headlines write only with a capital: "UK", "IMF", "Facebook")
+  const capital = (w) => {
+    const seen = [...`${a.title} ${b.title}`.matchAll(new RegExp(`(?<![\\p{L}])(${escRe(w)})(?![\\p{L}])`, 'giu'))].map((m) => m[1]);
+    return seen.length > 0 && seen.every((x) => /^\p{Lu}/u.test(x));
+  };
+  const words = shared.filter((w) => !capital(w));
+  const names = (t) => new Set([...t.matchAll(/(?<![\p{L}’'-])(\p{Lu}[\p{L}’'-]*[\p{L}])(?![\p{L}’'-])/gu)].map((m) => m[1].replace(/['’]s$/u, '')).filter((n) => n.length >= 2 && !REPORT_NOT_NAME.test(n) && !lookupPlace(n)));
+  const nb = names(lb);
+  // (a name written mid-sentence, or in capitals, in either lede: a headline's first word is no name, "Storm hits Florida
+  // coast…" and "Storm hits Texas coast…" are two storms)
+  const named = (n) => /^\p{Lu}{2,}/u.test(n) || [la, lb].some((t) => new RegExp(`(?<=[\\p{Ll}\\d,;:]\\s)${escRe(n)}(?![\\p{L}])`, 'u').test(t));
+  if (words.length >= 2 && [...names(la)].some((n) => nb.has(n) && named(n))) return 'words';
+  // (overlapping pairs: "Archbishop Timothy Broglio" gives "Timothy Broglio")
+  const people = (t) => new Set([...t.matchAll(/(?<![\p{L}’'-])(\p{Lu}\p{Ll}+)(?=\s+(\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?)(?![\p{L}’'-]))/gu)].filter((m) => !lookupPlace(m[1]) && !lookupPlace(m[2]) && !lookupPlace(`${m[1]} ${m[2]}`) && !REPORT_NOT_NAME.test(m[1]) && !/^(?:Archbishop|Chancellor|Secretary|General|Sir|Lord|Lady|New|North|South|East|West|United|European|Supreme|White|Storm|Hurricane|Typhoon|Cyclone|Tropical)$/.test(m[1])).map((m) => `${m[1]} ${m[2]}`));
+  const pb = people(lb);
+  if ([...people(la)].some((p) => pb.has(p) && !EVERYDAY_PERSON.test(p)) && (words.length >= 2 || words.some((w) => w.length >= 8))) return 'person';
+  return null;
+}
+export const sameReport = (a, b) => !!sameReportRule(a, b);
 
 /** Two headlines are about the same event if they share enough keywords. */
 export function sameEvent(a, b) {
@@ -1092,6 +1183,8 @@ export class NewsDesk {
     // "Hurricane Isaias strengthens as it heads towards land", BBC 10 Oct: both aired in one COSMOS), and an update
     // whose summary says the same as another's is the same story
     if (sameStorm(a, b, this.stormNames()) || sameSummary(a, b)) return true;
+    // (and what both reports say: a quoted name, a person and a rare word, three words of the headlines, sameReport)
+    if (sameReport(a, b)) return true;
     // the same quoted name in both ("India’s ‘Cockroach’ leaders detained" / "Founder of India's 'Cockroach' movement among
     // hundreds detained" / "India cracks down on youth protests", four outlets 10 Oct: three aired in one WORLD NOW)
     if (sameQuotedName(a, b) && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;

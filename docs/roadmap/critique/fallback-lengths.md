@@ -23,6 +23,8 @@ The panel:
 
 They score six categories from 0 to 10: truth, writing, length, rhythm and variety, robustness, and tests. **The round's score is its lowest category.** The target was above 9.7. It was not reached; the last round says why.
 
+Round 6 was narrowed to truth and standards, with standards scored apart for the first time. Its goal was truth of 9.7 or more: nothing false, misattributed or left out on air. It was not reached either (round 6, "Scores").
+
 ## How the editions were made, measured and read
 
 - **The real archive, replayed** (`tools/lengths/replay.mjs`, new).
@@ -65,6 +67,9 @@ They score six categories from 0 to 10: truth, writing, length, rhythm and varie
   - The live Open-Meteo forecast and GDACS warnings are fetched through the proxy and written by the station's weather writer for 24 seeds, timed the same way.
   - `--save-report` keeps the data, so the old writer can be run on the same forecast (`--writer`).
   - Open-Meteo answered HTTP 429 (rate limit) to three of five attempts. The forecast of 16 Oct 21:20 UTC came through, but without the moving sky.
+- **Truth and standards, counted** (`tools/lengths/standards.mjs`, round 6).
+  - It counts the six faults of round 6 by airing over every edition of a replay: a view nobody holds, a person or a body nobody introduced, no news on air, one event twice, a question its answer misses, a kicker that does not fit.
+  - Like the lint, it flags and never rewrites.
 - **Read by hand.** In each round, whole editions were read against their `.src.txt`, fact by fact. The final round's readings are listed with their paths.
 
 ## Round 1: the fallback writer as it stood (baseline replay)
@@ -992,9 +997,298 @@ The same hard panel, on `final20` and the readings above.
 - **No new recording.** Round 4's recording of WORLD NOW `028` stands. Round 5 changed what airs, not how it plays.
 - **Not touched:** `docs/programmes/play.md`, `tools/play/`, port 8711, and the main checkout's processes and data.
 
+## Round 6: truth and standards only
+
+Round 5 scored 5.5 and was merged into the main branch (`e08011c`). The reviewer judged that the fallback writer had reached its ceiling on writing and rhythm: it is an extractive writer, and broadcast prose is the AI writer's job. The last round was therefore narrowed to **truth and standards**, six faults the readings had found:
+1. views with no word of a view;
+2. people nobody introduced;
+3. an advice column leading MONEY MINUTE, and anything else the news desk calls no news reaching air;
+4. one event told twice in an edition;
+5. questions and answers that miss;
+6. a kicker from a stray phrase, playful on a grave story.
+
+Length, writing, rhythm and variety, robustness and tests were not worked on. **Their scores stay as round 5 left them.**
+
+The main branch was merged first. It had not moved since `e08011c`, so the merge was a fast-forward.
+
+The tests are in `test/fallback-standards.test.js` (new): 48 tests in nine blocks, one for each fault and three for what the readings found, each case as it aired. One more is in `test/correspondents.test.js`.
+
+### What was changed, fault by fault
+
+1. **Views with no word of a view** (standards editor).
+   - **The outlet's framing is a view, whoever the sentence quotes.** Round 5 aired "Ironically, claims that the drone strikes hindered Russian disinformation campaigns appears to be a form of disinformation itself, no matter what Zelenskyy says" five times. Its "claims" and "says" made it someone's. A sentence with the outlet's framing now goes whoever it quotes (`server/facts.js`, `outletView`). The framing words include:
+     - "ironically", "in reality", "might not be the case";
+     - "making up for lost time", "As important as…";
+     - "nerds", "a little unusual", "Not that…", "it's probably".
+   - **The outlet's praise is a view as much as its blame.** A sentence goes unless someone is said to hold the view. The words include:
+     - "stunning", "remarkable", "spectacular", "iconic", "impressive", "illustrious", "much-needed";
+     - "encouraging", "wayward", "doubtful", "supposedly".
+
+     A term stays: "striking workers", "an extraordinary general meeting", "Revolutionary Guards".
+   - **In a headline, on the strap and in a tease, the praise word goes** and its article is fitted (`calmTitle`). "Striking new images show…" is said "New images show…"; "a hefty US Air Force contract" becomes "a US Air Force contract".
+   - **A headline that holds the outlet's own guess is no news** (`notNews`): "The Yandex outage probably didn't blitz Russian bots", "It looks like Apple Music is getting new icon".
+   - **A film's or a series' plot is never told as news.** Only what is made, released or earned is told. Round 5 aired "2099 is taking place at a junction point when one species is ending…" six times.
+   - **TECH BYTES' sneers are gone**: "I would like to see the figures from someone who is not selling it.", "Software with ambition. What could possibly go wrong.", "Impressive. Also slightly worrying.". Its characters keep their curiosity and their taste.
+   - **A column, a review or a feature that the desk lets through never airs**, not even to fill a short programme. The programme is shorter instead.
+   - **Never a question in the outlet's voice, nor "At the time of writing".** A cut once said "– can she flip a key swing seat?" as a claim.
+2. **People nobody introduced** (first-time viewer, standards editor).
+   - **A speaker is said with the role the source gives** (`introducePeople`). The role comes before the name ("Pakistani President Asif Ali Zardari", "physicist Kostya Trachenko") or beside it ("Ross Benes, a senior analyst at eMarketer", "Christine Castley, WGEA's chief executive", "Jason Honeyman, who has led Bellway since 2017").
+     - A subject the line tells of gets a role too, when the story has said none ("Kanishka Narayan, the AI minister, will call on…"); after "…as minister calls for AI firms to increase safety efforts" the name is enough.
+     - A speaker the source never introduces does not air. An opener with one gives way to the headline.
+   - **A surname the headline gives alone is said whole the first time**, in a story and in a tease (`wholeSurnames`): "Chancellor John Healey faces £35bn Budget challenge…".
+   - **Part of a name is said whole**: "Ali Zardari acted…" becomes "Asif Ali Zardari acted…".
+   - **Hyphenated surnames are found**: "Amiry-Moghaddam", "Lamarre-Condon".
+   - **A surname the source never gives whole does not air** when it belongs to someone who argues or speaks: "Canestrini and his colleagues argued…", "said Mannon, 63".
+   - **An organisation's letters are said whole the first time**, as the source writes them. "WGEA warned…" becomes "The Workplace Gender Equality Agency warned…".
+   - **A quotation's "he said" airs only after the sentence that says who he is.**
+   - **These checks now run on every line that names someone**: the opener, the line kept back for after a story ("And this matters too: if convicted, Duterte could…"), THE CATCH, UNIT-8's answers and the tease. In round 5 they ran only on a story's later lines.
+   - **The coherence gate knows more bodies and people that the story must have met first**:
+     - bodies: "the organisation", "the charity", "the university", "the advisory";
+     - people: "the lab worker", "the Kenyan American engineer", "the artisan", "The 46-year-old";
+     - counts: "the three news organizations", "Both served as…";
+     - things pointed back at: "that paperwork", "that hearing", "In that state";
+     - leaning openings: "That was…", "That could…", "Gibney replied…";
+     - "the increase".
+
+     A body the story named is "the organisation" afterwards, but only a body of that kind: a charity must be a trust, a society or a fund. A trade after a named person refers to that person ("the actor"). The gate still lets a sentence through when the one before it in the source was told: "the artisan" airs that way (still open).
+3. **What the news desk calls no news** (standards editor).
+   - **`notNews` now also catches**:
+     - advice: "Five signs your house is leaking heat", or a summary that gives an instruction;
+     - a page's label: "Analysis:", "Comment:";
+     - a columnist's question under their name: "Faisal Islam: What… tells us";
+     - a column in the first person: "I don't miss the camera…", "BT charged me…";
+     - an outlet's own event or offer: TechCrunch Disrupt;
+     - a match's predictions;
+     - a headline's guess;
+     - a headline that is only a quoted question, or a yes-or-no question;
+     - a podcast's page;
+     - a picture's page (NASA's image articles and photojournal).
+
+     It never catches a report's "What we know about…", a study's "we still don't think…", everyone's "our cells", "World War I", or a question its own headline answers ("Was Neanderthal life violent? This wound suggests…"). Over the archive it newly drops 39 of 1,130 stories, and each of them was read: columns, promotions, podcast and video pages, picture pages, explainers, headlines' guesses. None is a report of news.
+   - **The writer drops whatever `notNews` drops**, whoever passed it on. It never airs a column or a feature at all, and no column leads while a report is there.
+   - **An analysts' stock call is never the number of the day** ("90% UPSIDE").
+4. **One event told twice** (senior news editor).
+   - **`sameReport` (`server/news.js`) joins two reports of one event.** It needs one of three signs:
+     - they share a quoted name;
+     - they share two words of their headlines and a name in their ledes;
+     - they name the same person and share a rare word.
+   - **The desk and the writer ask the same rule.** The desk's `sameStory` and the writer's `sameNews` both use it, so the desk groups the reports before the rundown is built and the writer agrees.
+   - **It joins**: the Facebook feed stories, the IMF's UK forecast told twice, the archbishop told twice.
+   - **It never joins**: two hurricanes, two school shootings, two start-ups' funding rounds, a match and a club.
+   - **A name counts only when a lede writes it mid-sentence, or in capitals.** A headline's first word is not a name: "Storm hits Florida coast…" and "Storm hits Texas coast…" are two storms.
+   - **Over the archive** it joins 373 pairs of stories within 36 hours. The list was read for false joins.
+5. **Questions and answers that miss** (first-time viewer).
+   - **One rule says what a question asks for and what an answer must say to give it** (`missesQuestion`, `server/correspondents.js`):
+     - "what comes next?" needs a future or a date, outside quotation marks;
+     - "How do they know?" needs a method;
+     - "how does it work?" needs a mechanism;
+     - "what does it cost?" needs a price;
+     - "what is behind it?" needs a cause;
+     - "what is the catch?" needs a limit or a cost, never good news.
+   - **A future is now a future said as one.** Round 5 asked "what comes next?" of "stronger than expected" and "as the war continues".
+   - **When the answer misses**:
+     - a writer's prompt is asked again in words the answer fits;
+     - a second exchange that still misses is dropped;
+     - THE CATCH and UNIT-8's exchanges are dropped;
+     - an expert's first question is chosen from those its answers give.
+   - **THE CATCH never answers with a contrast to a sentence the viewer did not hear** ("Despite the president's pushback, however, …").
+6. **Kickers** (senior broadcast director, standards editor).
+   - **A grave story takes a topic fit for it, never a playful one.** A grave story is one where people are killed or dead, or where there is a famine. Round 5 put:
+     - SOFTWARE on a hiker found dead;
+     - WILDLIFE on a man killed by a tiger;
+     - TRADE on officials killed near a port;
+     - TRANSPORT on a deadly derailment;
+     - GADGETS on a famine.
+   - **New topics for grave stories**: a famine is HUMANITARIAN, a fire set on purpose is CRIME, a deadly collapse is ACCIDENTS. An animal's death, an ancient one and an actor's keep their own field.
+   - **Kickers from stray words are gone**:
+     - a technology's topic found only in the summary of a story from another section (GADGETS on a TV station raid, AI on the IMF's forecast);
+     - a war or a fire that a business story's summary mentions in passing (the IFS's budget warning, a travel survey);
+     - a list before a colon: the headline is about what follows it (the Portugal budget is ECONOMY, not EDUCATION);
+     - a camera's footage (an ICE vehicle hitting a man is MIGRATION, not PRIVACY).
+   - **Over the archive** the strap changes for 45 of 1,116 stories. Each change was read.
+
+Found reading `final21`, the first replay of round 6, and each replay after it (`final22-partial`, `final22b` to `final22l`), and fixed before the final replay:
+- a wire's dateline, read twice and with its agency: "WARSAW, Poland — Poland is blaming…";
+- a cut that ends on a time needing what it is the time of: "He met Keir Starmer at Downing Street the day.";
+- one correspondent handed over twice in the same words in one WORLD NOW;
+- "this morning" said at 18:21 UTC. A time of day now airs only within four hours of the story's own time;
+- "Gibney is a douche" quoted in NEWS IN 60. No vulgar word is quoted into a bulletin;
+- "What ice cream has to do with this year's Nobel Prize…", an explainer's headline read as news;
+- the role lost to a tease's breath: "Still to come: Jason Honeyman welcomed…";
+- "according to Dima Romashin, Efferon’s co-founder and CEO,.";
+- "NATO 's";
+- "24 TRAVELLED" on a card, taken from the number in "France 24". A channel's or a craft's number is not a figure;
+- "France 24 travelled to … to find out more", the outlet's own trip read as news;
+- "Mannon's 300 cattle…", a surname the source never gives whole, its possessive before a number;
+- "Hiep is the latest Australian human rights campaigner…" in a round-up. A round-up's items and headlines now get the same name checks;
+- OCEANS on "Oil tanker reportedly attacked". An attack on a ship is CONFLICT;
+- a place's possessive taken for a stranger's name ("Amsterdam’s main airport"), found by the full suite;
+- two storms joined as one event by a headline's first word, also found by the full suite;
+- "The The Foschini Group": an organisation's letters said whole kept the name's own article and added another;
+- "NASA the Jet Propulsion Laboratory" and "The Foschini Group London": letters inside a longer name ("NASA JPL", "TFG London", the UK arm of The Foschini Group) are now left as they are;
+- "Fattah al-Burhan": a surname is said with all the given names the source gives it ("Abdel Fattah al-Burhan"), never the last one alone, and a common word that opens a sentence is no given name ("Friends Malcolm");
+- **quotation cards by a name the viewer never heard**: "— Griffiths", "— Kogan", "— Bekker", "— Jha", "— Donna". In round 5's final replay 192 of 840 cards named their speaker by one word the edition never said. A card now gives the whole name the source gives ("— Beverley Griffiths", "— David Kogan", "— Malcolm Butcher"), the name as the story said it ("— Apple"), or no card ("— Donna", whose surname the source never gives). The quote check (`groundQuote`, `server/facts.js`) accepts the whole name when the source writes it;
+- "As Sunday. Friends Malcolm put it" and "As Manchester City Kogan put it", found writing the cards' test: a speaker's whole name ran across a sentence's end or a headline's end. It now stays within a line, and a list's plural ("Friends Malcolm Butcher, 82, Jim Tyler, 81…") is no one person's role;
+- "this morning" at 18:21 UTC again, in the round-up (France 24's morning video, its feed dated 40 minutes before). A time of day now airs only when it is that time where the story is, as well as near the story's time;
+- WORLD NOW's lead on the Yandex strike told only its background ("Both Russia and Ukraine have stepped up attacks…"). The coherence gate took "- the third attack on the Russian tech giant's sites this week" for a sequel nobody had told, though the headline counts it; and the opener, shortened, had to keep "Ukraine", which the intro had just said. A count the headline gives is now no leaning, and the names the intro said need not be kept. The lead now opens "Yandex has been forced to pause its operations at a data centre near Moscow." In a deeper telling, the same rule had let another event the article tells further down open the story ("On Saturday, at least 20 people… were killed in Russian attacks on Zaporizhzhia", for want of the headline's "Russian" in the shortened news sentence); it no longer can;
+- "Republicans seem keenly aware of the discord and frustration among farmers." with no credit: the outlet's reading of a group's mind is a view;
+- "Transporter-18 SmallSats Encapsulation" and "NASA’s Record-Setting Perseverance Rover Team" read as COSMOS stories: a picture's page (NASA's image articles and photojournal) is no news;
+- found reading the replay after these fixes: the Yandex story, no longer the lead, opened on "Russia has previously also struck Ukrainian data centres…". The writer's check took the "also" for a lean and dropped the story, but three WORLD NOW intros still teased it. A story now never opens on "also", wherever the sentence stands in the article. And the intro never teases a story that does not air: a line that teases only a dropped story leaves the intro, its cues kept (`server/writer.js`). Round 5's final replay had one such intro (`101`, the arson victims);
+- "Meanwhile, H&M is investigating a separate claim that it was attacked by a notorious hacking group. The retail group reportedly told customers in an email that it did not believe customers' payment information had been affected." In the source, "the retail group" is TFG, named in the sentence the cut left out; on air it was H&M. A business described by its kind and not named ("The retail group", "The tech company") now follows only the sentence that names it, unless the story has said it in those words. (Tried on every body first, the rule took "The organisation's latest report…" after "the IMF said" for a lean and dropped the forecast MONEY MINUTE `180`'s headline is about; a public body stays the coherence gate's, which knows the IMF is an organisation);
+- "On Monday Narayan confirmed that AISI was conducting tests…" and "“It seems likely, if not inevitable, that our own cyber defences will be breached,” said Narayan.": a weekday before the surname was taken for part of a longer name, so the AI minister was never said whole nor introduced. A weekday or a month is no part of a name: the line now says "Kanishka Narayan, the UK's AI minister". (Tried on every sentence-opening word first, the rule took "Kosanica" in "In Kosanica, Montenegro", a place the gazetteer lacks, for a stranger, and the line went);
+- "“We have repeatedly made clear to Iran…,” he wrote on X." after "The group is already under UK sanctions…". The check that a quotation's "he" follows a line naming someone matched any two capitalised words case-blind, so "The group" passed. It now needs a whole name with its capitals or a role, and an outlet's credit ("according to Pixelburg Post") names no speaker.
+
+### How it was measured
+
+- **`tools/lengths/standards.mjs`** (new) counts the six faults by airing over every edition of a replay. Like the lint, it flags and never rewrites, and a flag can be wrong. Its classes:
+  - `view`: a judgement in the presenter's voice that nobody is said to hold ("Ironically, …", "in reality", "an impressive $27 million"), in a headline, a story, a correspondent's or an expert's line;
+  - `banter`: a presenter's sneer at a story;
+  - `bare`: a person by a surname, or part of a name, that the edition never said whole before;
+  - `roleless`: a person's whole name, said for the first time with nothing to say who they are, when the source says it;
+  - the same two in a headline (`bare-headline`, `roleless-headline`), counted apart, because outlets write headlines that way ("Russell Brand arrives for his trial");
+  - `bare-card`: a quotation card whose speaker is one word the edition never says ("— Griffiths");
+  - `not-news` and `lead-not-news`: a story the news desk calls no news, on air or as the lead;
+  - `same`: two stories of one event in one edition, by the desk's `sameStory`;
+  - `miss`: a question its answer does not answer;
+  - `kicker`: a playful or stray topic on a grave story's strap, or a technology's topic from a stray word.
+- **The lint's coherence classes** (`untold-*`), with this round's wider gate (`server/coherence.js`), on both replays.
+- **The replays.** `final20` is round 5's final replay. `final21` was round 6's first. Reading it found faults that were fixed, and so did reading each replay after it: `final22-partial` and `final22b` to `final22l` were stopped when a reading found a fault worth fixing (the last were the Yandex lead, the intros that teased it, H&M's "retail group", the IMF forecast that the fix for it dropped, and "On Monday Narayan"). `final22` is the replay of the code as committed. All use the same archive, desk and article pages. Every count below runs today's rules over `final20` and `final22`, so the before and the after are measured alike.
+
+### Airings removed
+
+Counted by `tools/lengths/standards.mjs` over every edition of each replay (275 in `final20`, 268 in `final22`), with today's rules on both. A flag is a pointer, not a verdict: the `roleless` class mostly flags bodies and headlines. `final22` has seven fewer editions than `final20` (the producer did not make them, see the lengths below), so a few of the airings removed went with whole editions.
+
+| Fault | Class | What it flags | Round 5 (`final20`) | Round 6 (`final22`) | Airings removed |
+|---|---|---|---|---|---|
+| 1. Views | `view` | a judgement in the presenter's voice nobody is said to hold | 114 | 3 | 111 |
+|  | `banter` | a presenter's sneer at a story | 21 | 0 | 21 |
+| 2. People | `bare` | a person by a surname or part of a name never said whole | 73 | 32 | 41 |
+|  | `bare-headline` | the same, in a headline | 16 | 10 | 6 |
+|  | `roleless` | a whole name said first with no role, the source giving one | 362 | 190 | 172 |
+|  | `roleless-headline` | the same, in a headline | 8 | 5 | 3 |
+|  | `bare-card` | a quotation card by one word the edition never says | 192 | 0 | 192 |
+| 3. No news | `not-news` | a story the desk calls no news, on air | 56 | 0 | 56 |
+|  | `lead-not-news` | the same, as the lead | 5 | 0 | 5 |
+| 4. One event twice | `same` | two stories of one event in an edition | 12 | 0 | 12 |
+| 5. Answers that miss | `miss` | a question its answer does not answer | 24 | 0 | 24 |
+| 6. Kickers | `kicker` | a playful or stray topic on a grave story, a technology's topic from a stray word | 53 | 0 | 53 |
+| (found reading) | — | an intro that teases a story the edition never tells (`teased.py`) | 1 | 0 | 1 |
+| (found reading) | — | an outlet's "this morning", "tonight" said at another time of day (`daypart_count.py`) | 6 | 0 | 6 |
+
+The lint's classes on the same two replays (`tools/lengths/lint.mjs`):
+
+| Lint class | Round 5 (`final20`) | Round 6 (`final22`) |
+|---|---|---|
+| `headlinese` | 179 | 207 |
+| `long` | 159 | 178 |
+| `untold-also` | 95 | 90 |
+| `fragment` | 91 | 100 |
+| `opinion` | 67 | 78 |
+| `untold-definite` | 59 | 14 |
+| `thin-lead` | 31 | 36 |
+| `quote-context` | 24 | 22 |
+| `untold-sequel` | 23 | 0 |
+| `leans` | 20 | 15 |
+| `untold-demonstrative` | 18 | 13 |
+| `untold-person` | 13 | 7 |
+| `boilerplate` | 6 | 3 |
+| `typography` | 5 | 7 |
+| `double-attribution` | 4 | 1 |
+| `same-event` | 3 | 0 |
+| `speaker-words` | 3 | 6 |
+
+The six `speaker-words` flags of `final22` are one sentence ("France is among the countries where a litre is most expensive…"), aired six times. It is the outlet's own sentence, not a quotation: the article leaves a quotation mark unclosed further up, and the lint reads the quotation as still open.
+
+### Lengths, for the record
+
+Round 6 did not work on length, and the length score stays as round 5 left it. Its fixes take lines off the air when they cannot be told truly (a speaker with no role, a column, a line that leans on one left out), so the lengths are given for the record: `final22` against round 5's `final20`, the same archive, desk and article pages.
+
+| Programme | Target | Round 5 (`final20`): voiced avg / median / min–max | In range | Round 6 (`final22`) | In range |
+|---|---|---|---|---|---|
+| WORLD NOW | 540–600 s | 496 / 516 / 204–613 | 46 of 113 | 496 / 520 / 182–622 | 43 of 114 |
+| COSMOS | 360–480 s | 400 / 411 / 156–475 | 31 of 38 | 380 / 394 / 259–452 | 24 of 37 |
+| TECH BYTES | 360–480 s | 370 / 409 / 79–450 | 31 of 43 | 401 / 410 / 210–471 | 33 of 38 |
+| MONEY MINUTE | 240–360 s | 259 / 280 / 143–306 | 19 of 25 | 248 / 253 / 87–295 | 16 of 23 |
+| NEWS IN 60 | 55–70 s | 62 / 63 / 50–73 | 52 of 56 | 61 / 61 / 45–68 | 51 of 56 |
+| WORLD WEATHER | 270–480 s | not changed by round 6 (`weather-r6final/`, the same forecast: as round 5) | | | |
+
+Editions the producer did not make, for want of enough stories on the replay's thin desk (its floor): WORLD NOW 7 then 6, COSMOS 7 then 8, TECH BYTES 0 then 5, MONEY MINUTE 2 then 4, NEWS IN 60 5 then 5. The new ones are desks that held mostly what the news desk now calls no news: TECH BYTES `022` and `042` of round 5 aired product reviews ("Mechanism’s first Switch 2 case is as awesome…", "OnePlus 16 is firm’s most interesting phone"), `207` a column. The live desk holds every story the feeds carry, so this replay's desk is thinner than the live one; that is a claim about the live desk, not a measurement of it.
+
+The shortest edition is MONEY MINUTE `072` at 87 s: its desk held five stories, three of them a headline with no article. COSMOS has seven fewer editions in range and MONEY MINUTE three: this round's checks take lines and stories off the air, and it added nothing in their place. TECH BYTES has more in range (33 of 38), because its shortest editions of round 5, reviews and a column, are no longer made.
+
+### Readings (who found what)
+
+New editions, none read in an earlier round. Each was read in full against its `.src.txt`, and every spoken line of a story, a chat and a cross was checked with `facts6.py`:
+- WORLD NOW `024`, `026`, `045`, `063`;
+- MONEY MINUTE `078`, `180`, `220`, `246`, and `084` again;
+- COSMOS `056`, `082`;
+- TECH BYTES `020`, `080`;
+- NEWS IN 60 `014`, `029`;
+- WORLD WEATHER seeds `010` and `016`, on the saved live forecast of 16 Oct 21:20 UTC.
+
+Notes per edition: `lengths/read6/NOTES.md`, with copies of the editions. Most were first read in `final22d` to `final22l` as each was made, and fixed where a fix was found (see the list above). Every note was checked again in `final22`.
+
+**Nothing false was found.** `facts6.py` finds no spoken figure or name that the sources lack; its only such flags are the cast's own hand-overs ("our Economics Editor, Omar Ledger") and once the station's own place before a story ("In the United Kingdom, …" for "the UK"). No time of day is said at the wrong hour, no quotation is said with nobody saying it, no card names its speaker by one word the edition never said.
+
+Still there, by who found it:
+1. **News told after background or a side detail, or only by its headline** (senior news editor).
+   - NEWS IN 60 `029`: "one person… was killed" and the stakes, never that the terminal was struck again; the cut dropped "in the latest attack".
+   - MONEY MINUTE `084`: last week's BA flight told for this week's, whose details go as the headline said again.
+   - MONEY MINUTE `180` and `220`: the Heathrow boss's warning only on the card; the story is the runway's history.
+   - MONEY MINUTE `220` and `246`: the skincare scheme told by one victim, then by NPR's investigation, never by what it found.
+   - WORLD NOW `024`: the reaction to a Burnham statement that is never given.
+   - TECH BYTES `080`: "Astronauts will install the arrays…", the cargo launch never told.
+   - WORLD NOW `045` and `063`: the Yandex lead now says the news, but never that it was a Ukrainian drone strike nor that no one was hurt.
+2. **A view, an analysis or a company's claim said as news** (standards editor).
+   - WORLD NOW `026`: the Guardian's unlabelled analysis leads ("The fate of Yemen was not going to shift votes in Kansas or Alaska.").
+   - NEWS IN 60 `014`: Al Jazeera's analysis of the Sudan strikes as an item ("…expose deepening border lawlessness and regional instability").
+   - TECH BYTES `020`: two executives' view as "TechCrunch reports"; TECH BYTES `080`: Ars Technica's verdict as the catch ("it's not a real smartwatch"), Google's own example as the expert's fact.
+   - COSMOS `056` and `082`: a press release's praise and hook ("vanillin has powerful properties", "Getting better sleep might be as simple as…", "“astonishing” property of light").
+   - MONEY MINUTE `180` and `246`: a photo feature on a flooded amusement park as a story; MONEY MINUTE `246`: a feature on Copenhagen's urban beekeepers ("Is the modern economic system broken? These urban beekeepers think so…") as a story, put to the Economics Editor.
+3. **People, things and counts nobody introduced** (first-time viewer).
+   - "the blaze" (`026`, `045`, `063`), "Those storms" (`024`), "Of those, 135,000" (`045`), "the artisan" and its card (`026`, `045`), "the error" (`180`), "Human hands provide a familiar example" (`082`).
+   - "AISI" never said whole (`220`): its letters are not the initials of "AI Security Institute" word by word.
+   - Dawn Myers never said to be a founder (`020`); Halima never introduced, and "Asho Hassan" for "Asho Hassan Abdi" (`024`); the football regulator's chair and the marine veteran named only on their cards (`078`, `063`).
+4. **The accused not called so** (standards and legal editor): "…which Zack Coughlan showed officers", and "the defendant" never said to be him (`026`).
+5. **Questions and closing lines that miss** (first-time viewer, director): "So who notices the difference?" answered with a camera feature, and "The second version is usually the one to buy." after a start-up with no second version (`080`).
+6. **Kickers from a stray word** (director): HISTORY on octopus genetics (`082`), CHIPS on the HomePod (`080`), CONFLICT on the IMF's forecast, from its headline's "war" (`220`).
+7. **One event in two stories** (senior news editor): the Riyadh terminal strike and the CCTV of people taking cover may be one attack (`029`); their headlines share one word.
+8. **WORLD WEATHER** (first-time viewer, writing): "near Cook Islands"; two cities ranked third and second at the same 40 degrees; "this afternoon" for Mumbai at 21:20 UTC.
+
+### Scores
+
+The same hard panel, on `final22` and the readings above. This round scored **truth** and **standards** only. Standards is scored apart for the first time: what a broadcaster may put on air (a view only with whoever holds it, people introduced, no column or furniture as news, one event once, answers that answer, a strap that fits the story's gravity). **The other categories stay as round 5 left them**: this round did not work on them, and they were not scored again.
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Truth | 7.5 | Nothing false was found: no figure, name or time the sources lack, no quotation without its speaker, no card naming its speaker by one word the edition never said. What keeps it down is what is misattributed or left out. An unlabelled analysis leads WORLD NOW `026`, and another is a NEWS IN 60 item (`014`). An outlet's verdict, two executives' view and a company's own example are said as fact (TECH BYTES `020`, `080`). A press release's hook and praise air as ours (COSMOS `056`, `082`). And a story can still lose its news to background or a side detail (NEWS IN 60 `029`; MONEY MINUTE `084`, `180`, `220`, `246`; WORLD NOW `024`; TECH BYTES `080`). Round 5 scored 6.0 |
+| Standards | 8.0 | By the detector, views in the presenter's voice, sneers, no news, kickers, answers that miss and one event twice are nearly gone, and so are cards by a name the viewer never heard (the table above). The readings still find: the accused not called so (`026`); things and people nobody introduced ("the blaze", "the artisan", "Of those", "the error"); features told as stories in MONEY MINUTE (`180`, `246`); three kickers from a stray word (`080`, `082`, `220`); a closing line that fits nothing (`080`) |
+| Writing | 5.5 | as round 5 left it |
+| Length | 5.5 | as round 5 left it (the lengths above are for the record) |
+| Rhythm and variety | 5.5 | as round 5 left it |
+| Robustness | 6.0 | as round 5 left it |
+| Tests | 8.5 | as round 5 left it; this round adds `test/fallback-standards.test.js`, every case as it aired |
+
+**Round score: 5.5** (writing, length, rhythm and variety, as round 5 left them). **The goal of truth ≥ 9.7 was not reached.** What stands between 7.5 and 9.7 is under "What is still open".
+
+### What is still open
+
+- **The goal of truth ≥ 9.7 was not reached.** Nothing false was found. What keeps truth and standards down is in the readings above, and each kind needs to know what a sentence claims and whose claim it is, or which sentence is the news:
+  - **a view, an analysis or a company's claim with no word that gives it away**: an unlabelled analysis, an outlet's verdict, a press release's hook. The rules catch a view by its words ("ironically", "stunning", "seem keenly aware"); these have none;
+  - **the news left to the headline** while the story tells background or a side detail, when the sentence that says it is long, is taken for the headline said again, or loses its clause to a cut;
+  - **lines that lean on what the story never told** where the sentence before them in the source was told: "the artisan", "the blaze", "Of those". The coherence gate trusts the source's own order;
+  - **the accused not called so**, and roles the source gives only elsewhere in the article.
+- **One event in two stories whose headlines share one word** ("Saudi airport passenger terminal is struck again" and "CCTV shows people take cover as missile hits Riyadh airport"). The desk's rule needs two shared words, or a quoted name, or the same person.
+- **A third of stories never name their outlet on air** (1,034 of 2,920 stories in round 5's replay, 1,023 of 2,898 now: `nocredit.py`). A newsroom may tell a story as its own, but these are outlets' reports.
+- **The detector's three `view` flags in `final22`**: UNIT-8's "Filed under remarkable." twice, the character's own word, and "A rare study has revealed a striking divide inside an Alzheimer’s patient’s brain." (COSMOS `285`), a press release's "striking", which the writer's rule keeps for its other senses ("striking workers").
+- **Famous people by surname** (`bare`, 32 flags, about half real): "Khan’s PTI party", "Alcaraz", "Duterte", "Takaichi said…".
+- **The categories round 6 did not work on** stay as round 5 left them: headlinese, fragments, the headline said twice when the lead's article cannot open it, one fact twice, the lengths of thin desks. The lint counts more of some (headlines read word for word 179 → 207, long sentences 159 → 178, fragments 91 → 100): where a line cannot be told truly, the headline is often what is left.
+- **No new recording.** Round 4's recording of WORLD NOW `028` stands; round 6 changed what airs, not how it plays.
+- **Not touched:** `docs/programmes/play.md`, `tools/play/`, port 8711, and the main checkout's processes and data.
+
 ## Before and after
 
-Lengths are voiced: the open, every line at its voice's measured rate, the pauses and the end card. Before is the baseline replay at `6b56d02`; after is the final replay (`final20`, round 5), with the same archive, desk and article pages.
+Lengths are voiced: the open, every line at its voice's measured rate, the pauses and the end card. Before is the baseline replay at `6b56d02`; after is round 5's final replay (`final20`), with the same archive, desk and article pages. Round 6 did not work on length; its lengths are given for the record in its section.
 
 | Programme | Target | Before: voiced avg / median / min–max | In range | After | In range |
 |---|---|---|---|---|---|
@@ -1020,7 +1314,7 @@ Every added line is a sentence of the story's own source, or one of the programm
 
 ## What was not done
 
-- **The target of 9.7 was not reached.** Rounds 4 and 5 both score 5.5. Round 5 removed most of the lines that leaned on what was never said (378 of 457, by the lint), restored the clock's worst case and brought NEWS IN 60 into its minute. Its readings still found what keeps the score down:
+- **The target of 9.7 was not reached.** Rounds 4 and 5 both score 5.5. Round 6 worked on truth and standards only: it scores them 7.5 and 8.0, short of its goal of truth ≥ 9.7, and the round stays at 5.5 (round 6, "What is still open"). Round 5 removed most of the lines that leaned on what was never said (378 of 457, by the lint), restored the clock's worst case and brought NEWS IN 60 into its minute. Its readings still found what keeps the score down:
   - news told after a detail, or not at all;
   - people nobody introduced;
   - views with no word of a view;
@@ -1058,9 +1352,11 @@ The editions, the recording and the scripts are in the session's scratchpad, und
 - `final14/` — round 4's final replay;
 - `final20/` — round 5's final replay, the code as committed apart from one kicker word fixed after it (GADGETS from "monitor");
 - `final20-nogate/` — the same code with the coherence gate switched off;
-- `read/NOTES.md` — round 4's readings; `read5/NOTES.md` — round 5's, with copies of the editions read;
+- `final21/` — round 6's first replay; `final22-partial/` and `final22b/` to `final22l/` — the round 6 replays a reading stopped;
+- `final22/` — round 6's final replay, the code as committed;
+- `read/NOTES.md` — round 4's readings; `read5/NOTES.md` — round 5's; `read6/NOTES.md` — round 6's; each with copies of the editions read;
 - `recordings/` — the recording;
 - `rec/` — the voiced edition;
-- `weather-before-live/`, `weather-after-final/` and `weather-r5final/` — WORLD WEATHER on the same forecast.
+- `weather-before-live/`, `weather-after-final/`, `weather-r5final/` and `weather-r6final/` — WORLD WEATHER on the same forecast.
 
-The tools are in the repository, under `tools/lengths/`. The checks used only for reading are scripts in the scratchpad: `prov.py`, `facts.py`, `facts_all.py`, `innerquote.py`, `pairs.py`, `stock.py`, `table.py`, `shortest.py`.
+The tools are in the repository, under `tools/lengths/` (round 6 added `standards.mjs`). The checks used only for reading are scripts in the scratchpad: `prov.py`, `facts.py`, `facts_all.py`, `innerquote.py`, `pairs.py`, `stock.py`, `table.py`, `shortest.py`; round 6 added `facts6.py`, `r6_table.py`, `make_r6_table.py`, `cards_bare.py`, `teased.py`, `daypart_count.py`, `nocredit.py` and the audits of the news desk's rules (`t_notnews_audit.mjs`, `t_samereport_audit.mjs`, `t_kick_diff.mjs`).

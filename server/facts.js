@@ -578,7 +578,10 @@ export function groundQuote(quote, source) {
   if (!match) return null;
   const by = squash(quote?.by ?? '');
   const speaker = squash(match.by ?? '');
-  const sameSpeaker = by && speaker && (by === speaker || by.replace(/^(?:the|a|an) /, '') === speaker.replace(/^(?:the|a|an) /, ''));
+  // (or the whole name the source gives that speaker: "Beverley Griffiths" for "…,” Griffiths said", "Malcolm Butcher" for
+  // "…,” Malcolm said", round 6)
+  const whole = by && speaker && (by.endsWith(` ${speaker}`) || by.startsWith(`${speaker} `)) && ` ${squash(source)} `.includes(` ${by} `);
+  const sameSpeaker = by && speaker && (by === speaker || whole || by.replace(/^(?:the|a|an) /, '') === speaker.replace(/^(?:the|a|an) /, ''));
   return { text, by: sameSpeaker ? String(quote.by).trim() : null };
 }
 
@@ -712,6 +715,9 @@ export function extractFigures(text, max = 3) {
     // on a card (NASA 9 Oct); "Apollo 11", "Falcon 9", "Windows 11" (a capitalised word before it mid-sentence)
     const head = s.slice(0, n.index);
     if (!n.percent && !n.currency && !n.unit && (/\p{L}[-‐‑]$/u.test(head) || /[\p{Ll},;]\s+\p{Lu}[\p{L}’'-]*\s$/u.test(head))) continue;
+    // (and at a sentence's start, a channel's, a craft's or a law's number: "France 24 travelled to the place Turning Point was
+    // founded…" once put "24 TRAVELLED" on a WORLD NOW card, 12 Oct, round 6)
+    if (!n.percent && !n.currency && !n.unit && /\b(?:France|Channel|Radio|Sky|Formula|Apollo|Artemis|Falcon|Windows|iPhone|Pixel|Galaxy|Crew|Expedition|Sentinel|Soyuz|Progress|Starship|Flight|Route|Highway|Interstate|Gate|Terminal|Platform|Level|Grade|Class|Article|Section|Chapter|Proposition|Measure|Transporter|Category|Stage|Phase|Episode|Season|Series|Volume|Model|Version|Gen|Studio|Station|District|Ward|Zone)\s$/.test(head)) continue;
     // (the count a ratio is out of is no figure: "One in 10 scams reported to Citizens Advice…" put "10 SCAMS" on a card, 14 Oct)
     if (/\b(?:one|1|two|2|three|3|four|4|nine|9)\s+(?:in|out of)\s+$/i.test(head.slice(-20))) continue;
     const tokens = (rest.match(/^[\s-]*([^.;:!?()]*)/)?.[1] || '').split(/\s+/).filter(Boolean);
@@ -953,14 +959,26 @@ export function fixNameTypos(text, title, whole = text) {
 // Oct). A sentence that says who holds the view keeps it (theirs, said so); a rule ("If the fourth attempt fails, a snap
 // election must be called") is no view.
 const VIEW_MODAL = /\b(?:should|must|ought to|needs? to|has to|have to|had better)\b/i;
-const VIEW_WORDS = /\b(?:(?:un)?surprisingly|unsurprising|beautiful|awkward(?:ly)?|unconvincing|embarrassing|shameful|disgraceful|absurd|ridiculous|bizarre|astonishing|outrageous|appalling|dreadful|brilliant|wonderful|fantastic|superb|admirabl[ey]|laughabl[ey]|pathetic|dubious|reckless|foolish|hypocritic\w*|ironically|unfortunately|fortunately|sadly|thankfully|hopefully|clearly|obviously|undoubtedly|certainly|frankly|admittedly|of course|might have nailed|is chaos|to ingratiate|it (?:looks|seems) (?:like|as if|as though)|could do more|have not done so|less than (?:she|he|they|it|we) should|it is (?:hard|easy) to (?:see|feel|argue|imagine|understand)|it would be (?:surprising|wise|wrong|right|unwise|a mistake)|easy to feel|which is (?:beautiful|wonderful|great|terrible|sad)|as luck would have it|in a good way|greatest spectacles?|looks like (?:the|its|their) (?:company's |firm's )?best)\b/i;
+const VIEW_WORDS = /\b(?:(?:un)?surprisingly|unsurprising|beautiful|awkward(?:ly)?|unconvincing|embarrassing|shameful|disgraceful|absurd|ridiculous|bizarre|astonishing|outrageous|appalling|dreadful|brilliant|wonderful|fantastic|superb|admirabl[ey]|laughabl[ey]|pathetic|dubious|reckless|foolish|hypocritic\w*|ironically|unfortunately|fortunately|sadly|thankfully|hopefully|clearly|obviously|undoubtedly|certainly|frankly|admittedly|of course|might have nailed|is chaos|to ingratiate|it (?:looks|seems) (?:like|as if|as though)|(?:seems?|seemed) (?:keenly |acutely |well |increasingly |deeply |fully )?(?:aware|unaware|willing|unwilling|determined|reluctant|eager|content|comfortable|uncomfortable)|could do more|have not done so|less than (?:she|he|they|it|we) should|it is (?:hard|easy) to (?:see|feel|argue|imagine|understand)|it would be (?:surprising|wise|wrong|right|unwise|a mistake)|easy to feel|which is (?:beautiful|wonderful|great|terrible|sad)|as luck would have it|in a good way|greatest spectacles?|looks like (?:the|its|their) (?:company's |firm's )?best)\b/i;
 const HELD_BY = /\b(?:said|says|say|told|tells|warned|warns|added|adds|according to|argued|argues|believes?|believed|claims?|claimed|insisted|insists|urged|urges|called for|calls for|wrote|writes|recommend\w*|suggest\w*|stressed|noted|accused|accuses|demanded|demands)\b/i;
+// (round 6: the outlet's framing is its own whoever the sentence quotes: "Ironically, claims that the drone strikes hindered
+// Russian disinformation campaigns appears to be a form of disinformation itself, no matter what Zelenskyy says", The Verge
+// 13 Oct, aired five times because "claims" and "says" made it someone's; "However, in reality, that might not be the case",
+// "Meta is making up for lost time in the AI race", "As important as some of the messages… are", "the world's econ nerds",
+// round 5's reading)
+// (and a wry aside: "Not that the heritage charity will be taking on the napkin-folding…", Guardian 13 Oct)
+const FRAMING = /^Not that\b|\b(?:ironically|in reality|might not be the case|no matter what|making up for lost time|as important as|nerds?|what could possibly go wrong|make no mistake|the truth is|needless to say|for better or worse|arguably|a little unusual|(?:it['’]s|is|are|was|were) probably(?: not)?)\b/i;
+// (and the outlet's praise, a view as much as its blame: "A spectacular blaze tore through the iconic covered market",
+// "Striking images…", "an impressive $27 million", "a remarkably detailed family tree", "an extraordinary Jurassic predator",
+// real news 12-15 Oct; never a term, "striking workers", "an extraordinary general meeting", "Revolutionary Guards")
+const PRAISE = /\b(?:stunning(?:ly)?|striking (?:images?|footage|photos?|pictures?|scenes?|views?|new images?|divide|difference|contrast|similarit\w+|resemblance|example|findings?|results?|changes?)|remarkabl[ey]|extraordinar(?:y|ily)(?!\s+(?:general meeting|session|summit|meeting|rendition|measures|powers|circumstances|council|congress|sitting))|spectacular(?:ly)?|incredibl[ey]|amazing(?:ly)?|staggering(?:ly)?|groundbreaking|game-?changing|iconic|legendary|impressive(?:ly)?|breathtaking|jaw-dropping|mind-blowing|gorgeous|magnificent|dazzling|thrilling|fascinating|intriguing|probably|wayward|erratic|hapless|mercurial|illustrious|prestigious|celebrated|much-needed|long-awaited|almighty|doubtful|supposedly|profound(?:ly)?|(?:particularly |very |hugely |especially )?encouraging)\b/i;
 export const outletView = (t) => {
   const unq = String(t).replace(/“[^”]*”|"[^"]*"|‘[^’]*’/g, ' ');
+  if (FRAMING.test(unq)) return true;
   // (advice in the outlet's voice, an instruction to the reader: "Always keep a timeline of interactions with a company…",
   // a consumer column, Guardian 14 Oct)
   if (/^(?:Always|Make sure|Remember to|Be sure to|Beware|Avoid|Don['’]t|Do not|Never (?:give|share|pay|click|assume|sign)|Keep (?:a|your)|Check (?:your|whether|that|if)|Consider|Ask (?:for|your))\b/.test(unq.trim())) return true;
   if (HELD_BY.test(unq)) return false;
   const rule = /\b(?:if|unless|under (?:the|its|their) (?:law|rules|constitution)|required|requires|by law|legally|obliged|allowed|permitted)\b/i.test(unq);
-  return (VIEW_MODAL.test(unq) && !rule) || VIEW_WORDS.test(unq);
+  return (VIEW_MODAL.test(unq) && !rule) || VIEW_WORDS.test(unq) || PRAISE.test(unq);
 };

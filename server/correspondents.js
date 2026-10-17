@@ -131,8 +131,37 @@ export function throwLine(c, desk, seed) {
   );
 }
 
-// An answer about what comes next (the prompt then asks for it).
-export const AHEAD = /\b(?:will|expects?|expected|plans?|planned|is due|are due|due to|set to|until|next (?:week|month|year|steps?)|continues?|continue to)\b/i;
+// An answer about what comes next (the prompt then asks for it): a future said as one, outside quotation marks.
+// (round 6: never a present that goes on nor a forecast already beaten: "Omar, what comes next?" was answered "UK GDP growth
+// has been stronger than expected in early 2026…", "And Rhea, what happens next?" "El Nino-induced drought is affecting
+// roughly half of the country as three-year long war continues.", 12-14 Oct; nor someone's plan as a noun, nor "until"
+// a year gone)
+export const AHEAD = /\b(?:will|won['’]t|(?:is|are|was|were) (?:expected|due|set|scheduled|likely|poised|planning|preparing) to|(?<!\bthan |\bas )expect(?:s|ing)?\b|(?:over|in|within|for) the (?:next|coming) (?:\w+ )?(?:hours|days|weeks|months|years)\b|(?<!(?:['’]s|\bthe|\ba|\bits|\btheir|\bhis|\bher|\bour|\bwhose)\s)plans? to|planned for|(?:is|are) due\b|due (?:to (?:be|start|begin|open|close|finish|launch|meet|vote|rule|decide|report|return)|on|in|next)\b|next (?:week|month|year|steps?)|later this (?:week|month|year)|in the coming (?:days|weeks|months)|until (?:next|the end of|at least)\b|from next\b)/i;
+const unquoted = (t) => String(t || '').replace(/“[^”]*”|"[^"]*"/g, ' ');
+
+// What a presenter's question asks for, and what an answer that gives it says (round 6: an exchange whose answer misses its
+// question is asked again in words the answer fits, or dropped; never aired as a non-answer). The answer is judged
+// outside quotation marks. A question none of these name ("what else do we know?") any fact of the story answers.
+const DATED = /\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|next (?:week|month|year)|later this (?:week|month|year)|by (?:the end of )?\d{4}|in \d{4}|within \d+ (?:days|weeks|months))\b/;
+const LATER = /\b(?:this year|next year|on sale|launch(?:es)? (?:in|next)|from next|by \d{4}|in the (?:spring|summer|autumn|winter)|deadline|appeal|next mission|(?:have|has) \d+ (?:days|weeks|months) to)\b/i;
+const METHOD = /\b(?:measured|measurements?|observed|(?<!\bproviding (?:\w+ )?)observations? (?:from|of|show|by|with)|crystals? show|data (?:from|show)|samples?|simulations?|scans?|analy[sz](?:ed|ing|is)|studied|tracked|surveyed|tested|compared|modelling|modeling|sequenc(?:ed|ing)|using (?:a |the )?(?:telescope|satellite|probe|rover|scanner|microscope|spectrometer|radar|sensors?|data|images)|randomi[sz]ed|followed \d[\d,]* (?:people|adults|patients|participants))\b/i;
+const MECHANISM = /\b(?:works (?:by|without|like)|by (?:using|\w{3,}ing)\b|relies on|powered by|runs on|(?:uses|using) (?:[\w’'-]+ ){1,4}to (?!be\b)\w+|designed to|lets (?:users|people|you)|allows? (?:users|people|you|it)|turns? (?:\w+ ){0,3}into)/i;
+const PRICE = /[$£€]\s?\d|\b\d[\d,.]*\s*(?:dollars|euros|pounds)\b|\bpriced at\b|\bcosts?\b|\bprice\b|\bfree\b/i;
+const CAUSE = /\b(?:because|after|following|due to|driven by|thanks to|as a result|amid|caused by|fuel(?:l)?ed by|on the back of|blamed|reflects?|since|as (?:\w+ ){1,4}(?:rose|fell|grew|slowed|surged|dropped|increased|declined))\b/i;
+const ASKS = [
+  { q: /\bwhat (?:happens|comes) (?:next|now)\b|\bwhat comes after that\b|\bwhat is the next step\b|\bwhat should we watch for\b|\bfrom here\b|\band next\b|\bwhen will we know more\b|\bwhat['’]?s next\b|\bthe timetable\b|\bwhen (?:does it reach|can anyone)\b/i, a: (t) => AHEAD.test(t) || DATED.test(t) || LATER.test(t) },
+  { q: /\bhow do they know\b|\bhow was (?:this|it) measured\b|\bwhat is the evidence\b/i, a: (t) => METHOD.test(t) },
+  { q: /\bhow does it (?:actually )?work\b|\bhow it works\b|\bthe clever part\b/i, a: (t) => MECHANISM.test(t) },
+  { q: /\bwhat (?:does it|will all this) cost\b|\bthe price tag\b/i, a: (t) => PRICE.test(t) },
+  // (a catch is a limit or a cost, never good news: "…is no longer stuck on a few aging PS4 hard drives", round 6)
+  { q: /\bwhat is the catch\b|\balways a but\b|\bthe small print\b/i, a: (t) => /\b(?:however|although|but|not yet|only|limited|won['’]t|can['’]t|doesn['’]t|isn['’]t|aren['’]t|without|lacks?|requires?|costs?|price[ds]?|unless|except|yet to|fewer|less|restricted|still|never)\b/i.test(t) && !/\bno longer\b/i.test(t) },
+  { q: /\bwhat is behind (?:it|this)\b/i, a: (t) => CAUSE.test(t) },
+];
+/** True when an answer does not give what its question asks for ("what comes next?" answered with what has been). */
+export const missesQuestion = (question, answer) => {
+  const t = unquoted(answer);
+  return ASKS.some((x) => x.q.test(String(question || '')) && !x.a(t));
+};
 
 /**
  * The presenter's one prompt after the report, addressed by first name and fitted to what the answer says:
@@ -140,7 +169,7 @@ export const AHEAD = /\b(?:will|expects?|expected|plans?|planned|is due|are due|
  * (a two-way is a conversation; WORLD NOW's rule is about headlines and tosses).
  */
 export function askLine(c, seed, answer = '') {
-  const list = AHEAD.test(answer)
+  const list = AHEAD.test(unquoted(answer))
     ? [`${c.first}, what happens next?`, `${c.first}, what comes next?`]
     : [`${c.first}, what else do we know?`, `${c.first}, what more can you tell us?`];
   return choose(list, `${seed}~ask`);
@@ -151,7 +180,7 @@ export function askLine(c, seed, answer = '') {
  * is known; never the first prompt's words again (`first`).
  */
 export function followLine(c, seed, answer = '', first = '') {
-  const list = AHEAD.test(answer)
+  const list = AHEAD.test(unquoted(answer))
     ? [`And ${c.first}, what happens next?`, `${c.first}, what comes next?`, `And what comes next, ${c.first}?`]
     : [`${c.first}, what else do we know?`, `And what more can you tell us, ${c.first}?`, `${c.first}, what else is in the detail?`];
   // (never the first prompt's question again in other order: "Vic, what more can you tell us?" then "And what more can you
