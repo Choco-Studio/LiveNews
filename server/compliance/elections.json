@@ -1,0 +1,1113 @@
+{
+ "generatedAt": "2026-10-17T09:46:33.746Z",
+ "source": "Wikidata (query.wikidata.org), elections with a date (P585), a country (P17) and candidates (P726)",
+ "rule": {
+  "windowDays": 30,
+  "localWindowDays": 14,
+  "afterDays": 1,
+  "staleDays": 8,
+  "minSilenceDays": 1
+ },
+ "elections": [
+  {
+   "name": "2026 Yokohama mayoral election",
+   "date": "2026-10-18",
+   "country": "Japan",
+   "countryQid": "Q17",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q141355983"
+   ]
+  },
+  {
+   "name": "Switzerland vote",
+   "date": "2026-10-18",
+   "country": "Switzerland",
+   "countryQid": "Q39",
+   "level": "national",
+   "candidates": [
+    "Maja Riniker"
+   ],
+   "items": [
+    "Q139962969"
+   ]
+  },
+  {
+   "name": "2026 Calverley and Farsley by-election",
+   "date": "2026-10-22",
+   "country": "United Kingdom",
+   "countryQid": "Q145",
+   "level": "by-election",
+   "candidates": [],
+   "items": [
+    "Q141724592"
+   ]
+  },
+  {
+   "name": "Municipal elections 2026 in Slovakia",
+   "date": "2026-10-24",
+   "country": "Slovakia",
+   "countryQid": "Q214",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q138358722"
+   ]
+  },
+  {
+   "name": "2026 Slovak regional elections",
+   "date": "2026-10-24",
+   "country": "Slovakia",
+   "countryQid": "Q214",
+   "level": "regional",
+   "candidates": [],
+   "items": [
+    "Q138358773"
+   ]
+  },
+  {
+   "name": "2026 Brazilian presidential election",
+   "date": "2026-10-25",
+   "country": "Brazil",
+   "countryQid": "Q155",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q115632204"
+   ]
+  },
+  {
+   "name": "2026 Brazilian general election",
+   "date": "2026-10-25",
+   "country": "Brazil",
+   "countryQid": "Q155",
+   "level": "regional",
+   "candidates": [],
+   "items": [
+    "Q115632178"
+   ]
+  },
+  {
+   "name": "2026 Bulgarian presidential election",
+   "date": "2026-10-25",
+   "country": "Bulgaria",
+   "countryQid": "Q219",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q110159977"
+   ]
+  },
+  {
+   "name": "2026 Serbian parliamentary election",
+   "date": "2026-10-25",
+   "country": "Serbia",
+   "countryQid": "Q403",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q126881596"
+   ]
+  },
+  {
+   "name": "2026 Ottawa municipal election",
+   "date": "2026-10-26",
+   "country": "Canada",
+   "countryQid": "Q16",
+   "level": "local",
+   "candidates": [
+    "Jeff Leiper",
+    "Mark Sutcliffe"
+   ],
+   "items": [
+    "Q135855709"
+   ]
+  },
+  {
+   "name": "2026 Ontario municipal elections",
+   "date": "2026-10-26",
+   "country": "Canada",
+   "countryQid": "Q16",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q134740033"
+   ]
+  },
+  {
+   "name": "2026 Israeli legislative election",
+   "date": "2026-10-27",
+   "country": "Israel",
+   "countryQid": "Q801",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q115632366"
+   ]
+  },
+  {
+   "name": "2026 Vanuatuan general election",
+   "date": "2026-10-31",
+   "country": "Vanuatu",
+   "countryQid": "Q686",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q114773783"
+   ]
+  },
+  {
+   "name": "2026 Northern Nalšia district by-election",
+   "date": "2026-11-01",
+   "country": "Lithuania",
+   "countryQid": "Q37",
+   "level": "by-election",
+   "candidates": [],
+   "items": [
+    "Q141302700"
+   ]
+  },
+  {
+   "name": "2026 Slovenian local elections",
+   "date": "2026-11-01",
+   "country": "Slovenia",
+   "countryQid": "Q215",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140199027"
+   ]
+  },
+  {
+   "name": "2026 United States elections",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q104902179",
+    "Q115857612"
+   ]
+  },
+  {
+   "name": "2026 United States state and regional elections",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "regional",
+   "candidates": [
+    "Charles Booker",
+    "Dan Osborn",
+    "David Jolly",
+    "Antonio Delgado",
+    "Bruce Blakeman",
+    "Kathy Hochul",
+    "Steve Hilton",
+    "Xavier Becerra",
+    "Keisha Lance Bottoms",
+    "Daniel L. Cox",
+    "Wes Moore",
+    "Josh Shapiro",
+    "Ned Lamont",
+    "Jocelyn Benson",
+    "Amy Acton",
+    "Gina Hinojosa",
+    "Katie Hobbs",
+    "Andy Biggs",
+    "Rob Sand",
+    "Zach Lahn",
+    "Cindy Holscher",
+    "Lisa Demuth",
+    "Amy Klobuchar",
+    "Aaron D. Ford",
+    "Phil Weiser",
+    "Victor Marx",
+    "Greg Lopez",
+    "Jeff Peckman",
+    "Maura Healey",
+    "JB Pritzker",
+    "Tom Begich",
+    "Jonathan Kreiss-Tomkins",
+    "Tina Kotek",
+    "Josh Green",
+    "Kevin McCormick",
+    "Vikki Goodwin",
+    "Dan Patrick",
+    "Cinde Warmington",
+    "Robert White",
+    "Brooke Pinto",
+    "Gregory Jaczko",
+    "Jon Ossoff",
+    "Chris Pappas",
+    "Troy Dale Jackson",
+    "Susan Collins",
+    "John Hickenlooper",
+    "Mary Peltola",
+    "Cory Booker",
+    "James Talarico",
+    "Ken Paxton",
+    "Darline Graham",
+    "Annie L. Andrews",
+    "Lindsey Graham",
+    "Michael Whatley",
+    "Roy Cooper",
+    "Peggy Flanagan",
+    "Michele Tafoya",
+    "Adam Hamilton",
+    "Joshua Smith",
+    "Joshua Turek",
+    "J.D. Scholten",
+    "Joni Ernst",
+    "Zach Wahls",
+    "Don Tracy",
+    "Juliana Stratton",
+    "Jeff Merkley",
+    "Mark Warner",
+    "Mike Rogers",
+    "Yolanda Prince",
+    "Nathaniel Moran"
+   ],
+   "items": [
+    "Q122761060",
+    "Q127257824",
+    "Q131302908",
+    "Q134274341",
+    "Q135210913",
+    "Q135404097",
+    "Q135921244",
+    "Q115862480",
+    "Q116745431",
+    "Q117085630",
+    "Q117350835",
+    "Q118902595"
+   ]
+  },
+  {
+   "name": "2026 United States Senate special election in Ohio",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "by-election",
+   "candidates": [
+    "Sherrod Brown",
+    "Jon Husted"
+   ],
+   "items": [
+    "Q131293430"
+   ]
+  },
+  {
+   "name": "2026 United States Senate special election in Florida",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "by-election",
+   "candidates": [
+    "Angie Nixon",
+    "Ashley Moody"
+   ],
+   "items": [
+    "Q131325097"
+   ]
+  },
+  {
+   "name": "2026 Paragould mayoral election",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [
+    "Wayne Laroe",
+    "Catrina Bateman",
+    "Josh Agee"
+   ],
+   "items": [
+    "Q141485588"
+   ]
+  },
+  {
+   "name": "2026 Louisiana Board of Elementary and Secondary Education special election",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "by-election",
+   "candidates": [],
+   "items": [
+    "Q141488571"
+   ]
+  },
+  {
+   "name": "2026 Washington, D.C., mayoral election",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [
+    "Janeese Lewis George",
+    "Kenyan McDuffie"
+   ],
+   "items": [
+    "Q131384766"
+   ]
+  },
+  {
+   "name": "2026 Los Angeles County Board of Supervisors election",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q135219159"
+   ]
+  },
+  {
+   "name": "2026 Navajo Nation presidential election",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q139906521"
+   ]
+  },
+  {
+   "name": "2026 Wall Township Public Schools school board elections",
+   "date": "2026-11-03",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [
+    "Kenneth Wondrack",
+    "Mairin Barbiere",
+    "Cody J. Smith",
+    "Kathryn Lawlor",
+    "Olivia Lopuzzo"
+   ],
+   "items": [
+    "Q141600056"
+   ]
+  },
+  {
+   "name": "2026 Michigan House of Representatives election",
+   "date": "2026-11-05",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "regional",
+   "candidates": [],
+   "items": [
+    "Q135766337"
+   ]
+  },
+  {
+   "name": "2026 Raleigh mayoral election",
+   "date": "2026-11-05",
+   "country": "United States",
+   "countryQid": "Q30",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140694859"
+   ]
+  },
+  {
+   "name": "2026 New Zealand general election",
+   "date": "2026-11-07",
+   "country": "New Zealand",
+   "countryQid": "Q664",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q104843407"
+   ]
+  },
+  {
+   "name": "Switzerland vote",
+   "date": "2026-11-08",
+   "country": "Switzerland",
+   "countryQid": "Q39",
+   "level": "national",
+   "candidates": [
+    "Philippe Demierre",
+    "Romain Collaud",
+    "Sylvie Bonvin-Sansonnens",
+    "Marie-France Roth Pasquier",
+    "Didier Castella"
+   ],
+   "items": [
+    "Q139097314"
+   ]
+  },
+  {
+   "name": "2026 Oldham Metropolitan Borough Council by-election in Failsworth West",
+   "date": "2026-11-12",
+   "country": "United Kingdom",
+   "countryQid": "Q145",
+   "level": "by-election",
+   "candidates": [],
+   "items": [
+    "Q141653419"
+   ]
+  },
+  {
+   "name": "2026 Victorian state election",
+   "date": "2026-11-28",
+   "country": "Australia",
+   "countryQid": "Q408",
+   "level": "regional",
+   "candidates": [],
+   "items": [
+    "Q115826851"
+   ]
+  },
+  {
+   "name": "2026 Taiwanese local elections",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q136171366"
+   ]
+  },
+  {
+   "name": "2026 Taipei mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Puma Shen",
+    "Chiang Wan-an"
+   ],
+   "items": [
+    "Q140420954"
+   ]
+  },
+  {
+   "name": "2026 Taipei City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140421025"
+   ]
+  },
+  {
+   "name": "2026 New Taipei City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140428912"
+   ]
+  },
+  {
+   "name": "2026 Taoyuan City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140440410"
+   ]
+  },
+  {
+   "name": "2026 Taichung City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140450155"
+   ]
+  },
+  {
+   "name": "2026 Tainan City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140456551"
+   ]
+  },
+  {
+   "name": "2026 Kaohsiung City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140464569"
+   ]
+  },
+  {
+   "name": "2026 Keelung mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Tong Tzu-wei",
+    "Hsieh Kuo-liang"
+   ],
+   "items": [
+    "Q140473029"
+   ]
+  },
+  {
+   "name": "2026 Hsinchu mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Ann Kao",
+    "Chuang Ching-cheng"
+   ],
+   "items": [
+    "Q140481901"
+   ]
+  },
+  {
+   "name": "2026 Hsinchu County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Cheng Chao-fang",
+    "Hsu Hsin-ying"
+   ],
+   "items": [
+    "Q140505551"
+   ]
+  },
+  {
+   "name": "2026 Miaoli County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chen Ping-an",
+    "Chung Tung-chin"
+   ],
+   "items": [
+    "Q140521089"
+   ]
+  },
+  {
+   "name": "2026 Changhua County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chen Su-yueh"
+   ],
+   "items": [
+    "Q140531020"
+   ]
+  },
+  {
+   "name": "2026 Nantou County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Hsu Shu-hua",
+    "Wen Shih-cheng"
+   ],
+   "items": [
+    "Q140550236"
+   ]
+  },
+  {
+   "name": "2026 Yunlin County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Liu Chien-kuo",
+    "Chang Chia-chun"
+   ],
+   "items": [
+    "Q140563311"
+   ]
+  },
+  {
+   "name": "2026 Chiayi mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Wang Mei-hui",
+    "Chang Chi-kai"
+   ],
+   "items": [
+    "Q140573006"
+   ]
+  },
+  {
+   "name": "2026 Chiayi County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Tsai Yi-yu"
+   ],
+   "items": [
+    "Q140593674"
+   ]
+  },
+  {
+   "name": "2026 Pingtung County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chou Chun-mi",
+    "Su Ching-chuan"
+   ],
+   "items": [
+    "Q140606067"
+   ]
+  },
+  {
+   "name": "2026 Taitung County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Wu Hsiu-hua",
+    "Chen Ying"
+   ],
+   "items": [
+    "Q140620401"
+   ]
+  },
+  {
+   "name": "2026 Hualien County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chang Chun",
+    "Wei Chia-hsien"
+   ],
+   "items": [
+    "Q140632149"
+   ]
+  },
+  {
+   "name": "2026 Yilan County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Wu Tsung-hsien"
+   ],
+   "items": [
+    "Q140644954"
+   ]
+  },
+  {
+   "name": "2026 Penghu County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Wu Shu-ching"
+   ],
+   "items": [
+    "Q140666899"
+   ]
+  },
+  {
+   "name": "2026 Kinmen County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chen Yu-jen"
+   ],
+   "items": [
+    "Q140676712"
+   ]
+  },
+  {
+   "name": "2026 Lienchiang County magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Wang Chung-ming"
+   ],
+   "items": [
+    "Q140685111"
+   ]
+  },
+  {
+   "name": "2026 Taiwan mayor and magistrate election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q136450556"
+   ]
+  },
+  {
+   "name": "2026 Taiwanese city and county council elections",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q136664049"
+   ]
+  },
+  {
+   "name": "2026 New Taipei mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Lee Shu-chuan",
+    "Su Chiao-hui"
+   ],
+   "items": [
+    "Q140428672"
+   ]
+  },
+  {
+   "name": "2026 Taoyuan mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Huang Shih-chieh",
+    "Simon Chang"
+   ],
+   "items": [
+    "Q140440159"
+   ]
+  },
+  {
+   "name": "2026 Taichung mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Ho Hsin-chun",
+    "Johnny Chiang"
+   ],
+   "items": [
+    "Q140450102"
+   ]
+  },
+  {
+   "name": "2026 Tainan mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Chen Ting-fei",
+    "Hsieh Lung-chieh"
+   ],
+   "items": [
+    "Q140456486"
+   ]
+  },
+  {
+   "name": "2026 Kaohsiung mayoral election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [
+    "Ko Chih-en",
+    "Lai Jui-lung"
+   ],
+   "items": [
+    "Q140464191"
+   ]
+  },
+  {
+   "name": "2026 Keelung City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140473269"
+   ]
+  },
+  {
+   "name": "2026 Hsinchu City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140482594"
+   ]
+  },
+  {
+   "name": "2026 Hsinchu County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140507273"
+   ]
+  },
+  {
+   "name": "2026 Miaoli County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140521214"
+   ]
+  },
+  {
+   "name": "2026 Changhua County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140535569"
+   ]
+  },
+  {
+   "name": "2026 Nantou County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140554331"
+   ]
+  },
+  {
+   "name": "2026 Yunlin County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140563424"
+   ]
+  },
+  {
+   "name": "2026 Chiayi City Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140573132"
+   ]
+  },
+  {
+   "name": "2026 Chiayi County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140593750"
+   ]
+  },
+  {
+   "name": "2026 Pingtung County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140606114"
+   ]
+  },
+  {
+   "name": "2026 Taitung County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140620482"
+   ]
+  },
+  {
+   "name": "2026 Hualien County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140632332"
+   ]
+  },
+  {
+   "name": "2026 Yilan County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140645069"
+   ]
+  },
+  {
+   "name": "2026 Penghu County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140667528"
+   ]
+  },
+  {
+   "name": "2026 Kinmen County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140676788"
+   ]
+  },
+  {
+   "name": "2026 Lienchiang County Council election",
+   "date": "2026-11-28",
+   "country": "Taiwan",
+   "countryQid": "Q865",
+   "level": "local",
+   "candidates": [],
+   "items": [
+    "Q140685147"
+   ]
+  },
+  {
+   "name": "2026 Spanish general election",
+   "date": "2026-11-29",
+   "country": "Spain",
+   "countryQid": "Q29",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q120973028"
+   ]
+  },
+  {
+   "name": "2026 Bahraini general election",
+   "date": "2026-11-30",
+   "country": "Bahrain",
+   "countryQid": "Q398",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q115632746"
+   ]
+  },
+  {
+   "name": "2026 Gambian presidential election",
+   "date": "2026-12-05",
+   "country": "The Gambia",
+   "countryQid": "Q1005",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q111594398"
+   ]
+  },
+  {
+   "name": "2026 Guinea-Bissau general election",
+   "date": "2026-12-06",
+   "country": "Guinea-Bissau",
+   "countryQid": "Q1007",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q138027225"
+   ]
+  },
+  {
+   "name": "2026 South Sudanese general election",
+   "date": "2026-12-22",
+   "country": "South Sudan",
+   "countryQid": "Q958",
+   "level": "national",
+   "candidates": [
+    "Peter Mayen Majongdit",
+    "Salva Kiir Mayardit"
+   ],
+   "items": [
+    "Q17020570"
+   ]
+  },
+  {
+   "name": "Next Fijian general election",
+   "date": "2026-12-31",
+   "country": "Fiji",
+   "countryQid": "Q712",
+   "level": "national",
+   "candidates": [],
+   "items": [
+    "Q115706232"
+   ]
+  }
+ ]
+}

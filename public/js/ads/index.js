@@ -18,15 +18,17 @@ export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, h
  * The channel's continuity voice at the break bumper (owner, 3 Oct: "volvemos en 1 minuto"). Not an ad
  * (never in ADS, never picked): its script holds every line the bumper may say, voiced by the server
  * like an advert's lines (server/voice: loadAds adds it), so the director finds them by exact text.
+ * Every line first says what the channel is (docs/publishing/compliance.md §3: the AI disclosure heard as well as
+ * seen, at every break, as the EU Code of Practice asks after interruptions; the words the ident shows).
  */
 export const CONTINUITY = Object.freeze({
   id: 'continuity',
   voice: { gender: 'female', lang: 'en-GB' },
-  duration: 3.6,
+  duration: 6.0,
   script: Object.freeze([
-    Object.freeze({ at: 0.6, text: "We'll be right back." }),
-    Object.freeze({ at: 0.6, text: "We'll be back in a minute." }),
-    Object.freeze({ at: 0.6, text: "We'll be back in two minutes." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be right back." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be back in a minute." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be back in two minutes." }),
   ]),
 });
 

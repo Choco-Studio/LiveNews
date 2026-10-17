@@ -8,7 +8,8 @@ import { pictureCredit } from './news.js';
 import { isGrave } from './facts.js';
 import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
-import { restageCheck, bookGuest, provenanceLine } from './guests/restage.js';
+import { restageCheck, restageHold, bookGuest, provenanceLine } from './guests/restage.js';
+import { rightsGate } from './compliance/credits.js';
 import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
@@ -582,6 +583,12 @@ export class Producer {
         declined.push({ storyId: seg.storyId, reasons: [identity.refused] });
         continue;
       }
+      // an election period for their country, a candidacy, or a request not to be re-staged (compliance.md §5)
+      const held = restageHold({ speaker: check.speaker, identity, story });
+      if (held.length) {
+        declined.push({ storyId: seg.storyId, reasons: held });
+        continue;
+      }
       const booking = bookGuest(check.speaker, { outlet: seg.source, identity });
       const slot = nextSlot();
       // the presenter no longer reads the words the person is about to say: that sentence (never the story's first)
@@ -919,7 +926,10 @@ export class Producer {
     }
     for (const item of ctx.episode.rundown) apply(item);
     const borrowed = stories.filter((s) => s.image && s.imageFrom).length;
-    return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };
+    // every picture on air has a rights record (server/compliance/credits.js): RIGHTS_GATE=strict (required at launch)
+    // takes one without a record off air, the story keeping its map or card; 'report' counts them in the pipeline
+    const rights = rightsGate(ctx.episode, { mode: this.config.rightsGate || process.env.RIGHTS_GATE || 'report', annotate: false });
+    return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}), ...(rights.missing ? { unlicensed: rights.missing, ...(rights.dropped ? { offAir: rights.dropped } : {}) } : {}) };
   }
 
   /**

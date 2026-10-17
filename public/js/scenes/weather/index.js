@@ -541,9 +541,18 @@ function drawRainKey(ctx, x, y) {
   return [x - 3, y - 3, x + lw + 4 + cols.length * 5 + 2, y + 8];
 }
 
+/**
+ * The data's credit as its licences ask (docs/publishing/compliance.md §6): Open-Meteo's data are CC BY 4.0 and ask
+ * for "Weather data by Open-Meteo.com" where they are shown; GDACS is named as the alerts' source.
+ */
+export function weatherCredit(source) {
+  const s = String(source || '').toUpperCase();
+  return `DATA: ${s.replace(/\bOPEN-METEO(?:\.COM)?\b/, 'OPEN-METEO.COM (CC BY 4.0)')}`;
+}
+
 /** The data's source in micro type on a black strip, right-aligned at `right`. */
 function drawSource(ctx, data, right, y) {
-  const txt = data.demo ? 'DEMO DATA · NOT A REAL FORECAST' : `DATA: ${data.source}`;
+  const txt = data.demo ? 'DEMO DATA · NOT A REAL FORECAST' : weatherCredit(data.source);
   const w = measureText(txt, 1, 'micro') + 6;
   ctx.fillStyle = P.black;
   ctx.fillRect(right - w, y - 1, w, 8);

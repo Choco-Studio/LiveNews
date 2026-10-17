@@ -331,9 +331,10 @@ test('the bumper and the tag say the break\'s length plainly', () => {
   assert.equal(breakLabel(130), 'BACK IN 2 MINUTES');
   assert.equal(clockLeft(61.2), '1:02');
   assert.equal(clockLeft(-3), '0:00');
-  assert.equal(continuityLine(30), "We'll be right back.");
-  assert.equal(continuityLine(70), "We'll be back in a minute.");
-  assert.equal(continuityLine(120), "We'll be back in two minutes.");
+  // (every line first says what the channel is: the AI disclosure heard at every break, compliance.md §3)
+  assert.equal(continuityLine(30), "This is GLOBIT 24, AI-produced news. We'll be right back.");
+  assert.equal(continuityLine(70), "This is GLOBIT 24, AI-produced news. We'll be back in a minute.");
+  assert.equal(continuityLine(120), "This is GLOBIT 24, AI-produced news. We'll be back in two minutes.");
 });
 
 // --- every spot draws cleanly ----------------------------------------------------------

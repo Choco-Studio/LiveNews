@@ -13,7 +13,8 @@
 // to the top.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { W, CAPTION, easeInOut } from './layout.js';
+import { CAPTION, easeInOut } from './layout.js';
+import { FRAME } from './disclosure.js';
 import { layoutText } from './breaks.js';
 import { CHANNEL } from '../pace.js';
 
@@ -27,6 +28,8 @@ export const CAPTION_COLOR = P.white;
 const BOX = P.black;
 const EMPTY = Object.freeze([]);
 const STYLE = Object.freeze({ color: CAPTION_COLOR });
+/** The caption's line width: the broadcast two-thirds, or a clip frame's window less its padding (?frame=9x16). */
+const captionWidth = () => (FRAME.active ? Math.min(CAPTION.maxW, FRAME.w - 2 * CAPTION.padX - 4) : CAPTION.maxW);
 
 /**
  * Split a sentence into pages of at most `perPage` (1 or 2) lines of `maxW`
@@ -77,7 +80,7 @@ export class CaptionState {
   update(t, text, since = null, charIndex = null, perPage = 2) {
     const per = perPage === 1 ? 1 : 2;
     if (text && text !== this.text) {
-      const pages = paginate(text, CAPTION.maxW, per);
+      const pages = paginate(text, captionWidth(), per);
       if (!pages.length) text = null; // whitespace only: nothing to show
       else {
         this.text = text;
@@ -92,7 +95,7 @@ export class CaptionState {
       // the strap came or went mid-sentence: re-layout and carry on from the page
       // that holds the words on screen now (repeating them beats losing them)
       const from = this.page >= 0 ? this.pages[this.page].start : 0;
-      const pages = paginate(text, CAPTION.maxW, per);
+      const pages = paginate(text, captionWidth(), per);
       let k = 0;
       while (k + 1 < pages.length && pages[k + 1].start <= from) k++;
       this.pages = pages;
@@ -146,7 +149,7 @@ const blockH = (lines) => lines.length * CAPTION.pitch;
 function drawBlock(ctx, lines, y0) {
   for (let i = 0; i < lines.length; i++) {
     const w = measureText(lines[i]);
-    const bx = Math.floor(W / 2 - w / 2) - CAPTION.padX;
+    const bx = Math.floor(FRAME.cx - w / 2) - CAPTION.padX;
     const by = y0 + i * CAPTION.pitch;
     ctx.fillStyle = BOX;
     ctx.fillRect(bx, by, w + 2 * CAPTION.padX, CAPTION.pitch);
@@ -212,7 +215,7 @@ export function drawCaptions(ctx, t, s, place) {
     return;
   }
   const span = Math.max(blockSpan(from), blockSpan(to));
-  const L = Math.floor(W / 2 - span / 2) - 1;
+  const L = Math.floor(FRAME.cx - span / 2) - 1;
   const R = L + span + 2;
   const T = Math.min(from.length ? yOf(from) : Infinity, to.length ? yOf(to) : Infinity);
   const B = Math.max(from.length ? yOf(from) + blockH(from) : -Infinity, to.length ? yOf(to) + blockH(to) : -Infinity);

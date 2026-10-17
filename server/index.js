@@ -16,6 +16,9 @@ import { WeatherDesk } from './weather.js';
 import { writeWeather } from './weatherwriter.js';
 import { FootageDesk } from './footage.js';
 import { IdentityDesk } from './guests/identity.js';
+import { configureRestage } from './guests/restage.js';
+import { sharedRegister } from './compliance/registry.js';
+import { startElectionCalendar, loadCalendar } from './compliance/elections.js';
 import { Archive } from './archive.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -59,6 +62,11 @@ const footage = new FootageDesk({
 });
 // IN THEIR WORDS, re-staged: who a named speaker is (Wikidata, cached), and the audit of every re-staged line
 const identity = new IdentityDesk({ dir: path.join(config.dataDir, 'guests', 'identity') });
+// ...and the compliance holds (docs/publishing/compliance.md §5): the election calendar (read from Wikidata every
+// day) and the register of takedowns and of people who asked not to be re-staged
+const compliance = sharedRegister(config.dataDir);
+startElectionCalendar({ dataDir: config.dataDir });
+configureRestage({ calendar: () => loadCalendar({ dataDir: config.dataDir }), blocked: (who) => compliance.isBlocked(who) });
 const audit = (entry) => {
   try {
     fs.mkdirSync(path.join(config.dataDir, 'guests'), { recursive: true });

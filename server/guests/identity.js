@@ -4,7 +4,7 @@
 // no identity: the source's own words decide, and a person the check rules out is never re-staged.
 //
 //   new IdentityDesk({ dir, fetchImpl, timeoutMs, now }).lookup(name, { role }) -> { qid, presentation, age, born,
-//     description } | { refused: 'under 18' | 'deceased' } | null
+//     description, citizenship? } | { refused: 'under 18' | 'deceased' } | null
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -43,7 +43,9 @@ export function pickIdentity(entities, { role = null, now = Date.now() } = {}) {
     const age = ageBracket(born, now);
     if (age === 'minor') return { refused: 'under 18', qid: e.id };
     const g = claimIds(e, 'P21')[0];
-    return { qid: e.id, presentation: GENDER[g] || 'neutral', age, born: Number.isFinite(born) ? new Date(born).toISOString().slice(0, 10) : null, description };
+    // their citizenship (P27), for the election rule (server/compliance/elections.js matches it to a vote's country)
+    const citizenship = claimIds(e, 'P27').slice(0, 4);
+    return { qid: e.id, presentation: GENDER[g] || 'neutral', age, born: Number.isFinite(born) ? new Date(born).toISOString().slice(0, 10) : null, description, ...(citizenship.length ? { citizenship } : {}) };
   }
   return null;
 }

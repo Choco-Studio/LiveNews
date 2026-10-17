@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "about": "Every asset that can reach air or a published file, with its rights. server/compliance/credits.js reads it; test/compliance-credits.test.js fails when a file in the repository or an asset in an episode has no record here. Checked 17 Oct 2026.",
+  "classes": {
+    "channel-original": {
+      "what": "Presenters, sets, studios, press room, graphics, logo, bitmap fonts, icons, maps' styling, the ident and the opens: drawn in code by GLOBIT 24",
+      "owner": "GLOBIT 24",
+      "licence": "original (GLOBIT 24)",
+      "credit": null,
+      "basis": "own work"
+    },
+    "channel-music": {
+      "what": "Themes, signatures, stingers, music beds and sound effects: composed and synthesised in code (WebAudio)",
+      "owner": "GLOBIT 24",
+      "licence": "original (GLOBIT 24)",
+      "credit": null,
+      "basis": "own work"
+    },
+    "channel-data": {
+      "what": "The channel's own data: gazetteer, weather grid, casting, rates, look tables, the election calendar's rule",
+      "owner": "GLOBIT 24",
+      "licence": "original (GLOBIT 24)",
+      "credit": null,
+      "basis": "own work"
+    },
+    "fixture-art": {
+      "what": "The offline demo's pictures and pages (config/fixtures, drawn by config/fixtures/make-images.mjs) for fictional outlets; never published",
+      "owner": "GLOBIT 24",
+      "licence": "original (GLOBIT 24)",
+      "credit": null,
+      "basis": "own work",
+      "publish": false
+    },
+    "lab-samples": {
+      "what": "Voice and music samples rendered for the lab pages and the owner's listening (public/lab, music proposals); never on air",
+      "owner": "GLOBIT 24",
+      "licence": "original output of the channel's own voice engine",
+      "credit": null,
+      "basis": "own work",
+      "air": false,
+      "publish": false
+    },
+    "synthetic-voices": {
+      "what": "Every voice on air: the channel's open-source text-to-speech engine and its voice files (tools/voice, data/models), run on our own machine",
+      "owner": "the engine's authors",
+      "licence": "Apache-2.0 (engine and voices)",
+      "credit": "Voices: synthetic, made with an open-source text-to-speech engine (Apache 2.0)",
+      "basis": "licence",
+      "creditRequired": false,
+      "source": "tools/voice/fetch-models.sh"
+    },
+    "natural-earth": {
+      "what": "The world map's land and borders (public/js/scenes/worlddata.js), from Natural Earth 1:50m via the world-atlas package",
+      "owner": "Natural Earth (public domain); world-atlas (ISC)",
+      "licence": "public domain (Natural Earth terms of use)",
+      "credit": "Map data: Natural Earth",
+      "basis": "public domain",
+      "creditRequired": false,
+      "source": "https://www.naturalearthdata.com/about/terms-of-use/"
+    },
+    "open-meteo": {
+      "what": "Forecasts, the heat map and the sky time-lapse of WORLD WEATHER",
+      "owner": "Open-Meteo.com, from national weather services (ECMWF, DWD, NOAA, Météo-France, Met Office and others)",
+      "licence": "CC-BY-4.0",
+      "credit": "Weather data by Open-Meteo.com (CC BY 4.0), processed into maps and icons by GLOBIT 24",
+      "onAir": "DATA: OPEN-METEO.COM (CC BY 4.0)",
+      "basis": "licence",
+      "creditRequired": true,
+      "commercial": "The free API is for non-commercial use only; a monetised channel needs a paid API plan (open-meteo.com/en/terms) before launch",
+      "source": "https://open-meteo.com/en/licence"
+    },
+    "gdacs": {
+      "what": "Weather warnings (cyclones, floods, droughts) on WORLD WEATHER",
+      "owner": "GDACS, the UN and European Commission's Global Disaster Alert and Coordination System",
+      "licence": "GDACS terms of use (March 2025): no licence stated; information \"as is\"; not a substitute for official warnings",
+      "credit": "Alerts: GDACS (UN / European Commission)",
+      "onAir": "GDACS",
+      "basis": "licence",
+      "creditRequired": true,
+      "source": "https://www.gdacs.org/documents/2025/GDACS_Terms_of_use_Mar_25.pdf",
+      "note": "Name GDACS on screen and in descriptions; say alerts come from GDACS and that national weather services issue the official warnings (terms, point 4)"
+    },
+    "wikidata": {
+      "what": "Who a re-staged public figure is (adult, alive, public role) and the election calendar; never shown on air",
+      "owner": "Wikidata",
+      "licence": "CC0-1.0",
+      "credit": null,
+      "basis": "public domain dedication",
+      "creditRequired": false,
+      "source": "https://www.wikidata.org/wiki/Wikidata:Licensing"
+    },
+    "commons-footage": {
+      "what": "FILE footage of a link's place (server/footage.js): Wikimedia Commons, free licences only, credited on air FILE · author · licence",
+      "owner": "each file's author",
+      "licence": "per file: CC0, public domain, CC BY, CC BY-SA",
+      "credit": "per file (FILE · <author> · <licence>)",
+      "basis": "licence",
+      "creditRequired": true,
+      "perItem": true
+    },
+    "picture": {
+      "what": "A story's picture: per item, from the cleared-pictures pipeline (server/pictures.js, images.js, imagesearch.js), credited on air",
+      "owner": "per item",
+      "licence": "per item",
+      "credit": "per item (PHOTO: <credit> or FILE · <author> · <licence>)",
+      "basis": "per item: a licence or a free licence; an outlet's own photo with no licence is not cleared",
+      "creditRequired": true,
+      "perItem": true
+    },
+    "news-reporting": {
+      "what": "The facts of each story, from the outlet named on screen; quotations of what public figures said, attributed",
+      "owner": "per outlet (their wording); facts are free",
+      "licence": "facts are not protected; quotations under the quotation and news-reporting exceptions (InfoSoc Art. 5(3)(c),(d),(f); CDPA s.30) with the source named",
+      "credit": "Reporting: <outlets>",
+      "basis": "facts and attributed quotation",
+      "creditRequired": true,
+      "perItem": true
+    }
+  },
+  "files": [
+    {
+      "glob": "public/assets/**",
+      "class": "channel-original"
+    },
+    {
+      "glob": "public/js/scenes/worlddata.js",
+      "class": "natural-earth"
+    },
+    {
+      "glob": "config/fixtures/**",
+      "class": "fixture-art"
+    },
+    {
+      "glob": "config/weather-grid.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "config/channel.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "config/feeds.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "config/feeds.fixture.json",
+      "class": "fixture-art"
+    },
+    {
+      "glob": "server/voice/*.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "server/compliance/*.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "tools/voice/*.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "tools/play/outlets.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "public/lab/**",
+      "class": "lab-samples"
+    },
+    {
+      "glob": "public/js/music/proposals/**",
+      "class": "lab-samples"
+    },
+    {
+      "glob": "eps.json",
+      "class": "channel-data"
+    },
+    {
+      "glob": "docs/**",
+      "class": "channel-data"
+    },
+    {
+      "glob": "test/fixtures/**",
+      "class": "fixture-art"
+    }
+  ]
+}

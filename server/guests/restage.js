@@ -20,8 +20,41 @@
 //   restageCheck({ quote, source, story, grave })   { ok, reasons, speaker }
 //   bookGuest(speaker, { outlet, identity })        the booking: { id, kind: 'restaged', name, role, label, look, voice, likeness }
 //   provenanceLine(booking, seed)         the presenter's line that hands over to the recreation
+//   restageHold({ speaker, identity, story, now })  the compliance holds once the identity is known (an election
+//                                         period, a person who asked not to be re-staged): [reasons] (compliance.md §5)
+//   configureRestage({ calendar, blocked })         the server's election calendar and opt-out register
 import crypto from 'node:crypto';
 import { isGrave } from '../facts.js';
+import { electionHold } from '../compliance/elections.js';
+
+// The compliance context (docs/publishing/compliance.md §5): the server hands over its election calendar (a
+// function: the newest calendar) and its register of people who asked not to be re-staged (server/index.js). Unset
+// (a test, a tool), nothing is held here; the publish-time check (server/compliance/clips.js) applies both again.
+const context = { calendar: null, blocked: null };
+export function configureRestage({ calendar = null, blocked = null } = {}) {
+  context.calendar = typeof calendar === 'function' ? calendar : calendar ? () => calendar : null;
+  context.blocked = typeof blocked === 'function' ? blocked : null;
+}
+
+/**
+ * The holds that need the person's identity (Wikidata, after restageCheck): an election period for a politician of
+ * a country about to vote, a named candidate, and anyone who asked not to be re-staged. `calendar` and `blocked`
+ * default to the server's (configureRestage). -> [reasons] (empty: no hold)
+ */
+export function restageHold({ speaker, identity = null, story = null, now = Date.now(), calendar = undefined, blocked = undefined } = {}) {
+  const reasons = [];
+  if (!speaker) return reasons;
+  const isBlocked = blocked === undefined ? context.blocked : blocked;
+  if (isBlocked) {
+    try {
+      const b = isBlocked({ name: speaker.name, role: speaker.role, qid: identity?.qid || null });
+      if (b) reasons.push(`asked not to be re-staged (${typeof b === 'string' ? b : 'register'}): the quote card stays`);
+    } catch { /* the register is read again next time */ }
+  }
+  const cal = calendar === undefined ? context.calendar?.() : calendar;
+  if (cal) reasons.push(...electionHold({ speaker, story, identity, now, calendar: cal }).reasons);
+  return reasons;
+}
 
 // Public roles (title words, a name may follow or precede them). A role names the kind; the order matters: the first
 // match wins ("former prime minister" is a politician, "health minister" too).
@@ -49,6 +82,8 @@ const PRONOUN_HE = /\b(?:he|him|his|himself|Mr|Sir)\b/;
 const squash = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const isName = (s) => /^[A-Z][\p{L}'’.-]+(?: (?:[A-Z][\p{L}'’.-]+|de|da|del|van|von|der|bin|al|el|la|le))*(?: [A-Z][\p{L}'’.-]+)$/u.test(String(s || '').trim());
 const kindOf = (text) => ROLES.find(([, re]) => re.test(text))?.[0] || null;
+/** The kind of a public role ("health minister" -> 'politician'), for checks made after the booking (clips.js). */
+export const roleKind = (text) => (NEVER.test(String(text || '')) ? 'private' : kindOf(String(text || '')));
 
 /**
  * Who said it: `by` is the validator's speaker for that very quotation (a name, "the mayor", "a spokesperson"),
@@ -157,6 +192,8 @@ export function restageCheck({ quote, source = '', story = null, grave = false }
   else if (partisan && sides === 1 && speaker.kind !== 'politician') reasons.push('a partisan voice on a political story: the quote card stays (balance)');
   // (a politician's words about another side are one side's case: "…the AfD are clearly linked to Russia…", ABC 12 Oct)
   else if ((speaker?.kind === 'politician' || (speaker?.role && politicalSides(speaker.role))) && politicalSides(String(quote?.text ?? '')) >= 1) reasons.push('a politician on another side: the quote card stays (balance)');
+  // the election period and the opt-out register, as far as the source tells (the identity, after this, may add)
+  if (speaker && !reasons.length) reasons.push(...restageHold({ speaker, story: { title: story?.title, summary: `${story?.summary || ''} ${source}`.slice(0, 2000), location: story?.location } }));
   return { ok: !reasons.length, reasons, speaker, grave: sombre };
 }
 
@@ -255,6 +292,8 @@ export function bookGuest(speaker, { outlet = '', identity = null, said = null }
     backdrop: 'press',
     presentation,
     ...(identity?.qid ? { qid: identity.qid } : {}),
+    // (their citizenship, for the election rule at publish time: server/compliance/clips.js)
+    ...(identity?.citizenship?.length ? { citizenship: identity.citizenship.slice(0, 4) } : {}),
   };
 }
 
