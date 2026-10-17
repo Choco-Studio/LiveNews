@@ -3,7 +3,8 @@
 // candidate looks, names and voices for the owner, one switch (public/js/pay-attention-looks.js) for both renderers;
 // each face unlike every other on the channel at 1x, drawn in the palette, hair (or headwear) of its own, its tells
 // readable in the wide, its mouth, blinks and quizmaster's gestures working, nothing clipped at the centre podium; each
-// voice built of components no one else on the channel uses; the guests never repeat the host.
+// voice a natural English voice unlike the players' (measured: test/voice-casting.test.js); the guests never repeat the
+// host.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -365,20 +366,22 @@ test('the old renderer: the host has its own sprite and close-up (every candidat
   assert.ok(IMAGES.length >= 4, 'the qm alias builds its own close-up');
 });
 
-test('three voices for the owner, each built of components no one else on the channel uses, the settings distinct', () => {
-  const parts0 = (spec) => spec.split('+').map((p) => p.split(':')[0]);
+test('three voices for the owner, each a natural English voice unlike the players\', the settings distinct', () => {
+  // (16 Oct voices round, owner: "la voz de la chica de camiseta roja suena fatal". The rule had been components no
+  // one else uses, and every English voice was taken, so the three were voices of other languages reading English.
+  // Now each leads with a well-graded English voice that no player leads with, and how far each is from every
+  // player is measured: test/voice-casting.test.js)
+  const parts = (spec) => spec.split('+').map((p) => p.split(':')).map(([name, w]) => ({ name, w: Number(w ?? 1) }));
+  const lead = (spec) => parts(spec).reduce((a, b) => (b.w > a.w ? b : a)).name;
   const qm = CASTING.qm;
   assert.ok(qm?.voice, 'qm has a cast voice');
   assert.deepEqual(Object.keys(qm.candidates), ['A', 'B', 'C']);
   assert.equal(qm.voice, qm.candidates[HOST_LOOK].voice, 'the voice on air is the provisional candidate\'s');
   assert.equal(qm.lang, CHANNEL.presenters.qm.voice.lang.toLowerCase(), 'read with the accent of the config');
-  // every component anyone else speaks with: presenters, correspondents, experts, the continuity announcer, the adverts
-  const taken = new Map();
-  for (const [id, c] of Object.entries(CASTING)) if (id !== 'qm') for (const v of parts0(c.voice)) taken.set(v, id);
-  for (const [id, a] of Object.entries(ADCAST)) {
-    if (id === '_note') continue;
-    for (const c of id === 'default' ? Object.values(a) : [a]) for (const v of parts0(c.voice)) taken.set(v, `advert ${id}`);
-  }
+  const players = (CHANNEL.programs['pay-attention'] || CHANNEL.drafts['pay-attention']).contestants;
+  const leads = new Map(players.map((p) => [lead(CASTING[p].voice), p]));
+  // no advert leads with the host's voice either (the break follows the quiz)
+  const adLeads = new Set(Object.entries(ADCAST).filter(([id, a]) => id !== '_note' && a?.voice).map(([, a]) => lead(a.voice)));
   const configs = Object.entries(CHANNEL.presenters).filter(([id]) => id !== 'qm').map(([, p]) => p.voice);
   const tuple = (v) => `${v.gender}|${v.lang.toLowerCase()}|${v.pitch}|${v.rate}`;
   const tuples = new Set(configs.map(tuple));
@@ -386,7 +389,9 @@ test('three voices for the owner, each built of components no one else on the ch
   for (const l of ['A', 'B', 'C']) {
     const c = qm.candidates[l];
     assert.match(c.voice, /^[a-z]{2}_[a-z]+(:\d*\.?\d+)?(\+[a-z]{2}_[a-z]+:\d*\.?\d+)*$/);
-    for (const v of parts0(c.voice)) assert.ok(!taken.has(v), `${l}: ${v} is ${taken.get(v)}'s`);
+    for (const { name } of parts(c.voice)) assert.match(name, /^(af|am|bf|bm)_/, `${l}: ${name} is not an English voice`);
+    assert.ok(!leads.has(lead(c.voice)), `${l} leads with ${leads.get(lead(c.voice))}'s voice`);
+    assert.ok(!adLeads.has(lead(c.voice)), `${l} leads with an advert's voice`);
     assert.ok(!seen.has(c.voice), `${l}: another candidate's voice`);
     seen.add(c.voice);
     assert.equal(c.gender, HOST_NAMES[l].gender, `${l}: the voice fits the look`);

@@ -176,10 +176,15 @@ function seeded(seed) {
 const pickFrom = (rand, list) => list[Math.floor(rand() * list.length) % list.length];
 
 // Generic synthetic voices for re-staged people: new blends of the engine's voices, none of them a presenter's,
-// an expert's or a correspondent's blend (server/voice/casting.json), never an imitation of anyone's real voice
+// an expert's or a correspondent's blend (server/voice/casting.json), never an imitation of anyone's real voice.
+// Measured with the cast (tools/voice/audit.py, test/voice-casting.test.js; voices round of 16 Oct): none leads with
+// a character's lead voice, each is 40 or more in timbre from everyone on the programmes that re-stage guests, and
+// natural and native English on the listening-score and accent measures. Before, four of the six sat on a character's
+// lead or near one (bm_george, 40 from Paco; fenrir and lewis, 29 from Max; bf_emma, 33 from Rhea; af_alloy, Amara's)
+// and one led with af_nicole, a breathy voice that scored lowest.
 export const GUEST_VOICES = {
-  man: [{ voice: 'bm_daniel:0.5+am_adam:0.5', speed: 0.97, lang: 'en-gb' }, { voice: 'am_santa:0.35+bm_george:0.65', speed: 0.95, lang: 'en-gb' }, { voice: 'am_fenrir:0.45+bm_lewis:0.55', speed: 0.98, lang: 'en-gb' }],
-  woman: [{ voice: 'af_nicole:0.55+bf_isabella:0.45', speed: 0.98, lang: 'en-gb' }, { voice: 'af_heart:0.45+bf_emma:0.55', speed: 0.97, lang: 'en-gb' }, { voice: 'af_alloy:0.6+bf_alice:0.4', speed: 0.98, lang: 'en-gb' }],
+  man: [{ voice: 'bm_daniel:0.5+am_adam:0.5', speed: 0.97, lang: 'en-gb' }, { voice: 'am_eric:0.6+am_onyx:0.4', speed: 0.97, lang: 'en-us' }, { voice: 'am_onyx:0.6+am_liam:0.4', speed: 0.97, lang: 'en-us' }],
+  woman: [{ voice: 'bf_lily:0.6+af_sky:0.4', speed: 0.98, lang: 'en-gb' }, { voice: 'af_sky:0.55+af_jessica:0.45', speed: 0.98, lang: 'en-us' }, { voice: 'bf_alice:0.55+af_river:0.45', speed: 0.98, lang: 'en-gb' }],
 };
 GUEST_VOICES.neutral = [GUEST_VOICES.woman[2], GUEST_VOICES.man[2]];
 

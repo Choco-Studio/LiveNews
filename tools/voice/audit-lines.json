@@ -1,0 +1,322 @@
+{
+ "_note": "Audit copy: the channel's own lines (data/archive stories of 14-16 Oct, data/quiz-run scripts, server/sport/shape.js banks, server/experts.js frames). 'common' is read by every voice (distinctness is measured on it: the same words for everyone); each programme's own lines are read by its people.",
+ "common": [
+  {
+   "id": "c-world",
+   "type": "story",
+   "text": "Authorities in Germany have briefly shut down an airport, according to ABC News. Details about the emergency call were not immediately available. Earlier on Tuesday, authorities noted a possible drone sighting at the airport."
+  },
+  {
+   "id": "c-quiz",
+   "type": "quiz",
+   "text": "Here is the headline: Smart ring maker Ultrahuman to roll out biological-age model across blank. Where did it happen? Brazil, the United Arab Emirates, or Namibia?"
+  },
+  {
+   "id": "c-analysis",
+   "type": "chat",
+   "text": "Here is what matters: in the UK, 3.6 million people work in catering and hospitality. All of these kitchens cooked with fossil gas or propane, according to Guardian Business."
+  },
+  {
+   "id": "c-sport",
+   "type": "story",
+   "sport": "football",
+   "text": "Starfield City drew 2-2 with Ledgerton Rovers after Rafe Lindqvist scored in the last minute. Rovers had led twice through goals from striker Teo Vance, Pixelburg Sport reports."
+  }
+ ],
+ "programmes": {
+  "world": [
+   {
+    "id": "w-diesel",
+    "type": "story",
+    "text": "Donald Trump's deal to buy Russian diesel has been met with fury from Volodymyr Zelenskyy, who said it was a weak decision and would generate billions in extra revenue for Putin's war effort. The Ukrainian president has also rejected US calls for an energy ceasefire."
+   },
+   {
+    "id": "w-number",
+    "type": "story",
+    "text": "Our number of the day: 50%. Italy has halved the number of aircraft in its airspace after overnight issues hit the data transmission network for air traffic control."
+   },
+   {
+    "id": "w-taiwan",
+    "type": "story",
+    "text": "Taiwan planned to buy liquefied natural gas from a US project, according to ABC News. The plan covers an annual purchase and a share in the development of the Alaska project."
+   }
+  ],
+  "cross": [
+   {
+    "id": "x-enav",
+    "type": "cross",
+    "text": "Thanks, Paco. ENAV said it was using alternative data transmission systems to allow as many departures as possible on Friday morning, including intercontinental flights."
+   },
+   {
+    "id": "x-number",
+    "type": "cross",
+    "text": "Italy has halved the number of aircraft in its airspace after overnight issues hit the data transmission network for air traffic control. That is the picture tonight."
+   },
+   {
+    "id": "w-diesel",
+    "type": "cross",
+    "text": "Donald Trump's deal to buy Russian diesel has been met with fury from Volodymyr Zelenskyy, who said it was a weak decision and would generate billions in extra revenue for Putin's war effort. The Ukrainian president has also rejected US calls for an energy ceasefire."
+   }
+  ],
+  "tech": [
+   {
+    "id": "t-cerebras",
+    "type": "story",
+    "text": "Cerebras CEO Andrew Feldman predicts a future where personal AI assistants become as commonplace as household appliances, running partly on local devices and partly in the cloud."
+   },
+   {
+    "id": "t-number",
+    "type": "story",
+    "text": "Our number of the day: 50 percent. Developers will get 50 percent discounted API rates through November, Ars Technica reports."
+   },
+   {
+    "id": "t-leap",
+    "type": "story",
+    "text": "BIPM members previously agreed in 2022 to stop using leap seconds on or before 2035. This has never been attempted before."
+   }
+  ],
+  "cosmos": [
+   {
+    "id": "s-protein",
+    "type": "story",
+    "text": "Scientists have discovered a protein that may help harmful ageing cells hide from the immune system, allowing them to build up and fuel age-related health problems. Blocking the protein in mice reduced these cells and the inflammation, ScienceDaily reports."
+   },
+   {
+    "id": "s-griffin",
+    "type": "story",
+    "text": "Voyager Technologies' Griffin-1 has completed environmental testing at NASA JPL. The tests show that the spacecraft is ready to face the harsh conditions of launch."
+   },
+   {
+    "id": "s-nino",
+    "type": "story",
+    "text": "El Nino has continued to strengthen, with several key measures now in record territory. These measurements come from the region of the equatorial Pacific used to monitor El Nino."
+   }
+  ],
+  "money": [
+   {
+    "id": "m-oil",
+    "type": "story",
+    "text": "Oil prices rose on recent reports that Iran attacked ships in the Strait of Hormuz. But the stock quickly erased those gains, moving between gains and losses, Euronews Business reports."
+   },
+   {
+    "id": "m-number",
+    "type": "story",
+    "text": "Our number of the day: 3.6 million. In the UK, 3.6 million people work in catering and hospitality."
+   },
+   {
+    "id": "m-nobel",
+    "type": "story",
+    "text": "On Monday morning, the world's economists tuned in to an announcement from Sweden to learn who won this year's Nobel Prize in economics."
+   }
+  ],
+  "news60": [
+   {
+    "id": "n-kabila",
+    "type": "story",
+    "text": "Former Congolese President Joseph Kabila has launched a new political and military coalition against the current government. It took control of Goma, the capital of North Kivu province, according to ABC News."
+   },
+   {
+    "id": "n-simon",
+    "type": "story",
+    "text": "Hurricane Simon is lurking off the Mexican coast. Though it remained offshore, the storm lashed coastal areas with high winds."
+   },
+   {
+    "id": "n-ba",
+    "type": "story",
+    "text": "A BA flight was forced to turn back over a cracked window, BBC Business reports. Passengers reported oxygen masks dropping in the cabin."
+   }
+  ],
+  "sport-kai": [
+   {
+    "id": "k-hello",
+    "type": "intro",
+    "text": "Good evening, and welcome to FULL TIME. I'm Kai Sprite, with Rosa Rally."
+   },
+   {
+    "id": "k-united",
+    "type": "story",
+    "sport": "football",
+    "text": "Pixelburg United beat Bitport Athletic 3-1 at the Riverside Ground to go top of the Pixel League for the first time since 2009."
+   },
+   {
+    "id": "k-vela",
+    "type": "story",
+    "sport": "tennis",
+    "text": "Ana Vela won the Pixelburg Open, beating top seed Lia Moreau 6-4 6-3 in the final. It is the 22-year-old's first title on the tour. Rosa now, with the cricket."
+   }
+  ],
+  "sport-rosa": [
+   {
+    "id": "r-penalty",
+    "type": "chat",
+    "text": "I once missed a penalty in a cup final. Nobody here mentions it."
+   },
+   {
+    "id": "r-menon",
+    "type": "story",
+    "sport": "cricket",
+    "text": "Opener Ravi Menon made 141, his first century of the season, as the Coastlanders took control of their Harbour Shield match against Ironvale. Ironvale ended the third day on 188 for six, still 112 runs behind."
+   },
+   {
+    "id": "r-sprinter",
+    "type": "chat",
+    "text": "Kai says he was a sprinter at school. His school has no record of it."
+   }
+  ],
+  "quiz": [
+   {
+    "id": "q-welcome",
+    "type": "quiz",
+    "text": "Hello and welcome. This is PAY ATTENTION, the quiz where the questions come from our own news. From WORLD NOW, Lola Byte. And from NEWS IN 60, Sam Night."
+   },
+   {
+    "id": "q-reveal",
+    "type": "quiz",
+    "text": "It's the United States. Nicely done, Lola. The jellyfish effect lights up the US sky."
+   },
+   {
+    "id": "q-answer",
+    "type": "quiz",
+    "text": "The answer: $149, the HomePod mini, as reported on TECH BYTES this evening, from TechCrunch. That is right, Lola."
+   },
+   {
+    "id": "q-signoff",
+    "type": "quiz",
+    "text": "Goodbye from PAY ATTENTION. See you at twenty past two tomorrow morning, and do keep watching the news."
+   }
+  ],
+  "expert-omar": [
+   {
+    "id": "e-oil",
+    "type": "chat",
+    "text": "The key detail is this: oil prices rose on reports that Iran attacked ships in the Strait of Hormuz. But the gains were erased quickly, and prices moved between gains and losses."
+   },
+   {
+    "id": "e-nobel",
+    "type": "chat",
+    "text": "Put simply: prices can get sticky. Once they have gone up, they are slow to come down again, and that is what this year's prize is about."
+   }
+  ],
+  "expert-clara": [
+   {
+    "id": "e-diesel",
+    "type": "chat",
+    "text": "What stands out is this: the Ukrainian president has rejected US calls for an energy ceasefire. He says the diesel deal would generate billions in extra revenue for the war effort."
+   },
+   {
+    "id": "e-taiwan",
+    "type": "chat",
+    "text": "The thing to note is this: Taiwan planned to buy liquefied natural gas from a US project, and to take a share in its development."
+   }
+  ],
+  "expert-dev": [
+   {
+    "id": "e-nino",
+    "type": "chat",
+    "text": "The key detail is this: several key measures of El Nino are now in record territory. The measurements come from the region of the equatorial Pacific used to monitor it."
+   },
+   {
+    "id": "e-simon",
+    "type": "chat",
+    "text": "Here is what matters: the hurricane stayed offshore, but it still lashed coastal areas with high winds and heavy rain."
+   }
+  ],
+  "expert-tomas": [
+   {
+    "id": "e-griffin",
+    "type": "chat",
+    "text": "Put simply: the spacecraft has passed its environmental tests. That means it is ready to face the harsh conditions of launch."
+   },
+   {
+    "id": "e-nino2",
+    "type": "chat",
+    "text": "The important part is this: these measurements come from the equatorial Pacific, and several of them are now in record territory."
+   }
+  ],
+  "expert-june": [
+   {
+    "id": "e-nudes",
+    "type": "chat",
+    "text": "The key detail is this: the attack method exposes flaws in the safeguards. Safety researchers continue to warn that a large volume of generated content is spreading unchecked."
+   },
+   {
+    "id": "e-leap",
+    "type": "chat",
+    "text": "What stands out is this: nobody has ever stopped using leap seconds before, and a lot of critical infrastructure relies on time synchronisation."
+   }
+  ],
+  "expert-amara": [
+   {
+    "id": "e-protein",
+    "type": "chat",
+    "text": "What we know is this: blocking the protein in mice reduced the ageing cells and the inflammation. It also improved blood sugar regulation and strength."
+   },
+   {
+    "id": "e-auto",
+    "type": "chat",
+    "text": "The key detail is this: women with autoimmune conditions are up to 74% more likely than men to be told their symptoms are psychological."
+   }
+  ],
+  "expert-leo": [
+   {
+    "id": "e-trailer",
+    "type": "chat",
+    "text": "The thing to note is this: Prime Video has unveiled the full trailer for Blade Runner 2099."
+   },
+   {
+    "id": "e-church",
+    "type": "chat",
+    "text": "Here is what matters: the church faces a legal challenge, which could add years more delay to Project Spire."
+   }
+  ],
+  "expert-ines": [
+   {
+    "id": "e-judge",
+    "type": "chat",
+    "text": "The key detail is this: a federal judge ruled that Apple can access the interview materials involving former Apple employees. All three are former Apple employees, according to TechCrunch."
+   },
+   {
+    "id": "e-fit",
+    "type": "chat",
+    "text": "Put simply: a club owner can be found to have failed a fitness test on integrity, honesty and financial soundness."
+   }
+  ],
+  "continuity": [
+   {
+    "id": "b-back",
+    "type": "ad",
+    "text": "We'll be right back."
+   },
+   {
+    "id": "b-two",
+    "type": "ad",
+    "text": "We'll be back in two minutes."
+   }
+  ]
+ },
+ "who": {
+  "paco": "world",
+  "lola": "world",
+  "rhea": "cross",
+  "vic": "cross",
+  "mika": "cross",
+  "max": "tech",
+  "ada": "tech",
+  "nova": "cosmos",
+  "unit8": "cosmos",
+  "penny": "money",
+  "sam": "news60",
+  "kai": "sport-kai",
+  "rosa": "sport-rosa",
+  "qm": "quiz",
+  "omar": "expert-omar",
+  "clara": "expert-clara",
+  "dev": "expert-dev",
+  "tomas": "expert-tomas",
+  "june": "expert-june",
+  "amara": "expert-amara",
+  "leo": "expert-leo",
+  "ines": "expert-ines",
+  "continuity": "continuity"
+ }
+}

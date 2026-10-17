@@ -471,16 +471,23 @@ describe('on screen and on air', () => {
     }
   });
 
-  test('each expert speaks with a voice of their own: no presenter\'s lead voice, none of Paco\'s, no two alike', async () => {
+  test('each expert speaks with a voice of their own: never the lead voice of a presenter they air with, none of Paco\'s, no two alike', async () => {
+    // (16 Oct voices round: the rule was "no presenter's lead voice anywhere", which left the experts the weakest
+    // English voices and voices of other languages; a lead may now be shared with a presenter of another programme,
+    // and test/voice-casting.test.js measures how far apart every two voices are)
     const casting = (await import('../server/voice/casting.json', { with: { type: 'json' } })).default;
-    const lead = (spec) => spec.split('+')[0].split(':')[0];
-    const anchors = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam'].map((id) => lead(casting[id].voice));
+    const lead = (spec) => spec.split('+').map((p) => p.split(':')).reduce((a, b) => (Number(b[1] ?? 1) > Number(a[1] ?? 1) ? b : a))[0];
     const voices = new Set();
     for (const id of EXPERT_IDS) {
       const c = casting[id];
       assert.ok(c?.voice, `${id} has a voice`);
-      assert.ok(!anchors.includes(lead(c.voice)), `${id} leads with a voice of their own`);
-      assert.ok(!/bm_george|bm_lewis|bm_daniel/.test(c.voice), `${id}: nobody may sound like Paco`);
+      const hosts = Object.values(CHANNEL.programs).filter((p) => p.experts?.includes(id)).flatMap((p) => p.presenters || []);
+      assert.ok(hosts.length, `${id} airs on a programme`);
+      for (const h of hosts) assert.notEqual(lead(c.voice), lead(casting[h].voice), `${id} leads with ${h}'s voice`);
+      // none of Paco's own components (bm_george, bm_lewis), so nobody he talks to sounds like him (bm_daniel was
+      // listed too until 16 Oct, though it is not in his voice: Omar's British share, measured 48 from Paco)
+      const pacos = casting.paco.voice.split('+').map((p) => p.split(':')[0]);
+      for (const v of pacos) assert.ok(!c.voice.includes(v), `${id}: ${v} is Paco's; nobody may sound like Paco`);
       assert.equal(c.lang, CHANNEL.presenters[id].voice.lang.toLowerCase(), `${id} reads with the accent of the config`);
       assert.ok(!voices.has(c.voice), `${id}: another expert has this voice`);
       voices.add(c.voice);

@@ -10,11 +10,11 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Veteran British anchor: bm_george (authority) with 40% bm_lewis (weight, lower centre). Lowest, steadiest en-GB male of the auditions (median F0 ~135 Hz, pitch IQR ~4.5 st), best recogniser score of the four Paco takes. Speed hits WORLD NOW's 163 wpm with the bible's longer pauses (the calm is in the pauses, the words run ~185 wpm). Keep bm_george/bm_daniel/bm_lewis out of any other voice so nobody sounds like Paco."
+  "notes": "Veteran British anchor: bm_george (authority) with 40% bm_lewis (weight, lower centre). Lowest, steadiest en-GB male of the auditions (median F0 ~135 Hz, pitch IQR ~4.5 st), best recogniser score of the four Paco takes. Speed hits WORLD NOW's 163 wpm with the bible's longer pauses (the calm is in the pauses, the words run ~185 wpm). Keep bm_george/bm_daniel/bm_lewis out of every expert and correspondent so nobody he talks to sounds like him (test/experts.test.js); since 16 Oct Kai Sprite (FULL TIME, never on Paco's programmes) leads with bm_george too, with bm_fable instead of bm_lewis, far from Paco in timbre (tools/voice/voice-audit.json) and quicker. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.11 with the bend, 4.38 without, on the same three lines."
  },
  "lola": {
   "voice": "af_heart:0.75+af_bella:0.25",
-  "speed": 1.0,
+  "speed": 1,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -23,19 +23,19 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Co-anchor, warm and curious: af_heart with 25% af_bella. Chosen over the sharper af_heart+af_sarah blend, which measured too close to Penny (Bhattacharyya 0.30), and over af_heart+af_kore, too close to Nova (0.6 st). ~7 st above Paco plus the accent contrast (en-US vs en-GB). WORLD NOW pace 171 wpm, same pause set as Paco so the two read as one programme."
+  "notes": "Co-anchor, warm and curious: af_heart with 25% af_bella. Chosen over the sharper af_heart+af_sarah blend, which measured too close to Penny (Bhattacharyya 0.30), and over af_heart+af_kore, too close to Nova (0.6 st). ~7 st above Paco plus the accent contrast (en-US vs en-GB). WORLD NOW pace 171 wpm, same pause set as Paco so the two read as one programme. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.30 with the bend, 4.48 without, on the same three lines."
  },
  "max": {
   "voice": "am_fenrir:0.6+am_puck:0.4",
   "speed": 0.98,
   "lang": "en-us",
-  "notes": "Technology correspondent, quick and keen but adult: am_fenrir with 40% am_puck. Highest, brightest US male (median F0 ~131 Hz, widest pitch movement of the cast, ~6.4 st IQR) so his enthusiasm is in the melody, never in volume. ~3 st above Sam; opposite gender and accent to Ada. TECH BYTES pace 175 wpm."
+  "notes": "Technology correspondent, quick and keen but adult: am_fenrir with 40% am_puck. Highest, brightest US male (median F0 ~131 Hz, widest pitch movement of the cast, ~6.4 st IQR) so his enthusiasm is in the melody, never in volume. ~3 st above Sam; opposite gender and accent to Ada. TECH BYTES pace 175 wpm. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.36 with the bend, 4.46 without, on the same three lines."
  },
  "ada": {
   "voice": "bf_emma:0.7+af_sarah:0.3",
   "speed": 0.87,
   "lang": "en-gb",
-  "notes": "Sceptical analyst, clear explainer: bf_emma with 30% af_sarah, read with en-GB phonemes (accent stays British). Same recogniser score as pure Emma with more question intonation (pitch IQR 3.9 vs 3.0 st). Distinct from Penny (the other British woman) by timbre (Bhattacharyya ~0.73, cepstral distance ~12.3 dB) rather than pitch, since their profiles share a pitch. TECH BYTES pace 166 wpm, ~9 wpm under Max."
+  "notes": "Sceptical analyst, clear explainer: bf_emma with 30% af_sarah, read with en-GB phonemes (accent stays British). Same recogniser score as pure Emma with more question intonation (pitch IQR 3.9 vs 3.0 st). Distinct from Penny (the other British woman) by timbre (Bhattacharyya ~0.73, cepstral distance ~12.3 dB) rather than pitch, since their profiles share a pitch. TECH BYTES pace 166 wpm, ~9 wpm under Max. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.30 with the bend, 4.44 without, on the same three lines."
  },
  "nova": {
   "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2",
@@ -45,7 +45,7 @@
    "comma": 0.16,
    "sentence": 0.32
   },
-  "notes": "Astrophysicist, warm and precise: af_nova with 25% af_alloy and 20% af_kore. Lowest, darkest female voice of the cast (median F0 ~155 Hz), best recogniser score of the Nova takes, 4.7 st under Lola so the two American women never blur. COSMOS pace 145 wpm with the bible's pauses; the words themselves stay above 150 wpm on her copy. Owner 3 Oct: 10% faster (speed 0.81 -> 0.89, pauses 10% shorter)."
+  "notes": "Astrophysicist, warm and precise: af_nova with 25% af_alloy and 20% af_kore. Lowest, darkest female voice of the cast (median F0 ~155 Hz), best recogniser score of the Nova takes, 4.7 st under Lola so the two American women never blur. COSMOS pace 145 wpm with the bible's pauses; the words themselves stay above 150 wpm on her copy. Owner 3 Oct: 10% faster (speed 0.81 -> 0.89, pauses 10% shorter). 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.44 with the bend, 4.50 without, on the same three lines."
  },
  "unit8": {
   "voice": "am_echo:0.7+am_fenrir:0.3",
@@ -57,7 +57,7 @@
    "sentence": 0.48,
    "colon": 0.3
   },
-  "notes": "Robot co-host, deadpan but charming: base am_echo with 30% am_fenrir, effect 'robot-soft' (owner 3 Oct picked A of four: mostly the voice itself with a gentle machine sheen, no buzz, no crush; the classic 'robot' was a monotone 100 Hz vocoder below 2.4 kHz and read odd and annoying). Chosen for intelligibility under the effect: pure am_echo and am_onyx+am_echo lose consonants (21% recogniser errors on the news sentence, vs 3%). Keep speed >= 0.82: slower speeds measurably smear the vocoder (15-18% errors at 0.78-0.80). The deliberate pace (~135 wpm, top of the COSMOS range) comes from a 0.48 s beat at full stops; for slower, lengthen pauses, never lower the speed."
+  "notes": "Robot co-host, deadpan but charming: base am_echo with 30% am_fenrir, effect 'robot-soft' (owner 3 Oct picked A of four: mostly the voice itself with a gentle machine sheen, no buzz, no crush; the classic 'robot' was a monotone 100 Hz vocoder below 2.4 kHz and read odd and annoying). Chosen for intelligibility under the effect: pure am_echo and am_onyx+am_echo lose consonants (21% recogniser errors on the news sentence, vs 3%). Keep speed >= 0.82: slower speeds measurably smear the vocoder (15-18% errors at 0.78-0.80). The deliberate pace (~135 wpm, top of the COSMOS range) comes from a 0.48 s beat at full stops; for slower, lengthen pauses, never lower the speed. 16 Oct voices round: unchanged, voice and sound (the melody never applied to the robot)."
  },
  "penny": {
   "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15",
@@ -66,17 +66,17 @@
   "pauses": {
    "sentence": 0.4
   },
-  "notes": "Markets correspondent, numbers first: bf_isabella with 25% af_kore and 15% bf_alice (en-GB phonemes). The clearest of the four Penny takes on figures at equal speed (recogniser errors 26% vs 37-54%), and no bf_emma so she stays distinct from Ada. MONEY MINUTE pace 170 wpm, 0.40 s at full stops."
+  "notes": "Markets correspondent, numbers first: bf_isabella with 25% af_kore and 15% bf_alice (en-GB phonemes). The clearest of the four Penny takes on figures at equal speed (recogniser errors 26% vs 37-54%), and no bf_emma so she stays distinct from Ada. MONEY MINUTE pace 170 wpm, 0.40 s at full stops. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.35 with the bend, 4.47 without, on the same three lines."
  },
  "sam": {
   "voice": "am_michael:0.75+am_onyx:0.25",
   "speed": 1.19,
   "lang": "en-us",
-  "notes": "Relaxed rolling-news anchor: am_michael with 25% am_onyx. Lowest, darkest voice of the cast (median F0 ~109 Hz), steady, friendly; ~3 st under Max. NEWS IN 60 pace 175 wpm (speed ~1.19: Michael articulates slowly, so this does not sound rushed); urgency comes from the cuts, never from the voice."
+  "notes": "Relaxed rolling-news anchor: am_michael with 25% am_onyx. Lowest, darkest voice of the cast (median F0 ~109 Hz), steady, friendly; ~3 st under Max. NEWS IN 60 pace 175 wpm (speed ~1.19: Michael articulates slowly, so this does not sound rushed); urgency comes from the cuts, never from the voice. 16 Oct voices round (docs/roadmap/critique/voices-naturalness.md): the voice stays (the owner approved it); the engine no longer bends its pitch to the planned melody, which measurably cost naturalness: predicted listening score 4.22 with the bend, 4.41 without, on the same three lines."
  },
  "rhea": {
-  "voice": "bf_lily:0.75+bf_emma:0.25",
-  "speed": 1.02,
+  "voice": "bf_emma:0.6+af_aoede:0.4",
+  "speed": 0.98,
   "lang": "en-gb",
   "pauses": {
    "comma": 0.18,
@@ -85,11 +85,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Europe & Africa correspondent (WORLD NOW links, owner 4 Oct): bf_lily with 25% bf_emma for clarity (Emma alone is Ada's base). Measured on the link test copy (40-band mel cepstrum, coefficients 1-12): nearest Penny 73.4, Max 75.4, Ada 80.7, more than the cast's own closest pair (Nova-continuity 60.3, Lola-Nova 67.3); median F0 ~194 Hz, pitch IQR 5.7 st (a livelier melody than Ada's 3.1). Blends with af_aoede or bf_isabella drifted to Lola/Penny (51-66) and were dropped. WORLD NOW pause set."
+  "notes": "Europe & Africa correspondent (WORLD NOW links). Re-cast 16 Oct: bf_emma (B-) with 40% af_aoede, British; the old bf_lily (D) + bf_emma. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.38; word error rate 0.028; accent +0.29; F0 ~181 Hz, 16.1 characters a second; nearest qm:C 40, june 46, ada 49 (before: 4.05, WER 0.028, accent +0.36, 15.8 cps).",
+  "previous": {
+   "voice": "bf_lily:0.75+bf_emma:0.25",
+   "speed": 1.02,
+   "lang": "en-gb",
+   "notes": "Europe & Africa correspondent (WORLD NOW links, owner 4 Oct): bf_lily with 25% bf_emma for clarity (Emma alone is Ada's base). Measured on the link test copy (40-band mel cepstrum, coefficients 1-12): nearest Penny 73.4, Max 75.4, Ada 80.7, more than the cast's own closest pair (Nova-continuity 60.3, Lola-Nova 67.3); median F0 ~194 Hz, pitch IQR 5.7 st (a livelier melody than Ada's 3.1). Blends with af_aoede or bf_isabella drifted to Lola/Penny (51-66) and were dropped. WORLD NOW pause set."
+  }
  },
  "vic": {
-  "voice": "am_eric:0.7+am_onyx:0.3",
-  "speed": 1.06,
+  "voice": "am_puck:0.65+am_michael:0.2+am_onyx:0.15",
+  "speed": 1.26,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -98,11 +104,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Americas correspondent (WORLD NOW links, owner 4 Oct): am_eric with 30% am_onyx (Sam has 25% onyx, but Sam is >79 away). Nearest voices on the link test copy: Nova 69.1 (another gender), continuity 72.5, Penny 78.9; every male presenter further (Paco, whom he follows in a two-way, >79). Median F0 ~130 Hz, IQR 4.8 st. am_liam/am_adam blends sat on Paco (53-63) and were dropped. WORLD NOW pause set."
+  "notes": "Americas correspondent (WORLD NOW links), brisk and concrete. Re-cast 16 Oct: am_puck (C+, the one good American male voice nobody on WORLD NOW leads with) with 20% am_michael and 15% am_onyx; the old am_eric (D) + am_onyx. First cast with 30% am_michael, 34 from Max (who has 40% am_puck); the onyx share takes him to 46. Speed 1.26 keeps his quick pace (am_eric read fast): at 1.20 he was 6% slower than before, and 1.26 measured the same listening score. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.41; word error rate 0.037; accent +0.41; F0 ~105 Hz, 17.4 characters a second; nearest qm:B 37, sam 40, dev 41 (before: 4.25, WER 0.037, accent +0.41, 17.6 cps).",
+  "previous": {
+   "voice": "am_eric:0.7+am_onyx:0.3",
+   "speed": 1.06,
+   "lang": "en-us",
+   "notes": "Americas correspondent (WORLD NOW links, owner 4 Oct): am_eric with 30% am_onyx (Sam has 25% onyx, but Sam is >79 away). Nearest voices on the link test copy: Nova 69.1 (another gender), continuity 72.5, Penny 78.9; every male presenter further (Paco, whom he follows in a two-way, >79). Median F0 ~130 Hz, IQR 4.8 st. am_liam/am_adam blends sat on Paco (53-63) and were dropped. WORLD NOW pause set."
+  }
  },
  "mika": {
   "voice": "af_aoede",
-  "speed": 1.0,
+  "speed": 1,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -111,17 +123,22 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Asia & Middle East correspondent (WORLD NOW links, owner 4 Oct): af_aoede alone, the best-graded Kokoro voice no presenter used. Nearest on the link test copy: Nova 72.3 (+2.6 st), Lola 81.9 (-1.6 st). Every blend with af_river/af_jessica pulled it onto Lola (40-48), so it stays pure. Median F0 ~179 Hz, IQR 4.4 st. WORLD NOW pause set."
+  "notes": "Asia & Middle East correspondent (WORLD NOW links, owner 4 Oct): af_aoede alone, the best-graded Kokoro voice no presenter used. Nearest on the link test copy: Nova 72.3 (+2.6 st), Lola 81.9 (-1.6 st). Every blend with af_river/af_jessica pulled it onto Lola (40-48), so it stays pure. Median F0 ~179 Hz, IQR 4.4 st. WORLD NOW pause set. 16 Oct voices round: the voice stays; the engine no longer bends its pitch to the planned melody."
  },
  "continuity": {
-  "voice": "bm_fable",
-  "speed": 1.1,
+  "voice": "bf_lily:0.5+bf_isabella:0.25+bf_emma:0.25",
+  "speed": 0.87,
   "lang": "en-gb",
-  "notes": "Continuity announcer for breaks, idents and the UP NEXT promo (not a presenter): bm_fable, the en-GB voice no presenter uses, as docs/programmes/channel-and-breaks.md asks; read at ~150 wpm, slower than the anchors."
+  "notes": "Continuity announcer: the break bumper's line (\"We'll be right back.\"), voiced through server/voice/adcast.json's 'continuity' entry, which must equal this one (test/voice-casting.test.js); idents and an UP NEXT promo would take it too. 16 Oct voices round: the bumper had been speaking with the adverts' default British woman, bf_alice (graded D; predicted listening score 3.59 on the bumper's two lines, one of them heard as Scottish), while this entry named bm_fable at 1.10, which nothing voiced and which Leo Sepia now leads with. Now bf_lily with a quarter each of bf_isabella and bf_emma: heard as English on every line, 4.17 on the bumper's lines, 45 or more from every character (Rosa 45, Penny 48, June 48). bf_lily (graded D) leads because every British woman's voice graded C or better leads a character, and an announcer who led with a presenter's voice would sound like the presenter who has just handed over; its listening score is measured instead. Speed 0.87 keeps bf_alice's pace (about 164 words a minute on the short lines). previous = what aired before.",
+  "previous": {
+   "voice": "bf_alice",
+   "speed": 0.92,
+   "lang": "en-gb"
+  }
  },
  "omar": {
-  "voice": "am_adam:0.6+am_onyx:0.4",
-  "speed": 0.96,
+  "voice": "am_michael:0.55+bm_daniel:0.45",
+  "speed": 1.03,
   "lang": "en-gb",
   "pauses": {
    "comma": 0.18,
@@ -130,10 +147,16 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Economics Editor, measured and plain: am_adam with 40% am_onyx (the low end of the cast, median F0 ~109 Hz, IQR 3.9 st), read with en-GB phonemes. Nearest Vic 66, Lola 66; Penny (MONEY MINUTE) and Paco further. WER 0.09. Blends with hm_omega or am_santa sat on Sam or Max (54-59)."
+  "notes": "Economics Editor, measured and plain. Re-cast 16 Oct: am_michael (C+) for a steady, low voice, with 45% bm_daniel, read with British phonemes: the British share is what makes him sound British (am_michael with bm_fable, or with British phonemes alone, was heard as American). bm_daniel is not in Paco's voice (bm_george + bm_lewis) and measures far from him. The old am_adam (F+, the weakest English voice) + am_onyx sounded American. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.41; word error rate 0.022; accent +0.17; F0 ~119 Hz, 15.9 characters a second; nearest sam 37, tomas 37, max 48 (before: 4.32, WER 0.034, accent +0.04, 16.4 cps).",
+  "previous": {
+   "voice": "am_adam:0.6+am_onyx:0.4",
+   "speed": 0.96,
+   "lang": "en-gb",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Economics Editor, measured and plain: am_adam with 40% am_onyx (the low end of the cast, median F0 ~109 Hz, IQR 3.9 st), read with en-GB phonemes. Nearest Vic 66, Lola 66; Penny (MONEY MINUTE) and Paco further. WER 0.09. Blends with hm_omega or am_santa sat on Sam or Max (54-59)."
+  }
  },
  "clara": {
-  "voice": "ff_siwis:0.5+af_sky:0.5",
+  "voice": "bf_isabella:0.55+af_bella:0.45",
   "speed": 0.95,
   "lang": "en-gb",
   "pauses": {
@@ -143,11 +166,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Diplomatic Correspondent, calm and exact: ff_siwis (a French voice, read with en-GB phonemes: a cooler, more precise colour) and af_sky in equal parts (no advert's lead voice dominates: cloudbrella leads with af_sky, 37 away). Nearest Penny 64, Rhea 70, Lola further; median F0 ~178 Hz, IQR 4.4 st. WER 0.05. Every af_river blend sat on Rhea (38-44)."
+  "notes": "Diplomatic Correspondent, calm and exact. Re-cast 16 Oct: bf_isabella (C) with 45% af_bella, British; the old blend was half ff_siwis, a French voice reading English, which a classifier heard as foreign. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.42; word error rate 0.023; accent +0.30; F0 ~202 Hz, 15.6 characters a second; nearest rosa 39, penny 39, lola 48 (before: 4.37, WER 0.023, accent -0.17, 15.5 cps).",
+  "previous": {
+   "voice": "ff_siwis:0.5+af_sky:0.5",
+   "speed": 0.95,
+   "lang": "en-gb",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Diplomatic Correspondent, calm and exact: ff_siwis (a French voice, read with en-GB phonemes: a cooler, more precise colour) and af_sky in equal parts (no advert's lead voice dominates: cloudbrella leads with af_sky, 37 away). Nearest Penny 64, Rhea 70, Lola further; median F0 ~178 Hz, IQR 4.4 st. WER 0.05. Every af_river blend sat on Rhea (38-44)."
+  }
  },
  "dev": {
-  "voice": "am_liam",
-  "speed": 1.03,
+  "voice": "am_fenrir:0.5+am_liam:0.3+am_onyx:0.2",
+  "speed": 1.13,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -156,11 +185,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Climate Correspondent, keen and clear: am_liam alone (no presenter uses it). Nearest Paco 59, Max 81; median F0 ~126 Hz, IQR 5.0 st. WER 0.02 (the clearest of the auditions). Blends with am_puck or pm_alex drifted onto Max or Paco (44-51)."
+  "notes": "Climate Correspondent, keen and clear. Re-cast 16 Oct: am_fenrir (C+) at 50% with 30% am_liam (his old voice, now a colour, not the lead) and 20% am_onyx. am_fenrir is the one C-or-better American male voice that nobody on his two programmes leads with (Omar and Tomas lead with am_michael, Vic with am_puck); Max (TECH, never with Dev) leads with it too, and the onyx share keeps Dev 40 from him (with 40% am_liam and no onyx he was 32 from Max, the closest pair on the channel). The old am_liam (D) alone was rough. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.47; word error rate 0.030; accent +0.41; F0 ~119 Hz, 17.0 characters a second; nearest max 40, vic 41, guest:man:0 45 (before: 4.15, WER 0.030, accent +0.38, 17.2 cps).",
+  "previous": {
+   "voice": "am_liam",
+   "speed": 1.03,
+   "lang": "en-us",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Climate Correspondent, keen and clear: am_liam alone (no presenter uses it). Nearest Paco 59, Max 81; median F0 ~126 Hz, IQR 5.0 st. WER 0.02 (the clearest of the auditions). Blends with am_puck or pm_alex drifted onto Max or Paco (44-51)."
+  }
  },
  "tomas": {
-  "voice": "am_santa:0.6+am_onyx:0.4",
-  "speed": 0.94,
+  "voice": "am_michael:0.52+am_eric:0.48",
+  "speed": 0.9,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -169,11 +204,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Planetary scientist, warm and unhurried: am_santa (the oldest-sounding Kokoro voice) with 40% am_onyx to steady it; the widest melody of the experts (IQR 7.9 st, median F0 ~128 Hz), slower at speed 1 than the rest. Nearest UNIT-8 51 (heard on air through its robot effect) and Sam 53 (never on COSMOS); Nova far. WER 0.09."
+  "notes": "Planetary scientist, warm and unhurried. Re-cast 16 Oct: am_michael (C+) with 48% am_eric, slow (0.90); the old am_santa (D-) + am_onyx had the lowest listening score of the cast. Sam and Omar lead with am_michael too (never on COSMOS): with 40% am_eric Tomas was 32 from Omar and 34 from Sam; blends with am_onyx or am_santa (for age) brought him within 14-23 of Sam. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.47; word error rate 0.025; accent +0.42; F0 ~133 Hz, 14.9 characters a second; nearest omar 37, sam 40, qm:B 42 (before: 3.51, WER 0.025, accent +0.39, 14.4 cps).",
+  "previous": {
+   "voice": "am_santa:0.6+am_onyx:0.4",
+   "speed": 0.94,
+   "lang": "en-us",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Planetary scientist, warm and unhurried: am_santa (the oldest-sounding Kokoro voice) with 40% am_onyx to steady it; the widest melody of the experts (IQR 7.9 st, median F0 ~128 Hz), slower at speed 1 than the rest. Nearest UNIT-8 51 (heard on air through its robot effect) and Sam 53 (never on COSMOS); Nova far. WER 0.09."
+  }
  },
  "june": {
-  "voice": "af_jessica",
-  "speed": 1.06,
+  "voice": "af_sarah:0.6+af_aoede:0.4",
+  "speed": 1.11,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -182,10 +223,16 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Security and hardware analyst, quick and precise: af_jessica alone, the brightest of the experts (median F0 ~205 Hz). Nearest Lola 75, Rhea 81; Ada and Max (TECH BYTES) far. WER 0.02. Kept pure: blends with af_sky or af_nicole drifted onto Lola (48-53)."
+  "notes": "Security and hardware analyst, quick and precise. Re-cast 16 Oct: af_sarah (C+) with 40% af_aoede, bright and quick; the old af_jessica (D) alone. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.50; word error rate 0.030; accent +0.34; F0 ~182 Hz, 17.2 characters a second; nearest qm:C 31, amara 46, rhea 46 (before: 4.02, WER 0.030, accent +0.34, 17.5 cps).",
+  "previous": {
+   "voice": "af_jessica",
+   "speed": 1.06,
+   "lang": "en-us",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Security and hardware analyst, quick and precise: af_jessica alone, the brightest of the experts (median F0 ~205 Hz). Nearest Lola 75, Rhea 81; Ada and Max (TECH BYTES) far. WER 0.02. Kept pure: blends with af_sky or af_nicole drifted onto Lola (48-53)."
+  }
  },
  "amara": {
-  "voice": "hf_alpha:0.5+af_river:0.5",
+  "voice": "af_alloy:0.55+bf_emma:0.45",
   "speed": 0.98,
   "lang": "en-gb",
   "pauses": {
@@ -195,11 +242,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Health Correspondent, a doctor who reassures where the facts allow: hf_alpha (a Hindi voice) with 50% af_river, read with en-GB phonemes. Nearest Lola 55, Penny 57, Rhea 59 (more than any other blend tried: af_river with if_sara, pf_dora or jf_gongitsune sat on Rhea, 26-44); median F0 ~194 Hz. WER 0.12, the cast's usual range."
+  "notes": "Health Correspondent, a doctor who reassures where the facts allow. Re-cast 16 Oct: af_alloy (C, the calmest, lowest female voice) with 45% bf_emma, British phonemes; the old blend was half hf_alpha, a Hindi voice reading English, which a classifier heard as Indian English. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.44; word error rate 0.024; accent +0.09; F0 ~163 Hz, 15.5 characters a second; nearest qm:C 44, june 46, penny 52 (before: 4.40, WER 0.024, accent -0.23, 15.2 cps).",
+  "previous": {
+   "voice": "hf_alpha:0.5+af_river:0.5",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Health Correspondent, a doctor who reassures where the facts allow: hf_alpha (a Hindi voice) with 50% af_river, read with en-GB phonemes. Nearest Lola 55, Penny 57, Rhea 59 (more than any other blend tried: af_river with if_sara, pf_dora or jf_gongitsune sat on Rhea, 26-44); median F0 ~194 Hz. WER 0.12, the cast's usual range."
+  }
  },
  "leo": {
-  "voice": "am_liam:0.6+im_nicola:0.4",
-  "speed": 1.04,
+  "voice": "bm_fable:0.6+bm_daniel:0.4",
+  "speed": 1.15,
   "lang": "en-gb",
   "pauses": {
    "comma": 0.18,
@@ -208,11 +261,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Culture Correspondent, lively and generous: am_liam with 40% im_nicola (an Italian voice, read with en-GB phonemes: a warmer, rounder colour than Dev's pure am_liam, 55 away). Nearest Sam 60, Paco 63; median F0 ~114 Hz. WER 0.07."
+  "notes": "Culture Correspondent, lively and generous. Re-cast 16 Oct: bm_fable (C, warm and British) with 40% bm_daniel, read with British phonemes; the old am_liam (D) + im_nicola (an Italian voice). First cast with 40% am_puck for liveliness, which made him sound American (bm_fable alone is only lightly British); bm_daniel keeps him British on every line with the same pitch movement. Omar also has bm_daniel (45%) and measures far from him. The two adverts that led with bm_fable now lead with onyx and lewis (adcast.json). Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.38; word error rate 0.026; accent +0.31; F0 ~121 Hz, 15.9 characters a second; nearest guest:man:1 43, ines 43, kai 46 (before: 4.33, WER 0.026, accent +0.17, 16.7 cps).",
+  "previous": {
+   "voice": "am_liam:0.6+im_nicola:0.4",
+   "speed": 1.04,
+   "lang": "en-gb",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Culture Correspondent, lively and generous: am_liam with 40% im_nicola (an Italian voice, read with en-GB phonemes: a warmer, rounder colour than Dev's pure am_liam, 55 away). Nearest Sam 60, Paco 63; median F0 ~114 Hz. WER 0.07."
+  }
  },
  "ines": {
-  "voice": "ef_dora:0.55+af_sky:0.45",
-  "speed": 1.02,
+  "voice": "af_kore:0.55+af_sky:0.45",
+  "speed": 1.14,
   "lang": "en-us",
   "pauses": {
    "comma": 0.18,
@@ -221,11 +280,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Legal Affairs Correspondent, careful and crisp: ef_dora (a Spanish voice, read with en-US phonemes) with 45% af_sky. Nearest UNIT-8 63, Sam 65, Vic 68; every WORLD NOW voice further; median F0 ~167 Hz. WER 0.02. Led by ef_dora rather than af_sky (the cloudbrella advert's lead), which also moved her further from the cast (62 -> 63+). Clara shares af_sky (37 apart), but they differ by accent (en-US / en-GB), pace and a Spanish against a French colour, and one analysis airs per programme."
+  "notes": "Legal Affairs Correspondent, careful and level. Re-cast 16 Oct: af_kore (C+) with 45% af_sky, the airy colour her old blend had; the old blend led with ef_dora, a Spanish voice reading English. First cast with 40% af_aoede, which left her 40.6 from Mika (af_aoede alone) on WORLD NOW. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.47; word error rate 0.030; accent +0.38; F0 ~153 Hz, 16.6 characters a second; nearest leo 43, qm:B 50, kai 50 (before: 4.05, WER 0.042, accent +0.36, 17.1 cps).",
+  "previous": {
+   "voice": "ef_dora:0.55+af_sky:0.45",
+   "speed": 1.02,
+   "lang": "en-us",
+   "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Legal Affairs Correspondent, careful and crisp: ef_dora (a Spanish voice, read with en-US phonemes) with 45% af_sky. Nearest UNIT-8 63, Sam 65, Vic 68; every WORLD NOW voice further; median F0 ~167 Hz. WER 0.02. Led by ef_dora rather than af_sky (the cloudbrella advert's lead), which also moved her further from the cast (62 -> 63+). Clara shares af_sky (37 apart), but they differ by accent (en-US / en-GB), pace and a Spanish against a French colour, and one analysis airs per programme."
+  }
  },
  "kai": {
-  "voice": "bm_lewis:0.55+am_puck:0.45",
-  "speed": 1.06,
+  "voice": "bm_george:0.55+bm_fable:0.45",
+  "speed": 1.19,
   "lang": "en-gb",
   "pauses": {
    "comma": 0.16,
@@ -234,10 +299,16 @@
    "colon": 0.26,
    "dash": 0.2
   },
-  "notes": "FULL TIME's presenter, quick and warm: bm_lewis with 45% am_puck, a British male with a brighter top than Paco's bm_george blend and none of Max's am_fenrir. A touch quicker than the anchors (sport's pace), never shouting; the results lines get the voice plan's marked names and score. First choice; the owner hears A/B before it is final."
+  "notes": "FULL TIME's presenter, quick and warm. Re-cast 16 Oct: bm_george with 45% bm_fable, the two best-graded British male voices (C), so he sounds British (the old bm_lewis + am_puck was rough: bm_lewis is D+). Paco also leads with bm_george but never airs on FULL TIME and is far in timbre; Kai is quicker (speed 1.19 keeps his old pace). Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.36; word error rate 0.042; accent +0.29; F0 ~130 Hz, 16.0 characters a second; nearest qm:B 39, tomas 42, leo 46 (before: 4.17, WER 0.047, accent +0.34, 15.8 cps).",
+  "previous": {
+   "voice": "bm_lewis:0.55+am_puck:0.45",
+   "speed": 1.06,
+   "lang": "en-gb",
+   "notes": "FULL TIME's presenter, quick and warm: bm_lewis with 45% am_puck, a British male with a brighter top than Paco's bm_george blend and none of Max's am_fenrir. A touch quicker than the anchors (sport's pace), never shouting; the results lines get the voice plan's marked names and score. First choice; the owner hears A/B before it is final."
+  }
  },
  "rosa": {
-  "voice": "if_sara:0.4+bf_alice:0.6",
+  "voice": "bf_isabella:0.55+af_nova:0.45",
   "speed": 0.98,
   "lang": "en-gb",
   "pauses": {
@@ -247,11 +318,17 @@
    "colon": 0.28,
    "dash": 0.22
   },
-  "notes": "FULL TIME's analyst, a former international: bf_alice with 40% if_sara, a warm, lower British alto with a Mediterranean colour unlike Ines (ef_dora) or Clara (ff_siwis). Calm and dry, a little slower than Kai so the context lands. First choice; the owner hears A/B before it is final."
+  "notes": "FULL TIME's analyst, a former international, calm and dry. Re-cast 16 Oct: bf_isabella (C) with 45% af_nova, a calm British alto; the old blend had an Italian voice (if_sara) reading English. First cast with bf_emma in the lead (as Ada and Rhea), 38 from Rhea; Clara and Penny lead with bf_isabella too but never air on FULL TIME, and measure 39 and 44 from her. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.49; word error rate 0.044; accent +0.29; F0 ~185 Hz, 15.2 characters a second; nearest clara 39, penny 44, nova 58 (before: 4.18, WER 0.028, accent +0.26, 15.3 cps).",
+  "previous": {
+   "voice": "if_sara:0.4+bf_alice:0.6",
+   "speed": 0.98,
+   "lang": "en-gb",
+   "notes": "FULL TIME's analyst, a former international: bf_alice with 40% if_sara, a warm, lower British alto with a Mediterranean colour unlike Ines (ef_dora) or Clara (ff_siwis). Calm and dry, a little slower than Kai so the context lands. First choice; the owner hears A/B before it is final."
+  }
  },
  "qm": {
-  "voice": "jf_gongitsune:0.7+pf_dora:0.3",
-  "speed": 1.08,
+  "voice": "af_bella:0.6+af_kore:0.4",
+  "speed": 1.0,
   "lang": "en-us",
   "pauses": {
    "comma": 0.15,
@@ -262,35 +339,59 @@
    "colon": 0.3,
    "dash": 0.2
   },
-  "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). No component any presenter, correspondent, expert, the continuity announcer or an advert uses: every English Kokoro voice is taken, so the host's are non-English voices read with English phonemes (as Clara, Amara, Leo and Ines blend theirs), each with its tonal match in tools/voice/tone.json (measure.py tone-add: without it the host sat about 3 dB duller than the cast from 2 kHz up). Measured with that match on the casting's own copy against every voice in this file (40-band mel cepstrum, coefficients 1-12, mean distance; PocketSphinx word error rate): the cast's closest pairs that share a component are 32 (Clara-Ines af_sky, Kai-Max am_puck), the closest that share none 45-47. A: jf_gongitsune with 30% pf_dora, en-US: a bright, quick, warm voice (median F0 ~207 Hz, IQR 4.5 st), nearest Rhea 71, Amara 74, Clara 76; WER 0.14 over four copies (the quiz's own lines among them; the cast 0.09-0.26 on the same four). Pauses its own: a beat before an answer (colon 0.30, ellipsis 0.55) and after a question (0.44), the rest a game's quick pace.",
+  "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). Re-cast 16 Oct (owner: \"la voz de la chica de camiseta roja suena fatal\"): the first three candidates were voices of other languages reading English (no English voice was free under the old rule). A is now af_bella, Kokoro's second-best English voice (A-), with 40% af_kore for a lower, rounder middle than Lola's heart-and-bella; bright and quick, American. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.46; word error rate 0.040; accent +0.34; F0 ~178 Hz, 15.6 characters a second; nearest lola 47, mika 53, june 54 (before: 4.15, WER 0.040, accent +0.18, 15.4 cps).",
   "candidates": {
    "A": {
-    "voice": "jf_gongitsune:0.7+pf_dora:0.3",
-    "speed": 1.08,
+    "voice": "af_bella:0.6+af_kore:0.4",
+    "speed": 1.0,
     "lang": "en-us",
     "gender": "female",
     "pitch": 1.12,
     "rate": 1.08,
-    "notes": "bright and quick, American; F0 ~207 Hz, IQR 4.5 st; nearest Rhea 71, Amara 74, Clara 76; WER 0.14 (four copies; the cast 0.09-0.26)"
+    "notes": "bright and quick, American: af_bella (A-) with 40% af_kore; predicted listening score 4.46; word error rate 0.040; accent +0.34; F0 ~178 Hz, 15.6 characters a second; nearest lola 47, mika 53, june 54 (before: 4.15, WER 0.040, accent +0.18, 15.4 cps)",
+    "previous": {
+     "voice": "jf_gongitsune:0.7+pf_dora:0.3",
+     "speed": 1.08,
+     "lang": "en-us",
+     "notes": "bright and quick, American; F0 ~207 Hz, IQR 4.5 st; nearest Rhea 71, Amara 74, Clara 76; WER 0.14 (four copies; the cast 0.09-0.26)"
+    }
    },
    "B": {
-    "voice": "hm_psi",
-    "speed": 1.08,
+    "voice": "am_puck:0.55+am_eric:0.45",
+    "speed": 1.02,
     "lang": "en-us",
     "gender": "male",
     "pitch": 1.08,
     "rate": 1.1,
-    "notes": "a light, lively baritone, American with a warm colour; F0 ~136 Hz, IQR 6.6 st (the widest melody of the male voices: Max and Tomas 6.5); nearest Leo 69, Paco 75, Mika 76; WER 0.17 (four copies)"
+    "notes": "a light, lively baritone, American: am_puck (C+) with 45% am_eric; predicted listening score 4.47; word error rate 0.045; accent +0.40; F0 ~132 Hz, 15.6 characters a second; nearest vic 37, kai 39, tomas 42 (before: 3.80, WER 0.060, accent -0.21, 15.2 cps)",
+    "previous": {
+     "voice": "hm_psi",
+     "speed": 1.08,
+     "lang": "en-us",
+     "notes": "a light, lively baritone, American with a warm colour; F0 ~136 Hz, IQR 6.6 st (the widest melody of the male voices: Max and Tomas 6.5); nearest Leo 69, Paco 75, Mika 76; WER 0.17 (four copies)"
+    }
    },
    "C": {
-    "voice": "jf_nezumi:0.65+pf_dora:0.35",
+    "voice": "af_kore:0.5+bf_emma:0.25+bf_lily:0.25",
     "speed": 1.06,
     "lang": "en-gb",
     "gender": "female",
     "pitch": 1.06,
     "rate": 1.06,
-    "notes": "clear and even, British; F0 ~214 Hz, IQR 3.6 st; nearest Rosa 61 (FULL TIME's analyst, no component shared), Rhea 69, Lola 73; WER 0.18 (four copies); 56 from candidate A"
+    "notes": "clear and even, British: af_kore (C+) with a quarter each of bf_emma and bf_lily, read with British phonemes (with 45% bf_emma she was 25.5 from Rosa); predicted listening score 4.47; word error rate 0.040; accent +0.18; F0 ~168 Hz, 15.5 characters a second; nearest june 31, rhea 40, continuity 42 (before: 4.17, WER 0.040, accent -0.05, 15.9 cps)",
+    "previous": {
+     "voice": "jf_nezumi:0.65+pf_dora:0.35",
+     "speed": 1.06,
+     "lang": "en-gb",
+     "notes": "clear and even, British; F0 ~214 Hz, IQR 3.6 st; nearest Rosa 61 (FULL TIME's analyst, no component shared), Rhea 69, Lola 73; WER 0.18 (four copies); 56 from candidate A"
+    }
    }
+  },
+  "previous": {
+   "voice": "jf_gongitsune:0.7+pf_dora:0.3",
+   "speed": 1.08,
+   "lang": "en-us",
+   "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). No component any presenter, correspondent, expert, the continuity announcer or an advert uses: every English Kokoro voice is taken, so the host's are non-English voices read with English phonemes (as Clara, Amara, Leo and Ines blend theirs), each with its tonal match in tools/voice/tone.json (measure.py tone-add: without it the host sat about 3 dB duller than the cast from 2 kHz up). Measured with that match on the casting's own copy against every voice in this file (40-band mel cepstrum, coefficients 1-12, mean distance; PocketSphinx word error rate): the cast's closest pairs that share a component are 32 (Clara-Ines af_sky, Kai-Max am_puck), the closest that share none 45-47. A: jf_gongitsune with 30% pf_dora, en-US: a bright, quick, warm voice (median F0 ~207 Hz, IQR 4.5 st), nearest Rhea 71, Amara 74, Clara 76; WER 0.14 over four copies (the quiz's own lines among them; the cast 0.09-0.26 on the same four). Pauses its own: a beat before an answer (colon 0.30, ellipsis 0.55) and after a question (0.44), the rest a game's quick pace."
   }
  }
 }

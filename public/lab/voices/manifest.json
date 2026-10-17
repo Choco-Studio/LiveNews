@@ -1,0 +1,395 @@
+{
+ "note": "The same line in the old voice and the new one (16 Oct round). Kokoro voices through the channel's own engine and broadcast chain, as they air. The old blends stay in server/voice/casting.json under \"previous\".",
+ "rows": [
+  {
+   "id": "qm",
+   "name": "Quinn Query (PAY ATTENTION, A)",
+   "role": "quizmaster",
+   "line": "It's the United States. Nicely done, Lola. The jellyfish effect lights up the US sky.",
+   "changed": "voice",
+   "before": {
+    "file": "presentadora-concurso-antes.ogg",
+    "voice": "jf_gongitsune:0.7+pf_dora:0.3 (en-us, x1.08)"
+   },
+   "after": {
+    "file": "presentadora-concurso-despues.ogg",
+    "voice": "af_bella:0.6+af_kore:0.4 (en-us, x1)"
+   }
+  },
+  {
+   "id": "qm:B",
+   "name": "PAY ATTENTION host, candidate B",
+   "role": "quizmaster (male, US)",
+   "line": "It's the United States. Nicely done, Lola. The jellyfish effect lights up the US sky.",
+   "changed": "voice",
+   "before": {
+    "file": "concurso-B-antes.ogg",
+    "voice": "hm_psi (en-us, x1.08)"
+   },
+   "after": {
+    "file": "concurso-B-despues.ogg",
+    "voice": "am_puck:0.55+am_eric:0.45 (en-us, x1.02)"
+   }
+  },
+  {
+   "id": "qm:C",
+   "name": "PAY ATTENTION host, candidate C",
+   "role": "quizmaster (female, British)",
+   "line": "It's the United States. Nicely done, Lola. The jellyfish effect lights up the US sky.",
+   "changed": "voice",
+   "before": {
+    "file": "concurso-C-antes.ogg",
+    "voice": "jf_nezumi:0.65+pf_dora:0.35 (en-gb, x1.06)"
+   },
+   "after": {
+    "file": "concurso-C-despues.ogg",
+    "voice": "af_kore:0.5+bf_emma:0.25+bf_lily:0.25 (en-gb, x1.06)"
+   }
+  },
+  {
+   "id": "kai",
+   "name": "Kai Sprite (FULL TIME)",
+   "role": "sports presenter",
+   "line": "Pixelburg United beat Bitport Athletic 3-1 at the Riverside Ground to go top of the Pixel League for the first time since 2009.",
+   "changed": "voice",
+   "before": {
+    "file": "kai-antes.ogg",
+    "voice": "bm_lewis:0.55+am_puck:0.45 (en-gb, x1.06)"
+   },
+   "after": {
+    "file": "kai-despues.ogg",
+    "voice": "bm_george:0.55+bm_fable:0.45 (en-gb, x1.19)"
+   }
+  },
+  {
+   "id": "rosa",
+   "name": "Rosa Rally (FULL TIME)",
+   "role": "sports analyst",
+   "line": "Kai says he was a sprinter at school. His school has no record of it.",
+   "changed": "voice",
+   "before": {
+    "file": "rosa-antes.ogg",
+    "voice": "if_sara:0.4+bf_alice:0.6 (en-gb, x0.98)"
+   },
+   "after": {
+    "file": "rosa-despues.ogg",
+    "voice": "bf_isabella:0.55+af_nova:0.45 (en-gb, x0.98)"
+   }
+  },
+  {
+   "id": "omar",
+   "name": "Omar Ledger",
+   "role": "Economics Editor",
+   "line": "The key detail is this: oil prices rose on reports that Iran attacked ships in the Strait of Hormuz. But the gains were erased quickly, and prices moved between gains and losses.",
+   "changed": "voice",
+   "before": {
+    "file": "omar-antes.ogg",
+    "voice": "am_adam:0.6+am_onyx:0.4 (en-gb, x0.96)"
+   },
+   "after": {
+    "file": "omar-despues.ogg",
+    "voice": "am_michael:0.55+bm_daniel:0.45 (en-gb, x1.03)"
+   }
+  },
+  {
+   "id": "clara",
+   "name": "Clara Meridian",
+   "role": "Diplomatic Correspondent",
+   "line": "The thing to note is this: Taiwan planned to buy liquefied natural gas from a US project, and to take a share in its development.",
+   "changed": "voice",
+   "before": {
+    "file": "clara-antes.ogg",
+    "voice": "ff_siwis:0.5+af_sky:0.5 (en-gb, x0.95)"
+   },
+   "after": {
+    "file": "clara-despues.ogg",
+    "voice": "bf_isabella:0.55+af_bella:0.45 (en-gb, x0.95)"
+   }
+  },
+  {
+   "id": "dev",
+   "name": "Dev Isobar",
+   "role": "Climate Correspondent",
+   "line": "Here is what matters: the hurricane stayed offshore, but it still lashed coastal areas with high winds and heavy rain.",
+   "changed": "voice",
+   "before": {
+    "file": "dev-antes.ogg",
+    "voice": "am_liam (en-us, x1.03)"
+   },
+   "after": {
+    "file": "dev-despues.ogg",
+    "voice": "am_fenrir:0.5+am_liam:0.3+am_onyx:0.2 (en-us, x1.13)"
+   }
+  },
+  {
+   "id": "tomas",
+   "name": "Dr Tomas Albedo",
+   "role": "Planetary Scientist",
+   "line": "Put simply: the spacecraft has passed its environmental tests. That means it is ready to face the harsh conditions of launch.",
+   "changed": "voice",
+   "before": {
+    "file": "tomas-antes.ogg",
+    "voice": "am_santa:0.6+am_onyx:0.4 (en-us, x0.94)"
+   },
+   "after": {
+    "file": "tomas-despues.ogg",
+    "voice": "am_michael:0.52+am_eric:0.48 (en-us, x0.9)"
+   }
+  },
+  {
+   "id": "june",
+   "name": "June Kernel",
+   "role": "Security & Hardware Analyst",
+   "line": "What stands out is this: nobody has ever stopped using leap seconds before, and a lot of critical infrastructure relies on time synchronisation.",
+   "changed": "voice",
+   "before": {
+    "file": "june-antes.ogg",
+    "voice": "af_jessica (en-us, x1.06)"
+   },
+   "after": {
+    "file": "june-despues.ogg",
+    "voice": "af_sarah:0.6+af_aoede:0.4 (en-us, x1.11)"
+   }
+  },
+  {
+   "id": "amara",
+   "name": "Dr Amara Pulse",
+   "role": "Health Correspondent",
+   "line": "The key detail is this: women with autoimmune conditions are up to 74% more likely than men to be told their symptoms are psychological.",
+   "changed": "voice",
+   "before": {
+    "file": "amara-antes.ogg",
+    "voice": "hf_alpha:0.5+af_river:0.5 (en-gb, x0.98)"
+   },
+   "after": {
+    "file": "amara-despues.ogg",
+    "voice": "af_alloy:0.55+bf_emma:0.45 (en-gb, x0.98)"
+   }
+  },
+  {
+   "id": "leo",
+   "name": "Leo Sepia",
+   "role": "Culture Correspondent",
+   "line": "Here is what matters: the church faces a legal challenge, which could add years more delay to Project Spire.",
+   "changed": "voice",
+   "before": {
+    "file": "leo-antes.ogg",
+    "voice": "am_liam:0.6+im_nicola:0.4 (en-gb, x1.04)"
+   },
+   "after": {
+    "file": "leo-despues.ogg",
+    "voice": "bm_fable:0.6+bm_daniel:0.4 (en-gb, x1.15)"
+   }
+  },
+  {
+   "id": "ines",
+   "name": "Ines Clause",
+   "role": "Legal Affairs Correspondent",
+   "line": "Put simply: a club owner can be found to have failed a fitness test on integrity, honesty and financial soundness.",
+   "changed": "voice",
+   "before": {
+    "file": "ines-antes.ogg",
+    "voice": "ef_dora:0.55+af_sky:0.45 (en-us, x1.02)"
+   },
+   "after": {
+    "file": "ines-despues.ogg",
+    "voice": "af_kore:0.55+af_sky:0.45 (en-us, x1.14)"
+   }
+  },
+  {
+   "id": "rhea",
+   "name": "Rhea Raster",
+   "role": "Europe & Africa correspondent",
+   "line": "Thanks, Paco. ENAV said it was using alternative data transmission systems to allow as many departures as possible on Friday morning, including intercontinental flights.",
+   "changed": "voice",
+   "before": {
+    "file": "rhea-antes.ogg",
+    "voice": "bf_lily:0.75+bf_emma:0.25 (en-gb, x1.02)"
+   },
+   "after": {
+    "file": "rhea-despues.ogg",
+    "voice": "bf_emma:0.6+af_aoede:0.4 (en-gb, x0.98)"
+   }
+  },
+  {
+   "id": "vic",
+   "name": "Vic Vector",
+   "role": "Americas correspondent",
+   "line": "Thanks, Paco. ENAV said it was using alternative data transmission systems to allow as many departures as possible on Friday morning, including intercontinental flights.",
+   "changed": "voice",
+   "before": {
+    "file": "vic-antes.ogg",
+    "voice": "am_eric:0.7+am_onyx:0.3 (en-us, x1.06)"
+   },
+   "after": {
+    "file": "vic-despues.ogg",
+    "voice": "am_puck:0.65+am_michael:0.2+am_onyx:0.15 (en-us, x1.26)"
+   }
+  },
+  {
+   "id": "mika",
+   "name": "Mika Voxel",
+   "role": "Asia & Middle East correspondent",
+   "line": "Thanks, Paco. ENAV said it was using alternative data transmission systems to allow as many departures as possible on Friday morning, including intercontinental flights.",
+   "changed": "processing",
+   "before": {
+    "file": "mika-antes.ogg",
+    "voice": "af_aoede (en-us, x1)"
+   },
+   "after": {
+    "file": "mika-despues.ogg",
+    "voice": "af_aoede (en-us, x1)"
+   }
+  },
+  {
+   "id": "paco",
+   "name": "Paco Pixel",
+   "role": "anchor",
+   "line": "Our number of the day: 50%. Italy has halved the number of aircraft in its airspace after overnight issues hit the data transmission network for air traffic control.",
+   "changed": "processing",
+   "before": {
+    "file": "paco-antes.ogg",
+    "voice": "bm_george:0.6+bm_lewis:0.4 (en-gb, x1.15)"
+   },
+   "after": {
+    "file": "paco-despues.ogg",
+    "voice": "bm_george:0.6+bm_lewis:0.4 (en-gb, x1.15)"
+   }
+  },
+  {
+   "id": "lola",
+   "name": "Lola Byte",
+   "role": "anchor",
+   "line": "Our number of the day: 50%. Italy has halved the number of aircraft in its airspace after overnight issues hit the data transmission network for air traffic control.",
+   "changed": "processing",
+   "before": {
+    "file": "lola-antes.ogg",
+    "voice": "af_heart:0.75+af_bella:0.25 (en-us, x1)"
+   },
+   "after": {
+    "file": "lola-despues.ogg",
+    "voice": "af_heart:0.75+af_bella:0.25 (en-us, x1)"
+   }
+  },
+  {
+   "id": "max",
+   "name": "Max Circuit",
+   "role": "technology correspondent",
+   "line": "Our number of the day: 50 percent. Developers will get 50 percent discounted API rates through November, Ars Technica reports.",
+   "changed": "processing",
+   "before": {
+    "file": "max-antes.ogg",
+    "voice": "am_fenrir:0.6+am_puck:0.4 (en-us, x0.98)"
+   },
+   "after": {
+    "file": "max-despues.ogg",
+    "voice": "am_fenrir:0.6+am_puck:0.4 (en-us, x0.98)"
+   }
+  },
+  {
+   "id": "ada",
+   "name": "Ada Volt",
+   "role": "tech analyst",
+   "line": "BIPM members previously agreed in 2022 to stop using leap seconds on or before 2035. This has never been attempted before.",
+   "changed": "processing",
+   "before": {
+    "file": "ada-antes.ogg",
+    "voice": "bf_emma:0.7+af_sarah:0.3 (en-gb, x0.87)"
+   },
+   "after": {
+    "file": "ada-despues.ogg",
+    "voice": "bf_emma:0.7+af_sarah:0.3 (en-gb, x0.87)"
+   }
+  },
+  {
+   "id": "nova",
+   "name": "Dr Nova Reyes",
+   "role": "science editor",
+   "line": "Voyager Technologies' Griffin-1 has completed environmental testing at NASA JPL. The tests show that the spacecraft is ready to face the harsh conditions of launch.",
+   "changed": "processing",
+   "before": {
+    "file": "nova-antes.ogg",
+    "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2 (en-us, x0.89)"
+   },
+   "after": {
+    "file": "nova-despues.ogg",
+    "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2 (en-us, x0.89)"
+   }
+  },
+  {
+   "id": "penny",
+   "name": "Penny Sterling",
+   "role": "markets correspondent",
+   "line": "Our number of the day: 3.6 million. In the UK, 3.6 million people work in catering and hospitality.",
+   "changed": "processing",
+   "before": {
+    "file": "penny-antes.ogg",
+    "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15 (en-gb, x1.04)"
+   },
+   "after": {
+    "file": "penny-despues.ogg",
+    "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15 (en-gb, x1.04)"
+   }
+  },
+  {
+   "id": "sam",
+   "name": "Sam Night",
+   "role": "anchor",
+   "line": "Hurricane Simon is lurking off the Mexican coast. Though it remained offshore, the storm lashed coastal areas with high winds.",
+   "changed": "processing",
+   "before": {
+    "file": "sam-antes.ogg",
+    "voice": "am_michael:0.75+am_onyx:0.25 (en-us, x1.19)"
+   },
+   "after": {
+    "file": "sam-despues.ogg",
+    "voice": "am_michael:0.75+am_onyx:0.25 (en-us, x1.19)"
+   }
+  },
+  {
+   "id": "continuity",
+   "name": "Continuity announcer",
+   "role": "the break bumper",
+   "line": "We'll be right back.",
+   "changed": "voice",
+   "before": {
+    "file": "continuidad-antes.ogg",
+    "voice": "bf_alice (en-gb, x0.92)"
+   },
+   "after": {
+    "file": "continuidad-despues.ogg",
+    "voice": "bf_lily:0.5+bf_isabella:0.25+bf_emma:0.25 (en-gb, x0.87)"
+   }
+  },
+  {
+   "id": "guest:woman:0",
+   "name": "A re-staged guest (woman, voice 1 of 3)",
+   "role": "IN THEIR WORDS recreation",
+   "line": "Authorities in Germany have briefly shut down an airport, according to ABC News. Details about the emergency call were not immediately available. Earlier on Tuesday, authorities noted a possible drone sighting at the airport.",
+   "changed": "voice",
+   "before": {
+    "file": "invitada-recreada-antes.ogg",
+    "voice": "af_nicole:0.55+bf_isabella:0.45 (en-gb, x0.98)"
+   },
+   "after": {
+    "file": "invitada-recreada-despues.ogg",
+    "voice": "bf_lily:0.6+af_sky:0.4 (en-gb, x0.98)"
+   }
+  },
+  {
+   "id": "guest:man:2",
+   "name": "A re-staged guest (man, voice 3 of 3)",
+   "role": "IN THEIR WORDS recreation",
+   "line": "Authorities in Germany have briefly shut down an airport, according to ABC News. Details about the emergency call were not immediately available. Earlier on Tuesday, authorities noted a possible drone sighting at the airport.",
+   "changed": "voice",
+   "before": {
+    "file": "invitado-recreado-antes.ogg",
+    "voice": "am_fenrir:0.45+bm_lewis:0.55 (en-gb, x0.98)"
+   },
+   "after": {
+    "file": "invitado-recreado-despues.ogg",
+    "voice": "am_onyx:0.6+am_liam:0.4 (en-us, x0.97)"
+   }
+  }
+ ]
+}
