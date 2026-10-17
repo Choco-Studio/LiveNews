@@ -463,6 +463,11 @@ obeys the outlet's robots.txt (`server/robots.js`, RFC 9309). The feeds are not 
   The desk never poses as a browser.
 - **Euronews** answered the first read of two runs with a 406 and the next with its file (its `*` group keeps only
   `/api/` and scripts). A 406 counts as "no file" for one hour, then the file is read again.
+- **The pictures.** The desk downloads a picture its feed names, or one an open page names, without asking the
+  picture host's robots.txt (a picture is not a page the desk crawls, and the story keeps its feed's pictures, as
+  asked). Read for the record: today's feed pictures live on 15 hosts (`i.guim.co.uk`, `ichef.bbci.co.uk`,
+  `s.abcnews.com`, Sky's `365dm.com` and others), and none of their files keeps a picture from us (two have no file,
+  one answers 403).
 - **What the writer loses: nothing today** (0 of 393 stories). Had the desk opened the feed's tagged links, Al
   Jazeera's 25 stories would have lost their article text (about 1,900 characters on average where a page is read, 34
   pages sampled) and been written from a 100-character summary: Al Jazeera's feed gives no full text.
@@ -632,8 +637,9 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
      not the articles). Confirm that this reading of the file is sound.
    - Sky News's bot shield refuses our robots.txt request and our pages (403). The RFC reads a 4xx as "allowed", but
      the desk reads nothing there. Confirm that it should keep trying (once per six hours) rather than never.
-   - the feeds themselves (and their pictures) are read without robots.txt, as published to be read. Confirm that a
-     feed's terms allow broadcasting from it with credit.
+   - the feeds themselves and the pictures are read without robots.txt (a feed is published to be read; a picture is
+     not a page). On 17 Oct no picture host's file kept a picture from us. Confirm that a feed's terms allow
+     broadcasting from it with credit.
 
 **What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 

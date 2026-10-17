@@ -52,6 +52,7 @@ export const groupOf = (it) => (it.kind === 'clip' ? `clip|${it.source?.momentId
 /** Why the compliance desk held an item, in the owner's words (its own message, in English, stays under it). */
 export const RULE_ES = Object.freeze({
   verbatim: 'Copia palabras del medio: el texto o la voz repiten sus frases. No sale hasta que el canal lo cuente con sus propias palabras.',
+  'sources-missing': 'No están a mano los textos del medio para esta noticia, así que no se puede comprobar que no los copia. No sale.',
   demo: 'Son datos de prueba (demostración): nunca se publican.',
   'flag-missing': 'Falta la marca de «contenido generado por IA» que exige la red.',
   'flag-unavailable': 'Esta red no tiene marca de IA automática: hay que ponerla a mano o no publicar aquí.',

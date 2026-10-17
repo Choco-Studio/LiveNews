@@ -142,6 +142,13 @@ test('a moment whose story copies its source is not publishable in any phase (th
   assert.equal(all[0].copied, undefined);
 });
 
+test('a moment whose story has no sources at hand is not publishable either (its words cannot be checked)', () => {
+  const m = (id, storyIds) => ({ id, kind: 'story', storyIds, light: true, grave: false, scores: { sense: 9 } });
+  const all = markCopied([m('a', ['s1']), m('b', ['s2'])], new Set(), { unverified: new Set(['s2']) });
+  assert.deepEqual(publishable(all, { phase: 1 }).map((x) => x.id), ['a']);
+  assert.equal(all[1].refused, 'verbatim: its sources are not at hand, its words cannot be checked');
+});
+
 test('a moment that shows a picture not cleared is never chosen nor queued, in any phase; nor any moment of a private preview', async () => {
   const { markUncleared, picturesShown } = await import('../server/publish/moments.js');
   const { auditItem } = await import('../server/compliance/credits.js');

@@ -549,12 +549,18 @@ export function markUncleared(moments, episode, { audit = null } = {}) {
  * The verbatim rule (docs/publishing/verbatim.md): a moment that tells a story whose aired words copy its source is not
  * publishable in any phase (the compliance gate would hold its clip). `copied`: the story ids the lint flagged.
  */
-export function markCopied(moments, copied) {
+export function markCopied(moments, copied, { unverified = [] } = {}) {
   const ids = copied instanceof Set ? copied : new Set(copied || []);
+  const blind = unverified instanceof Set ? unverified : new Set(unverified || []);
   for (const m of moments) {
     if ((m.storyIds || []).some((id) => ids.has(id))) {
       m.copied = true;
       m.refused = m.refused || 'verbatim: its aired words copy the source';
+    } else if ((m.storyIds || []).some((id) => blind.has(id))) {
+      // (publishing round 6) the sources are not at hand: its words cannot be shown not to copy them, so the gate
+      // refuses its clip (sources-missing) and it is not chosen either
+      m.copied = true;
+      m.refused = m.refused || 'verbatim: its sources are not at hand, its words cannot be checked';
     }
   }
   return moments;

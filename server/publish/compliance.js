@@ -8,6 +8,7 @@
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
 //   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
 //   clipGetStory(storyIds, getStory) that, for the stories one clip tells only
+//   storiesWithoutSources(item, getStory) the stories the verbatim rule cannot measure (preflight refuses the item)
 //   usingStub   true while the stub stands in
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,13 +53,39 @@ export function clipGetStory(storyIds, getStory) {
   return (id) => (ids.has(id) && typeof getStory === 'function' ? getStory(id) : null);
 }
 
+/**
+ * The stories an item tells as stories whose sources are not at hand (getStory gives no title or summary): the verbatim
+ * rule cannot measure their words, so the item is not published (publishing round 6: a FULL TIME edition replayed from
+ * a sport snapshot told stories the archive never kept, and the lint let them through as "unverified"). A text post
+ * carries its own sources (sourceTexts) and is not concerned.
+ */
+export function storiesWithoutSources(item, getStory) {
+  if (!item?.episode || typeof getStory !== 'function') return [];
+  const told = new Set((item.episode.segments || []).filter((s) => s.type === 'story' && s.storyId).map((s) => s.storyId));
+  // a clip: the stories it tells (none listed, none checked here); a whole programme: every story it tells
+  const listed = Array.isArray(item.storyIds) ? item.storyIds.filter(Boolean) : [];
+  const ids = listed.length || item.kind === 'clip' || item.kind === 'short' ? listed : [...told];
+  return [...new Set(ids)].filter((id) => told.has(id)).filter((id) => {
+    const s = getStory(id);
+    return !s || !(String(s.title || '').trim() || String(s.summary || '').trim());
+  });
+}
+
 /** The publish-time gate: preflight when the module has it, else checkClip (video) or the text prefix rule. */
 export function preflight(item, opts = {}) {
-  if (mod.preflight) return mod.preflight(item, opts);
   const kind = item.kind || (item.episode ? 'episode' : 'text');
-  if (['live', 'episode', 'clip', 'short'].includes(kind)) return mod.checkClip({ ...item, kind }, opts);
-  const ok = /^AI-generated:/.test(String(item.text || '').trim());
-  return { ok, violations: ok ? [] : [{ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' }], warnings: [] };
+  let r;
+  if (mod.preflight) r = mod.preflight(item, opts);
+  else if (['live', 'episode', 'clip', 'short'].includes(kind)) r = mod.checkClip({ ...item, kind }, opts);
+  else {
+    const ok = /^AI-generated:/.test(String(item.text || '').trim());
+    r = { ok, violations: ok ? [] : [{ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' }], warnings: [] };
+  }
+  // the verbatim rule fails closed: a story whose sources are not at hand cannot be shown not to copy them
+  const blind = kind === 'text' || kind === 'live' ? [] : storiesWithoutSources(item, opts.getStory);
+  if (!blind.length) return r;
+  const extra = blind.map((id) => ({ rule: 'sources-missing', message: `story ${id}: its sources are not at hand, so its words cannot be checked against them`, storyId: id }));
+  return { ...r, ok: false, violations: [...(r?.violations || []), ...extra] };
 }
 
 /** C2PA marking; never throws (the real module throws when a file cannot be marked: an unmarked file is not published). */

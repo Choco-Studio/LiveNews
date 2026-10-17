@@ -13,10 +13,15 @@ The publishable clips go to the queue, waiting for the owner. Everything is a dr
 
     node tools/publish/factory.mjs --episode <episode.json> --out <dir> [--formats vertical,horizontal] [--max 6]
          [--moments <id,id>] [--all] [--queue data/publish] [--keep-masters] [--parallel] [--seconds n]
-         [--pictures <dir>]
+         [--pictures <dir>] [--sources <dataDir>]
 
 `--pictures` serves the episode's pictures (`<storyId>.jpg|png|webp`) to the recorder, so its clips show them as they
 aired, with their credits.
+
+`--sources` reads the stories' sources (the archive and its article cache) from another data folder, for an edition
+the station's own archive never kept, such as one replayed from a sport snapshot. Without its sources a story's words
+cannot be measured under the verbatim rule: its moments are not chosen, and the gate refuses its clips
+(`sources-missing`, since round 6; before, such a story passed as "unverified").
 
 `tools/publish/material.mjs` makes episodes from the archive offline, with recorded voices, for measuring and
 rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the recorder.
