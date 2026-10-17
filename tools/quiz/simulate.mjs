@@ -22,6 +22,8 @@ const contestants = contestantsFrom(channel, ['paco', 'lola', 'max', 'ada', 'nov
 // A rich synthetic week: benign stories on every desk and programme, places in every region, some figures
 const H = 3600_000;
 const COUNTRIES = [['France', 46.6, 2.2], ['Japan', 36.2, 138.3], ['Brazil', -10.8, -52.9], ['Kenya', 0.2, 37.9], ['Canada', 56.1, -106.3], ['Australia', -25.3, 133.8], ['India', 22, 79], ['Mexico', 23.6, -102.5], ['Norway', 60.5, 8.5], ['Chile', -35.7, -71.5], ['Vietnam', 14.1, 108.3], ['Morocco', 31.8, -7.1], ['Italy', 41.9, 12.6], ['Peru', -9.2, -75], ['Jordan', 30.6, 36.2]];
+// every picture with a cleared rights record (by default PICTURE THIS shows no other: server/quiz/desk.js pictureCleared)
+const CLEARED = { source: 'wikimedia-commons', licence: 'CC-BY-4.0', author: 'Jane Doe', url: 'https://x/y.jpg', credit: 'FILE · JANE DOE · CC BY 4.0 · PIXELATED', label: 'FILE', cleared: true };
 const DESKS = [['world-now', 'world'], ['tech-bytes', 'tech'], ['cosmos', 'science'], ['money-minute', 'business'], ['news-60', 'world']];
 const NOUNS = ['telescope', 'museum', 'garden', 'robot', 'orchestra', 'library', 'bridge', 'satellite', 'festival', 'glacier', 'reef', 'tramway', 'chip plant', 'wind farm', 'ferry', 'zoo', 'observatory', 'bakery', 'airline', 'startup', 'rover', 'aquarium', 'stadium', 'vineyard'];
 const VERBS = ['unveils', 'opens', 'launches', 'celebrates', 'tests', 'restores', 'maps', 'finds', 'builds', 'records', 'shows', 'reveals'];
@@ -38,7 +40,7 @@ function week(now, rnd) {
       const [country, lat, lon] = COUNTRIES[Math.floor(rnd() * COUNTRIES.length)];
       const fig = rnd() < 0.2;
       const value = String(20 + Math.floor(rnd() * 900));
-      a.keep({ id: `e${n}`, at, programId, category, rank: k % 6, title, headline: title, link: 'https://www.bbc.co.uk/x', source: 'BBC News', image: 'https://x/y.jpg',
+      a.keep({ id: `e${n}`, at, programId, category, rank: k % 6, title, headline: title, link: 'https://www.bbc.co.uk/x', source: 'BBC News', image: 'https://x/y.jpg', imageRights: CLEARED,
         text: `${title}${placed ? ` in ${country}` : ''}. The work took ${fig ? `${value} days` : 'months'}, its makers say.`, summary: '',
         ...(placed ? { location: { place: country.toUpperCase(), lat, lon } } : {}), ...(fig ? { numbers: [{ value, label: 'DAYS' }] } : {}) });
       n++;

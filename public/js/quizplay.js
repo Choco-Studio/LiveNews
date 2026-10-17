@@ -476,3 +476,17 @@ export function sameShot(a, b) {
 
 /** Is this a PAY ATTENTION episode (the quiz's segments)? */
 export const isQuizEpisode = (ep) => Array.isArray(ep?.segments) && ep.segments.some((s) => s?.type === 'quiz');
+
+/**
+ * May PICTURE THIS show this question's picture (server/rights.js, PICTURE_RIGHTS)? Only with a cleared rights record
+ * for that very picture, or the operator's own local file; an outlet's photo only in a private preview (the episode's
+ * `picturePreview`). The station plans and fetches no other (server/quiz/desk.js pictureCleared, producer.js); the
+ * director never loads one either, so an outlet's photo never reaches the board outside a preview.
+ */
+export function quizPictureAirable(question, episode = null) {
+  const image = question?.image;
+  if (!image) return false;
+  if (episode?.picturePreview === true) return true;
+  const r = question.imageRights;
+  return (!!r && r.cleared === true && r.url === image) || /^file:/i.test(image);
+}

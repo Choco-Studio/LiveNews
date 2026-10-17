@@ -6,7 +6,7 @@
 // pairing's pool: eligible events of the last seven days, none aired on either player's programme, none asked in the
 // last seven days.
 //
-//   planEdition({ events, entries, now, contestants, history, same, avoid })
+//   planEdition({ events, entries, now, contestants, history, same, avoid, pictures })
 //     → { air: true, pair, rounds, don, tieBreak, asked, recent, pool, why } | { air: false, reason, ... }
 import { graveDay } from './grave.js';
 import { ROUND_TYPES, QUESTIONS, TODAY_ITEMS, pickAsked, buildQuestions, seeded, shuffle, londonDayStart } from './rounds.js';
@@ -132,7 +132,7 @@ function fill(types, pool, all, ctx, rnd) {
   const taken = new Set();
   const rounds = [];
   for (const t of roundOrder(types, ctx.history, rnd)) {
-    const questions = buildQuestions(t, chosen[t], options, rnd, { todayStart: ctx.todayStart, taken, extraPlaces: ctx.extraPlaces });
+    const questions = buildQuestions(t, chosen[t], options, rnd, { todayStart: ctx.todayStart, taken, extraPlaces: ctx.extraPlaces, pictures: ctx.pictures });
     if (!questions) return null;
     rounds.push({ type: t, questions });
   }
@@ -140,7 +140,7 @@ function fill(types, pool, all, ctx, rnd) {
   // "NASA spots patch of Moon-like rock on Earth" was a wrong option in PICTURE THIS and again in DOUBLE OR NOTHING)
   const donOffers = [];
   for (const o of don.offers) {
-    const build = (seen) => buildQuestions(don.type, o.asked, options, rnd, { todayStart: ctx.todayStart, taken: new Set(seen), extraPlaces: ctx.extraPlaces });
+    const build = (seen) => buildQuestions(don.type, o.asked, options, rnd, { todayStart: ctx.todayStart, taken: new Set(seen), extraPlaces: ctx.extraPlaces, pictures: ctx.pictures });
     const questions = build(taken) || build([]);
     if (questions) donOffers.push({ desk: o.desk, question: questions[0] });
   }
@@ -154,7 +154,7 @@ function fill(types, pool, all, ctx, rnd) {
  * days (quizEvents), `entries` the archive's airings (for the grave-day rule and the three-day minimum), `contestants`
  * [{ id, own }], `history` the editions before [{ at, pair, types, asked }].
  */
-export function planEdition({ events, entries, now = Date.now(), contestants, history = [], same = null, seed = null, checkHour = true, minArchiveDays = MIN_ARCHIVE_DAYS, avoid = new Set() } = {}) {
+export function planEdition({ events, entries, now = Date.now(), contestants, history = [], same = null, seed = null, checkHour = true, minArchiveDays = MIN_ARCHIVE_DAYS, avoid = new Set(), pictures = 'cleared' } = {}) {
   const rnd = seeded(seed ?? `pay-attention:${new Date(now).toISOString().slice(0, 13)}`);
   const hour = londonHour(now);
   if (checkHour && (hour < AIR_FROM || hour >= AIR_TO)) return { air: false, reason: `overnight (${hour}:00 London; the quiz airs 14:00–23:00)` };
@@ -163,7 +163,7 @@ export function planEdition({ events, entries, now = Date.now(), contestants, hi
   const grave = graveDay(entries, { now, same });
   if (grave.grave || grave.thin) return { air: false, reason: grave.grave ? `grave news day: ${grave.reason}` : `too little aired to judge the day (${grave.reason})`, grave };
   const dayStart = londonDayStart(now);
-  const ctx = { now, todayStart: dayStart + 6 * 3600_000, earlierBefore: dayStart - DAY_MS, history, extraPlaces: neutralPlaces(avoid) };
+  const ctx = { now, todayStart: dayStart + 6 * 3600_000, earlierBefore: dayStart - DAY_MS, history, extraPlaces: neutralPlaces(avoid), pictures };
   const askedWeek = new Set(history.filter((h) => h.at > now - 7 * DAY_MS).flatMap((h) => h.asked || []));
   // (asked once in seven days goes by story: another source's take on a story asked this week is out too; round 15's
   // reading: "Google makes it easier to launch your vibe-coded apps" asked on the 13th, "Google wants to host your

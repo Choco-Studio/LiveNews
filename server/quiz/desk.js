@@ -4,12 +4,14 @@
 // turned to a death is out whole. The words on screen are the channel's own: the aired headline verbatim, or the
 // source's title when the aired one is a cut that broke; never a sentence the desk wrote.
 //
-//   quizEvents(archive, { now, days, same })   eligible events of the window: [{ key, ids, words, image, place, figure,
-//                                               programmes, first, last, category, source, latest, ... }]
+//   quizEvents(archive, { now, days, same, pictures })   eligible events of the window: [{ key, ids, words, image,
+//                                               place, figure, programmes, first, last, category, source, latest, ... }]
+//                                               (image: only a cleared picture unless pictures is 'preview')
 //   excludedKind(text)                         the excluded kind a text falls in ('crime', 'politics'…) or null
 //   quizWords(entry)                           the headline the quiz may show, or null
 import { isGrave, notForFeatures, sentencesIn } from '../facts.js';
 import { findPlaces, lookupPlace, placeSupported } from '../gazetteer.js';
+import { currentRights } from '../rights.js';
 
 const DAY = 86400_000;
 
@@ -17,10 +19,14 @@ const DAY = 86400_000;
 // retailer pushback" (TechCrunch, 13 Oct: a fee the state's payments body postponed), "Japan bans…", "France to tax…".
 // A country that launches, finds or builds stays news ("Japan launches a lunar probe").
 const STATE_VERBS = /^(?:(?:plans?|agrees?|pledges?|vows?|promises?|threatens?|moves?|seeks?|wants?|aims?) to\b|signs?\b|pledges?\b|vows?\b|threatens?\b|delays?|postpones?|bans?|approves?|orders?|imposes?|blocks?|allows?|proposes?|tightens?|eases?|scraps?|rejects?|lifts?|halts?|suspends?|fines?|taxes|caps?|curbs?|restricts?|limits?|mandates?|requires?|legalises?|legalizes?|outlaws?|regulates?|to (?:ban|tax|fine|cap|curb|restrict|limit|require|impose|delay|scrap|lift|halt|allow|approve|block))\b/i;
+// ...and the same acts told as done: "Australia has proposed a switch to force social media platforms…" (16 Oct, under
+// "Toxic algorithms wouldn't let them go - now Australia wants off switch"), "Portugal has chosen Lufthansa to buy a
+// 44.9% stake in TAP, completing the first phase of the airline's privatisation" (16 Oct)
+const STATE_DONE = /^(?:has|have|had)\s+(?:now\s+|also\s+|just\s+|formally\s+|officially\s+)?(?:delayed|postponed|banned|approved|ordered|imposed|blocked|allowed|proposed|tightened|eased|scrapped|rejected|lifted|halted|suspended|fined|taxed|capped|curbed|restricted|limited|mandated|required|legalised|legalized|outlawed|regulated|signed|pledged|vowed|threatened|chosen|selected|agreed to|moved to|decided to|announced plans to)\b/i;
 function stateActs(text) {
   for (const line of String(text ?? '').split(/(?<=[.!?:])\s+|\n/)) {
     const m = /^\W*(?:the\s+)?((?:\p{Lu}[\p{L}'’.-]*)(?:\s+\p{Lu}[\p{L}'’.-]*){0,3})\s+(.+)$/u.exec(line.trim());
-    if (!m || !STATE_VERBS.test(m[2])) continue;
+    if (!m || !(STATE_VERBS.test(m[2]) || STATE_DONE.test(m[2]))) continue;
     const e = lookupPlace(m[1]);
     if (e && e.kind === 'country') return true;
   }
@@ -30,29 +36,65 @@ function stateActs(text) {
 // What is never asked about and never shown as an option (§3.1). Word lists, so step 1's gate checks every question by
 // hand; each kind is named for that check. Each list is matched on the title, summary and aired text of every airing.
 export const EXCLUDED = [
-  ['harm', /\b(?:kill\w*|fatal(?:ly|ity|ities)?|dead|deaths?|die[sd]?|dying|funerals?|injur\w*|hurt|victims?|casualt\w*|missing|rescue[sd]?|rescuers?|evacuat\w*|displac\w*|bod(?:y|ies))\b/i],
-  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*|water levels?|surg(?:e|es|ed|ing) (?:of )?waters?|waters? surg\w*|high water|overflow\w*|swollen rivers?|deluge|torrential|forced to (?:turn back|return|land|divert|evacuate|stop)|turn(?:s|ed|ing)? back (?:to|after|mid)|emergency (?:landing|stop)|(?:flights?|planes?|jets?|trains?) (?:\w+ )?divert\w*|diverted|mayday|turbulence|grounded|engine (?:failure|fire|fault)|near[- ]miss\w*|mid-air|derailment|stranded)\b/i],
-  ['crime', /\b(?:polic(?:e|ing)|officers? (?:said|arrested)|courts?|judges?|trials?|jail\w*|prison\w*|sentenc\w*|charged|charges|arrest\w*|murder\w*|crimes?|criminal\w*|fraud\w*|scam\w*|con(?:s|ned)? (?:homeowners|people|customers|victims)|falsif\w*|forg(?:ed|ery)|evade tax|evasion|dodge tax|launder\w*|bribe\w*|corrupt\w*|scandal\w*|lawsuits?|su(?:e|es|ed|ing)\b|legal action|abuse\w*|assault\w*|raid\w*|detain\w*|detention|investigators?|under investigation|investigat(?:es|ed|ing)? (?:the |a |an )?(?:death|crash|attack|fraud|claims?|allegations?|case|complaints?)|police investigation|criminal investigation|justice department|department of justice|fbi|prosecut\w*|probes? into|exploit(?:ed|ation)|smuggl\w*|thefts?|stolen|steal\w*|robber\w*|hack(?:ed|ers?)|ransomware|cyber-?attacks?|executions?|executed|death row|death penalty|death sentences?|capital punishment|lethal injections?|firing squads?|electric chair|gallows|inmates?)\b/i],
-  ['conflict', /\b(?:wars?|warfare|army|armies|armed|military|militar\w*|troops|soldiers?|missiles?|drones? (?:strikes?|attacks?)|(?:air)?strikes? (?:on|against)|attack\w*|terror\w*|bomb\w*|shoot\w*|shots? fired|guns?|gunm[ae]n|weapons?|ceasefire|fightback|offensive|rebels?|militias?|insurgen\w*|houthis?|hamas|hezbollah|taliban|nato|invasion|invad\w*|occupation|hostages?|sanction\w*|defen[cs]e (?:minister|ministry|forces)|frontline|front line|ukraine|russia|gaza|israel\w*|palestin\w*|(?:armed|security|special|government|rebel|federal|allied|enemy|ground|naval|paramilitary|regional) forces|forces (?:enter\w*|captur\w*|seiz\w*|advanc\w*|took|take|withdr\w*|clash\w*|launch\w*|fire[sd]?)|strategic (?:town|city|port|hill)|militants?|jihad\w*|al-shabaab|isis|islamic state|coups?|junta|tigray|darfur|sudan\w*|yemen\w*|syria\w*|somalia\w*|sahel|kashmir|iran\w*|north korea\w*|taiwan strait|south china sea|hormuz|crosshairs|afghan\w*|myanmar|haiti\w*|libya\w*|burkina faso|eritrea\w*|belarus\w*|venezuela\w*)\b/i],
+  // (and dangerous work, counted anywhere: the 17 Oct gate's "Artisanal miners behind Nigeria's lithium boom", whose
+  // third airing went on "But as investment grows, they say they face unsafe working conditions")
+  ['harm', /\b(?:kill\w*|fatal(?:ly|ity|ities)?|dead|deaths?|die[sd]?|dying|funerals?|injur\w*|hurt|victims?|casualt\w*|missing|rescue[sd]?|rescuers?|evacuat\w*|displac\w*|bod(?:y|ies)|(?:unsafe|dangerous|hazardous|deadly|perilous) (?:working |work )?conditions|risk(?:s|ed|ing)? (?:their|his|her|our) (?:lives|life)|life-threatening|child labou?r|forced labou?r|modern slavery|sweatshops?)\b/i],
+  ['disaster', /\b(?:fires?|fired? (?:at|on|upon)|blaze|burn(?:s|ed|t|ing)? down|destroy\w*|flood\w*|storms?|quakes?|earthquakes?|hurricanes?|typhoons?|cyclones?|tornado\w*|wildfires?|tsunamis?|landslides?|avalanches?|droughts?|heatwaves?|crash\w*|collisions?|collid\w*|explo(?:sion|sions|de[sd]?)|blasts?|derail\w*|capsiz\w*|sinks|sank|sunk|wreck\w*|gas leaks?|oil spills?|spills?|contaminat\w*|pollut\w*|water levels?|surg(?:e|es|ed|ing) (?:of )?waters?|waters? surg\w*|high water|overflow\w*|swollen rivers?|deluge|torrential|forced to (?:turn back|return|land|divert|evacuate|stop)|turn(?:s|ed|ing)? back (?:to|after|mid)|emergency (?:landing|stop)|(?:flights?|planes?|jets?|trains?) (?:\w+ )?divert\w*|diverted|mayday|turbulence|grounded|engine (?:failure|fire|fault)|near[- ]miss\w*|mid-air|derailment|stranded)\b/i,
+    // an incident worded mildly: a technical failure and the disruption it brings, counted anywhere (the 17 Oct gate:
+    // "Italy cuts air traffic in half[ amid data transmission issue]", "Italy's air traffic cut 50% after network
+    // problems as delays spread nationwide"; its aired text "Air travelers across Italy faced delays and
+    // cancellations"). A firm's own product glitch is an incident too; "disruption" alone is the business sense
+    /\b(?:(?:technical|data transmission|transmission|computer|software|system|systems|network|radar|signal(?:ling)?|communications?|connectivity|electrical|mechanical|hardware|server|power|air traffic control) (?:issues?|problems?|faults?|failures?|glitch(?:es)?|outages?|errors?|malfunctions?|meltdowns?)|(?:issues?|problems?|faults?|failures?|glitch(?:es)?) (?:\w+ ){0,3}(?:hit|hits|hitting|affect\w*|with|in|at) (?:the |its |a )?(?:\w+ ){0,2}(?:networks?|servers?|air traffic control|(?:computer|booking|payment|check-in|ticketing|signalling|signal|radar|control) systems?)|glitch(?:es|ed)?|outages?|power cuts?|(?:rolling|nationwide|widespread|citywide|city-wide) blackouts?|blackouts? (?:hit|hits|left|leave|leaves|across|in)|(?:travel|flight|air|rail|train|transport|traffic|airport|service|network|power|internet|port|shipping) disruptions?|disruptions? (?:to|at|on|for|across) (?:\w+ )?(?:flights?|services?|trains?|travel|airports?|traffic|networks?)|(?:flights?|services?|trains?|travel|traffic) (?:were |was |are |is |have been |has been )?(?:severely |badly |widely )?disrupted|delays and cancellations|cancellations and delays|delays? (?:spread|spreads|spreading|mount\w*)|(?:flights?|trains?) (?:were |was |are |have been |had to be )?(?:cancel(?:l)?ed|grounded|halted|suspended)|cancel(?:l)?ed (?:\w+ )?flights|(?:cut|cuts|cutting|halv(?:e|es|ed|ing)|reduc(?:e|es|ed|ing)|restrict\w*|suspend\w*|halt\w*) (?:\w+ ){0,3}(?:air traffic|flights|airspace)|(?:air traffic|airspace) (?:\w+ ){0,2}(?:cut|halved|reduced|restricted|suspended|halted|closed)|malicious (?:activity|attack|actors?))\b/i,
+    /\bIT (?:issues?|problems?|faults?|failures?|glitch(?:es)?|outages?|meltdowns?|systems? (?:failure|outage|meltdown))\b/],
+  ['crime', /\b(?:polic(?:e|ing)|officers? (?:said|arrested)|courts?|judges?|trials?|jail\w*|prison\w*|sentenc\w*|charged|charges|arrest\w*|murder\w*|crimes?|criminal\w*|fraud\w*|scam\w*|con(?:s|ned)? (?:homeowners|people|customers|victims)|falsif\w*|forg(?:ed|ery)|evade tax|evasion|dodge tax|launder\w*|bribe\w*|corrupt\w*|scandal\w*|lawsuits?|su(?:e|es|ed|ing)\b|legal action|abuse\w*|assault\w*|raid\w*|detain\w*|detention|investigators?|under investigation|investigat(?:es|ed|ing)? (?:the |a |an )?(?:death|crash|attack|fraud|claims?|allegations?|case|complaints?)|police investigation|criminal investigation|justice department|department of justice|fbi|prosecut\w*|probes? into|exploit(?:ed|ation)|smuggl\w*|thefts?|stolen|steal\w*|robber\w*|hack(?:ed|ers?)|ransomware|cyber-?attacks?|executions?|executed|death row|death penalty|death sentences?|capital punishment|lethal injections?|firing squads?|electric chair|gallows|inmates?)\b/i,
+    // a court case in passing ("Amazon has since filed an amended complaint", 17 Oct, under "Websites are closing their
+    // doors to AI agents"), a security breach ("India becomes the latest country to report rogue AI agent activity",
+    // 16 Oct: the agents "got in through credentials … left exposed"), a stabbing
+    /\b(?:(?:filed?|files|filing) (?:an? |its |a new |their )?(?:amended |new |formal )?(?:complaint|lawsuit|suit|claim)s?|amended complaint|injunctions?|infring\w*|data breach\w*|security breach\w*|breach(?:es|ed)? (?:of )?(?:its |the |their |a )?(?:systems?|networks?|servers?|security|data|accounts?|websites?)|breached|malware|spyware|phishing|rogue (?:\w+ ){0,2}(?:agents?|actors?|activity)|stabb(?:ed|ing|ings)|knife (?:crime|attacks?|point)|knifepoint)\b/i],
+  ['conflict', /\b(?:wars?|warfare|army|armies|armed|military|militar\w*|troops|soldiers?|missiles?|drones? (?:strikes?|attacks?)|(?:air)?strikes? (?:on|against)|attack\w*|terror\w*|bomb\w*|shoot\w*|shots? fired|guns?|gunm[ae]n|weapons?|ceasefire|fightback|offensive|rebels?|militias?|insurgen\w*|houthis?|hamas|hezbollah|taliban|nato|invasion|invad\w*|occupation|hostages?|sanction\w*|defen[cs]e (?:minister|ministry|forces)|frontline|front line|ukraine|russia|gaza|israel\w*|palestin\w*|(?:armed|security|special|government|rebel|federal|allied|enemy|ground|naval|paramilitary|regional) forces|forces (?:enter\w*|captur\w*|seiz\w*|advanc\w*|took|take|withdr\w*|clash\w*|launch\w*|fire[sd]?)|strategic (?:town|city|port|hill)|militants?|jihad\w*|al-shabaab|isis|islamic state|coups?|junta|tigray|darfur|sudan\w*|yemen\w*|syria\w*|somalia\w*|sahel|kashmir|iran\w*|north korea\w*|taiwan strait|south china sea|hormuz|crosshairs|afghan\w*|myanmar|haiti\w*|libya\w*|burkina faso|eritrea\w*|belarus\w*|venezuela\w*|butterfly kni(?:fe|ves)|switchblades?|flick kni(?:fe|ves)|machetes?)\b/i],
   ['children', /\b(?:child|children|childhood|kids?|boys?|girls?|teen\w*|minors?|pupils?|schools?|schoolchildren|bab(?:y|ies)|toddlers?|infants?|nurser(?:y|ies)|adolescen\w*)\b/i],
-  ['politics', { test: (s) => stateActs(s) }, /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deals?|disputes?|tensions?|frictions?|imbalances?|truce|talks|surplus|deficit|barriers?)|rebalanc\w* (?:its |global )?trade|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|foreign polic\w*|(?:approach|policy|stance|strategy|relations|ties|dealings) (?:to|on|towards?|with) (?:china|russia|beijing|moscow|washington|america|the us|the eu|europe|iran|india|taiwan|israel|ukraine)|crackdown\w*|curfews?|martial law|state of emergency|emergency rule|lock(?:ed|s)? down|lockdowns?|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|labou?r (?:battle|dispute|fight|talks|strife|unrest|war)|lockouts?|collective bargaining|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank|press secretary|spokesperson for the|censor\w*|press freedom|suspend(?:s|ed|ing)? (?:broadcasts?|transmissions?|services? of)|trump\w*|biden|kamala harris|vance|starmer|sunak|badenoch|farage|reeves|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|burnham|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/],
+  ['politics', { test: (s) => stateActs(s) }, /\b(?:elections?|elect(?:ed|s)?\b|vot(?:e|es|ed|ers?|ing)|ballot\w*|polls?\b|campaign\w*|part(?:y|ies)|ministers?|ministr(?:y|ies)|president\w*|prime minister|premier|chancellor|governments?|governor\w*|parliament\w*|senat\w*|congress\w*|mps?\b|meps?\b|lawmakers?|legislat\w*|politic\w*|mayors?|councils?|councillors?|labour|tor(?:y|ies)|conservatives?|liberal democrats?|democrats?|republicans?|reform uk|snp|white house|downing street|kremlin|eu\b|european union|european commission|brussels|un\b|united nations|g7|g20|summit|diplomat\w*|ambassador\w*|embass(?:y|ies)|treat(?:y|ies)|tariffs?|trade (?:war|deals?|disputes?|tensions?|frictions?|imbalances?|truce|talks|surplus|deficit|barriers?)|rebalanc\w* (?:its |global )?trade|post-brexit|brexit|regulat(?:or|ors|ion|ions)|watchdog|ban(?:s|ned|ning)?\b|policy|policies|foreign polic\w*|(?:approach|policy|stance|strategy|relations|ties|dealings) (?:to|on|towards?|with) (?:china|russia|beijing|moscow|washington|america|the us|the eu|europe|iran|india|taiwan|israel|ukraine)|crackdown\w*|curfews?|martial law|state of emergency|emergency rule|lock(?:ed|s)? down|lockdowns?|protest\w*|demonstrat\w*|strikes? (?:by|over|action)|on strike|labou?r (?:battle|dispute|fight|talks|strife|unrest|war)|lockouts?|collective bargaining|refugees?|migrants?|migration|asylum|deport\w*|immigra\w*|borders?|royal family|the royals|king charles|queen camilla|prince (?:william|harry|andrew)|princess|monarch\w*|pope|vatican|iea|opec|imf|world bank|central banks?|interest rates?|federal reserve|bank of england|ecb|think tank|press secretary|spokesperson for the|censor\w*|press freedom|suspend(?:s|ed|ing)? (?:broadcasts?|transmissions?|services? of)|trump\w*|biden|kamala harris|vance|starmer|sunak|badenoch|farage|reeves|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|burnham|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro)\b/i, /\b(?:UK|British|the|new|former) PM\b|\bPM (?:says|said|to|vows|warns|has)\b/,
+    // a politician by office or by role in a race, and the race itself (the 17 Oct gate: "Lisa Nandy 'minded to
+    // intervene' in Sky's £1.6bn purchase of ITV", whose source opens "The culture secretary, Lisa Nandy, …"; "AOC
+    // transfers $1m to Michigan candidate El-Sayed in progressive push"). A candidate in science or hiring is no
+    // politician ("a vaccine candidate", "a candidate planet", "candidates for the role")
+    /\b(?:(?:culture|home|foreign|health|business|education|transport|energy|environment|defen[cs]e|treasury|commerce|justice|interior|labou?r|trade|housing|science|technology|digital|work and pensions|northern ireland|scotland|scottish|wales|welsh|cabinet|homeland security|agriculture|veterans affairs|war|navy|army|shadow(?: \w+)?) secretar(?:y|ies)|secretar(?:y|ies) of (?:state|defen[cs]e|war|the (?:treasury|navy|army|interior)|commerce|energy|health|labor|transportation|education|homeland security|agriculture)|attorneys? general|solicitor general|(?:house )?speaker of the house|house speaker|first minister|shadow (?:chancellor|cabinet|minister)|whitehall|capitol hill|state department|home office|foreign office|(?<!\b(?:drug|vaccine|therapy|treatment|planet|exoplanet|moon|star|galaxy|material|materials|gene|molecule|compound|job|role|position|interview|ideal|perfect|promising)\s)candidates?\b(?!\s+(?:planets?|exoplanets?|drugs?|vaccines?|genes?|materials?|molecules?|compounds?|for (?:dark matter|life|the (?:job|role|position)|a (?:job|role|position))))|candidacy|nominees?|running mate|primar(?:y|ies) (?:race|election|campaign|challenge|challenger|win|vote|ballot)|progressives\b|progressive (?:push|wing|caucus|stalwart|candidate|democrats?|movement|politics|politicians?|left|agenda|challenger|lawmakers?|groups?|activists?|champion)|left-wing|right-wing|far-right|far-left|populis\w*|ocasio-cortez|nandy|privati[sz](?:ation|ations|e|es|ed|ing)|nationali[sz](?:ation|ations|e|es|ed|ing)|(?:tightly|heavily|strictly|highly|closely) regulated|state-controlled)\b/i,
+    /\bAOC\b(?!['’]s? (?:new )?(?:monitors?|displays?|gaming|screens?|Agon)|\s+(?:monitors?|displays?|gaming|screens?|Agon))/],
   // a head of state or a party leader named anywhere in the story: the deal they announce is politics, wherever the
   // aired text names them (on air, 14 Oct: "Taiwan plans to buy liquefied natural gas from Alaska pipeline project",
   // a WHERE question; its aired text: "This is what Donald Trump, the U.S. President, said")
   ['politics (a politician named)', /\b(?:trump\w*|biden|kamala harris|starmer|sunak|badenoch|farage|putin|zelensky\w*|netanyahu|xi jinping|modi|macron|merz|meloni|erdogan|carney|albanese|lula|milei|khamenei|kim jong\w*|orban|le pen|bolsonaro|white house|downing street|kremlin|prime minister|(?:u\.?s\.? |us |french |russian |chinese |the )president)\b/i],
   ['health', /\b(?:cancer\w*|tumou?rs?|diseases?|diagnos\w*|hospital\w*|patients?|surger(?:y|ies)|operation on|illness\w*|ill\b|sick\w*|virus\w*|outbreaks?|pandemic|epidemic|dementia|alzheimer\w*|stroke\b|heart attack|overdos\w*|suicid\w*|mental health|nhs|medicines? (?:grow )?scarce|nodule|blood clots?|ruled out (?:for|of|vs\.?|against|with)|sidelined|concussion\w*|hamstring|torn (?:acl|ligament\w*|muscle)|fractur\w*)\b/i],
-  ['money of people', /\b(?:salar(?:y|ies)|wages?|pay ?(?:rise|cut|deal)|earn(?:s|ed|ing)?\s+(?:up to\s+|over\s+|more than\s+|about\s+|around\s+)?[£$€]|i earn|income|pensions?|fined|fines?\b|damages|compensation|payouts?|net worth|fortune|wealth\w*|billionaires?|millionaires?|inheritance|inherit\w*|tax(?:es)? (?:bill|affairs))\b/i],
+  // (and the prize a person wins, which is their earnings: the 17 Oct gate's HOW MANY? on "Isabel Allende wins €1m
+  // Spanish literary prize"; and private people's spending: "'I'd spend $1,000 on a wedding present'", 17 Oct, "New
+  // Yorkers share how much they spend on a wedding gift")
+  ['money of people', /\b(?:salar(?:y|ies)|wages?|pay ?(?:rise|cut|deal)|earn(?:s|ed|ing)?\s+(?:up to\s+|over\s+|more than\s+|about\s+|around\s+)?[£$€]|i earn|incomes?|pensions?|fined|fines?\b|damages|compensation|payouts?|net worth|fortune|wealth\w*|billionaires?|millionaires?|inheritance|inherit\w*|tax(?:es)? (?:bill|affairs)|prize money|prize (?:pot|fund|purse)|cash prizes?|(?<=[£$€]\s?)\d[\d.,]*\s*(?:k|m|bn|million|billion|thousand)?\s+(?:[a-z'’-]+\s+){0,3}(?:prizes?|awards?|purses?)|(?:prizes?|awards?|purses?) (?:worth|of) [£$€]\s?\d|lucrative (?:\w+ ){0,2}(?:prizes?|awards?)|how much (?:\w+ ){0,2}(?:spend|spent|earn|earned|save|saved|pay|paid)|i(?:'|’)?d spend)\b/i],
   ['betting', /\b(?:bet(?:s|ting)?|bookmakers?|bookies|odds|tips?\b|tipster\w*|predictions?|predicted line-?ups?|gambl\w*|casino\w*|lotter(?:y|ies)|jackpot|fantasy (?:football|baseball|basketball|hockey|sports?|league)|matchup rankings|start(?:\/| or | and |-)sit|fade)\b/i],
-  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|lay(?:s|ing)? off|(?:cut|cuts|cutting|slash\w*|axe\w*|shed\w*) (?:up to |more than |about |around |some |nearly )?(?:\d[\d,.]*k? |hundreds of |thousands of |dozens of )?(?:\w+ )?jobs|subscriptions? (?:slow|fall|drop|declin)\w*|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making|price (?:increase|hike|rise)s?|prices? (?:increas|hik|ris|jump|soar|go(?:es)? up)\w*|slumping|winless|losing streak|lonel\w*|social isolation|quitting|losing (?:\d[\d,]* |hundreds of |thousands of |dozens of )?(?:\w+ )?(?:workers|staff|employees|jobs)|(?:staff|workers|employees|drivers|nurses|teachers|posties)\s+(?:are\s+)?(?:quit\w*|leav\w*|walk\w* out)|exodus|efficiency (?:plans?|drives?|savings?|programmes?|cuts?)|cost[- ]cutting|cuts? (?:to|in) (?:staff|jobs|services|deliveries|routes)|under (?:pressure|strain)|overstretched|understaffed|staff shortages?)\b/i],
+  ['hardship', /\b(?:struggl\w*|shortages?|scarce|scarcity|crisis|cris[ie]s|recession|layoffs?|laid off|lay(?:s|ing)? off|(?:cut|cuts|cutting|slash\w*|axe\w*|shed\w*) (?:up to |more than |about |around |some |nearly )?(?:\d[\d,.]*k? |hundreds of |thousands of |dozens of )?(?:\w+ )?jobs|subscriptions? (?:slow|fall|drop|declin)\w*|job (?:cuts|losses)|redundanc\w*|bankrupt\w*|insolven\w*|administration\b|(?:close[sd]?|closing|shut(?:s|ting)?)\s+(?:its\s+|the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}(?:plant|factory|store|stores|shop|shops|branch|branches|site|mine|offices?|restaurants?|pubs?)|closures?|poverty|homeless\w*|hunger|famine|debt\w*|evict\w*|cost of living|inflation|price rises?|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|shrink\w*|shrank|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:revenues?|sales|profits?|earnings|subscribers?|users|membership|demand|shares)|(?:revenues?|sales|profits?|earnings|subscribers?|demand|shares)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|slow(?:s|ed|ing)?|shrink\w*|shrank|miss(?:es|ed)?)|miss(?:es|ed)?\s+(?:\w+\s+){0,2}(?:forecasts?|estimates|expectations|targets)|profit warnings?|loss-making|price (?:increase|hike|rise)s?|prices? (?:increas|hik|ris|jump|soar|go(?:es)? up)\w*|slumping|winless|losing streak|lonel\w*|social isolation|quitting|losing (?:\d[\d,]* |hundreds of |thousands of |dozens of )?(?:\w+ )?(?:workers|staff|employees|jobs)|(?:staff|workers|employees|drivers|nurses|teachers|posties)\s+(?:are\s+)?(?:quit\w*|leav\w*|walk\w* out)|exodus|efficiency (?:plans?|drives?|savings?|programmes?|cuts?)|cost[- ]cutting|cuts? (?:to|in) (?:staff|jobs|services|deliveries|routes)|under (?:pressure|strain)|overstretched|understaffed|staff shortages?)\b/i,
+    // squeezed firms and households, low incomes, bills through the roof, a market's plunge (the 17 Oct gate: "Fuel
+    // costs squeezing margins for some businesses" as HOW MANY?, "Low-cost clinic helps pet owners with vet bills",
+    // whose source opens "…for the pets of people with low incomes"; "Energy bills through the roof? …", "Indonesian
+    // stocks plunge 11% as MSCI proposes emerging market downgrade"). A "squeezy" toy is no squeeze. Artisanal and
+    // informal mining is a story of poor workers' livelihoods and their danger: "Artisanal miners behind Nigeria's lithium
+    // boom" (16–17 Oct) aired twice as "artisanal miners hope to benefit" before its third airing said "they face unsafe
+    // working conditions"
+    /\b(?:artisanal (?:miners?|mining|mines?|gold)|informal (?:miners?|mining|workers?|settlements?)|subsistence (?:farmers?|farming|miners?)|squeez(?:e|es|ed|ing) (?:on )?(?:\w+ ){0,2}(?:margins?|budgets?|households?|incomes?|finances|businesses|firms|families|consumers|shoppers|wallets|profits?|pockets)|(?:margins?|budgets?|households?|incomes?|finances|businesses|firms|families|consumers|profits?) (?:\w+ )?(?:are |were |being |feel(?:ing)? the )?squeez(?:e|es|ed|ing)\b|(?:costs?|prices?|bills?) (?:are |is )?squeez(?:e|es|ed|ing)\b|feel(?:s|ing)? the (?:financial |cash |budget )?squeeze|(?:cost-of-living|financial|cash|budget|income|living standards?) squeeze|squeezed middle|low[- ]incomes?|lower[- ]incomes?|(?:people|families|households|those|owners) (?:on|with) low (?:incomes?|pay|wages)|food banks?|soup kitchens?|(?:can(?:'|’)?t|cannot|struggl\w* to|unable to) afford|hardship funds?|financial hardship|money worries|(?:bills?|costs?|prices?|rents?) (?:\w+ ){0,2}(?:through the roof|soar(?:s|ed|ing)?|spiral\w*|skyrocket\w*)|(?:soaring|rising|spiralling|spiraling|sky-high|crippling|eye-watering) (?:\w+ )?(?:bills|costs|prices|rents)|(?:declin\w*|falling|fell|drop(?:s|ped|ping)?|slump\w*|plung\w*|tumbl\w*|crash\w*|slid(?:e|es|ing)?)\s+(?:\w+\s+){0,2}(?:stocks|stock markets?|markets|bourses?|indices|index)|(?:stocks|stock markets?|bourses?|indices|index|markets)\s+(?:\w+\s+)?(?:fell|fall|falls|dropped|drops?|declin\w*|slump\w*|plung\w*|tumbl\w*|crash\w*|sink|sank|slid(?:e|es)?))\b/i],
   ['offensive language', /\b(?:f[\*u]+c?k\w*|f\*+|sh[\*i]t\w*|bollocks|bastard\w*|wank\w*|arse(?:hole)?s?|piss(?:ed|ing)?|bloody hell|crap)\b/i],
-  ['promotion', /(?:[–—|-]\s*(?:podcast|video|audio|live|quiz|gallery|in pictures)\s*(?=\.(?:\s|$)|$)|(?:^|\.\s+)(?:podcast|video|watch|listen|quiz)\s*[:|]|\bthe \w+ podcast\b)|\b(?:\d+ (?:hours|days) (?:to|until|left)|job opportunit\w*|vacanc(?:y|ies)|we(?:'re| are) hiring|apply now|careers? at|your final chance|tickets?|ticket savings|discount\w*|promo codes?|deals? of the day|on sale|buy now|sponsored|giveaway|\d+ gets you|gets you .{0,60} for|price drops?|lowest price|bargains?|\d+% off|save \$?\d+)\b/i],
+  ['promotion', /(?:[–—|-]\s*(?:podcast|video|audio|live|quiz|gallery|in pictures)\s*(?=\.(?:\s|$)|$)|(?:^|\.\s+)(?:podcast|video|watch|listen|quiz)\s*[:|]|\bthe \w+ podcast\b)|\b(?:\d+ (?:hours|days) (?:to|until|left)|job opportunit\w*|vacanc(?:y|ies)|we(?:'re| are) hiring|apply now|careers? at|your final chance|tickets?|ticket savings|discount\w*|promo codes?|deals? of the day|on sale|buy now|sponsored|giveaway|\d+ gets you|gets you .{0,60} for|price drops?|lowest price|bargains?|\d+% off|save \$?\d+)\b/i,
+    // a media advisory or an open call is a notice (NASA's feed, 16–17 Oct: "NASA to Discuss Artemis Acceleration,
+    // Status of Upcoming Moon Missions", "NASA will provide an update … at 2 p.m. EDT, Friday, Oct. 23"; "NASA Welcomes
+    // All Ages, Experience Levels for Space Apps Challenge", "Registration is open for…")
+    /\b(?:registration (?:is )?(?:now )?open\w*|register now|sign up (?:now|today)|applications? (?:are )?(?:now )?open|media accreditation|accreditation polic(?:y|ies)|media advisory|(?:learn |find out )?(?:where|how) to watch|watch (?:it )?live|will (?:provide|hold|host|give|present|discuss|preview|stream|broadcast)\b[^.]{0,120}?\bat \d{1,2}(?::\d\d)?\s?[ap]\.?\s?m\b)/i,
+    /^\W*(?:\S+\s+){1,3}to (?:discuss|preview|brief (?:media|reporters)|host (?:a )?(?:news|media|press)|hold (?:a )?(?:news|media|press))\b/i],
   ['failure of a person', /\b(?:flop(?:s|ped|ping)?|box[- ]office (?:bomb|disaster)|weak start|panned|slammed|mock\w*|ridicul\w*|gaffes?|embarrass\w*|humiliat\w*|backlash|push ?back|pushed back|outrage|rows? (?:over|with|between)|feud|criticis\w*|criticiz\w*|apologi[sz]\w*|resign\w*|sacked|fired\b|ousted|quits?\b|wavered|controvers\w*|accus\w*|allegation\w*|alleged\w*|denies|denied|not returning as|parts? ways|steps? down|stepping down|let go|relieved of|dismiss(?:ed|al|es)|bottom (?:10|ten|five|three)|major fall|fallout|under fire|damaging|suspend(?:s|ed|ing)? \S+(?: \S+)? for|punch\w*|brawl\w*|in (?:the )?face|owns? up|incoherent|shambolic|plagued by|lack of (?:expertise|experience|leadership|transparency|accountability)|critics|angry|anger(?:ed)?|furious|fury|livid|fum(?:e|es|ing)\b|tough (?:loss|defeat|night|day|weekend) for|sent off|sending[- ]offs?|red cards?|second yellow|yellows|booed|boos|jeered|heckl\w*|dumb|stupid|idiot\w*|daft|blunder\w*|howlers?|own goals?|miss(?:es|ed)? (?:a |the )?penalt\w*|penalty miss\w*|yellow cards?|blames?|blamed|dropped from|axed|benched)\b/i],
 ];
 
 // Reviews and first-person pieces: a verdict is not a fact to quiz on ("Mechanism's first Switch 2 case is as awesome
 // as I hoped it would be", "OnePlus 16 is firm's most interesting phone", The Verge 12 Oct)
-const FIRST_PERSON = /(?:^|[\s‘'"“])(?:I|I'm|I’m|I've|I’ve|My|my|We|we|We've|we've|Our|our)\s/;
-const OPINION = /\b(?:as I hoped|hands-on|review(?:ed)?|first look|verdict|best and worst|most interesting|awesome|we tried|tested:|why (?:you|we|i)\b|in praise of|the case for|deja vu|déjà vu|is alarming|is the best|is the worst)\b/i;
+// ("'I'd spend $1,000 on a wedding present'", 17 Oct; "Bose's new wired earbuds are simple[ in the best way]", The
+// Verge's review, 17 Oct)
+const FIRST_PERSON = /(?:^|[\s‘'"“])(?:I|I'm|I’m|I've|I’ve|I'd|I’d|I'll|I’ll|My|my|We|we|We've|we've|We'd|We’d|We'll|We’ll|Our|our)\s/;
+const OPINION = /\b(?:as I hoped|hands-on|review(?:ed)?|first look|verdict|best and worst|most interesting|awesome|we tried|tested:|why (?:you|we|i)\b|in praise of|the case for|deja vu|déjà vu|is alarming|is the best|is the worst|in the (?:best|worst) (?:possible )?way)\b/i;
 
 // Kinds matched on the story's subject only (its headline, title and opening sentences): a passing "the government
 // says" in a tunnel story's third sentence does not make it politics. Harm, disasters, crime, conflict and betting
@@ -94,6 +136,9 @@ export const MAX_WORDS_CHARS = 72;
 // step-1 gate checks every question by hand.
 const BARE_VERBS = new Set('is are was were be been has have had will would can could may might must shall should do does did let lets set sets get gets got make makes made take takes took find finds found map maps spot spots reach reaches open opens launch launches win wins won beat beats plan plans unveil unveils build builds test tests show shows reveal reveals return returns start starts begin begins end ends hit hits cut cuts raise raises rise rises fall falls grow grows drop drops land lands join joins leave leaves meet meets say says tell tells warn warns ask asks offer offers buy buys sell sells move moves turn turns bring brings break breaks keep keeps hold holds give gives go goes come comes run runs play plays need needs want wants help helps look looks lights light record records release releases restore restores celebrate celebrates discover discovers capture captures solve solves'.split(' '));
 const FUNCTION_WORDS = new Set(['a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'by', 'with', 'from', 'as', 'its', 'vs', 'v']);
+const AUX_VERBS = new Set('is are was were be been has have had will would can could may might must shall should do does did'.split(' '));
+const PAST_VERBS = new Set('got made took found won'.split(' '));
+const BEFORE_BARE = new Set(['to', 'will', 'can', 'could', 'may', 'might', 'must', 'should', 'would', 'shall', "'ll", 'they', 'we', 'you', 'i']);
 export function labelLike(words) {
   const tokens = String(words ?? '').replace(/[“”"‘(),.:;!?–—]/g, ' ').replace(/’/g, "'").split(/\s+/).filter(Boolean);
   if (tokens.length < 3) return true;
@@ -102,7 +147,15 @@ export function labelLike(words) {
   const titleCase = content.every((t) => /^\p{Lu}/u.test(t));
   const verbish = (t, i) => {
     const w = t.toLowerCase();
-    if (/^(?:there|it|that|what|who|here|he|she)'s$/.test(w) || BARE_VERBS.has(w)) return true;
+    if (/^(?:there|it|that|what|who|here|he|she)'s$/.test(w)) return true;
+    // in a Title Case caption a bare verb is mostly a noun ("NASA's Space X CRS-35 Launch Jellyfish", NASA's feed,
+    // 16 Oct): it counts after "to", a modal or a plural subject ("NASA to Help…", "Scientists Find…"), and an
+    // inflected one always ("NASA Names…")
+    if (BARE_VERBS.has(w) && titleCase && !AUX_VERBS.has(w) && !(/s$/.test(w) && w.length > 3) && !PAST_VERBS.has(w)) {
+      const prev = String(tokens[i - 1] || '').toLowerCase();
+      return BEFORE_BARE.has(prev) || (/s$/.test(prev) && !/(?:ss|us|is)$/.test(prev) && prev.length > 3);
+    }
+    if (BARE_VERBS.has(w)) return true;
     if (i === 0) return false; // a first word ending in -s is a subject ("Scientists map…")
     if (/\p{Lu}/u.test(t.slice(1))) return false; // a name ("SmallSats", "NASA")
     if (!titleCase && /^\p{Lu}/u.test(t)) return false; // a name in a sentence-case headline
@@ -115,20 +168,57 @@ export function labelLike(words) {
 // dropped its articles ("This tiny jurassic predator helped pave the way for the human brain" aired as "…helped pave
 // way", 16 Oct). Returns the title's text after the aired headline's last word, or null when the aired headline is not
 // such a cut (a rewrite, or the whole title).
+// The aired headline may also have dropped other words on the way ("Meta may use sweeping[ new] commercial TOS", the
+// 17 Oct gate; "Apple's HomeView is just[ the latest] threat to online recipe writers", "India becomes[ the latest]
+// country to report rogue AI agent activity"): such a cut is still a cut, and since a dropped word can break the
+// sense, the source's own title is shown whole when it fits. So is a name an article was dropped from ("Winnie[ the]
+// Pooh turns 100", 17 Oct). Returns { rest (the title after the aired headline's last word, or null when the aired
+// headline runs to the title's end), dropped, nameBroken }, or null when the aired headline is no cut (a rewrite).
 const ARTICLES = new Set(['a', 'an', 'the']);
-function cutRest(aired, title) {
-  const words = (t) => [...String(t).matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’$£€%.,-]*/gu)].map((m) => ({ w: m[0].toLowerCase().replace(/[.,]+$/, ''), end: m.index + m[0].replace(/[.,]+$/, '').length }));
+const capital = (t) => /^\p{Lu}/u.test(t?.raw || '');
+function cutOf(aired, title) {
+  const words = (t) => [...String(t).matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’$£€%.,-]*/gu)].map((m) => {
+    const raw = m[0].replace(/[.,]+$/, '');
+    return { w: raw.toLowerCase(), raw, start: m.index, end: m.index + raw.length };
+  });
   const a = words(aired);
   const t = words(title);
-  if (!a.length || a.length >= t.length) return null;
+  if (!a.length || a.length > t.length) return null;
   let j = 0;
-  for (const { w } of a) {
-    while (j < t.length && t[j].w !== w && ARTICLES.has(t[j].w)) j++;
-    if (j >= t.length || t[j].w !== w) return null;
-    j++;
+  let dropped = false;
+  let nameBroken = false;
+  for (let i = 0; i < a.length; i++) {
+    let k = j;
+    while (k < t.length && t[k].w !== a[i].w) k++;
+    if (k >= t.length) return null;
+    const skipped = t.slice(j, k);
+    if (i === 0) {
+      // a kicker cut off the front ("‘A big responsibility’: Clifton Suspension Bridge master hails…") or a dropped
+      // opening article is clean; any other opening words dropped are not ("Why the best phones…" → "best phones…")
+      if (skipped.length && !skipped.every((s) => ARTICLES.has(s.w)) && !/[:–—|]/.test(title.slice(t[k - 1].end, t[k].start))) dropped = true;
+    } else {
+      for (let x = j; x < k; x++) {
+        if (!ARTICLES.has(t[x].w)) dropped = true;
+        else if (capital(t[x - 1]) && capital(t[x + 1])) nameBroken = true;
+      }
+    }
+    j = k + 1;
   }
   const rest = title.slice(t[j - 1].end);
-  return /[\p{L}\p{N}]/u.test(rest) ? rest : null;
+  return { rest: /[\p{L}\p{N}]/u.test(rest) ? rest : null, dropped, nameBroken };
+}
+
+// A quoted phrase in the aired headline must be the source's own words: "Replit's CEO says future of work is
+// ‘self-driving firm’" (17 Oct) quoted a word the CEO never said (the source: "the ‘self-driving company’")
+const QUOTED = /‘(.+?)’(?=[\s,.:;!?)]|$)|“(.+?)”|"(.+?)"|(?:^|\s)'(.+?)'(?=[\s,.:;!?)]|$)/gu;
+const quoteNorm = (s) => String(s ?? '').toLowerCase().replace(/[‘’`]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ');
+function quotesHeld(aired, e) {
+  const source = quoteNorm(`${e?.title || ''} ${e?.summary || ''} ${e?.text || ''}`);
+  for (const m of String(aired).matchAll(QUOTED)) {
+    const q = quoteNorm(m[1] || m[2] || m[3] || m[4]).trim();
+    if (q.length >= 3 && !source.includes(q)) return false;
+  }
+  return true;
 }
 
 /** The headline the quiz may show for an archive entry: the aired one when whole, else the source's title (≤ 72), else null. */
@@ -137,9 +227,11 @@ export function quizWords(e) {
   const title = String(e?.title || '').replace(/\s+/g, ' ').replace(/^(?:BREAKING|LIVE|WATCH|VIDEO|EXCLUSIVE)\s*[:|-]\s*/i, '').trim();
   const titleOk = title && title.length <= MAX_WORDS_CHARS && !OPEN_END.test(title.replace(/[.!?]+$/, ''));
   if (!aired) return titleOk ? title : null;
-  const rest = cutRest(aired, title);
-  if (rest !== null && !CLEAN_REST.test(rest)) return titleOk ? title : null;
+  const cut = cutOf(aired, title);
+  if (cut?.rest != null && !CLEAN_REST.test(cut.rest)) return titleOk ? title : null;
   if (OPEN_END.test(aired.replace(/[.!?]+$/, ''))) return titleOk ? title : null;
+  if (cut && (cut.dropped || cut.nameBroken) && titleOk) return title;
+  if (!quotesHeld(aired, e)) return titleOk ? title : null;
   return aired.length <= MAX_WORDS_CHARS ? aired : titleOk ? title : null;
 }
 
@@ -175,6 +267,9 @@ const LOCATIVE = /\b(?:in|at|near|off|across|outside|around|over|throughout|insi
 // "available in the US", "users in Japan", "a new feature in the US" (The Verge, 13 Oct): where a product is sold, not
 // where a story happened
 const AVAILABILITY = /\b(?:available|availability|users?|customers?|subscribers?|buyers?|shoppers?|owners?|players?|sold|sells?|selling|ships?|shipping|features?|services?|rolls? out|rolling out|rollout|expands?|expanding|expansion|subscriptions?|apps?|launch(?:es|ed|ing)?(?: first)?(?: only)?)\s+(?:only\s+)?(?:in|across|to)\s+(?:the\s+)?$/i;
+// (and a roll-out a few words before its place: "Smart ring maker Ultrahuman to roll out biological-age model across
+// UAE", asked as WHERE on the 16 Oct re-run. A factory that opens or a probe that launches stays where it happens)
+const AVAILABILITY_FAR = /\b(?:roll(?:s|ed|ing)? out|rollouts?|ship(?:s|ped|ping)?|sell(?:s|ing)?|available|expand(?:s|ed|ing)?|expansion)\b(?:\s+[\p{L}\p{N}'’-]+){1,4}\s+(?:in|across|to|throughout)\s+(?:the\s+)?$/iu;
 const insideOf = (e, country, placeEntry) => e === country || e === placeEntry || e.country === country.name;
 function happensIn(texts, country, place) {
   const placeEntry = lookupPlace(String(place).split(',')[0]);
@@ -183,7 +278,7 @@ function happensIn(texts, country, place) {
     for (const h of findPlaces(s)) {
       if (!insideOf(h.entry, country, placeEntry)) continue;
       const before = s.slice(Math.max(0, h.index - 40), h.index);
-      if (LOCATIVE.test(before.slice(-24)) && !AVAILABILITY.test(before)) return true;
+      if (LOCATIVE.test(before.slice(-24)) && !AVAILABILITY.test(before) && !AVAILABILITY_FAR.test(before)) return true;
       const after = s.slice(h.index + h.text.length, h.index + h.text.length + 3);
       if (/^['’]s\b/.test(after) || (h.index === 0 && /^\s*:/.test(after))) return true;
     }
@@ -192,6 +287,18 @@ function happensIn(texts, country, place) {
 }
 
 export const MASK = '▮▮▮▮▮';
+// The country's own names as written, wherever they stand: the gazetteer reads "US citizen" as a nationality, not a
+// place, yet on WHERE's board it names the answer (the 17 Oct gate: "Joni Mitchell becomes US citizen: …" shown
+// unmasked over the pin on the USA)
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function nameSpans(words, country) {
+  const spans = [];
+  for (const n of new Set([country.name, country.label, ...(country.aliases || [])].filter(Boolean))) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n)}(?![\\p{L}\\p{N}])`, 'gu');
+    for (const m of String(words).matchAll(re)) spans.push([m.index, m.index + m[0].length]);
+  }
+  return spans;
+}
 /**
  * The words with the place masked: every name of the place, of a place inside its country and of its people
  * ("Egypt's Fayoum mummy portraits…" → "▮▮▮▮▮'s Fayoum mummy portraits…"); one mask's length for every name, so its
@@ -200,8 +307,14 @@ export const MASK = '▮▮▮▮▮';
 export function maskPlace(words, country, place) {
   const placeEntry = lookupPlace(String(place).split(',')[0]);
   const spans = findPlaces(words).filter((h) => insideOf(h.entry, country, placeEntry)).map((h) => [h.index, h.index + h.text.length]);
+  spans.push(...nameSpans(words, country));
   if (country.demonymRe) for (const m of words.matchAll(new RegExp(country.demonymRe.source, 'gu'))) spans.push([m.index, m.index + m[0].length]);
   if (!spans.length) return words;
+  // a name's own first word goes with it: "Cost of balancing Great ▮▮▮▮▮'s power grid…" (16 Oct re-run) told the answer
+  for (const s of spans) {
+    const q = /(?:^|\s)((?:Great|Greater|New|North|South|East|West|Northern|Southern|Eastern|Western|Upper|Lower|Central)\s+)$/.exec(words.slice(0, s[0]));
+    if (q) s[0] -= q[1].length;
+  }
   spans.sort((a, b) => b[0] - a[0]);
   let out = words;
   let reach = Infinity;
@@ -228,8 +341,9 @@ export function usablePlace(e, words) {
   const named = (x) => placeSupported(loc.place, x) || placeSupported(country.label, x);
   if (!named(text) && !named(words)) return null;
   if (!happensIn([words, e.title, text], country, loc.place)) return null;
-  const masked = named(words) ? maskPlace(words, country, loc.place) : words;
-  if (!masked || named(masked.replaceAll(MASK, ' '))) return null; // a name the mask could not find stays a give-away
+  const shows = (x) => named(x) || nameSpans(x, country).length > 0;
+  const masked = shows(words) ? maskPlace(words, country, loc.place) : words;
+  if (!masked || shows(masked.replaceAll(MASK, ' '))) return null; // a name the mask could not find stays a give-away
   return { country: country.name, label: country.label, lat: country.lat, lon: country.lon, region: regionOf(country), masked: masked === words ? null : masked };
 }
 
@@ -483,7 +597,19 @@ const outOf = (e) => {
   return VERDICTS.get(e);
 };
 
-export function quizEvents(archive, { now = Date.now(), days = 7, same = null, real = true } = {}) {
+/**
+ * May this airing's picture be shown (server/rights.js)? By default only a picture with a cleared rights record for that
+ * very picture, or the operator's own local file (the archive's rule, server/archive.js keep); 'preview' (a private
+ * preview, PICTURE_RIGHTS=preview) also an outlet's photo. The 17 Oct gate's PICTURE THIS showed a Getty photo from Ars
+ * Technica, TechCrunch's own photos and the BBC's.
+ */
+export function pictureCleared(e, { pictures = 'cleared' } = {}) {
+  if (!e?.image) return false;
+  if (pictures === 'preview') return true;
+  return !!currentRights(e)?.cleared || /^file:/i.test(e.image);
+}
+
+export function quizEvents(archive, { now = Date.now(), days = 7, same = null, real = true, pictures = 'cleared' } = {}) {
   const since = now - days * DAY;
   const groups = groupEvents(archive.entries.filter((e) => e.at >= since && e.at <= now), same);
   const events = [];
@@ -499,7 +625,12 @@ export function quizEvents(archive, { now = Date.now(), days = 7, same = null, r
       continue;
     }
     const latest = entries.at(-1);
-    const words = quizWords(latest) || entries.map(quizWords).filter(Boolean).at(-1) || null;
+    // the words, the picture and the figure are the latest airing's own story (its story id): the desk's grouping can
+    // join two stories, and then a headline would sit over another story's picture ("These execs think voice AI hasn't
+    // reached its … moment yet", 12 Oct, joined on the 16th with "A Nvidia insider-turned-VC on why robotics
+    // hasn't hit its … moment, yet" and its picture)
+    const own = entries.filter((e) => e.id === latest.id);
+    const words = quizWords(latest) || own.map(quizWords).filter(Boolean).at(-1) || null;
     if (!words) {
       out['broken headline'] = (out['broken headline'] || 0) + 1;
       continue;
@@ -508,9 +639,10 @@ export function quizEvents(archive, { now = Date.now(), days = 7, same = null, r
       out['not a headline'] = (out['not a headline'] || 0) + 1;
       continue;
     }
-    const withImage = [...entries].reverse().find((e) => e.image);
+    // (only a picture the channel may show: pictureCleared)
+    const withImage = [...own].reverse().find((e) => pictureCleared(e, { pictures }));
     // corrections: the latest aired figure, and none that aired with two values within an hour
-    const figures = entries.map((e) => ({ at: e.at, f: usableFigure(e) })).filter((x) => x.f);
+    const figures = own.map((e) => ({ at: e.at, f: usableFigure(e) })).filter((x) => x.f);
     const figure = figures.length && !figures.some((x) => figures.some((y) => Math.abs(x.at - y.at) < 3600_000 && x.f.value !== y.f.value)) ? figures.at(-1).f : null;
     events.push({
       key: g.key,
@@ -521,6 +653,9 @@ export function quizEvents(archive, { now = Date.now(), days = 7, same = null, r
       imageId: withImage?.id || null,
       // and its rights record as it aired (server/rights.js compactRights): the publishing gate reads it
       imageRights: withImage?.imageRights || null,
+      // what the picture shows, as the picture desk chose it (server/archive.js: a person's portrait, a place, an
+      // event…): PICTURE THIS's wrong options must not fit it (rounds.js)
+      imageSubject: withImage?.imageSubject || (withImage?.imageFit === 'portrait' ? { kind: 'person', label: null } : null),
       place: usablePlace(latest, words),
       optionPlace: optionPlace(latest),
       figure,

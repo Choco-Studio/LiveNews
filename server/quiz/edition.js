@@ -57,8 +57,11 @@ export function editionStories(plan, events, archive = null) {
 export const DEFAULT_CONTESTANTS = Object.freeze(['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']);
 
 export class QuizDesk {
-  constructor({ archive = null, same = null, dir = null, now = () => Date.now(), log = console, view = false } = {}) {
+  constructor({ archive = null, same = null, dir = null, now = () => Date.now(), log = console, view = false, pictures = null } = {}) {
     this.archive = archive;
+    // the picture rights mode (server/rights.js, PICTURE_RIGHTS): PICTURE THIS shows only cleared pictures unless the
+    // station runs a private preview ('preview'); the archive's own mode when none is given, else 'cleared'
+    this.pictures = (pictures ?? archive?.pictures) === 'preview' ? 'preview' : 'cleared';
     // QUIZ_VIEW (server/config.js): a draft put on air by DRAFTS_ON_AIR may be viewed before the archive holds three
     // days and at any hour; an official programme never (plan() asks the channel which drafts are on air)
     this.view = !!view;
@@ -89,9 +92,9 @@ export class QuizDesk {
     if (!this.archive) return { air: false, reason: 'no archive' };
     if (now - this.lastAt < (program.minGapHours ?? 4) * 3600_000) return { air: false, reason: `the last edition aired under ${program.minGapHours ?? 4} hours ago` };
     const entries = this.archive.entries.filter((e) => e.at <= now && realEntry(e));
-    const { events, avoid } = quizEvents(this.archive, { now, days: 7, same: this.same });
+    const { events, avoid } = quizEvents(this.archive, { now, days: 7, same: this.same, pictures: this.pictures });
     const view = this.view && Array.isArray(channel?.draftsOnAir) && channel.draftsOnAir.includes(program.id);
-    const plan = planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid, ...(view ? { minArchiveDays: 0, checkHour: false } : {}) });
+    const plan = planEdition({ events, entries, now, contestants: this.contestants(program, channel), history: this.history.filter((h) => h.at > now - 8 * DAY), same: this.same, avoid, pictures: this.pictures, ...(view ? { minArchiveDays: 0, checkHour: false } : {}) });
     if (plan?.air) plan.stories = editionStories(plan, events, this.archive);
     return plan;
   }
