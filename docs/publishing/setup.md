@@ -89,6 +89,13 @@ dicen **qué nombres faltan**, nunca su valor.
    queda **retenido** y no se publica nunca.
 6. Lo deja en la **cola**, esperando tu aprobación.
 
+**Las páginas de los medios.** Para escribir una noticia, el canal lee el principio del artículo en la web del medio,
+y a veces su foto. Antes de abrir cualquier página mira el archivo robots.txt de esa web, que dice qué pueden leer los
+programas automáticos. Si el medio no nos deja leer esa página, no se abre nunca: la noticia se cuenta con lo que da el
+propio medio en su feed (el titular, el resumen y su foto). El canal se presenta siempre como GLOBIT 24, con el enlace
+al proyecto. Hoy (17 de octubre) ninguno de los 17 sitios de nuestros medios nos cierra sus artículos. Para revisarlo
+cuando quieras: `node tools/compliance/robots-report.mjs`.
+
 Para hacerlo a mano con un programa ya emitido:
 `node tools/publish/factory.mjs --episode <programa.json> --out <carpeta>`. Los textos del día se hacen con
 `node tools/publish/posts.mjs --day 2026-10-17`.

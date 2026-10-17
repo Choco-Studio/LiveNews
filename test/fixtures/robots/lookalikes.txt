@@ -1,0 +1,14 @@
+# Tokens that look like ours or like words of our user-agent header, none of which is ours
+User-agent: LiveNewsBot
+User-agent: bot
+User-agent: news
+User-agent: Mozilla
+User-agent: compatible
+User-agent: GLOBIT24-compliance-audit
+User-agent: globit2
+User-agent: xGLOBIT24
+Disallow: /
+
+User-agent: *
+Disallow: /private/
+Crawl-delay: 1

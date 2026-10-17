@@ -104,7 +104,8 @@ describe('net: streaming byte caps', () => {
 
   test('NewsDesk.fetchText keeps only the cap of an endless article page', async () => {
     const { body, stats } = endless();
-    const desk = new NewsDesk({ log: quiet, lookup: publicDns, fetchImpl: async () => new Response(body) });
+    // (the outlet's robots.txt is read first: none here)
+    const desk = new NewsDesk({ log: quiet, lookup: publicDns, fetchImpl: async (url) => (url.endsWith('/robots.txt') ? new Response('', { status: 404 }) : new Response(body)) });
     const html = await desk.fetchText('https://news.test/page', { maxBytes: 100_000 });
     assert.equal(html.length, 100_000);
     assert.ok(stats.pulled < 500_000);

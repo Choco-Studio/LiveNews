@@ -169,6 +169,11 @@ The publishing desk's only door to the compliance desk (`server/compliance/`, co
 - **The contract tests** (`test/publish-compliance.test.js`) run the same assertions against whichever module is
   loaded, and against the stub. On 17 Oct 2026 they also passed against the compliance desk's module in its own
   branch.
+- **The verbatim rule fails closed** (round 6). The door's `preflight` adds `sources-missing` for every story an item
+  tells (a clip's own stories; every story of a whole programme) whose sources the archive does not hold: its words
+  cannot be shown not to copy them. The compliance desk's lint counts such a story as "unverified" and lets it pass
+  unless asked to be strict; the publishing desk never publishes it. The factory, the upload, the publisher and its
+  re-check all go through this door.
 
 ## 6. The live supervisor (`live.js`)
 

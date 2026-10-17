@@ -199,3 +199,30 @@ test('the gate measures a clip\'s own stories\' aired words against their source
   assert.ok(verbatim(gate(['s1'])).length > 0, 'the wildfire clip reads the outlet\'s sentence');
   assert.equal(C.clipGetStory(['s2'], getStory)('s1'), null);
 });
+
+test('the verbatim rule fails closed: a story whose sources are not at hand is refused (sources-missing), in a clip and in a whole programme', async () => {
+  const C = await import('../server/publish/compliance.js');
+  const episode = {
+    id: 'e1', program: { id: 'full-time', title: 'FULL TIME' }, storyIds: ['s1', 's2'],
+    segments: [
+      { type: 'story', storyId: 's1', headline: 'Coventry win', text: 'Coventry beat Newcastle four goals to one on Saturday.', source: 'Sky Sports' },
+      { type: 'story', storyId: 's2', headline: 'Owls in the park', text: 'Four barn owl chicks were counted in Riverside Park on Tuesday, birders said.', source: 'NPR' },
+    ],
+  };
+  // (a FULL TIME edition replayed from a sport snapshot: the archive never kept s1)
+  const getStory = (id) => (id === 's2' ? { title: 'A rare family of barn owls moved into Manhattan', summary: 'Barn owls are nesting in Manhattan this autumn.', body: null } : null);
+  const flags = { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } };
+  const missing = (r) => (r.violations || []).filter((v) => v.rule === 'sources-missing').map((v) => v.storyId);
+  const clip = (ids) => C.preflight({ id: 'c1', kind: 'short', episode, storyIds: ids, platforms: ['youtube'], flags, text: 'AI-generated: sport.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory: C.clipGetStory(ids, getStory) });
+  assert.deepEqual(missing(clip(['s1'])), ['s1']);
+  assert.equal(clip(['s1']).ok, false);
+  assert.deepEqual(missing(clip(['s2'])), [], 'a clip of a story whose sources are at hand is not concerned');
+  const whole = C.preflight({ id: 'e1', kind: 'episode', episode, platforms: ['youtube'], flags, text: 'AI-generated: sport.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory });
+  assert.deepEqual(missing(whole), ['s1']);
+  assert.deepEqual(C.storiesWithoutSources({ episode, kind: 'episode' }, getStory), ['s1']);
+  assert.deepEqual(C.storiesWithoutSources({ episode, kind: 'short' }, getStory), [], 'a clip that lists no story is checked by its own rules');
+  // no getStory given at all: preflight warns, as before (the check needs a door to the sources)
+  assert.deepEqual(missing(C.preflight({ id: 'e1', kind: 'episode', episode, platforms: ['youtube'], flags, text: 'AI-generated: sport.' }, { now: 0 })), []);
+  const { RULE_ES } = await import('../server/publish/approval.js');
+  assert.match(RULE_ES['sources-missing'], /no se puede comprobar/);
+});
