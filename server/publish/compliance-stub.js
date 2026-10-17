@@ -235,7 +235,10 @@ export function preflight(item = {}, opts = {}) {
   const kind = item.kind || (item.episode ? 'episode' : 'text');
   if (isVideo(kind)) {
     const r = checkClip({ ...item, kind }, opts);
-    return { ...r, credits: creditsFor(item), description: describe(item, { credits: creditsFor(item) }) };
+    // the offline fallback writer's episodes are never published (the real module's rule `offline-writer`)
+    const told = Array.isArray(item.storyIds) ? item.storyIds.filter(Boolean) : (item.episode?.segments || []).filter((s) => s?.type === 'story' && s.storyId);
+    const offline = String(item.episode?.provider || '').toLowerCase() === 'mock' && told.length ? [{ rule: 'offline-writer', message: 'written by the offline fallback writer: never published' }] : [];
+    return { ...r, ...(offline.length ? { ok: false, violations: [...(r.violations || []), ...offline] } : {}), credits: creditsFor(item), description: describe(item, { credits: creditsFor(item) }) };
   }
   const violations = [];
   if (!/^AI-generated:/.test(norm(item.text))) violations.push({ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' });

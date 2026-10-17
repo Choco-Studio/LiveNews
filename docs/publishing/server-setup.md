@@ -91,3 +91,44 @@ node tools/publish/live.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=tts"
 - If it does not hold: the cheapest real fix (voices generated further ahead, a lower encoder preset, or a bigger
   plan: 4 cores and 8 GB). No workaround that lowers what viewers see without saying so.
 - Then add the result to `docs/roadmap/LISTA.md` (section H), commit (full suite first) and push.
+
+## 6. The AI writer trial (with the owner's key)
+
+Without an AI key the channel airs the offline writer, which copies its sources, and none of its episodes can be
+published (`verbatim.md` §7). The AI writer tells the stories in the channel's own words. This trial shows whether it
+does, on this server, with the owner's key.
+
+- **The key: the owner puts it in, never in the chat.** They add these lines to `/etc/globit24.env` on their own screen:
+  ```
+  OPENAI_API_KEY=<typed by the owner>
+  PROVIDERS=openai,mock
+  ```
+  The second line is there because the Codex CLI is not installed on this server. Then run
+  `chown root:root /etc/globit24.env && chmod 600 /etc/globit24.env`. Never `cat`, print or commit the file. The
+  station reads it through its systemd unit (`EnvironmentFile=/etc/globit24.env`), or when started by hand with
+  `node --env-file=/etc/globit24.env server/index.js`.
+- **The trial.** It writes files only and takes about 10–20 minutes:
+  ```
+  node --env-file=/etc/globit24.env tools/writer/try.mjs --episodes 2
+  ```
+  - It makes 2 real episodes of each AI-written programme from the live feeds: NEWS IN 60, WORLD NOW, TECH BYTES,
+    COSMOS and MONEY MINUTE (`--programmes full-time` adds the draft).
+  - The episodes go through the real pipeline: the write, the own-words check and its rewrites, the editor and the fit.
+  - It writes `data/writer-trial/<time>/report.txt`, `report.json`, `log.txt` and `episodes/`. Nothing is published,
+    streamed, archived or voiced.
+- **Reading the report.**
+  - `breaking the verbatim rule as aired` must be 0. Each story's copied share (at most 20 %) and longest copied run
+    (at most 12 words) are listed.
+  - `own words` gives the stories rewritten, cut and dropped, and the rewrites refused. Many drops mean the prompt
+    needs work: keep the `[own words]` lines of `log.txt`.
+  - `editor (review faults)` is what the standards editor changed: sentences, fields, stories taken out.
+  - `by mock (OFFLINE…)` means the AI did not answer (the key, the quota, the network). `calls[].error` in
+    `report.json` says why.
+  - Tokens and time are given per stage (write, rewrite, review). `A MONTH OF 24/7 AIR` gives the month's tokens on the
+    channel's clock and `cost a month = A × P_in + B × P_cached + C × P_out`. Put in the provider's prices per million
+    tokens.
+- **A manual run without a key** (to read the prompts and answer them by hand):
+  `PROVIDERS=inbox,mock AI_INBOX_TIMEOUT_MS=900000 node tools/writer/try.mjs --programmes news-60 --episodes 1`, then
+  answer the files in `data/ai-inbox/` (its README says how).
+- **A dry run of the tool itself:** `PROVIDERS=mock FEEDS_FILE=config/feeds.fixture.json node tools/writer/try.mjs --episodes 1`.
+- **Report it to the owner in Spanish** (section 5): the zero, the drops, and the month's tokens with the formula.

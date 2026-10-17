@@ -20,6 +20,8 @@ import { voicedAir } from './airtime.js';
 import { airable, compactRights, currentRights, pictureMode } from './rights.js';
 import { locate, lookupPlace, placeSupported, institutionPlace } from './gazetteer.js';
 import { boardSpec } from '../public/js/boardspec.js';
+import { airedText } from './compliance/verbatim.js';
+import { MAX_REWRITES, checkScore, copiedPassages, currentLines, dropStory, editorChanges, mergeRewrite, parseRewrite, rewriteFaults, rewritePrompt, storyCheck, storySources, trimStory } from './ownwords.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -309,6 +311,8 @@ export class Producer {
     const started = Date.now();
     try {
       for (const stage of this.stages) {
+        // (an episode the own-words check left below its floor is not finished: server/ownwords.js)
+        if (ctx.skip) break;
         if (stage.enabled && !stage.enabled(ctx)) continue;
         const t0 = Date.now();
         const note = await stage.run(ctx);
@@ -317,6 +321,13 @@ export class Producer {
     } catch (err) {
       this.log.error?.(`[producer] ${program.title}: ${err.message}`);
       throw err;
+    }
+    if (ctx.skip) {
+      // the slot is skipped (the station moves on); the stories that could not be told in our own words sink in the
+      // ranking, then drop out (NewsDesk.markOffered), so the next episode does not meet them first
+      if (ctx.dropped?.length) this.news.markOffered(ctx.dropped);
+      this.log.warn?.(`[producer] ${program.title}: ${ctx.skip}; slot skipped`);
+      return null;
     }
 
     this.newsSinceWeather++;
@@ -741,8 +752,184 @@ export class Producer {
     ctx.episode = value;
     ctx.provider = provider;
     const deeper = await this.deepen(ctx, request, provider);
+    const own = await this.ownWords(ctx, 'write');
     this.castCorrespondents(ctx);
-    return { provider, ...(deeper ? { depth: deeper.depth, air: Math.round(deeper.air), ...(deeper.fewer ? { fewer: deeper.fewer } : {}) } : {}) };
+    return { provider, ...(deeper ? { depth: deeper.depth, air: Math.round(deeper.air), ...(deeper.fewer ? { fewer: deeper.fewer } : {}) } : {}), ...(own ? { own } : {}) };
+  }
+
+  /** The script as a writer gives it: links folded back into their stories, stage directions back in the text. */
+  scriptOf(episode) {
+    return {
+      title: episode.title,
+      // a correspondent link reads as its story's `cross`, as the writer gave it (the validator rebuilds the link)
+      segments: collapseCrosses(episode.segments).map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues || []) })),
+    };
+  }
+
+  /** Was this episode written by a writer that copies its sources (the offline fallback writer, which never reviews)? */
+  offlineWriter(name) {
+    const p = this.chain?.providers?.find?.((x) => x.name === name);
+    return p ? p.reviews === false : name === 'mock';
+  }
+
+  /**
+   * The channel's own words (server/ownwords.js; docs/publishing/verbatim.md): every story of an AI-written episode is
+   * measured against its sources (the verbatim rule: no run over 12 words, at most 20 % copied, attributed quotations
+   * exempt) and checked for the paraphrase traps (a hedge dropped, words given to another speaker, a rise told as a
+   * fall). A story that fails goes back to the model, at most MAX_REWRITES times, with its copied passages and faults
+   * named; a rewrite that gives a figure another value is refused. One still failing is cut to its compliant sentences, else
+   * dropped from the episode: a copy never airs. Below the programme's floor the slot is skipped (ctx.skip). Every
+   * rewrite, cut and drop is logged. The offline fallback writer is measured only (the publish gate holds it). Runs after
+   * the writer and again after the standards editor (`phase`). -> the pipeline note, or null
+   */
+  async ownWords(ctx, phase) {
+    if (!ctx.episode?.storyIds?.length) return null;
+    const title = ctx.program.title;
+    const storyOf = (id) => this.news.get(id) || ctx.candidates?.find((s) => s.id === id) || null;
+    const ignore = [ctx.channelName, title, ...Object.values(ctx.presenters || {}).map((p) => p?.name), ...(ctx.correspondents || []).map((c) => c.name), ...(ctx.experts || []).map((e) => e.name)].filter(Boolean);
+    const check = (episode, id) => storyCheck(episode, id, storySources(storyOf(id)), { ignore: [...ignore, storyOf(id)?.source].filter(Boolean) });
+    const checkAll = (episode) => new Map(episode.storyIds.map((id) => [id, check(episode, id)]));
+    const sum = (checks) => {
+      let words = 0;
+      let copied = 0;
+      let longest = 0;
+      let violating = 0;
+      let faults = 0;
+      for (const c of checks.values()) {
+        words += c.report.words;
+        copied += c.report.copied;
+        longest = Math.max(longest, c.report.longest);
+        violating += c.report.violations.length ? 1 : 0;
+        faults += c.faults.length;
+      }
+      return { stories: checks.size, share: words ? Math.round((copied / words) * 1000) / 1000 : 0, longest, violating, faults };
+    };
+    let checks = checkAll(ctx.episode);
+    if (this.offlineWriter(ctx.provider)) {
+      // (the offline writer reads its sources out by design: never rewritten or cut here; the publish gate holds it)
+      const s = sum(checks);
+      if (s.violating) this.log.info?.(`[own words] ${title}: written offline (${ctx.provider}): ${s.violating} of ${s.stories} stories copy their sources (${Math.round(s.share * 100)} % of the words); never published (publish gate: offline-writer)`);
+      return { offline: true, ...s };
+    }
+    const normalize = (script) => this.normalizer(ctx, ctx.candidates?.length ? ctx.candidates : ctx.episode.storyIds.map(storyOf).filter(Boolean))(JSON.stringify(script));
+    const pct = (c) => `${Math.round(c.report.share * 100)} %`;
+    const why = (c) => [...c.report.violations.map((v) => (v.rule === 'run' ? `a run of ${v.length} words copied` : `${Math.round(v.share * 100)} % copied`)), ...c.faults.map((f) => f.message)].join('; ');
+    let script = this.scriptOf(ctx.episode);
+    const note = { rounds: 0, rewritten: [], refused: 0, trimmed: [], dropped: [] };
+    for (let round = 1; round <= MAX_REWRITES; round++) {
+      const failing = [...checks].filter(([, c]) => c.failing).map(([id]) => id);
+      if (!failing.length) break;
+      note.rounds = round;
+      const items = failing.map((id) => {
+        const seg = script.segments.find((x) => x.type === 'story' && x.storyId === id);
+        const c = checks.get(id);
+        return { storyId: id, story: storyOf(id), current: currentLines(seg), copied: copiedPassages(c.report), faults: c.faults.map((f) => `"${f.sentence}" ${f.message}`) };
+      });
+      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
+      let reply;
+      let provider;
+      try {
+        // (an unreadable reply is no reason to pause the provider: the editor still needs it for the review)
+        ({ provider, value: reply } = await this.chain.generate(request, (text) => {
+          try {
+            return parseRewrite(text, failing);
+          } catch (err) {
+            return Object.assign(new Map(), { error: err.message });
+          }
+        }));
+      } catch (err) {
+        note.error = err.message;
+        this.log.warn?.(`[own words] ${title}: no rewrite (${err.message})`);
+        break;
+      }
+      if (!reply.size) {
+        note.error = reply.error || 'empty rewrite';
+        this.log.warn?.(`[own words] ${title}: the rewrite reply holds none of the stories (${note.error})`);
+        continue;
+      }
+      for (const [id, fields] of reply) {
+        const before = checks.get(id);
+        const refuse = (reason) => {
+          note.refused++;
+          this.log.warn?.(`[own words] ${title}: rewrite of story ${id} refused (round ${round}): ${reason}`);
+        };
+        const candidate = mergeRewrite(script, id, fields);
+        let episode = null;
+        try {
+          episode = normalize(candidate);
+        } catch {
+          /* refused below */
+        }
+        if (!episode?.storyIds?.includes(id)) {
+          refuse('the story did not survive the checks');
+          continue;
+        }
+        const changed = rewriteFaults(airedText(ctx.episode, id), airedText(episode, id));
+        if (changed.length) {
+          refuse(changed.join('; '));
+          continue;
+        }
+        const after = check(episode, id);
+        if (after.faults.length > before.faults.length) {
+          refuse(after.faults.map((f) => f.message).join('; '));
+          continue;
+        }
+        if (after.failing && checkScore(after) >= checkScore(before)) {
+          refuse(`no better (${why(after)})`);
+          continue;
+        }
+        script = candidate;
+        ctx.episode = episode;
+        checks = checkAll(episode);
+        if (!note.rewritten.includes(id)) note.rewritten.push(id);
+        this.log.info?.(`[own words] ${title}: story ${id} rewritten (round ${round}, ${provider}): copied ${pct(before)} -> ${pct(after)}, longest run ${before.report.longest} -> ${after.report.longest}${after.failing ? `; still ${why(after)}` : ''}`);
+      }
+    }
+    // Still failing: the shorter compliant version, else out of the episode. (Checked again once the whole script is
+    // normalised: dropping a story re-cuts the intro and the chats.)
+    for (let pass = 0; pass < 3; pass++) {
+      const failing = [...checks].filter(([, c]) => c.failing);
+      if (!failing.length) break;
+      for (const [id, c] of failing) {
+        const trimmed = trimStory(script, id, storySources(storyOf(id)), c.faults.map((f) => f.sentence));
+        let kept = false;
+        if (trimmed) {
+          try {
+            const episode = normalize(trimmed);
+            if (episode.storyIds.includes(id) && !check(episode, id).failing) {
+              script = trimmed;
+              kept = true;
+              if (!note.trimmed.includes(id)) note.trimmed.push(id);
+              this.log.warn?.(`[own words] ${title}: story ${id} cut to its own sentences (${why(c)})`);
+            }
+          } catch {
+            /* not a version we air */
+          }
+        }
+        if (!kept) {
+          script = dropStory(script, id);
+          note.dropped.push(id);
+          this.log.warn?.(`[own words] ${title}: story ${id} dropped: ${why(c)}`);
+        }
+      }
+      try {
+        ctx.episode = normalize(script);
+      } catch (err) {
+        ctx.skip = `no story left in the channel's own words (${err.message})`;
+        break;
+      }
+      checks = checkAll(ctx.episode);
+    }
+    if (!ctx.skip && [...checks.values()].some((c) => c.failing)) ctx.skip = 'a story still copies its source after the rewrites';
+    // (a programme's floor counts only against what this check took out: a writer's own shorter choice is its own)
+    const floor = Math.min(this.floorOf(ctx.program), ctx.episode.storyIds.length + note.dropped.length);
+    if (!ctx.skip && note.dropped.length && ctx.episode.storyIds.length < floor) ctx.skip = `only ${ctx.episode.storyIds.length} stories left in the channel's own words (the floor is ${floor})`;
+    if (note.dropped.length) ctx.dropped = [...new Set([...(ctx.dropped || []), ...note.dropped])];
+    const out = { ...sum(checks), ...(note.rounds ? { rounds: note.rounds } : {}) };
+    for (const k of ['rewritten', 'trimmed', 'dropped']) if (note[k].length) out[k] = note[k];
+    if (note.refused) out.refused = note.refused;
+    if (note.error) out.error = note.error;
+    return out;
   }
 
   /**
@@ -834,11 +1021,7 @@ export class Producer {
   /** Standards editor: checks the script against the sources. Never blocks the show. */
   async review(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
-    const script = {
-      title: ctx.episode.title,
-      // a correspondent link reads as its story's `cross`, as the writer gave it (the validator rebuilds the link)
-      segments: collapseCrosses(ctx.episode.segments).map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues || []) })),
-    };
+    const script = this.scriptOf(ctx.episode);
     const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
     try {
       const { provider, value } = await this.chain.generate(
@@ -846,9 +1029,14 @@ export class Producer {
         this.normalizer(ctx, stories)
       );
       // The editor may drop a story it cannot stand behind, never add one.
+      const before = ctx.episode;
       ctx.episode = value;
+      // what the editor found and put right (the review's faults: stories taken out, sentences and graphics fields changed)
+      const changes = editorChanges(before, value);
+      // ...and the editor's corrections are in our own words too (a correction that pastes the source goes back once more)
+      const own = await this.ownWords(ctx, 'review');
       this.castCorrespondents(ctx);
-      return { provider, reviewed: true };
+      return { provider, reviewed: true, ...(changes.stories || changes.dropped.length ? { changes } : {}), ...(own ? { own } : {}) };
     } catch (err) {
       // Without an AI editor (offline demo: the mock only writes) nothing is checked, and the pipeline says so.
       if (err.code === 'NO_REVIEWER') this.log.info?.(`[producer] review skipped: ${err.message}`);

@@ -33,7 +33,8 @@ test('every asset file in the repository has a rights record (a new picture, sou
 function episode() {
   return {
     id: 'e1',
-    provider: 'mock',
+    // (an AI writer's: the offline writer's news is never published at all, rule offline-writer)
+    provider: 'openai',
     program: { id: 'world-now' },
     storyIds: ['s1', 's2', 's3'],
     segments: [

@@ -436,7 +436,9 @@ describe('Producer.produce: the script is normalised with the programme rules', 
     const stories = [makeStory(1, { summary: 'Some 40,000 people were evacuated in Kyiv.' }), ...makeStories(7).slice(1)];
     const { episode } = await produceWith(
       scriptText([
-        storySeg('s1', { shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.4501, lon: 30.5234 }, fact: '40,000 EVACUATED', text: 'Some 40,000 people were evacuated in Kyiv.' }),
+        // (in the channel's own words: the summary read out word for word would be a copy, and an AI writer's copy is
+        // rewritten or dropped, server/ownwords.js)
+        storySeg('s1', { shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.4501, lon: 30.5234 }, fact: '40,000 EVACUATED', text: 'In Kyiv, some 40,000 people have been evacuated.' }),
         storySeg('s2', { shot: 'map' }),
       ]),
       { stories }
