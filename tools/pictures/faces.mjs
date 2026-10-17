@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // The face reader: reads the faces in the pictures the picture desk queued (server/faces.js FaceStore), with a face
 // detector (UltraFace RFB-320) and an expression model (FER+, emotion-ferplus-8), both ONNX, run by onnxruntime-web in
-// headless Chromium (tools/pictures/faces.html). The station never runs a model; this tool is run beside it (after a
-// measurement, or on a schedule), and the desk reads what it wrote.
+// headless Chromium (tools/pictures/faces.html). The station runs no model itself: it runs this tool as a child process
+// in its watch mode and starts it again if it stops (server/facereader.js, FACE_READER=off: not run); after a
+// measurement it is run by hand. The desk reads what it wrote.
 //
 //   NODE_USE_ENV_PROXY=1 node tools/pictures/faces.mjs --dir data/pictures [--img <cache dir>] [--limit 200]
 //        [--urls <file with one URL a line>]   (read these too)
+//        [--watch <seconds>]   (keep running: read the queue again every so many seconds; a picture that would not
+//                              download is tried again half an hour later)
 //
 // Models and runtime are fetched once into data/models (Hugging Face: huggingface.co, which redirects to its CDN
 // us.aws.cdn.hf.co; jsDelivr for onnxruntime-web 1.18.0). Pictures are fetched with the desk's own User-Agent, one at a
@@ -50,11 +53,21 @@ for (const [name, url] of MODEL_FILES) {
 }
 
 const store = new FaceStore({ dir });
-const urls = store.queue().map((x) => x.url);
-if (args.urls) for (const u of fs.readFileSync(args.urls, 'utf8').split('\n').map((x) => x.trim()).filter(Boolean)) if (!store.readings.has(u) && !urls.includes(u)) urls.push(u);
-const todo = urls.slice(0, Number(args.limit || 400));
-console.log(`[faces] ${todo.length} pictures to read (${store.readings.size} read before)`);
-if (!todo.length) process.exit(0);
+const watch = args.watch ? Math.max(5, Number(args.watch) || 60) : 0;
+const limit = Number(args.limit || 400);
+const extra = args.urls ? fs.readFileSync(args.urls, 'utf8').split('\n').map((x) => x.trim()).filter(Boolean) : [];
+// (watch mode: a picture that would not download waits half an hour before it is tried again)
+const missed = new Map();
+function todoNow() {
+  // the station's desk adds to the queue while this runs: its file is read again each time
+  store.reloadQueue();
+  const urls = store.queue().map((x) => x.url);
+  for (const u of extra) if (!store.readings.has(u) && !urls.includes(u)) urls.push(u);
+  return urls.filter((u) => !(missed.get(u) > Date.now())).slice(0, limit);
+}
+const first = todoNow();
+console.log(`[faces] ${first.length} pictures to read (${store.readings.size} read before)${watch ? `, then the queue again every ${watch} s` : ''}`);
+if (!first.length && !watch) process.exit(0);
 
 // ---- the pictures, fetched once
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -117,34 +130,57 @@ try {
   playwright = await import('/opt/node-tools/node_modules/playwright/index.mjs');
 }
 const browser = await playwright.chromium.launch();
+// (stopped by the station, or by hand: the browser goes with it)
+let closing = false;
+const close = async (code = 0) => {
+  if (closing) return;
+  closing = true;
+  // the readings so far are kept; the queue file stays the desk's (never written over from here)
+  store.save({ queue: false });
+  await browser.close().catch(() => {});
+  server.close();
+  process.exit(code);
+};
+process.on('SIGTERM', () => close(0));
+process.on('SIGINT', () => close(0));
 const page = await browser.newPage();
 page.on('pageerror', (e) => console.error('[page]', e.message));
 await page.goto(`http://127.0.0.1:${server.address().port}/`);
 await page.waitForFunction(() => document.body.dataset.loaded === '1' || document.body.dataset.loaded === 'error', null, { timeout: 120000 });
 if ((await page.evaluate(() => document.body.dataset.loaded)) === 'error') throw new Error(await page.evaluate(() => document.body.dataset.error));
 
-let n = 0;
-let failed = 0;
-for (const url of todo) {
-  n++;
-  const local = await download(url);
-  // (a picture that would not download stays queued: read on a later run, never taken for "no face")
-  if (!local) {
-    failed++;
-    continue;
+async function readAll(todo) {
+  let n = 0;
+  let failed = 0;
+  for (const url of todo) {
+    if (closing) return;
+    n++;
+    const local = await download(url);
+    // (a picture that would not download stays queued: read on a later run, never taken for "no face")
+    if (!local) {
+      failed++;
+      missed.set(url, Date.now() + 30 * 60_000);
+      continue;
+    }
+    try {
+      const reading = await page.evaluate((u) => window.__score(u), `/cache/${local}`);
+      store.record(url, reading);
+      const v = faceVerdict(reading);
+      if (args.verbose) console.log(`[faces] ${url.split('/').pop().slice(0, 60)} faces ${v.faces} share ${v.share} ${v.expression} happy ${v.happiness} -> ${v.sober ? 'SOBER' : v.why}`);
+    } catch (err) {
+      console.warn(`[faces] ${url}: ${err.message}`);
+    }
+    if (n % 20 === 0) store.save({ queue: false });
+    if (!args.verbose && process.stdout.isTTY) process.stdout.write(`\r[faces] ${n}/${todo.length}   `);
   }
-  try {
-    const reading = await page.evaluate((u) => window.__score(u), `/cache/${local}`);
-    store.record(url, reading);
-    const v = faceVerdict(reading);
-    if (args.verbose) console.log(`[faces] ${url.split('/').pop().slice(0, 60)} faces ${v.faces} share ${v.share} ${v.expression} happy ${v.happiness} -> ${v.sober ? 'SOBER' : v.why}`);
-  } catch (err) {
-    console.warn(`[faces] ${url}: ${err.message}`);
-  }
-  if (n % 20 === 0) store.save();
-  if (!args.verbose && process.stdout.isTTY) process.stdout.write(`\r[faces] ${n}/${todo.length}   `);
+  store.save({ queue: false });
+  console.log(`[faces] read ${n - failed}, ${failed} would not download (still queued)`);
 }
-store.save();
-console.log(`[faces] read ${n - failed}, ${failed} would not download (still queued)`);
-await browser.close();
-server.close();
+
+await readAll(first);
+if (!watch) await close(0);
+for (;;) {
+  await wait(watch * 1000);
+  const todo = todoNow();
+  if (todo.length) await readAll(todo);
+}

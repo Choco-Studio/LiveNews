@@ -532,8 +532,27 @@ describe('the vertical picture', () => {
     comp3.box = comp.box;
     assert.equal(comp3.pictureCredit({ ...scene, shot: 'close' }), 0);
     // the headline frame without a picture: the place's locator board, its name in the column; without a place, the
-    // topic board, its name under the glyph in the column
-    for (const item of [{ storyId: 'p1', headline: 'Flooding closes roads across the north of the country', source: 'BBC', location: { lat: 37.2, lon: -119.5, place: 'CALIFORNIA, USA' } }, { storyId: 't1', headline: 'Startup raises money for a new AI chip', source: 'TechCrunch', category: 'tech' }]) {
+    // topic board (the story's own figure, quote, actor or topic), every word of it in the column, over the headline
+    const boards = [
+      { storyId: 't1', headline: 'Startup raises $1.3bn for a new AI chip', source: 'TechCrunch', category: 'tech' },
+      { storyId: 't2', headline: "'It was fake': villagers allege a staged rescue", source: 'BBC', category: 'world' },
+      { storyId: 't3', headline: 'Replit lets anyone build apps by talking to them', source: 'TechCrunch', category: 'tech', board: { kind: 'actor', name: 'REPLIT', about: 'COMPANY AND ONLINE CODING ENVIRONMENT' } },
+      { storyId: 't4', headline: 'Carers left waiting as the allowance rule changes', source: 'BBC', category: 'politics' },
+    ];
+    for (const item of boards) {
+      const c = fakeCanvas(216, 384);
+      const cm = new VerticalCompositor({ canvas: c, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+      const sc = { shot: 'montage', shotSince: 0, program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, card: { index: 0 }, rundown: [item], images: new Map() };
+      cm.profile = profileOf(sc);
+      cm.box = cm.profile.box;
+      cm.drawStage(3, sc);
+      const g = c.getContext('2d');
+      assert.ok(wordsSafe(g, `topic board ${item.storyId}`) >= 2);
+      assert.ok(g.images.some((im) => im.w === L.VW && im.h === cm.box.h && im.y === cm.box.y), `${item.storyId}: the board's field for the tall backdrop`);
+      // the board's own words above the headline's plate (the plate rises at most 106 rows from the stage's foot)
+      for (const im of g.images.filter((x) => x.h <= 48 && x.y < cm.box.y + cm.box.h - 106 && x.y > cm.box.y)) assert.ok(im.x >= L.SAFE.x - 1 && im.x + im.w <= L.SAFE.right + 1, `${item.storyId}: ${JSON.stringify(im)}`);
+    }
+    for (const item of [{ storyId: 'p1', headline: 'Flooding closes roads across the north of the country', source: 'BBC', location: { lat: 37.2, lon: -119.5, place: 'CALIFORNIA, USA' } }]) {
       const c = fakeCanvas(216, 384);
       const cm = new VerticalCompositor({ canvas: c, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
       const sc = { shot: 'montage', shotSince: 0, program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, card: { index: 0 }, rundown: [item], images: new Map() };
@@ -544,7 +563,7 @@ describe('the vertical picture', () => {
       assert.ok(wordsSafe(g, `headline frame ${item.storyId}`) >= 2);
       const backdrop = g.images.find((im) => im.w === L.VW && im.h === cm.box.h && im.y === cm.box.y);
       assert.ok(backdrop, `${item.storyId}: a board drawn for the tall backdrop`);
-      const accent = g.fills.find((f) => f.w === 2 && f.h >= 13 && f.y < cm.box.y + cm.box.h - 64);
+      const accent = g.fills.find((f) => f.w === 2 && f.h >= 13 && f.y < cm.box.y + cm.box.h - 64 && f.c !== PAL.ink);
       assert.ok(accent && accent.x >= L.SAFE.x && accent.x <= L.SAFE.right, `${item.storyId}: the name's plate in the column ${JSON.stringify(accent)}`);
       // a city's dot is never under its own name (no room either side in 216 px: the name goes under it)
       const dot = g.fills.find((f) => f.w === 7 && f.h === 7 && f.c === PAL.black);

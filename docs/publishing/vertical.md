@@ -192,8 +192,9 @@ A story with no picture has a board of its own, prepared for the tall backdrop (
 - **With a place:** the locator board (`graphics/locator.js`, with its `anchor` and `frame` options). The place sits at
   the column's middle, a third of the way down, and its name stays inside the column above the tallest headline
   plate.
-- **Without a place:** the topic board (`graphics/topicboard.js`, with its `frame` option). The glyph sits over the
-  column's middle and its name under the glyph.
+- **Without a place:** the topic board (`graphics/topicboard.js`, with its `frame` option): the story's own figure,
+  quote, actor or topic, as the pictures desk's round 8 draws it. It is right-aligned to x 184, between rows 30 and 112
+  of the backdrop, above the tallest headline plate. A description too wide for the column is left out, never cut.
 
 FULL TIME keeps the plain ground.
 

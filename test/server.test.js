@@ -60,6 +60,8 @@ async function startApp(env = {}) {
   for (const item of ['server', 'config', 'package.json']) fs.cpSync(path.join(REPO, item), path.join(dir, item), { recursive: true });
   fs.mkdirSync(path.join(dir, 'public', 'js'), { recursive: true });
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'cues.js'), path.join(dir, 'public', 'js', 'cues.js'));
+  // (the topic board's decision, made by the producer for the rundown: no imports of its own)
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'boardspec.js'), path.join(dir, 'public', 'js', 'boardspec.js'));
   // the client modules the server imports (no imports of their own)
   fs.mkdirSync(path.join(dir, 'public', 'js', 'scenes', 'weather'), { recursive: true });
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'weather', 'tracks.js'), path.join(dir, 'public', 'js', 'scenes', 'weather', 'tracks.js'));
@@ -81,7 +83,8 @@ async function startApp(env = {}) {
   const output = { stdout: '', stderr: '' };
   const child = spawn(process.execPath, ['--import', pathToFileURL(path.join(dir, 'stub-fetch.mjs')).href, 'server/index.js'], {
     cwd: dir,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), PROVIDERS: 'mock', STATION_CLOCK: '0', QUEUE_SIZE: '2', REVIEW_PASS: '1', CANDIDATE_POOL: '12', MIN_NEW_STORIES: '3', ...env },
+    // (no face reader under test: it would start headless Chromium beside the copy)
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), PROVIDERS: 'mock', STATION_CLOCK: '0', QUEUE_SIZE: '2', REVIEW_PASS: '1', CANDIDATE_POOL: '12', MIN_NEW_STORIES: '3', FACE_READER: '0', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => (output.stdout += d));

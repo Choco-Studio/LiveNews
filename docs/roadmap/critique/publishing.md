@@ -854,6 +854,17 @@ demo takedown: 5 held, each with "Hay un aviso en el registro…". Nothing was s
 
 **Round 5: 9.8**
 
+### After the merge with the pictures desk's round 8
+
+The coordinator's branch gained the pictures desk's round 8 during this round (984cadf). Its topic board shows the
+story's own figure, quote, actor or topic, where round 7 showed a glyph, and its geometry is the horizontal frame's
+(right-aligned to x 365, rows 74–123). The merge keeps that board as it is on air. It adds a `frame` option, so the
+vertical headline frame sets the same board in the safe column: right-aligned to x 184, between rows 30 and 112 of
+the backdrop, above the tallest headline plate. A description that does not fit the narrow box is left out rather than
+cut. The vertical test now draws a figure, a quote, an actor and a section tile in the tall frame. It checks that every word
+is in the column and that the board stays above the headline. `vertical-3x-topic-boards-round8.png` shows the four
+in the headline frame (the topic board on `vertical-4x-pictures.png` is round 7's, drawn before the merge).
+
 ### FULL TIME's first real edition: not yet
 
 The real weekend results reach the archive with the sport snapshots of 17 Oct at 18:40 UTC and 18 Oct at 17:50 UTC.

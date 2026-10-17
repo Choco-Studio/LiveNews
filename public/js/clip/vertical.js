@@ -459,8 +459,9 @@ export class VerticalCompositor {
       if (board) drawLocator(ctx, board, loc, { accent: acc, dt, x: 0, y: this.box.y });
       else drawWorldMap(ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: acc, programId: scene.program?.id, follow: true });
     } else if (item.storyId && scene.program?.theme !== 'sport') {
-      // no picture and no place: the topic board, its glyph over the column's middle, its name under it
-      drawTopicBoard(ctx, item, { accent: acc, dt, frame: { x: 0, y: this.box.y, w: VW, h: this.box.h, cx: SAFE.cx, cy: 52, x0: SAFE.x + 4, x1: SAFE.right - 4 } });
+      // no picture and no place: the topic board (the story's own figure, quote, actor or topic: graphics/topicboard.js),
+      // its box right-aligned in the safe column, above the tallest headline plate
+      drawTopicBoard(ctx, item, { accent: acc, dt, frame: { x: 0, y: this.box.y, w: VW, h: this.box.h, right: SAFE.right - 4, top: 30, bottom: this.box.h - 116, maxW: SAFE.w - 8 } });
     } else ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
     // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
     const headline = String(item.headline || '').toUpperCase();

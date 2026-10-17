@@ -23,6 +23,7 @@ import { startElectionCalendar, loadCalendar } from './compliance/elections.js';
 import { Archive } from './archive.js';
 import { PictureDesk } from './picturedesk.js';
 import { FaceStore } from './faces.js';
+import { FaceReader } from './facereader.js';
 import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
 import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
@@ -50,6 +51,8 @@ const imageSearch = new ImageSearch({ ...config.imageSearch, wikimedia });
 // (a grave story's portrait airs only once the face reader, tools/pictures/faces.mjs, read it as sober: the desk
 // queues the pictures it needs read in data/pictures/faces-queue.json and reads the verdicts in faces.json)
 const faces = new FaceStore({ dir: config.pictures.dir });
+// the face reader itself, run as a child process and started again if it stops (FACE_READER=off: never started)
+const faceReader = new FaceReader({ dir: config.pictures.dir, enabled: config.pictures.faceReader && config.pictures.desk }).exitWithStation();
 // (institutions' own Flickr pictures through Openverse, anonymously, within its announced limits: server/openverse.js)
 const openverse = config.pictures.openverse ? new OpenverseClient({ agent: wikimediaAgent(config.pictures.contact), perDay: config.pictures.openverseDaily }) : null;
 const pictureDesk = new PictureDesk({ dir: config.pictures.dir, wikimedia, search: imageSearch, faces, openverse, mode: config.pictures.rights, enabled: config.pictures.desk });
@@ -281,6 +284,7 @@ for (const w of configWarnings) console.warn(`[config] ${w}`);
 findPlaces('Warm-up in London');
 
 server.listen(config.port, config.host, () => {
+  faceReader.start();
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
   // The mock writes but never reviews: say so rather than promise an editor that is not there.
   const editor = chain.providers.some((p) => p.reviews !== false);
