@@ -18,7 +18,9 @@ import { FootageDesk } from './footage.js';
 import { IdentityDesk } from './guests/identity.js';
 import { Archive } from './archive.js';
 import { PictureDesk } from './picturedesk.js';
-import { WikimediaClient } from './wikimedia.js';
+import { FaceStore } from './faces.js';
+import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
+import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -41,7 +43,12 @@ const wikimedia = new WikimediaClient({ contact: config.pictures.contact });
 const imageSearch = new ImageSearch({ ...config.imageSearch, wikimedia });
 // The rights desk (docs/pictures/RIGHTS.md): only pictures the channel may publish air, each with its rights record.
 // The outlets' own photos stand in only in a PRIVATE preview (PICTURE_RIGHTS=preview), marked on screen.
-const pictureDesk = new PictureDesk({ dir: config.pictures.dir, wikimedia, search: imageSearch, mode: config.pictures.rights, enabled: config.pictures.desk });
+// (a grave story's portrait airs only once the face reader, tools/pictures/faces.mjs, read it as sober: the desk
+// queues the pictures it needs read in data/pictures/faces-queue.json and reads the verdicts in faces.json)
+const faces = new FaceStore({ dir: config.pictures.dir });
+// (institutions' own Flickr pictures through Openverse, anonymously, within its announced limits: server/openverse.js)
+const openverse = config.pictures.openverse ? new OpenverseClient({ agent: wikimediaAgent(config.pictures.contact), perDay: config.pictures.openverseDaily }) : null;
+const pictureDesk = new PictureDesk({ dir: config.pictures.dir, wikimedia, search: imageSearch, faces, openverse, mode: config.pictures.rights, enabled: config.pictures.desk });
 if (config.pictures.rights === 'preview') console.warn('[pictures] PRIVATE PREVIEW (PICTURE_RIGHTS=preview): outlet photos may air marked NOT CLEARED; never publish this output');
 // Pictures of local (offline fixture) feeds are served from their own folders only.
 const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots, contact: config.pictures.contact });

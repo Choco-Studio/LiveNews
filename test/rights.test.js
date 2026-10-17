@@ -89,6 +89,18 @@ describe('the on-air credit follows each licence', () => {
     assert.equal(commons('CC-BY-SA-3.0').credit, 'FILE · JANE DOE · CC BY-SA 3.0 · PIXELATED');
     assert.equal(commons('CC-BY-SA-3.0-IGO', { author: 'ESA/ATG medialab' }).credit, 'FILE · ESA/ATG MEDIALAB · CC BY-SA 3.0 IGO · PIXELATED');
   });
+  test('a FILE picture of an earlier event says its year in the tag ("FILE 2023"); an institution\'s Flickr picture names it', () => {
+    const r = commons('CC-BY-SA-4.0', { year: 2023 });
+    assert.equal(r.credit, 'FILE 2023 · JANE DOE · CC BY-SA 4.0 · PIXELATED');
+    assert.equal(r.year, 2023);
+    assert.equal(compactRights(r).year, 2023);
+    assert.equal(commons('CC-BY-4.0', { year: 2023, label: 'EVENT' }).credit, 'JANE DOE · CC BY 4.0 · PIXELATED', 'a picture of the event itself has no FILE tag');
+    assert.equal(commons('CC-BY-4.0', { year: 'soon' }).credit, 'FILE · JANE DOE · CC BY 4.0 · PIXELATED');
+    const f = rightsRecord({ source: 'flickr', via: 'openverse:flickr', licence: 'CC-BY-2.0', author: 'European Parliament', title: 'European Youth Event 2025', page: 'https://www.flickr.com/photos/36612355@N08/1', url: 'https://live.staticflickr.com/1/x_b.jpg', year: 2025 });
+    assert.equal(f.cleared, true);
+    assert.equal(f.credit, 'FILE 2025 · EUROPEAN PARLIAMENT · CC BY 2.0 · PIXELATED');
+    assert.equal(f.page, 'https://www.flickr.com/photos/36612355@N08/1', 'the source page kept');
+  });
   test('public domain and CC0: the author when known, the licence named; no modification note needed', () => {
     assert.equal(commons('PD').credit, 'FILE · JANE DOE · PD');
     assert.equal(commons('CC0-1.0', { author: null }).credit, 'FILE · CC0');

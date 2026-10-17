@@ -4,15 +4,17 @@
 // next to what aired before (the outlet's own photo).
 //
 //   NODE_USE_ENV_PROXY=1 node tools/pictures/measure.mjs [--archive data/archive] [--out <dir>] [--per world-now=180,...]
-//        [--seed 17] [--all] [--exclude <another results.json>]
+//        [--seed 17] [--all] [--exclude <another results.json>[,<another>...]] [--openverse <requests a day, 0: none>]
 //
 // Wikimedia answers are kept in <out>/answers.json, so a second run asks nothing it already asked. A 429 pauses the
 // desk; this tool (never the station) then waits for the pause to end and asks the stories left again, up to --rounds.
 import fs from 'node:fs';
 import path from 'node:path';
 import { PictureDesk } from '../../server/picturedesk.js';
-import { WikimediaClient, PacedJson } from '../../server/wikimedia.js';
+import { WikimediaClient, PacedJson, wikimediaAgent } from '../../server/wikimedia.js';
+import { OpenverseClient } from '../../server/openverse.js';
 import { ImageSearch } from '../../server/imagesearch.js';
+import { FaceStore } from '../../server/faces.js';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => {
@@ -52,8 +54,8 @@ for (const e of rows.filter(real)) {
 }
 let rnd = seed;
 const random = () => ((rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648);
-// --exclude <results.json>: leave out the stories another measurement sampled (a second, disjoint sample)
-const excluded = new Set(args.exclude ? JSON.parse(fs.readFileSync(path.resolve(args.exclude), 'utf8')).map((r) => r.id) : []);
+// --exclude <results.json>[,...]: leave out the stories other measurements sampled (a disjoint sample)
+const excluded = new Set(args.exclude ? String(args.exclude).split(",").flatMap((f) => JSON.parse(fs.readFileSync(path.resolve(f), "utf8")).map((r) => r.id)) : []);
 const pool = [...byId.values()].filter((e) => !excluded.has(e.id));
 let sample;
 if (args.all) sample = pool;
@@ -69,7 +71,12 @@ console.log(`[measure] ${rows.length} aired rows, ${pool.length} real stories, s
 // ---- the desk, as index.js builds it
 const wm = new WikimediaClient({ gapMs: Number(args.gap || 1500), contact: process.env.WIKIMEDIA_CONTACT || undefined, log: { warn: (m) => console.warn(m) } });
 const search = new ImageSearch({ wikimedia: wm, log: { warn: (m) => console.warn(m) } });
-const desk = new PictureDesk({ dir: out, wikimedia: wm, nasa: new PacedJson({ gapMs: 500 }), search, log: { warn: (m) => console.warn(m) } });
+// the face reader's verdicts (tools/pictures/faces.mjs --dir <out> reads what this run queued; run this again after it)
+const faces = new FaceStore({ dir: out, log: { warn: (m) => console.warn(m) } });
+// Openverse (institutions' Flickr pictures), anonymously, under its daily allowance (--openverse 0: not asked)
+const ovDay = Number(args.openverse ?? 120);
+const openverse = ovDay > 0 ? new OpenverseClient({ agent: wikimediaAgent(process.env.WIKIMEDIA_CONTACT || undefined), perDay: ovDay, log: { warn: (m) => console.warn(m) } }) : null;
+const desk = new PictureDesk({ dir: out, wikimedia: wm, nasa: new PacedJson({ gapMs: 500 }), search, faces, openverse, log: { warn: (m) => console.warn(m) } });
 
 // --redecide: keep every answer Wikimedia gave, decide again with the rules as they are now
 if (args.redecide) for (const k of [...desk.kept.map.keys()]) if (k.startsWith('d:')) desk.kept.map.delete(k);
@@ -87,7 +94,8 @@ for (let round = 0; round < rounds; round++) {
     for (const s of batch) {
       const d = res.get(s.id);
       // (a decision a source did not fully answer is asked again, up to --patience rounds; then its picture counts)
-      if (d && (d.complete || (round >= patience && d.picks?.length))) decided.set(s.id, d);
+      // (one waiting only for the face reader counts as decided: the reader runs between two passes)
+      if (d && (d.complete || d.awaitingFaces || (round >= patience && d.picks?.length))) decided.set(s.id, d);
     }
     process.stdout.write(`\r[measure] round ${round + 1}: ${decided.size}/${stories.length} decided  wikimedia ${JSON.stringify(wm.stats)}   `);
   }

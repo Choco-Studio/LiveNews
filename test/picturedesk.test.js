@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { PictureDesk, nameSpans, subjectsOf, storyFlags, roleAgreement, personProblem, itemKind, pictureProblem, nasaItem, nasaOwnPicture, focusOf, near, placeTitlesOf, aliasFor, singular } from '../server/picturedesk.js';
 import { feedCandidates } from '../server/pictures.js';
 import { WikimediaClient, PacedJson } from '../server/wikimedia.js';
+import { FaceStore } from '../server/faces.js';
 import { ImageSearch } from '../server/imagesearch.js';
 import { lookupPlace } from '../server/gazetteer.js';
 
@@ -39,9 +40,15 @@ const PAGES = {
   'United Kingdom': { qid: 'Q145', description: 'Country in Europe', coords: { lat: 54, lon: -2 } },
   'Amazon rainforest': { qid: 'Q177567', description: 'Large rainforest in South America', coords: { lat: -3.4, lon: -62 } },
   Hake: { qid: 'Q1289807', description: 'Family of fishes' },
+  'Norman Hale': { qid: 'Q900020', description: 'British physicist (1936–2026)', living: false },
   'Michael Olise': { qid: 'Q900010', description: 'French footballer (born 2001)', living: true },
+  'Donald Trump': { qid: 'Q22686', description: 'President of the United States since 2025', living: true },
+  'European Parliament': { qid: 'Q8889', description: 'Legislative body of the European Union' },
+  'Extinction Rebellion': { qid: 'Q55227530', description: 'Environmental movement' },
+  'United States Capitol': { qid: 'Q54109', description: 'Seat of the United States Congress', coords: { lat: 38.89, lon: -77.01 } },
+  'Volodymyr Zelenskyy': { qid: 'Q3874799', description: 'President of Ukraine since 2019', living: true },
 };
-const REDIRECTS = { 'Recep Tayyip Erdogan': 'Recep Tayyip Erdoğan', Erdogan: 'Recep Tayyip Erdoğan', 'Prince Charles': 'Charles III' };
+const REDIRECTS = { 'Volodymyr Zelensky': 'Volodymyr Zelenskyy', 'Recep Tayyip Erdogan': 'Recep Tayyip Erdoğan', Erdogan: 'Recep Tayyip Erdoğan', 'Prince Charles': 'Charles III' };
 const FACTS = {
   Q6383803: { inst: 'human', imgs: ['Keir Starmer portrait.jpg'], born: '1962-09-02T00:00:00Z', sitelinks: 125, occ: 'politician|barrister', pos: 'Prime Minister of the United Kingdom|Leader of the Labour Party', cty: 'United Kingdom' },
   Q305177: { inst: 'human', imgs: ['Jensen Huang 2025.jpg'], born: '1963-02-17T00:00:00Z', sitelinks: 60, occ: 'businessperson|engineer|chief executive officer', pos: '', cty: 'United States|Taiwan' },
@@ -56,7 +63,7 @@ const FACTS = {
   Q1899: { inst: 'city|capital', imgs: ['Kyiv skyline.jpg'], coord: 'Point(30.52 50.45)', sitelinks: 250 },
   Q1065: { inst: 'intergovernmental organization', imgs: ['UN headquarters.jpg'], sitelinks: 300 },
   Q16947045: { inst: 'human spaceflight', imgs: ['Artemis II artist concept.jpg'], sitelinks: 72 },
-  Q39723: { inst: 'human', imgs: ['Erdogan official.jpg'], born: '1954-02-26T00:00:00Z', sitelinks: 200, occ: 'politician', pos: 'President of Turkey|Prime Minister of Turkey', cty: 'Turkey' },
+  Q39723: { cat: 'Recep Tayyip Erdoğan', inst: 'human', imgs: ['Erdogan official.jpg'], born: '1954-02-26T00:00:00Z', sitelinks: 200, occ: 'politician', pos: 'President of Turkey|Prime Minister of Turkey', cty: 'Turkey' },
   Q47542: { inst: 'taxon', imgs: ['Eurasian beaver at the river.jpg'], sitelinks: 100 },
   Q43274: { inst: 'human', imgs: ['King Charles III.jpg'], born: '1948-11-14T00:00:00Z', sitelinks: 200, occ: 'monarch', pos: 'King of the United Kingdom|Prince of Wales', cty: 'United Kingdom' },
   Q7372: { inst: 'taxon', imgs: ['Great white shark.jpg'], sitelinks: 150 },
@@ -65,7 +72,13 @@ const FACTS = {
   Q39121: { inst: 'city', imgs: ['Leeds skyline.jpg'], coord: 'Point(-1.55 53.8)', sitelinks: 150 },
   Q145: { inst: 'sovereign state|country', imgs: ['Palace of Westminster.jpg'], coord: 'Point(-2 54)', sitelinks: 300 },
   Q177567: { inst: 'tropical forest', imgs: ['Amazon Manaus forest.jpg'], coord: 'Point(-62 -3.4)', sitelinks: 150 },
+  Q900020: { inst: 'human', imgs: ['Norman Hale 2015.jpg'], born: '1936-01-01T00:00:00Z', died: '2026-10-10T00:00:00Z', sitelinks: 22, occ: 'physicist', cty: 'United Kingdom' },
   Q1289807: { inst: 'taxon', imgs: ['Illustration from The Natural History of British Fishes (1802) by Edward Donovan.jpg'], sitelinks: 40 },
+  Q22686: { inst: 'human', imgs: ['Donald Trump official portrait.jpg'], born: '1946-06-14T00:00:00Z', sitelinks: 250, occ: 'politician|businessperson', pos: 'President of the United States', cty: 'United States' },
+  Q8889: { inst: 'legislature|parliament', imgs: ['European Parliament logo.svg'], sitelinks: 150, cat: 'European Parliament' },
+  Q55227530: { inst: 'social movement|advocacy group', imgs: [], sitelinks: 60, cat: 'Extinction Rebellion' },
+  Q54109: { inst: 'government building|capitol building', imgs: ['US Capitol east side.jpg'], coord: 'Point(-77.01 38.89)', sitelinks: 120 },
+  Q3874799: { inst: 'human', imgs: ['Zelenskyy smiling 2019.jpg'], born: '1978-01-25T00:00:00Z', sitelinks: 200, occ: 'politician|actor', pos: 'President of Ukraine', cty: 'Ukraine' },
   Q900010: { inst: 'human', imgs: ['Michael Olise 2025.jpg'], born: '2001-12-12T00:00:00Z', sitelinks: 45, occ: 'association football player', cty: 'France' },
 };
 const file = (title, { w = 1280, h = 720, licence = 'CC BY-SA 4.0', code = '', artist = 'Jane Doe', description = '', categories = '', restrictions = '' } = {}) => ({ title: `File:${title}`, w, h, licence, code, artist, description, categories, restrictions });
@@ -84,6 +97,8 @@ const FILES = Object.fromEntries(
     file('UN headquarters.jpg', { licence: 'Public domain', code: 'pd', artist: '' }),
     file('Artemis II artist concept.jpg', { description: "An artist's concept of Orion", licence: 'Public domain', code: 'pd' }),
     file('Erdogan official.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'Presidency of Turkey' }),
+    file('Erdogan at the podium 2025.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'Presidency of Turkey' }),
+    file('Erdogan smiling 2024.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'Presidency of Turkey' }),
     file('Eurasian beaver at the river.jpg', { licence: 'CC BY-SA 4.0', artist: 'Per Harald Olsen' }),
     file('King Charles III.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'Someone' }),
     file('Great white shark.jpg', { licence: 'CC BY 2.0', artist: 'Elias Levy' }),
@@ -93,9 +108,23 @@ const FILES = Object.fromEntries(
     file('Amazon Manaus forest.jpg', { licence: 'CC BY-SA 3.0', artist: 'Neil Palmer' }),
     file('Illustration from The Natural History of British Fishes (1802) by Edward Donovan.jpg', { licence: 'CC0', code: 'cc0' }),
     file('Michael Olise 2025.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
+    file('Norman Hale 2015.jpg', { w: 800, h: 1000, licence: 'CC BY-SA 4.0', artist: 'Someone' }),
+    file('Donald Trump official portrait.jpg', { w: 800, h: 1000, licence: 'Public domain', code: 'pd', artist: 'Official White House Photo' }),
+    file('US Capitol east side.jpg', { licence: 'Public domain', code: 'pd', artist: 'Architect of the Capitol' }),
+    file('Zelenskyy smiling 2019.jpg', { w: 800, h: 1000, licence: 'CC BY 4.0', artist: 'President.gov.ua' }),
   ].map((f) => [f.title, f])
 );
+const CATEGORIES = { 'Recep Tayyip Erdoğan': ['File:Erdogan at the podium 2025.jpg', 'File:Erdogan smiling 2024.jpg', 'File:Ankara skyline.jpg'] };
 const SEARCH = {
+  '"European Parliament" plenary session': [
+    file('Clashes outside the European Parliament plenary session 2024.jpg', { licence: 'CC BY 4.0', artist: 'EP', description: 'Police and protesters clash' }),
+    file('European Parliament plenary session hemicycle.jpg', { licence: 'CC BY 4.0', artist: 'EP', description: 'The hemicycle during a plenary session (no date)' }),
+    file('European Parliament plenary session 2026-10-16.jpg', { licence: 'CC BY 4.0', artist: 'EP', description: 'Plenary session, Strasbourg (the day before the story)' }),
+    file('European Parliament plenary session in Strasbourg, 2024-03-12.jpg', { licence: 'CC BY 4.0', artist: 'European Parliament', description: 'MEPs vote during the plenary session in Strasbourg' }),
+  ],
+  '"Extinction Rebellion" protest': [
+    file('Extinction Rebellion protest in London, 2023-04-21.jpg', { licence: 'CC BY-SA 4.0', artist: 'Alisdare Hickson', description: 'Extinction Rebellion protest on Parliament Square' }),
+  ],
   'Rotterdam port': [
     file('Rotterdam harbour cranes NC.jpg', { licence: 'CC BY-NC 2.0', description: 'Rotterdam harbour' }),
     file('Map of Rotterdam port.png', { description: 'Rotterdam' }),
@@ -175,7 +204,7 @@ function backend({ limited = () => false } = {}) {
         .map((id) => {
           const f = FACTS[id];
           const v = (value) => ({ type: 'literal', value: String(value) });
-          return { item: { value: `http://www.wikidata.org/entity/${id}` }, inst: v(f.inst), imgs: v(fp(f.imgs || [])), ...(f.logos ? { logos: v(fp(f.logos)) } : {}), ...(f.born ? { born: v(f.born) } : {}), ...(f.died ? { died: v(f.died) } : {}), sitelinks: v(f.sitelinks || 0), occ: v(f.occ || ''), pos: v(f.pos || ''), cty: v(f.cty || ''), ...(f.coord ? { coord: v(f.coord) } : {}) };
+          return { item: { value: `http://www.wikidata.org/entity/${id}` }, ...(f.cat ? { cat: v(f.cat) } : {}), inst: v(f.inst), imgs: v(fp(f.imgs || [])), ...(f.logos ? { logos: v(fp(f.logos)) } : {}), ...(f.born ? { born: v(f.born) } : {}), ...(f.died ? { died: v(f.died) } : {}), sitelinks: v(f.sitelinks || 0), occ: v(f.occ || ''), pos: v(f.pos || ''), cty: v(f.cty || ''), ...(f.coord ? { coord: v(f.coord) } : {}) };
         });
       return reply({ results: { bindings } });
     }
@@ -184,6 +213,7 @@ function backend({ limited = () => false } = {}) {
         const q = u.searchParams.get('gsrsearch').replace(/ filetype:.*$/, '');
         return reply({ query: { pages: (SEARCH[q] || []).map((f, i) => commonsPage(f, i + 1)) } });
       }
+      if (u.searchParams.get('list') === 'categorymembers') return reply({ query: { categorymembers: (CATEGORIES[u.searchParams.get('cmtitle').replace(/^Category:/, '')] || []).map((title) => ({ title })) } });
       const titles = u.searchParams.get('titles').split('|');
       return reply({ query: { pages: titles.map((t) => (FILES[t] ? commonsPage(FILES[t]) : { title: t, missing: true })) } });
     }
@@ -199,7 +229,7 @@ function makeDesk(opts = {}) {
   const { fetchImpl, calls } = backend(opts);
   const wikimedia = new WikimediaClient({ fetchImpl, gapMs: 0, now: clock, sleep: async () => {}, log: { warn() {} } });
   const search = new ImageSearch({ fetchImpl, wikimedia, log: { warn() {} } });
-  const desk = new PictureDesk({ wikimedia, nasa: new PacedJson({ fetchImpl, gapMs: 0, now: clock, sleep: async () => {} }), search, mode: opts.mode || 'cleared', now: clock, log: { warn() {} } });
+  const desk = new PictureDesk({ wikimedia, nasa: new PacedJson({ fetchImpl, gapMs: 0, now: clock, sleep: async () => {} }), search, faces: opts.faces || null, openverse: opts.openverse || null, mode: opts.mode || 'cleared', now: clock, log: { warn() {} } });
   return { desk, calls, advance: (ms) => (now += ms), wikimedia };
 }
 
@@ -317,19 +347,30 @@ describe('the desk end to end (a fake Wikipedia, Wikidata, Commons and NASA)', (
     assert.equal(rotterdam.pick.rights.via, 'commons:search');
     assert.equal(rotterdam.pick.rights.credit, 'FILE · FRANS BERKELAAR · CC BY 2.0 · PIXELATED');
   });
-  test('a grave story: no portrait (an expression cannot be checked), never a postcard of the place; a violent one: no institution either', async () => {
+  test('a grave story: a sober portrait of the official it is about, once the face reader read it; never a postcard of the place; a violent one: no institution either', async () => {
     const quake = await pickOf(story('g1', 'Earthquake kills 30 in eastern Turkey', 'Rescuers searched collapsed buildings overnight.'));
     assert.equal(quake.pick, null, 'no place photo under a grave story (the map tells it)');
-    const visit = await pickOf(story('g2', 'Erdogan visits quake zone as death toll rises', 'President Recep Tayyip Erdogan visited Turkey’s eastern provinces after the earthquake killed 30.'));
-    assert.equal(visit.pick, null, 'his usual portrait may be a smile: not under a death toll');
-    assert.ok(visit.d.options.some((o) => o.label === 'Recep Tayyip Erdoğan' && /grave story/.test(o.refused || '')));
+    const visitStory = story('g2', 'Erdogan visits quake zone as death toll rises', 'President Recep Tayyip Erdogan visited Turkey’s eastern provinces after the earthquake killed 30.');
+    // no reader yet: no portrait, the pictures queued, the decision asked again later
+    const faces = new FaceStore({});
+    const unread = await pickOf(visitStory, { faces });
+    assert.equal(unread.pick, null, 'an expression never read never airs under a grave story');
+    assert.equal(unread.d.complete, false);
+    const queued = faces.queue().map((x) => x.url);
+    assert.ok(queued.some((u) => /Erdogan_official/.test(u)) && queued.some((u) => /podium/.test(u)), 'the Wikidata picture and the Commons category queued for the reader');
+    // the reader: the official portrait smiles, the podium picture is sober
+    const reading = (happiness) => ({ faces: [{ x: 0.3, y: 0.1, w: 0.3, h: 0.35, score: 0.98, emotions: { neutral: 1 - happiness, happiness, surprise: 0, sadness: 0, anger: 0, disgust: 0, fear: 0, contempt: 0 } }] });
+    for (const u of queued) faces.record(u, reading(/podium/.test(u) ? 0.02 : 0.97));
+    const read = await pickOf(visitStory, { faces });
+    assert.equal(read.pick?.kind, 'portrait');
+    assert.match(read.pick.rights.title, /podium/, 'the sober one, never the smile');
     const speech = await pickOf(story('g2b', 'Erdogan visits new airport terminal in Ankara', 'President Recep Tayyip Erdogan opened the terminal.'));
-    assert.equal(speech.pick?.kind, 'portrait', 'the same person, the same picture, on a story that is not grave');
+    assert.equal(speech.pick?.kind, 'portrait', 'a story that is not grave: his usual picture');
     // a person's illness or operation is grave for the picture
     assert.equal(storyFlags(story('g2c', "What we know about Pope Leo XIV's planned lung operation this week")).grave, true);
     assert.equal(storyFlags(story('g2d', 'NASA operations centre opens in Houston')).grave, false);
     const ill = await pickOf(story('g2e', 'Erdogan undergoes heart surgery in Ankara', 'President Recep Tayyip Erdogan is recovering.'));
-    assert.equal(ill.pick, null);
+    assert.equal(ill.pick, null, 'grave: no portrait until a sober one is read');
     const strike = await pickOf(story('g3', 'United Nations condemns missile strike on Kyiv that killed 12', 'The attack hit a residential block.'));
     assert.equal(strike.pick, null);
     assert.ok(strike.d.options.some((o) => o.label === 'United Nations' && /violence/.test(o.refused || '')));
@@ -587,6 +628,17 @@ describe('round 4 of the critique: the place the headline opens on, no seat of g
     const notSport = await pickOf(story('sp3', 'Michael Olise opens a bakery in his home town', 'The shop sells bread.', { category: 'business' }));
     assert.ok(!notSport.d.picks.some((p) => p.kind === 'portrait'), 'outside a sports story his role is not given');
   });
+  test('the obituary of a public figure: a sober portrait (their death confirmed); never the victim of violence', async () => {
+    const faces = new FaceStore({});
+    const obit = story('ob1', 'Norman Hale obituary', 'Norman Hale, the physicist who built the first..., has died aged 90.', { category: 'science' });
+    const first = await pickOf(obit, { faces });
+    assert.equal(first.pick, null, 'read first');
+    for (const { url } of faces.queue()) faces.record(url, { faces: [{ x: 0.3, y: 0.1, w: 0.3, h: 0.4, score: 0.97, emotions: { neutral: 0.95, happiness: 0.02, surprise: 0, sadness: 0.03, anger: 0, disgust: 0, fear: 0, contempt: 0 } }] });
+    const read = await pickOf(obit, { faces });
+    assert.equal(read.pick?.subject.label, 'Norman Hale');
+    const shot = await pickOf(story('ob2', 'Norman Hale shot dead outside his home', 'Police said the physicist was killed.'), { faces });
+    assert.ok(!shot.d.picks.some((p) => p.kind === 'portrait'), 'a victim of violence: no portrait');
+  });
   test("a search of someone's home or a raid is a story of suspicion: no portrait", () => {
     assert.equal(storyFlags(story('j1', "Immigration agents search Congresswoman Ilhan Omar's home")).jeopardy, true);
     assert.equal(storyFlags(story('j2', 'Police raid offices of opposition party')).jeopardy, true);
@@ -674,6 +726,81 @@ describe('what a picture must be', () => {
     assert.equal(pictureProblem({ ...ok, description: 'Protesters in the square' }), 'shows an event');
     assert.match(pictureProblem({ ...ok, description: 'Tourists on the beach' }, { flags: { grave: true } }), /crowd or leisure/);
     assert.equal(pictureProblem({ ...ok, description: 'Tourists on the beach' }), null);
+  });
+});
+
+describe('round 7: surnames, FILE pictures of the same actor, the seat of government, Openverse institutions', () => {
+  test('Volvo is two companies: the cars for a car story, AB Volvo for trucks (the hand check of round 7)', () => {
+    assert.equal(aliasFor('Volvo', story('v1', 'Volvo makes a bigger bet on Nvidia for hands-free automated driving')), 'Volvo Cars');
+    assert.equal(aliasFor('Volvo', story('v2', 'Volvo to cut truck output as orders fall')), 'Volvo');
+  });
+  test('a public figure the news names by surname alone: their portrait, never when someone else of that name is named', async () => {
+    const t = await pickOf(story('r7a', 'Trump faces growing backlash over plans to import diesel from Russia', 'The US president said the deal would lower prices for American drivers.'));
+    assert.equal(t.pick?.subject.label, 'Donald Trump');
+    const m = subjectsOf(story('r7b', 'Melania Trump launches a memoir', 'Melania Trump, the first lady, said...'));
+    assert.ok(!m.some((c) => c.text === 'Donald Trump'), 'Melania Trump is not Donald Trump');
+  });
+  test('the same named actor doing the same kind of thing: FILE and the year, never a violent scene, never the story\'s own day', async () => {
+    const r = await pickOf(story('r7c', 'European Parliament votes to ban single-use vapes', 'MEPs approved the ban in Strasbourg.', { category: 'world' }));
+    assert.equal(r.pick?.kind, 'event');
+    assert.match(r.pick.rights.title, /2024-03-12/, 'not the clash, not the undated one, not the day before the story');
+    assert.equal(r.pick.rights.year, 2024);
+    assert.match(r.pick.rights.credit, /^FILE 2024 · /);
+    // under a death toll: never another day's picture
+    const toll = await pickOf(story('r7d', 'Extinction Rebellion protest after three killed in flood', 'Activists marched in London.'));
+    assert.ok(!toll.d.picks.some((p) => p.kind === 'event'));
+  });
+  test('a FILE picture of an event under a grave story: only once the face reader found no face in the foreground', async () => {
+    const faces = new FaceStore({});
+    const s = story('r7e', 'Extinction Rebellion protest over climate crisis', 'Thousands joined the protest in London.', { grave: true });
+    const first = await pickOf(s, { faces });
+    assert.ok(!first.d.picks.some((p) => p.kind === 'event'), 'not read yet');
+    assert.equal(first.d.complete, false);
+    const url = faces.queue().map((x) => x.url).find((u) => /Extinction_Rebellion/.test(u));
+    assert.ok(url, 'queued for the face reader');
+    faces.record(url, { faces: [{ x: 0.4, y: 0.3, w: 0.2, h: 0.25, score: 0.95, emotions: { neutral: 1 } }] });
+    const near = await pickOf(s, { faces });
+    assert.ok(!near.d.picks.some((p) => p.kind === 'event'), 'a face in the foreground');
+    faces.record(url, { faces: [{ x: 0.4, y: 0.5, w: 0.03, h: 0.04, score: 0.9, emotions: { neutral: 1 } }] });
+    const far = await pickOf(s, { faces });
+    assert.equal(far.pick?.kind, 'event');
+    assert.match(far.pick.rights.credit, /^FILE 2023 · /);
+  });
+  test('a story about government: the seat of the legislature it names; never under violence', async () => {
+    const r = await pickOf(story('r7f', 'US Senate votes on budget bill as shutdown looms', 'Senators met late into the night.'));
+    assert.equal(r.pick?.kind, 'institution');
+    assert.equal(r.pick.subject.label, 'United States Capitol');
+    assert.match(r.pick.rights.credit, /^FILE · /);
+    const v = await pickOf(story('r7g', 'US Senate votes to authorise air strikes on militants', 'Senators voted after the attack killed soldiers.'));
+    assert.ok(!v.d.picks.some((p) => p.kind === 'institution'));
+  });
+  test("a grave story's public figure: an institution's own Flickr portrait (Openverse) when Commons has no sober one, read first", async () => {
+    const faces = new FaceStore({});
+    const asked = [];
+    const openverse = {
+      store: null,
+      async search(q, opts) {
+        asked.push([q, opts?.extra?.source]);
+        return [
+          { id: 'a', title: 'Volodymyr Zelenskyy with soldiers 12.03.2025', url: 'https://live.staticflickr.com/1/a_b.jpg', page: 'https://www.flickr.com/photos/165930373@N06/1', creator: 'President Of Ukraine', account: '165930373@N06', licenceName: 'CC0', licence: 'CC0-1.0', source: 'flickr', width: 1024, height: 683, indexedOn: Date.UTC(2025, 3, 1), tags: [] },
+          { id: 'b', title: 'Volodymyr Zelenskyy addressed the nation 14.03.2025', url: 'https://live.staticflickr.com/1/b_b.jpg', page: 'https://www.flickr.com/photos/165930373@N06/2', creator: 'President Of Ukraine', account: '165930373@N06', licenceName: 'CC0', licence: 'CC0-1.0', source: 'flickr', width: 1024, height: 683, indexedOn: Date.UTC(2025, 3, 1), tags: [] },
+          { id: 'c', title: 'Volodymyr Zelenskyy portrait', url: 'https://live.staticflickr.com/1/c_b.jpg', page: 'https://www.flickr.com/photos/someone/3', creator: 'Someone', account: 'someone', licenceName: 'CC BY 2.0', licence: 'CC-BY-2.0', source: 'flickr', width: 1024, height: 683, indexedOn: Date.UTC(2025, 3, 1), tags: [] },
+        ];
+      },
+    };
+    const s = story('r7h', 'Zelensky vows response after Russian missile strike on Kyiv', 'Ukrainian President Volodymyr Zelensky said the attack would not go unanswered.');
+    const one = await pickOf(s, { faces, openverse });
+    assert.equal(one.pick, null, 'nothing read yet');
+    // the Commons portrait smiles; the institution's picture of him addressing the nation is sober
+    const smile = { faces: [{ x: 0.3, y: 0.1, w: 0.3, h: 0.4, score: 0.98, emotions: { neutral: 0.02, happiness: 0.98 } }] };
+    const sober = { faces: [{ x: 0.3, y: 0.1, w: 0.25, h: 0.35, score: 0.98, emotions: { neutral: 0.9, sadness: 0.1, happiness: 0 } }] };
+    for (const { url } of faces.queue()) faces.record(url, /staticflickr/.test(url) ? sober : smile);
+    const two = await pickOf(s, { faces, openverse });
+    assert.equal(two.pick?.kind, 'portrait');
+    assert.equal(two.pick.rights.source, 'flickr');
+    assert.equal(two.pick.rights.page, 'https://www.flickr.com/photos/165930373@N06/2', 'the institution, one person, the source page kept');
+    assert.match(two.pick.rights.credit, /PRESIDENT OF UKRAINE|President Of Ukraine/i);
+    assert.ok(asked.every(([, src]) => src === 'flickr'));
   });
 });
 

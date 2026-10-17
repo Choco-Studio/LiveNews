@@ -171,8 +171,9 @@ const iso = (ms) => new Date(ms).toISOString();
  *   restrictions  non-copyright warnings the source gives ('personality', 'trademarked', 'insignia'...)
  *   ai       true when the source marks the picture as made by a generator (never a real photo: never cleared)
  *   label    'FILE' unless the picture is of the event itself
+ *   year     the year a FILE picture of an earlier event was taken (its tag then says "FILE 2023")
  */
-export function rightsRecord({ source, via = null, licence = null, author = null, title = null, page = null, url = null, restrictions = [], ai = false, label = 'FILE', subject = null, checkedAt = Date.now(), outlet = null, localOk = false } = {}) {
+export function rightsRecord({ source, via = null, licence = null, author = null, title = null, page = null, url = null, restrictions = [], ai = false, label = 'FILE', year = null, subject = null, checkedAt = Date.now(), outlet = null, localOk = false } = {}) {
   const terms = licence ? LICENCES[licence] : null;
   const who = cleanAuthor(author);
   const uses = terms
@@ -201,6 +202,8 @@ export function rightsRecord({ source, via = null, licence = null, author = null
     uses,
     restrictions: [...new Set(restrictions)].filter(Boolean),
     label: label === 'EVENT' ? 'EVENT' : 'FILE',
+    // (a FILE picture of an earlier event says the year it was taken: "FILE 2023")
+    ...(label !== 'EVENT' && Number.isInteger(year) && year >= 1900 && year <= 2100 ? { year } : {}),
     checkedAt: iso(checkedAt),
     cleared: !why,
     ...(why ? { why } : {}),
@@ -268,7 +271,7 @@ function screenAuthor(record) {
   const shown = screenText(a);
   if (a && shown.ok && shown.text) return shown.text;
   if (a) return ''; // (a name the type cannot write: only a picture that need not name its author gets here)
-  return record.licence.id === 'PD' || record.licence.id === 'PD-USGov' || record.licence.id === 'CC0-1.0' ? '' : 'WIKIMEDIA COMMONS';
+  return record.licence.id === 'PD' || record.licence.id === 'PD-USGov' || record.licence.id === 'CC0-1.0' ? '' : record.source === 'flickr' ? 'FLICKR' : 'WIKIMEDIA COMMONS';
 }
 
 // What one line of micro type under the clock holds beside the FILE tag (graphics/remote.js drawFileCredit):
@@ -287,7 +290,7 @@ export function onAirCredit(record) {
   // an outlet's photo (a private preview only): its credit as the outlet gives it, never dressed as a licence
   if (record.source === 'outlet') return record.author || record.outlet || null;
   const terms = LICENCES[record.licence?.id] || null;
-  const tag = record.label === 'EVENT' ? null : 'FILE';
+  const tag = record.label === 'EVENT' ? null : record.year ? `FILE ${record.year}` : 'FILE';
   const lic = !terms ? '' : record.source === 'nasa' ? '' : terms.short;
   const change = terms?.noticeChange ? MODIFIED_WORD.toUpperCase() : '';
   let who = screenAuthor(record);
@@ -368,6 +371,7 @@ export function compactRights(record) {
     credit: record.credit,
     attribution: record.attribution,
     label: record.label,
+    ...(record.year ? { year: record.year } : {}),
     cleared: !!record.cleared,
     checkedAt: record.checkedAt,
     ...(record.restrictions?.length ? { restrictions: record.restrictions } : {}),

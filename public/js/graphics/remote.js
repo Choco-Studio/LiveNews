@@ -37,7 +37,7 @@ function tagRight(ctx, text, right, y, accent, { micro = false } = {}) {
 export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3, tag = 'FILE') {
   const right = W - TOP.x;
   const x = tagRight(ctx, tag, right, y, null);
-  const text = String(credit || '').replace(/^FILE\s*·\s*/i, '').toUpperCase();
+  const text = String(credit || '').replace(/^FILE(?: \d{4})?\s*·\s*/i, '').toUpperCase();
   if (!text) return 1;
   const lines = creditLines(text, (t) => measureText(t, 1, 'micro'));
   lines.forEach((line, i) => {

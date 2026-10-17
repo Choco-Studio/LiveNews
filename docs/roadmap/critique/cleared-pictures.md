@@ -346,41 +346,153 @@ all; 12 have a subject whose every picture was refused (a map, a flag, a seat of
 subject with no free photograph (Replit, Bumble, Vinted); 2 are sports fixtures. The outlets' photos covered most of
 these with **event** pictures from the wires; a free licence can almost never give the event itself.
 
+## Round 7 — the no-picture boards, sober portraits, FILE pictures of the same actor, Openverse, a third sample
+
+The coordinator's review of round 6: coverage at 30 % "with an empty blue board for the other 70 % is the quality
+loss the owner forbade". The brief: a designed board for every story without a picture, held to a photo's bar;
+Openverse as a new source with safeguards against laundering; sober portraits under grave stories, read by an
+expression model; FILE pictures of the same named actor doing the same kind of thing, with the year; **a relevant
+cleared real picture on at least 75 % of stories, 0 wrong people, 0 misleading**, measured on a fresh sample too; a
+quote request for the wires.
+
+**1. The boards.** The flat blue rectangles of round 6's `none-NN.png` were the sheet tool's fault (the lab page drew
+the map before its data had loaded, and the 6 ms budget returned the sea), but the real montage was not much better:
+an unlabelled animated map, or for a story with no place the montage's plain field. Now:
+
+- **the locator board** (`public/js/graphics/locator.js`), for a story with a place: the country drawn from the
+  channel's own map and lit (fog, silver edge) against its dimmed neighbours, framed to fill the upper right clear of
+  the tag and the headline; a city's accent dot with a ring that pops once; the place's name on an ink plate with the
+  accent bar. Prepared by the director before the montage, a frame at a time; drawn by the montage and STILL TO COME
+  exactly as the sheets show it (`public/lab/pictures.html` calls the same functions);
+- **the topic board** (`public/js/graphics/topicboard.js`), for a story with neither a picture nor a place (half of
+  them: a startup's funding, a study, a scam): its topic as one of fourteen 16×16 pixel glyphs at 4× (a chip for AI, a
+  rocket for space, a flask for science, a chart for the economy, a bolt for energy, a car for transport…), two rings,
+  a dot grid and the topic's name on the same plate. Under a grave story or a story of crime, no glyph (a cartoon under
+  a death or a charge is never sober): the rings and the section's name.
+
+**2. Sober portraits under grave stories** (`server/faces.js`, `tools/pictures/faces.mjs`). A face detector and an
+expression model (UltraFace RFB-320 and FER+, ONNX, Apache-2.0) run by onnxruntime-web in headless Chromium beside the
+station; the desk queues the pictures, reads the verdicts and waits for them (a picture never read never airs under a
+grave story). Candidates: the Wikidata picture, the person's Commons category, their photographs on Commons by name
+and by their category's name, an institution's Flickr picture; one person in the title. Allowed only for the public
+figure the story is about in their role (they speak, they lead the response) and for obituaries; never the accused,
+a private person or a victim. **Models fetched from new hosts: huggingface.co (redirecting to us.aws.cdn.hf.co) and
+cdn.jsdelivr.net.**
+
+**3. FILE pictures of the same actor** (`server/fileevents.js`): a movement, a union, a party, a legislature, a bloc or
+a company protesting, striking, sitting or meeting, the file naming the actor and the action, dated before the story,
+labelled `FILE 2023`; never under a death or a disaster toll, never a violent scene, never an armed group; under a
+grave story only with no face in the foreground. **And the seat of government** for a story whose state is its actor.
+
+**4. Openverse** (`server/openverse.js`): anonymous, paced under its announced limits (20 a minute, 200 a day), only
+institutions' own Flickr accounts (13 checked by hand), licence as indexed, no agency credit, indexed before the story,
+the source page kept. **Flickr's robots.txt refuses every robot it does not name**, so the desk never reads flickr.com:
+the second trust tier (a long-standing account) needs Flickr's API and stays off.
+
+**5. A curated list of surnames** (`SURNAMES`, 59 public figures named that way, each article checked): "Trump faces
+growing backlash…" now shows Donald Trump; never where someone else of that surname is named, never an ambiguous one
+(Bolsonaro, Albanese, Medvedev).
+
+**What the sheets and the hand check found in this round, each fixed in it and re-run:**
+
+1. **10 Downing Street under "Leeds vs Manchester United: Premier League – teams, prediction, lineups"** (misleading):
+   "Premier" in "Premier League" made the story one about government, and the seat rule took the UK's government.
+   Fixed twice over: no seat under a sports story, and "Premier League" is no longer a word of government.
+2. **The White House under "Duel in the desert: US marine veteran aims to win back working-class voters"** and
+   Parliament House under "Australian industry reliant on gas" (a person or a thing of that country, not its state):
+   the seat now needs the state to be the headline's actor (the word after the country is its government or its act:
+   "US Senate votes", "France imposes", a politics kicker).
+3. **State House, Nairobi, under "Kenya's health ministry confirms second Ebola case"**: never a seat or a FILE event
+   under an outbreak.
+4. **AB Volvo's powertrain plant under "Volvo makes a bigger bet on Nvidia for hands-free automated driving"** (the
+   wrong company: Volvo Cars is another): "Volvo" stands for Volvo Cars unless the story speaks of trucks or buses, and
+   an ambiguous name is asked only by its alias. (The story now shows Nvidia's headquarters: weak, the partner.)
+5. **The White House under "US lawmakers unveil bill…"** (the executive for the legislature): a story about government
+   now shows its seat before the country's capital (the Capitol).
+6. **"Talks on Ukraine continue in Geneva as ministers meet"** would have shown Kyiv's presidential office: the seat's
+   country must open the headline.
+7. **The Pope smiles in every Commons photograph read** (32 of his pictures, the reader refused all, rightly): his
+   seven illness stories keep the topic board. Reading more candidates (the category's own name, "Leo XIV", 30 a
+   person) found no sober one.
+8. **Openverse found nothing usable on these samples**: the index is sparse and dated for Flickr (the European
+   Parliament: 240 of its 14,000 pictures indexed, the newest from June 2025; the President of Ukraine's under a
+   generic title), and its search timed out at 10 s (now 25 s). It is wired with its safeguards for when an
+   institution's pictures are indexed; it is not where coverage comes from.
+
+**Three samples** of the archive's real aired stories, all decided by the final desk (the third fresh: 138 other
+stories, seed 19, the same programme mix as the second; its programmes had fewer stories left to draw):
+
+| | before (outlet photos) | sample 1 (440) | sample 2 (150 others) | sample 3 (138 others, fresh) |
+| --- | --- | --- | --- | --- |
+| round 6 | 97.3 % / 95.3 % | 30.0 % | 28.0 % | — |
+| **round 7: stories with a cleared picture** | | **157 (35.7 %)** | **49 (32.7 %)** | **41 (29.7 %)** |
+| not grave / grave | | 47.8 % of 301 / 13 of 139 | 44.0 % of 100 / 5 of 50 | 37.9 % of 87 / 8 of 51 |
+| picks: subjects / places / portraits / seats / FILE events / NASA | | 88 / 20 / 36 / 10 / 2 / 1 | 29 / 3 / 13 / 3 / 0 / 1 | 15 / 10 / 14 / 2 / 0 / 0 |
+| grave portraits (sober, read) | | 7 | 4 | 8 |
+| licences | | BY-SA 84 · PD and CC0 39 · BY 29 · OGL 5 | BY-SA 27 · PD 14 · BY 6 · OGL 2 | BY-SA 15 · PD 12 · BY 13 · OGL 1 |
+| no picture: locator board / topic board (no glyph) | | 139 / 144 (47) | 59 / 42 (9) | 53 / 44 (10) |
+
+All three: **247 of 728 stories (33.9 %)**. **The 75 % target is not met.**
+
+**The hand check: all 247 cleared picks** (`hand-check-r7.txt`; every grave portrait and every FILE picture also seen
+full size):
+
+| verdict | picks | |
+| --- | --- | --- |
+| right subject, right picture | 204 (82.6 %) | sober portraits of the official who speaks (Zelenskyy under the strikes on Kyiv, Mamdani speaking into a microphone under the ICE shooting, Trump's official portrait), seats of government under the state's own act (the Berlaymont under EU sanctions, the Capitol under a bill, the Kremlin under an arrest), company buildings |
+| weak but true | 43 (17.4 %) | a country's postcard for a national story (London from the air ×5, Tehran ×2, the Acropolis ×3, Pretoria); a secondary subject (Trump where Zelenskyy targets him, Trump under the FTC's probe of AI firms, Nvidia under Volvo, 10 Downing Street under a PM adviser's wife); the yellow vests' FILE 2018 (the right actor and action, a muddled scene); a 2007 portrait of Kabila, relaxed rather than grave; a 2016 title celebration under a struggling club's sale; and round 6's weak picks that still stand |
+| misleading | **0** | (five found in the round, above, fixed and re-run) |
+| wrong person | **0 of 63 portraits** | 19 of them under grave stories: Trump (8), Zelenskyy (6), Kabila (2), Chalmers, Mamdani, Musk, Netanyahu |
+
+**Why 75 % is out of reach under the round's own rules.** Of the 481 stories left without a picture in the three
+samples, 61 have a death, a toll or a disaster in the headline, 105 are armed conflict or violence, 26 an accusation
+or a trial, 46 other grave stories (an illness, harm) with no sober portrait of a public figure, and 243 are not grave
+and name nothing a free photograph can show (a startup, a study, a party met as "Labor", a crowd). The brief itself
+forbids a FILE picture under a death or a disaster toll and a portrait of the accused, a victim or a private person,
+and the earlier rounds forbade a place's postcard under grave news. **Even a picture on every story that is not grave
+would give 67 %** (sample 1: 296 of 440; sample 2: 101 of 150; sample 3: 93 of 138); the remaining third of the
+channel's news is war, death, disaster and crime, which only the wires' event pictures (or a sober official) can show.
+
+**The boards, on their own visual score**: the locator board **8.0** (designed and legible at 4×, the country lit on
+the channel's own map, the place's name on the channel's plate; not higher: a large country is shown from far out
+(Russia fills Eurasia), and the place it shows is the news desk's: 4 of the 135 boards whose headline names a place
+show another (Jamaica's deportation flights on the USA, "Ukraine says its Starshield access is back" on Russia), a
+finding for `server/news.js`); the topic board **7.0** (a deliberate pixel board, never empty; not higher: fourteen
+glyphs repeat, the grave board is only rings and the section's name, and that name repeats the headline's chip).
+
 ## Final table
 
-| category | round 1 | round 2 | round 3 | round 4 | round 5 | **round 6 (final)** | why, in the final round |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | **9.0** | every aired picture cleared under terms read from its source and recorded per picture; pixelation allowed by every cleared licence; NC, ND and no-alteration terms excluded; credits legible and complete on screen and in the description; outlet photos never served by default. Not higher: ShareAlike (and FAL) inside a video is open and 53 % of the picks are BY-SA; the other points in §8 of RIGHTS.md |
-| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | **8.5** | 0 wrong person in 25 portraits, 0 misleading in 174 picks of the final desk; 25 weak (14 %), most of them a country's postcard for a national story or a company's second-best picture: a hostile picture editor would swap a third of them for the map |
-| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | **3.0** | 30.0 % and 28.0 % against 97 % (about 41 % of the stories that are not grave); the tone rules give the map to every grave story; 138 of the 308 left name nothing a free photograph can show |
-| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | **8.5** | portraits whole (head and shoulders over a blurred backdrop), none upscaled (a 442 px original is refused, not stretched), 88.5 % at least twice the full shot, every credit legible; not higher: some company buildings read flat once pixelated (Tesla's Gigafactory wall), a few crops read badly (a beaver's fur), and rounds 3–5 were scored on overstated resolution |
-| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | **9.0** | one polite queue, Retry-After obeyed, answers kept, partial decisions decided again, standard renditions for every original; measured with Wikimedia answering 429 on about one request in four |
-| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | **9.0** | rights, credits (one and two lines, transliteration, Commons' author forms), the desk end to end on a fake Wikipedia/Wikidata/Commons/NASA (every finding of every round has a test), the producer (credit, focus, portrait framing), the archive, the server gate, the client overlay |
-| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | coverage |
+| category | r1 | r2 | r3 | r4 | r5 | r6 | **round 7** | why, in round 7 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | **8.5** | every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
+| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | **8.5** | 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
+| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | **3.5** | 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
+| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | **8.0** | the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
+| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | **8.5** | every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
+| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | **9.0** | the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
+| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | coverage |
 
-**The gate is not met: 3.0, not 9.7.** Legal clearance, relevance, quality, robustness and tests are at 8.5–9.0, and
-cannot honestly go higher until a lawyer answers the ShareAlike question. **Coverage cannot reach 9.7 with free
-licences**: what the outlets aired was mostly the wires' picture of the event itself (the flood, the summit, the
-courtroom), and an open licence almost never gives that. Every attempt to raise coverage further met a picture that
-misleads or jars: the country's postcard for a story met at the end of the headline, a seat of government under a
-story that is not about government, a famous surname for its namesake, a museum specimen for a living animal, a grin
-under a shooting. The desk refuses those and airs the map instead, which the channel's boards were built for. Each
-round traded pictures for relevance (178 → 132 picks); the owner asked for no loss of quality, and a wrong or
-jarring picture is the worse loss.
+**The gate is not met: 3.5, not 9.7, and the coverage target is not met: 33.9 % against 75 %.** The round moved
+coverage by four to six points without a wrong person or a misleading picture, and replaced the flat field behind the
+other two thirds of the stories with designed boards; it did not, and under its own rules could not, reach 75 %: a
+third of the news is war, death, disaster and crime, where the brief forbids a FILE picture under a toll, a portrait of
+the accused or a victim, and a place's postcard; most of the rest names nothing a free photograph can show. A wire
+licence is still the only route to the event itself.
 
 What would close the gap, without giving any of this back:
 
-1. **A wire licence with written permission for the pixel treatment** (`docs/pictures/WIRE_LICENSING.md`): Reuters
-   Connect or a Getty Enterprise plan for ~1,200 event stills a month, editorial, five platforms, retelling within
-   24 h, the pixel style named in the order. It would be a fourth source in `server/rights.js` with its own licence id
-   and the label `EVENT`, put first for a programme's lead stories. This is the only route to the event itself, and to
-   a sober picture under grave stories.
-2. **The lawyer's answer on ShareAlike**: if yes, nothing changes; if no, 53 % of the current picks go and coverage
-   falls to about 14 %, which would make (1) urgent.
-3. **An editor's eye for portraits under grave stories**: a person who approves one sober portrait per public figure
-   (kept with its record) would give those stories their portrait back; the desk will not guess an expression.
-4. **More official open sources read directly** (the European Commission's audiovisual service, government
-   photostreams under PD or OGL), each with its terms recorded: worth a few points, not tens.
+1. **A wire licence with written permission for the pixel treatment**: the quote request is drafted
+   (`docs/pictures/AGENCY_REQUEST.md`: Reuters, AP, AFP; ~1,200 stills a month; seven clauses to change, from the
+   pixel treatment to "broadcast once" and the watermark). This is the only route to the event itself, and to a
+   picture under the grave third of the news.
+2. **The lawyer's answers** (RIGHTS.md §8): ShareAlike (51 % of the picks), the face reader, identifiable people in
+   FILE pictures.
+3. **The face reader on a schedule** beside the station (every 20 minutes, after the desk's decisions), so a grave
+   story's sober portrait airs in the same hour.
+4. **Flickr's API with a commercial key** (owner action): the second Openverse tier (long-standing accounts) and the
+   date taken; and **a registered Openverse key** for more than 200 requests a day.
+5. **The news desk's place** (`server/news.js`, another agent's file): the board shows the place the news desk gives;
+   in 4 of 135 checked it is not the place the headline names.
 
 ## What the owner's licence rules removed (17 Oct)
 
@@ -399,13 +511,15 @@ search results) and the outlet photos the 440 stories aired with:
 ## The contact sheets
 
 Rendered by `tools/pictures/sheet.mjs` with the channel's own client code (`public/lab/pictures.html`: the headline
-board, `pixelate.js` at 416×234 and 24 colours with the desk's focus, the credit overlay), into the measuring
-session's scratch directory (`…/scratchpad/pictures/sheets-final/`):
-`picks-NN.png` (each cleared pick, before: the outlet photo it aired with; after: the cleared pick and its credit),
-`grid-NN.png` (the hand check: every pick with its story, subject and file), `big-NN.png` (twelve at 4×, the pixel
-artist's view), `none-NN.png` (forty stories left without a cleared picture: the outlet photo, then the map), and
-`hand-check-final.txt` (every verdict, both samples); the second sample's sheets in `sheets-final-2/` beside it. Not
-kept in the repository (outlet photos are not ours to copy).
+board as the montage airs it, `pixelate.js` at 416×234 and 24 colours with the desk's focus, the credit overlay, the
+locator and topic boards), into the measuring session's scratch directory (`…/scratchpad/pictures/sheets-r7/`), round
+6's sheets deleted:
+`s1-board-01.png` and `s1-board-big-01.png` (the locator board: before, the outlet photo; after, the board),
+`s1-topic-01.png` and `s1-topic-big-01.png` (the topic board, with and without its glyph), `s1-grave-portraits-01.png`
+and `s2-grave-portraits-and-seats-01.png` (every sober portrait under a grave story, and the seats),
+`s1-file-and-seats-01.png` (the FILE pictures of the same actor and the seats), `s3-all-picks-01..04.png` (every pick of
+the fresh sample), and `hand-check-r7.txt` (every verdict, three samples). Not kept in the repository (outlet photos
+are not ours to copy).
 
 ## What a lawyer should still confirm
 
@@ -413,6 +527,8 @@ See `docs/pictures/RIGHTS.md` §8: ShareAlike inside a video (the largest open q
 FAL), CC 2.0/3.0 attribution in video, personality rights and data protection for portraits, photographers' moral
 rights against pixelation, freedom of panorama, the no-portrait rule for the accused (and for a search of someone's
 home), NASA's terms for a monetised channel, ESA's standard terms, platform policies, the takedown policy for a Commons
-file whose licence proves wrong, the Free Art Licence's copyleft (as ShareAlike), and whether a credit giving a
-transliterated user name, or running on two lines, is attribution "in any reasonable manner based on the medium".
-This critique is not legal advice.
+file whose licence proves wrong, the Free Art Licence's copyleft (as ShareAlike), whether a credit giving a
+transliterated user name, or running on two lines, is attribution "in any reasonable manner based on the medium"; and,
+new in round 7, the face reader under the EU AI Act and the GDPR, identifiable people in FILE pictures of events,
+Openverse's terms (its notice, its fee clause, anonymous use by a monetised channel) and Flickr pictures known only
+through Openverse's index. This critique is not legal advice.

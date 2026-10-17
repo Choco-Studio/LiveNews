@@ -11,10 +11,16 @@
 //                      country or its fame confirms it); never on a story of their death or of an accusation;
 //        a thing       an organisation's headquarters, a structure, a product, a spacecraft or mission, a body in space;
 //        a place       the story's place (server/gazetteer.js), its item confirmed by its coordinates;
+//        under a grave story only the public figure it is about, and only a portrait the face reader read as sober
+//        (server/faces.js: no smile, one face), from their Wikidata picture, their Commons category and photographs,
+//        or an institution's own Flickr picture (server/openverse.js); an obituary likewise;
 //   2. NASA's image library for space stories (public domain in the US; no artist's concepts, posters or graphics;
 //      only NASA's own credits);
-//   3. a Commons FILE photo of the place or the structure the story names (server/imagesearch.js), as before;
-//   4. nothing: the place's map and the channel's boards take over (never a drawn picture).
+//   3. a FILE picture of the same named actor doing the same kind of thing ("FILE 2023": server/fileevents.js), the
+//      seat of government of the country a story about government names, a Commons FILE photo of the place or the
+//      structure the story names (server/imagesearch.js);
+//   4. nothing: the locator board (its place) or the topic board (its topic) take over (public/js/graphics/locator.js,
+//      topicboard.js); never a drawn picture.
 // Relevance, as strict as before or stricter: a picture never shows an event (no flood under a flood story, no
 // crowd, no victims, no ruins); a grave story gets an official portrait or an institution, never a place's postcard;
 // every picture that is not of the event itself is labelled FILE; a picture must be a photograph (no map, flag, logo,
@@ -23,7 +29,7 @@
 // Wikimedia is asked politely (server/wikimedia.js: one queue, a compliant User-Agent, Retry-After obeyed, batches of
 // 50 titles or 40 items a request) and every answer is kept on disk, so a 24-hour desk asks a few requests an episode.
 //
-//   new PictureDesk({ dir, wikimedia, nasa, search, mode, now }).assign(stories, { budgetMs }) -> stats
+//   new PictureDesk({ dir, wikimedia, nasa, search, faces, openverse, mode, now }).assign(stories, { budgetMs }) -> stats
 //   .decide(stories, { budgetMs })   find (and keep) each story's picture without touching the stories
 //   .apply(story)                    put the decision on the story (s.image is then the cleared picture, or none)
 //   .failed(story, reason)           the picture would not download: the next cleared one, or none
@@ -34,6 +40,8 @@ import { isGrave, severity } from './facts.js';
 import { rightsRecord, outletRecord, operatorRecord, currentRights, pictureMode, licenceOf } from './rights.js';
 import { WikimediaClient, PacedJson, KeptAnswers } from './wikimedia.js';
 import { fileQuery, fileFromCommons, COMMONS_MEDIA, standardRendition } from './imagesearch.js';
+import { storyAction, actorKind, eventFileProblem, eventQuery, fileYear, seatFor } from './fileevents.js';
+import { INSTITUTIONS, openverseTrust } from './openverse.js';
 export { fileFromCommons };
 
 const HOUR = 3600_000;
@@ -108,7 +116,7 @@ export function storyFlags(story) {
     disaster: DISASTER.test(title) || UNREST.test(title) || /\b(?:march(?:es|ed|ing)?|marchers|rall(?:y|ies))\b/.test(title),
     // a story about government (a minister, an election, sanctions; plan() adds a state acting): only such a story may
     // show a seat of government as its place's picture (the White House under an archbishop's words misleads)
-    statecraft: STATECRAFT.test(title),
+    statecraft: STATECRAFT.test(title.replace(/\bpremier league\b/gi, ' ')),
     // a story about nature (deforestation, a species, the climate): a city's postcard is not its picture
     environment: ENVIRONMENT.test(title),
     // a sports story: the club or the player, never the city's postcard (a match is not a place)
@@ -210,13 +218,14 @@ export function nameSpans(text) {
 // (only when written exactly so, with its capitals)
 export const ALIASES = {
   Apple: 'Apple Inc.', Meta: 'Meta Platforms', Amazon: 'Amazon (company)', Tesla: 'Tesla, Inc.', Shell: 'Shell plc', Visa: 'Visa Inc.', Target: 'Target Corporation', Oracle: 'Oracle Corporation', Ford: 'Ford Motor Company', GM: 'General Motors', Alphabet: 'Alphabet Inc.', Uber: 'Uber', Nvidia: 'Nvidia', OpenAI: 'OpenAI', Anthropic: 'Anthropic', Samsung: 'Samsung Electronics', Sony: 'Sony', Intel: 'Intel', AMD: 'AMD', TSMC: 'TSMC', Netflix: 'Netflix', Microsoft: 'Microsoft', Google: 'Google', SpaceX: 'SpaceX', Boeing: 'Boeing', Airbus: 'Airbus', Huawei: 'Huawei', Xiaomi: 'Xiaomi', Alibaba: 'Alibaba Group', Tencent: 'Tencent', ByteDance: 'ByteDance', TikTok: 'TikTok', Spotify: 'Spotify', Disney: 'The Walt Disney Company', Lufthansa: 'Lufthansa', Ryanair: 'Ryanair', BP: 'BP', Nissan: 'Nissan', Toyota: 'Toyota', Volkswagen: 'Volkswagen', BMW: 'BMW', Stellantis: 'Stellantis', Renault: 'Renault', Ferrari: 'Ferrari', Starbucks: "Starbucks", "McDonald's": "McDonald's", Walmart: 'Walmart', Costco: 'Costco', Pfizer: 'Pfizer', Moderna: 'Moderna', Novartis: 'Novartis', AstraZeneca: 'AstraZeneca', Nestlé: 'Nestlé', Unilever: 'Unilever', HSBC: 'HSBC', Barclays: 'Barclays', Santander: 'Banco Santander', Goldman: 'Goldman Sachs', JPMorgan: 'JPMorgan Chase', Rolls: 'Rolls-Royce Holdings', Siemens: 'Siemens', ASML: 'ASML Holding', Arm: 'Arm Holdings', Qualcomm: 'Qualcomm', Broadcom: 'Broadcom', IBM: 'IBM', Cisco: 'Cisco', Salesforce: 'Salesforce', Adobe: 'Adobe Inc.', Dell: 'Dell Technologies', HP: 'HP Inc.', Lenovo: 'Lenovo', Nintendo: 'Nintendo', Ubisoft: 'Ubisoft', Valve: 'Valve Corporation', Roblox: 'Roblox Corporation', Reddit: 'Reddit', Pinterest: 'Pinterest', Snap: 'Snap Inc.', Discord: 'Discord', Telegram: 'Telegram (software)', Yandex: 'Yandex', Baidu: 'Baidu', BYD: 'BYD Auto', Rivian: 'Rivian', Waymo: 'Waymo', Zoox: 'Zoox (company)', Starlink: 'Starlink', Poundland: 'Poundland', Betfred: 'Betfred',
+  'Yellow Vests': 'Yellow vests protests', 'Gilets jaunes': 'Yellow vests protests', BBC: 'BBC', Volvo: 'Volvo Cars',
   Epic: 'Epic Games', Cerebras: 'Cerebras Systems', SNES: 'Super Nintendo Entertainment System', Xbox: 'Xbox', PlayStation: 'PlayStation', IEA: 'International Energy Agency', OECD: 'OECD', ICE: 'U.S. Immigration and Customs Enforcement', Webb: 'James Webb Space Telescope',
   NASA: 'NASA', ESA: 'European Space Agency', ISRO: 'Indian Space Research Organisation', JAXA: 'JAXA', Roscosmos: 'Roscosmos', CNSA: 'China National Space Administration', ISS: 'International Space Station', JWST: 'James Webb Space Telescope', Hubble: 'Hubble Space Telescope', 'Brazilian Amazon': 'Amazon rainforest', WHO: 'World Health Organization', UN: 'United Nations', NATO: 'NATO', IMF: 'International Monetary Fund', ECB: 'European Central Bank', Fed: 'Federal Reserve', BoE: 'Bank of England', NHS: 'National Health Service (England)', FDA: 'Food and Drug Administration', FBI: 'Federal Bureau of Investigation', CIA: 'Central Intelligence Agency', Interpol: 'Interpol', ICC: 'International Criminal Court', ICJ: 'International Court of Justice', WTO: 'World Trade Organization', OPEC: 'OPEC', IAEA: 'International Atomic Energy Agency', Pentagon: 'The Pentagon', Kremlin: 'Moscow Kremlin', Vatican: 'Vatican City', Ofcom: 'Ofcom', Ofgem: 'Ofgem', CERN: 'CERN', WMO: 'World Meteorological Organization', UNESCO: 'UNESCO', UNICEF: 'UNICEF',
 };
 
 // short names that are everyday words or other things (the Amazon is a river and a forest; an apple a fruit): their
 // company only where the story speaks of a company
-const AMBIGUOUS = new Set(['Apple', 'Amazon', 'Meta', 'Shell', 'Target', 'Visa', 'Oracle', 'Epic', 'Arm', 'Snap', 'Valve', 'Ford', 'Tesla', 'Alphabet', 'Discord', 'Telegram', 'Ramp', 'Plex', 'Webb', 'ESA', 'ICC', 'ECB']);
+const AMBIGUOUS = new Set(['Volvo', 'Apple', 'Amazon', 'Meta', 'Shell', 'Target', 'Visa', 'Oracle', 'Epic', 'Arm', 'Snap', 'Valve', 'Ford', 'Tesla', 'Alphabet', 'Discord', 'Telegram', 'Ramp', 'Plex', 'Webb', 'ESA', 'ICC', 'ECB']);
 const COMPANY_TALK = /\b(?:company|companies|firm|shares?|stock|investors?|ceo|chief executive|boss|app|apps|device|devices|gadget|iphone|ipad|mac|store|launch(?:es|ed)?|unveil\w*|product|profit|revenue|sales|employees|staff|jobs|lay(?:s)? off|layoffs|deal|acquisition|platform|users|subscribers|subscription|service|tech|software|smartphone|chip|ai\b|model|startup)\b/i;
 const ACRONYM_TALK = {
   ESA: /\b(?:space|satellites?|rockets?|launch\w*|orbit\w*|astronauts?|missions?|probes?|telescopes?|planets?|moon|mars|ariane|copernicus)\b/i,
@@ -232,12 +241,47 @@ export function aliasFor(name, story) {
   if (!AMBIGUOUS.has(name)) return target;
   const text = `${story?.title || ''} ${story?.summary || ''}`;
   if (name === 'Webb') return SPACE_TALK.test(text) ? target : null;
+  // Volvo is two companies: the cars (Volvo Cars, Geely's) and the trucks and buses (AB Volvo, whose article is "Volvo")
+  if (name === 'Volvo') return /\b(?:trucks?|lorr(?:y|ies)|buses|coaches|construction equipment|volvo group|ab volvo)\b/i.test(text) ? 'Volvo' : target;
   if (name === 'Amazon' && FOREST_TALK.test(text)) return 'Amazon rainforest';
   // an acronym that names other bodies too: ESA is also the Entertainment Software Association ("ESA targets Anbernic
   // emulation handhelds", the hand check of 17 Oct), ICC the International Cricket Council, ECB the England and Wales
   // Cricket Board
   if (ACRONYM_TALK[name]) return ACRONYM_TALK[name].test(text) ? target : null;
   return /^(?:tech|business|money)/.test(String(story?.category || '').toLowerCase()) || COMPANY_TALK.test(text) ? target : null;
+}
+
+// public figures the news names by their surname alone, each article checked on Wikipedia on 17 Oct 2026: the article
+// meant, only where no one else of that surname is named in the story ("Melania Trump", "Francesca Albanese": that is
+// why Albanese is not here; "Bolsonaro" is Jair or Flávio, "Medvedev" a politician or a tennis player: never). Every
+// person rule still applies (living, adult, early in the headline, never accused, sober under a grave story); the list
+// itself stands for the role check, which a headline naming only a surname rarely passes ("Trump faces backlash...")
+export const SURNAMES = {
+  Trump: 'Donald Trump', Biden: 'Joe Biden', Obama: 'Barack Obama', Vance: 'JD Vance', Rubio: 'Marco Rubio', Hegseth: 'Pete Hegseth', Bessent: 'Scott Bessent', Newsom: 'Gavin Newsom', Mamdani: 'Zohran Mamdani', Pelosi: 'Nancy Pelosi', Schumer: 'Chuck Schumer', 'Ocasio-Cortez': 'Alexandria Ocasio-Cortez',
+  Putin: 'Vladimir Putin', Lavrov: 'Sergey Lavrov', Peskov: 'Dmitry Peskov', Zelensky: 'Volodymyr Zelenskyy', Zelenskyy: 'Volodymyr Zelenskyy', Macron: 'Emmanuel Macron', Starmer: 'Keir Starmer', Burnham: 'Andy Burnham', Farage: 'Nigel Farage', Badenoch: 'Kemi Badenoch', Sunak: 'Rishi Sunak',
+  Netanyahu: 'Benjamin Netanyahu', Xi: 'Xi Jinping', Modi: 'Narendra Modi', Erdogan: 'Recep Tayyip Erdoğan', 'Erdoğan': 'Recep Tayyip Erdoğan', Lula: 'Luiz Inácio Lula da Silva', Milei: 'Javier Milei', Meloni: 'Giorgia Meloni', Sheinbaum: 'Claudia Sheinbaum', Merz: 'Friedrich Merz', Scholz: 'Olaf Scholz', Tusk: 'Donald Tusk', 'Orbán': 'Viktor Orbán', Orban: 'Viktor Orbán', Fico: 'Robert Fico',
+  Khamenei: 'Ali Khamenei', Pezeshkian: 'Masoud Pezeshkian', Guterres: 'António Guterres', Lagarde: 'Christine Lagarde', Rutte: 'Mark Rutte', Kallas: 'Kaja Kallas', Carney: 'Mark Carney', Trudeau: 'Justin Trudeau', Ramaphosa: 'Cyril Ramaphosa', Ruto: 'William Ruto', Tinubu: 'Bola Tinubu', Maduro: 'Nicolás Maduro', Bukele: 'Nayib Bukele', Takaichi: 'Sanae Takaichi', Prabowo: 'Prabowo Subianto', Mitsotakis: 'Kyriakos Mitsotakis', Lukashenko: 'Alexander Lukashenko',
+  Musk: 'Elon Musk', Zuckerberg: 'Mark Zuckerberg', Bezos: 'Jeff Bezos', Altman: 'Sam Altman', Nadella: 'Satya Nadella', Pichai: 'Sundar Pichai', 'Pope Leo': 'Pope Leo XIV',
+};
+const SURNAME_FAMILY = { Musk: 'business', Zuckerberg: 'business', Bezos: 'business', Altman: 'business', Nadella: 'business', Pichai: 'business', 'Pope Leo': 'religion' };
+/** The role a curated surname stands for (server SURNAMES): { family, how }. */
+export const surnameRole = (surname) => ({ family: SURNAME_FAMILY[surname] || 'politics', how: 'a public figure named by surname' });
+// the words that may stand before a surname without naming someone else ("President Trump", "Russia's Putin")
+const BEFORE_SURNAME = /^(?:president|presidents|prime|minister|chancellor|premier|pm|leader|secretary|senator|vice|general|pope|mr|mrs|ms|dr|the|us|u\.s\.|uk|eu|un|former|ex|said|says|and|by|to|of|on|with|as|after|before|against|for|from|at|in|but|why|how|what|when|meets|tells|warns|slams|urges|calls|backs|hits|blasts|praises|accuses|sues|trusts|ally|allies|rival|critics)$/i;
+/** The article a public figure's bare surname stands for in this story, or null (someone else of that name is named). */
+export function surnameFor(name, story) {
+  const target = SURNAMES[name];
+  if (!target) return null;
+  const first = target.split(' ')[0];
+  const text = `${story?.title || ''} ${story?.summary || ''}`;
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const m of text.matchAll(new RegExp(`([\\p{L}.'’]+)\\s+${esc}(?![\\p{L}])`, 'gu'))) {
+    const w = m[1].replace(/['’]s$/u, '');
+    // (a place or its demonym before it is fine: "Russian President Putin", "Brazil's Lula")
+    if (w === first || BEFORE_SURNAME.test(w) || !isCap(w) || lookupPlace(w) || findPlaces(w).length) continue;
+    return null;
+  }
+  return target;
 }
 
 /** A headline without its "Middle East crisis: ..." or "REPLAY: ..." kicker (a kicker is not the headline's subject). */
@@ -289,7 +333,12 @@ export function subjectsOf(story) {
       for (let n = Math.min(4, ws.length); n >= 1; n--) {
         for (let k = 0; k + n <= ws.length; k++) {
           const part = ws.slice(k, k + n).join(' ');
-          if (n === 1 ? ALIASES[part] || (sumNames.has(part) && !NOT_A_NAME.has(part.toLowerCase())) : sumNames.has(part)) add(aliasFor(part, story) || part, span.start + k, n === 1 ? 'word' : 'span', n);
+          const known = n <= 2 && surnameFor(part, story);
+          if (known) {
+            add(known, span.start + k, 'surname', n);
+            const c = out.find((x) => x.text === known);
+            if (c && !c.surname) c.surname = part;
+          } else if (n === 1 ? ALIASES[part] || (sumNames.has(part) && !NOT_A_NAME.has(part.toLowerCase())) : sumNames.has(part)) add(aliasFor(part, story) || part, span.start + k, n === 1 ? 'word' : 'span', n);
         }
       }
       continue;
@@ -302,7 +351,18 @@ export function subjectsOf(story) {
     // (an ambiguous name the story does not speak of as its known body is not asked as written either: "ESA" leads to
     // the space agency on Wikipedia, while "ESA targets Anbernic emulation handhelds" is the games industry's)
     const unmeant = AMBIGUOUS.has(span.text) && ALIASES[span.text] && !aliasFor(span.text, story);
-    if (span.words <= 5 && !unmeant) add(span.text, span.start, 'span');
+    // a public figure the news names by surname alone ("Trump", "Putin"): their article, the surname kept as written
+    // (instead of the bare surname, which would lead to the same article and be refused as "not named in full")
+    const known = !fuller && surnameFor(span.text, story);
+    if (known) {
+      add(known, span.start, 'surname', span.words);
+      const c = out.find((x) => x.text === known);
+      if (c && !c.surname) c.surname = span.text;
+    }
+    // (a name whose alias is another article is asked by its alias only: "Volvo" is AB Volvo on Wikipedia, while a car
+    // story's Volvo is Volvo Cars)
+    const other = aliasFor(span.text, story);
+    if (span.words <= 5 && !unmeant && !known && !(other && other !== span.text && AMBIGUOUS.has(span.text))) add(span.text, span.start, 'span');
     if (aliasFor(span.text, story)) add(aliasFor(span.text, story), span.start, 'alias', span.words);
     if (span.words > 1) {
       const ws = span.text.split(' ');
@@ -425,7 +485,7 @@ function countryInText(country, text) {
 // ------------------------------------------------------------------------------------------------ what an item is
 
 const TYPE_EVENT = /\b(?:war|battle|conflict|attack|bombing|shooting|massacre|disaster|earthquake|flood|fire|wildfire|hurricane|cyclone|typhoon|storm|tornado|election|referendum|protest|riot|demonstration|strike action|labor strike|accident|crash|incident|explosion|pandemic|epidemic|outbreak|tournament|championship|season|olympic|festival|ceremony|summit|conference|trial|scandal|crisis|invasion|operation|siege|ceasefire|coup|assassination|genocide|murder|occurrence|event|sports event|recurring event|award|edition)\b/i;
-const TYPE_GENERIC = /\b(?:type|class|kind|category|genre|concept|field of study|academic discipline|occupation|profession|position|family name|given name|surname|name|disambiguation|wikimedia|taxon|fruit|food|dish|disease|symptom|chemical|substance|drug|medication|color|colour|emotion|ideology|religion|ethnic group|language|currency|unit|website|software|mobile app|application|web service|social network|online service|search engine|operating system|programming language|video game|film|television series|book|album|song|literary work|political party|militant|terrorist|armed group|paramilitary|military unit|armed forces|police|law enforcement|military branch|army|navy|air force)\b/i;
+const TYPE_GENERIC = /\b(?:type|class|kind|category|genre|concept|field of study|academic discipline|occupation|profession|position|family name|given name|surname|name|disambiguation|wikimedia|taxon|fruit|food|dish|disease|symptom|chemical|substance|drug|medication|color|colour|emotion|ideology|religion|ethnic group|language|currency|unit|website|software|mobile app|application|web service|social network|online service|search engine|operating system|programming language|video game(?! (?:console|developer|publisher|company|studio))|film|television series|book|album|song|literary work|political party|militant|terrorist|armed group|paramilitary|military unit|armed forces|police|law enforcement|military branch|army|navy|air force)\b/i;
 const COUNTRY_TYPE = /\b(?:sovereign state|country|island country|constituent country)\b/i;
 const NATURAL_PLACE = /\b(?:mountain|massif|volcano|stratovolcano|glacier|lake|river|island|archipelago|waterfall|canyon|desert|national park|reef|bay|fjord|peninsula|summit|peak|forest|tropical forest|rainforest|ecoregion|biome|wetland|nature reserve)\b/i;
 const STRONG_ORG = /\b(?:public company|business|enterprise|corporation|for-profit corporation|technology company|software company|conglomerate|space agency|government agency|independent agency|central bank|intergovernmental organi[sz]ation|international organi[sz]ation|non-governmental organi[sz]ation|airline|automobile manufacturer|aerospace manufacturer|launch service provider|bank|university|stock exchange)\b/i;
@@ -478,11 +538,17 @@ const SEARCH_VIEW = /\b(?:skyline|panorama|panoramic|cityscape|aerial|view|views
 const PEOPLE_IN_PICTURE = /\b(?:presidents?|prime ministers?|ministers?|secretar(?:y|ies)|ambassadors?|consuls?|generals?|gen\.|admirals?|senators?|governors?|mayors?|kings?|queens?|princes?|princess(?:es)?|pope|meet|meets|meeting|met with|visits?|delegations?|officials?|chairman|ceo|portrait of|mr\.?|mrs\.?|dr\.)\b/i;
 const CROWD_OR_LEISURE = /\b(?:crowds?|people|tourists?|beach|holiday|vacation|festival|carnival|party|parade|celebrat\w*|fireworks|concert|nightlife|wedding|sunbath\w*|bathers|swimm\w*|fans|spectators|audience|children|kids)\b/i;
 const PHOTO_MIME = /^image\/(?:jpeg|png|webp)$/i;
+// a picture whose title speaks of others (a meeting, a crowd, a family): never a grave story's portrait of one person
+// (the biggest face in it may be someone else's)
+// how many pictures of one person the face reader may be asked to read for a grave story
+const SOBER_CANDIDATES = 30;
+const SOBER_NOT_ALONE = /\b(?:and|with|meets?|meeting|met|greet\w*|visit\w*|crowds?|pilgrims|audience|faithful|delegation|family|wife|husband|children|kids|students|supporters|fans|people|team|group|cabinet|leaders|summit|ceremony|rally|wedding|funeral|vs|receives?|from|between|together)\b|&/i;
 
 /** Why a Commons file must not air for this subject and story (null when it may). */
 export function pictureProblem(file, { kind = 'other', flags = {}, minWidth = null } = {}) {
   if (!file) return 'no file';
-  if (!file.url || !COMMONS_MEDIA.test(file.url)) return 'not a Commons picture';
+  // (a Commons picture, or an institution's own Flickr picture found through Openverse, server/openverse.js)
+  if (!file.url || !(COMMONS_MEDIA.test(file.url) || (file.openverse && /^https:\/\/live\.staticflickr\.com\//.test(file.url)))) return 'not a Commons picture';
   if (file.mime && !PHOTO_MIME.test(file.mime) && !/\.(?:jpe?g|png|webp)$/i.test(file.url)) return `format ${file.mime}`;
   // (the size asked of the original; the served picture is Commons' standard rendition of it, 960 or 500 px wide, never
   // narrower than the full shot: nothing is upscaled)
@@ -506,6 +572,8 @@ export function pictureProblem(file, { kind = 'other', flags = {}, minWidth = nu
   if (NOT_PHOTO.test(`${file.title || ''} | ${file.objectName || ''}`) || cats.some((c) => CATEGORY_NOT_PHOTO.test(c) || /\b(?:in|as) logos?\b|^logos? of\b|\brecord labels?\b/i.test(c)) || NOT_PHOTO_DESCRIPTION.test(file.description || '')) return 'not a photograph';
   // (a portrait's description often says where it was taken, "at a rally", "greeting the crowd": for a person only its
   // title counts)
+  // (a FILE picture of the same actor's earlier event shows that event: server/fileevents.js judges what it shows)
+  if (kind === 'event') return null;
   if (EVENT_IN_PICTURE.test(kind === 'person' ? `${file.title || ''}` : `${file.title || ''} | ${file.description || ''} | ${file.objectName || ''}`)) return 'shows an event';
   if (kind !== 'person' && /\b(?:portrait|headshot|selfie)\b/i.test(words)) return 'a portrait under a place or a thing';
   if (kind !== 'person' && OCCASION_IN_PICTURE.test(`${file.title || ''} | ${file.objectName || ''}`)) return 'shows an occasion';
@@ -594,7 +662,7 @@ export class PictureDesk {
    * @param o.search     the Commons FILE-photo search (server/imagesearch.js ImageSearch), optional
    * @param o.mode       'cleared' (default) | 'preview' (outlet photos may stand in, never published)
    */
-  constructor({ dir = null, wikimedia = null, nasa = null, search = null, mode = 'cleared', enabled = true, now = () => Date.now(), log = console, fetchImpl = globalThis.fetch, contact } = {}) {
+  constructor({ dir = null, wikimedia = null, nasa = null, search = null, faces = null, openverse = null, mode = 'cleared', enabled = true, now = () => Date.now(), log = console, fetchImpl = globalThis.fetch, contact } = {}) {
     this.now = now;
     this.log = log;
     this.mode = pictureMode(mode);
@@ -602,7 +670,14 @@ export class PictureDesk {
     this.wm = wikimedia || new WikimediaClient({ fetchImpl, now, log, ...(contact ? { contact } : {}) });
     this.nasa = nasa || new PacedJson({ fetchImpl, now });
     this.search = search;
+    // the face reader's verdicts (server/faces.js; tools/pictures/faces.mjs writes them): a grave story's portrait airs
+    // only once read as sober
+    this.faces = faces;
+    // Openverse (server/openverse.js): institutions' own Flickr pictures, their accounts and licences checked; its day's
+    // count kept with the desk's answers
+    this.openverse = openverse;
     this.kept = new KeptAnswers({ file: dir ? path.join(dir, 'answers.json') : null, now, log });
+    if (this.openverse && !this.openverse.store) this.openverse.store = this.kept;
     this.busy = Promise.resolve(); // decisions run one at a time
     this.failedUrls = new Map(); // url -> until
     this.warned = 0;
@@ -720,6 +795,45 @@ export class PictureDesk {
     return out;
   }
 
+  /** The Commons categories of these items (P373, one SPARQL query per 40, kept): { qid -> category name }. */
+  async commonsCats(qids) {
+    const out = new Map();
+    const ask = [];
+    for (const id of new Set(qids.filter((x) => /^Q\d+$/.test(x || '')))) {
+      if (this.kept.has(`cc:${id}`)) out.set(id, this.kept.get(`cc:${id}`));
+      else ask.push(id);
+    }
+    for (const part of chunks(ask, 40)) {
+      const query = `SELECT ?item (SAMPLE(?c) AS ?cat) WHERE { VALUES ?item { ${part.map((i) => `wd:${i}`).join(' ')} } OPTIONAL { ?item wdt:P373 ?c } } GROUP BY ?item`;
+      let data;
+      try {
+        data = await this.wm.json(`${WDQS}?format=json&query=${encodeURIComponent(query)}`, { accept: 'application/sparql-results+json' });
+      } catch (err) {
+        this.warn(`categories: ${err.message}`);
+        break;
+      }
+      const got = new Map((data?.results?.bindings || []).map((b) => [String(b.item?.value || '').split('/').pop(), b.cat?.value || null]));
+      for (const id of part) out.set(id, this.kept.set(`cc:${id}`, got.get(id) || null, TTL.entity));
+    }
+    return out;
+  }
+
+  /** The newest files of a Commons category (kept): [file title] | null (could not ask). */
+  async categoryFiles(cat) {
+    const k = `cf:${cat}`;
+    if (this.kept.has(k)) return this.kept.get(k);
+    const u = new URL(COMMONS);
+    for (const [key, v] of Object.entries({ action: 'query', format: 'json', formatversion: '2', list: 'categorymembers', cmtitle: `Category:${cat}`, cmtype: 'file', cmlimit: '50', cmsort: 'timestamp', cmdir: 'desc' })) u.searchParams.set(key, v);
+    try {
+      const data = await this.wm.json(u.toString());
+      const titles = (data?.query?.categorymembers || []).map((m) => m.title).filter((t) => /\.(?:jpe?g|png|webp)$/i.test(t));
+      return this.kept.set(k, titles, TTL.entity);
+    } catch (err) {
+      this.warn(`category files: ${err.message}`);
+      return null;
+    }
+  }
+
   /** The capitals of these countries (P36, one SPARQL query per 40, kept): { qid -> [capital qid] }. */
   async capitals(qids) {
     const out = new Map();
@@ -795,12 +909,12 @@ export class PictureDesk {
   }
 
   /** The Commons FILE-photo search (place and structure) with each result's rights. */
-  async commonsSearch(q) {
-    const k = `s:${q}`;
+  async commonsSearch(q, { limit = 12 } = {}) {
+    const k = limit === 12 ? `s:${q}` : `s${limit}:${q}`;
     if (this.kept.has(k)) return (this.kept.get(k) || []).map(withRendition);
     if (!this.search?.searchFiles) return null;
     try {
-      const list = await this.search.searchFiles(q);
+      const list = await this.search.searchFiles(q, { limit });
       if (!list) return null;
       return this.kept.set(k, list, TTL.search).map(withRendition);
     } catch (err) {
@@ -881,6 +995,33 @@ export class PictureDesk {
         }
       }
     }
+    // a portrait that must be sober (a grave story): the person's own Commons category adds candidates after the Wikidata
+    // picture (the face reader picks a sober one)
+    const soberOpts = [...options.values()].flat().filter((o) => o.sober && o.qid);
+    if (soberOpts.length) {
+      const cats = await this.commonsCats(soberOpts.map((o) => o.qid));
+      for (const o of soberOpts) {
+        const name = o.label.replace(/\s*\([^)]*\)\s*$/, '');
+        const surname = fold(name).split(' ').pop();
+        // (a picture of one person: never one whose title speaks of others, a crowd or a meeting)
+        const alone = (t) => fold(t).includes(surname) && !SOBER_NOT_ALONE.test(String(t).replace(/^File:/, '').replace(/[_-]+/g, ' '));
+        const cat = cats.get(o.qid);
+        const listed = cat ? await this.categoryFiles(cat) : [];
+        for (const t of listed || []) if (alone(t) && !o.files.includes(t) && o.files.length < 10) o.files.push(t);
+        // and the person's photographs on Commons by the category's own name when it differs ("Leo XIV" for Pope Leo
+        // XIV, whose files say so) and by name (a category often keeps them in subcategories by year); a public figure
+        // who smiles in most pictures (the Pope) needs many read before a sober one is found
+        for (const q of [...(cat && fold(cat) !== fold(name) ? [cat] : []), name]) {
+          if (o.files.length >= SOBER_CANDIDATES) break;
+          const found = await this.commonsSearch(`"${q}"`, { limit: 30 });
+          for (const f of found || []) {
+            if (!alone(f.title) || o.files.includes(f.title) || o.files.length >= SOBER_CANDIDATES) continue;
+            if (!this.kept.has(`f:${f.title}`)) this.kept.set(`f:${f.title}`, f, TTL.file);
+            o.files.push(f.title);
+          }
+        }
+      }
+    }
     const wanted = [];
     for (const opts of options.values()) for (const o of opts) wanted.push(...o.files);
     const files = await this.files(wanted);
@@ -915,12 +1056,45 @@ export class PictureDesk {
             o.rejected.push({ file: f, problem: `rights: ${rights.why}`, licence: file.licence || file.licenceName || null });
             continue;
           }
+          // a grave story's portrait: only one the face reader read as sober (one face, big enough, no smile)
+          if (o.sober) {
+            const v = this.faces?.verdict(file.url) || null;
+            if (!v) {
+              this.faces?.want(file.url, `sober portrait: ${o.label}`);
+              o.awaiting = (o.awaiting || 0) + 1;
+              o.rejected.push({ file: f, problem: 'expression not read yet' });
+              continue;
+            }
+            if (!v.sober) {
+              o.rejected.push({ file: f, problem: `not a sober portrait: ${v.why}` });
+              continue;
+            }
+          }
           picks.push({ url: file.url, width: file.width, height: file.height, tier: o.tier, kind: FAMILY_OF(o.kind), subject: { kind: o.kind, qid: o.qid, label: o.label, how: o.how || null }, focus: focusOf(o.kind, file.width, file.height), rights });
           break;
         }
         if (picks.length >= 3) break;
       }
-      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: answered(plan, opts) });
+      // (a portrait waiting for the face reader: decided again once it has read them)
+      const waiting = !picks.some((p) => p.tier <= 1) && opts.some((o) => o.awaiting);
+      const known = answered(plan, opts);
+      result.set(s.id, { picks, options: opts, plan: { flags: plan.flags, place: plan.place?.label || null, subjects: plan.subjects.map((c) => c.text) }, complete: known && !waiting, awaitingFaces: known && waiting });
+    }
+    // 3b. a grave story's public figure whose Commons pictures were all read and none is sober: an institution's own
+    // Flickr picture of them (Openverse), read by the face reader too
+    for (const s of todo) {
+      if (!this.openverse || this.now() > deadline) break;
+      const d = result.get(s.id);
+      if (d.picks.some((p) => p.tier <= 1.2)) continue;
+      const o = (options.get(s.id) || []).find((x) => x.sober && !x.awaiting);
+      if (!o) continue;
+      const pick = await this.openversePortrait(s, o);
+      if (pick?.awaiting) {
+        if (!d.picks.length) {
+          d.awaitingFaces = d.complete;
+          d.complete = false;
+        }
+      } else if (pick) d.picks.unshift(pick);
     }
     // 4. NASA's library for a space story whose subject gave no picture (before the place: the desk's order);
     // 5. the Commons FILE photo of the place or structure, for a story still without any
@@ -932,23 +1106,43 @@ export class PictureDesk {
       // a company or a product with no usable picture of its own on Wikidata: a Commons FILE photo of it (its
       // headquarters, its shop, the product itself), named so in the file
       const own = await this.subjectSearchPick(s, plan, options.get(s.id));
-      if (own === undefined) d.complete = false;
+      if (own === undefined) d.complete = d.awaitingFaces = false;
       else if (own) {
         d.picks.unshift(own);
         continue;
       }
       const nasa = await this.nasaPick(s, plan, options.get(s.id));
-      if (nasa === undefined) d.complete = false;
+      if (nasa === undefined) d.complete = d.awaitingFaces = false;
       else if (nasa) d.picks.unshift(nasa);
+      // a FILE picture of the same named actor doing the same kind of thing ("FILE 2023"), before a place's picture
+      if (!d.picks.some((p) => p.tier < 3.8)) {
+        const ev = await this.fileEventPick(s, plan, pages, facts);
+        if (ev === undefined) d.complete = d.awaitingFaces = false;
+        else if (ev?.awaiting) {
+          if (!d.picks.length) {
+            d.awaitingFaces = d.complete;
+            d.complete = false;
+          }
+        } else if (ev) d.picks.unshift(ev);
+      }
+      // a story about government: the seat of the government or the legislature it names, before its country's
+      // capital ("US lawmakers unveil bill": the Capitol, not the White House across the Mall)
+      const first = d.picks[0];
+      const countryPlace = !!first && first.kind === 'place' && (options.get(s.id) || []).some((o) => o.country && o.qid === first.subject?.qid);
+      if (!d.picks.length || countryPlace) {
+        const seat = await this.seatPick(s, plan);
+        if (seat === undefined) d.complete = d.awaitingFaces = false;
+        else if (seat) d.picks.unshift(seat);
+      }
       if (d.picks.length || plan.flags.harm) continue;
       const living = await this.topicSearchPick(s, plan, options.get(s.id));
-      if (living === undefined) d.complete = false;
+      if (living === undefined) d.complete = d.awaitingFaces = false;
       else if (living) {
         d.picks.push(living);
         continue;
       }
       const found = await this.searchPick(s, plan);
-      if (found === undefined) d.complete = false;
+      if (found === undefined) d.complete = d.awaitingFaces = false;
       else if (found) d.picks.push(found);
     }
     for (const s of todo) {
@@ -990,17 +1184,24 @@ export class PictureDesk {
       if (kind === 'thing:taxon') continue; // a living thing is only ever a story's topic
       seenQ.add(page.qid);
       if (kind === 'person') {
-        const why = personProblem({ candidate: c, page, facts: f, flags, text, now: this.now() });
+        const obituary = isObituary({ candidate: c, page, facts: f, flags, now: this.now() });
+        const why = personProblem({ candidate: c, page, facts: f, flags, text, now: this.now(), obituary });
         if (why) {
           opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: why });
           continue;
         }
-        const role = roleAgreement(text, f, { sport: flags.sport });
-        // a grave story: no portrait at all. The desk cannot see a face's expression, and the person's usual picture is
-        // often a smile (Mamdani grinning under "ICE agents who shot man in New York", the hand check of 17 Oct): the map
-        // or the institution's building tells it soberly
-        if (flags.harm || flags.grave) {
-          opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: 'grave story: no portrait (an expression cannot be checked)' });
+        const role = roleAgreement(text, f, { sport: flags.sport }) || (c.how === 'surname' && c.surname ? surnameRole(c.surname) : null) || (obituary ? { family: 'obituary', how: 'obituary' } : null);
+        // a grave story: a portrait only of the public figure it is about (they speak about it, they lead the response;
+        // or the obituary of a public figure), and only a picture the face reader found sober: their usual picture is
+        // often a smile (Mamdani grinning under "ICE agents who shot man in New York", the hand check of 17 Oct). Never
+        // the accused (personProblem), never a private person, never a victim of violence
+        if (flags.harm || flags.grave || obituary) {
+          const grave = graveProblem({ facts: f, role, flags, obituary });
+          if (grave) {
+            opts.push({ kind, tier: 0, qid: page.qid, label: page.title, files: [], via: 'wikidata:P18', refused: grave });
+            continue;
+          }
+          opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: obituary ? 'obituary' : role.how, sober: true });
           continue;
         }
         opts.push({ kind, tier: 1, qid: page.qid, label: page.title, files: images.slice(0, 2), via: 'wikidata:P18', how: role.how });
@@ -1095,6 +1296,173 @@ export class PictureDesk {
       return { url: file.url, width: file.width, height: file.height, tier: 3.6, kind: 'subject', subject: { kind: o.kind, qid: o.qid, label: o.label, how: 'commons search' }, focus: 0.4, rights };
     }
     return null;
+  }
+
+  /**
+   * An actor's names (its Wikidata labels in eight languages, its English aliases) and its Commons category (one SPARQL
+   * query per 40, kept): { qid -> { names, cat } }; null when Wikidata could not be asked.
+   */
+  async actorNames(qids) {
+    const out = new Map();
+    const ask = [];
+    for (const id of new Set(qids.filter((x) => /^Q\d+$/.test(x || '')))) {
+      if (this.kept.has(`an:${id}`)) out.set(id, this.kept.get(`an:${id}`));
+      else ask.push(id);
+    }
+    for (const part of chunks(ask, 40)) {
+      const query = `SELECT ?item (GROUP_CONCAT(DISTINCT ?l; separator="|") AS ?labels) (GROUP_CONCAT(DISTINCT ?a; separator="|") AS ?aliases) (SAMPLE(?c) AS ?cat) WHERE { VALUES ?item { ${part.map((i) => `wd:${i}`).join(' ')} } OPTIONAL { ?item rdfs:label ?l FILTER(LANG(?l) IN ("en","fr","de","es","it","pt","nl","pl")) } OPTIONAL { ?item skos:altLabel ?a FILTER(LANG(?a) = "en") } OPTIONAL { ?item wdt:P373 ?c } } GROUP BY ?item`;
+      let data;
+      try {
+        data = await this.wm.json(`${WDQS}?format=json&query=${encodeURIComponent(query)}`, { accept: 'application/sparql-results+json' });
+      } catch (err) {
+        this.warn(`actor names: ${err.message}`);
+        return null;
+      }
+      const got = new Map((data?.results?.bindings || []).map((b) => [String(b.item?.value || '').split('/').pop(), { names: [...new Set([...(b.labels?.value || '').split('|'), ...(b.aliases?.value || '').split('|')].filter((x) => x && x.length <= 80))].slice(0, 30), cat: b.cat?.value || null }]));
+      for (const id of part) out.set(id, this.kept.set(`an:${id}`, got.get(id) || { names: [], cat: null }, TTL.entity));
+    }
+    return out;
+  }
+
+  /**
+   * A FILE picture of the same named actor doing the same kind of thing the headline says it does (server/fileevents.js):
+   * a movement or a union protesting, a union on strike, a legislature sitting, a bloc's summit; labelled FILE and its
+   * year. undefined: could not ask; { awaiting: true }: under a grave story, a picture the face reader has not read yet.
+   */
+  async fileEventPick(story, plan, pages, facts) {
+    if (!this.search?.searchFiles) return null;
+    const action = storyAction(plan.flags);
+    if (!action) return null;
+    const actors = [];
+    for (const c of plan.subjects) {
+      if (c.start > 6 || c.how === 'topic') continue;
+      const page = pages.get(c.text);
+      if (!page?.qid || page.disambiguation || page.fragment || actors.some((a) => a.qid === page.qid)) continue;
+      const kind = actorKind(facts.get(page.qid));
+      if (kind && action.actors.includes(kind)) actors.push({ qid: page.qid, label: page.title, written: c.text, kind });
+    }
+    if (!actors.length) return null;
+    const known = await this.actorNames(actors.map((a) => a.qid));
+    if (!known) return undefined;
+    const storyAt = Number(story.published || story.at) || this.now();
+    const grave = plan.flags.grave || plan.flags.harm;
+    let awaiting = false;
+    for (const a of actors.slice(0, 2)) {
+      const k = known.get(a.qid) || { names: [] };
+      const names = [a.label.replace(/\s*\([^)]*\)\s*$/, ''), a.written, ...k.names, ...(k.cat ? [k.cat] : [])];
+      const list = await this.commonsSearch(eventQuery(a.written, action), { limit: 30 });
+      if (list === null) return undefined;
+      for (const file of list) {
+        if (eventFileProblem(file, { names, action, storyAt })) continue;
+        if (pictureProblem(file, { kind: 'event', flags: plan.flags })) continue;
+        const when = fileYear(file, storyAt);
+        const rights = rightsRecord({ source: 'wikimedia-commons', via: `commons:file-${action.id}`, licence: file.licence, author: file.author, title: file.title, page: file.page, url: file.url, restrictions: file.restrictions, ai: file.ai, year: when.year, subject: { kind: 'event', qid: a.qid, label: a.label }, checkedAt: this.now() });
+        if (!rights.cleared) continue;
+        // a grave story: no private person's face in the foreground (the face reader's verdict)
+        if (grave) {
+          const v = this.faces?.verdict(file.url) || null;
+          if (!v) {
+            this.faces?.want(file.url, `FILE ${action.id}: ${a.label}`);
+            awaiting = true;
+            continue;
+          }
+          if (v.foreground) continue;
+        }
+        return { url: file.url, width: file.width, height: file.height, tier: 3.8, kind: 'event', subject: { kind: 'event', qid: a.qid, label: a.label, how: `FILE ${action.id} ${when.year}` }, focus: 0.45, rights };
+      }
+      // an institution's own Flickr pictures of it (Openverse: a parliament's sittings, a government's summit)
+      for (const r of (await this.openverseFind(eventQuery(a.written, action).replace(/"/g, ''))) || []) {
+        if (!openverseTrust(r, { storyAt }).tier) continue;
+        const file = this.openverseFile(r);
+        if (eventFileProblem(file, { names, action, storyAt }) || pictureProblem(file, { kind: 'event', flags: plan.flags })) continue;
+        const when = fileYear(file, storyAt);
+        const rights = rightsRecord({ source: 'flickr', via: `openverse:file-${action.id}`, licence: r.licence, author: r.creator, title: r.title, page: r.page, url: r.url, year: when.year, subject: { kind: 'event', qid: a.qid, label: a.label }, checkedAt: this.now() });
+        if (!rights.cleared) continue;
+        if (grave) {
+          const v = this.faces?.verdict(r.url) || null;
+          if (!v) {
+            this.faces?.want(r.url, `FILE ${action.id} (Openverse): ${a.label}`);
+            awaiting = true;
+            continue;
+          }
+          if (v.foreground) continue;
+        }
+        return { url: r.url, width: r.width, height: r.height, tier: 3.8, kind: 'event', subject: { kind: 'event', qid: a.qid, label: a.label, how: `FILE ${action.id} ${when.year} (${INSTITUTIONS.get(r.account)})` }, focus: 0.45, rights };
+      }
+    }
+    return awaiting ? { awaiting: true } : null;
+  }
+
+  /**
+   * The seat of the government or the legislature of the country a story about government names first (its Wikidata
+   * picture, FILE): undefined: could not ask; null: no seat for this story.
+   */
+  async seatPick(story, plan) {
+    const seat = seatFor(plan.flags);
+    if (!seat) return null;
+    const pages = await this.pages([seat.title]);
+    const page = pages.get(seat.title);
+    if (!page) return this.kept.has(`t:${seat.title}`) ? null : undefined;
+    if (!page.qid || page.disambiguation || page.fragment) return null;
+    const f = (await this.facts([page.qid])).get(page.qid);
+    if (!f) return this.kept.has(`q:${page.qid}`) ? null : undefined;
+    const titles = [...(f.images || []).slice(0, 2), ...(f.aerials || []).slice(0, 1)].filter((x) => !(f.logos || []).includes(x));
+    const files = await this.files(titles);
+    for (const t of titles) {
+      const file = files.get(t);
+      if (!file && !this.kept.has(`f:${t}`)) return undefined;
+      if (pictureProblem(file, { kind: 'place', flags: { ...plan.flags, statecraft: true } })) continue;
+      const rights = rightsRecord({ source: 'wikimedia-commons', via: 'wikidata:P18', licence: file.licence, author: file.author, title: file.title, page: file.page, url: file.url, restrictions: file.restrictions, ai: file.ai, subject: { kind: 'thing:structure', qid: page.qid, label: page.title }, checkedAt: this.now() });
+      if (!rights.cleared) continue;
+      return { url: file.url, width: file.width, height: file.height, tier: 4.5, kind: 'institution', subject: { kind: 'thing:structure', qid: page.qid, label: page.title, how: `seat of the ${seat.kind} (${seat.country})` }, focus: 0.4, rights };
+    }
+    return null;
+  }
+
+  /** Openverse's Flickr results for a query, the institutions' only (kept a week): [result] | null (could not ask). */
+  async openverseFind(q) {
+    if (!this.openverse) return [];
+    const k = `ov:${q}`;
+    if (this.kept.has(k)) return this.kept.get(k);
+    const list = await this.openverse.search(q, { extra: { source: 'flickr' } });
+    if (list === null) return null;
+    return this.kept.set(k, list.filter((r) => INSTITUTIONS.has(r.account || '')).slice(0, 20), 7 * DAY);
+  }
+
+  /** An Openverse result as the desk's file record (for pictureProblem and the face reader). */
+  openverseFile(r) {
+    return { openverse: true, url: r.url, width: r.width, height: r.height, origWidth: r.width, title: r.title, description: (r.tags || []).join(', '), categories: '', objectName: '', mime: 'image/jpeg' };
+  }
+
+  /**
+   * A sober portrait of a grave story's public figure from an institution's own Flickr account (Openverse): one person
+   * named in the title, read by the face reader (undefined/null: none; { awaiting: true }: not read yet).
+   */
+  async openversePortrait(story, o) {
+    const name = o.label.replace(/\s*\([^)]*\)\s*$/, '');
+    const surname = fold(name).split(' ').pop();
+    const list = await this.openverseFind(name);
+    if (!list) return null;
+    const storyAt = Number(story.published || story.at) || this.now();
+    let awaiting = false;
+    for (const r of list) {
+      if (!fold(r.title).includes(surname) || SOBER_NOT_ALONE.test(r.title)) continue;
+      const trust = openverseTrust(r, { storyAt });
+      if (!trust.tier) continue;
+      const file = this.openverseFile(r);
+      if (pictureProblem(file, { kind: 'person' })) continue;
+      const rights = rightsRecord({ source: 'flickr', via: 'openverse:flickr', licence: r.licence, author: r.creator, title: r.title, page: r.page, url: r.url, subject: { kind: 'person', qid: o.qid, label: o.label }, checkedAt: this.now() });
+      if (!rights.cleared) continue;
+      const v = this.faces?.verdict(r.url) || null;
+      if (!v) {
+        this.faces?.want(r.url, `sober portrait (Openverse): ${o.label}`);
+        awaiting = true;
+        continue;
+      }
+      if (!v.sober) continue;
+      return { url: r.url, width: r.width, height: r.height, tier: 1.2, kind: 'portrait', subject: { kind: 'person', qid: o.qid, label: o.label, how: `${o.how || 'grave story'}; ${trust.why}` }, focus: focusOf('person', r.width, r.height), rights };
+    }
+    return awaiting ? { awaiting: true } : null;
   }
 
   /** NASA's library for a space story (undefined: could not ask; null: nothing fits). */
@@ -1297,20 +1665,23 @@ export function near(entry, coords) {
 
 const YEAR = 365.25 * DAY;
 /** Why a person's portrait must not air on this story (null when it may). */
-export function personProblem({ candidate, page, facts, flags, text, now = Date.now() }) {
-  if (!page.living) return 'not in Wikipedia\'s living people';
-  if (facts.died) return 'deceased';
+export function personProblem({ candidate, page, facts, flags, text, now = Date.now(), obituary = false }) {
+  // (the obituary of a public figure: their death is the story, confirmed on Wikidata or in it)
+  if (!obituary && !page.living) return 'not in Wikipedia\'s living people';
+  if (!obituary && facts.died) return 'deceased';
   if (!Number.isFinite(facts.born)) return 'no birth date (adult unknown)';
-  if (now - facts.born < 18 * YEAR) return 'under 18';
-  if (flags.deathOf) return 'a story of a death';
+  if (now - facts.born < 18 * YEAR && !obituary) return 'under 18';
+  if (flags.deathOf && !obituary) return 'a story of a death';
   if (flags.jeopardy) return 'a story of an accusation or a trial';
   // named in full in the story, the surname in the headline, and early in it (the story is about them)
   const full = page.title.replace(/\s*\([^)]*\)\s*$/, '');
   const inText = (n) => new RegExp(`(?<![\\p{L}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(text);
-  const written = candidate.text;
-  if (written.split(/\s+/).length < 2 && !inText(full)) return 'not named in full';
+  // (a public figure the news names by surname alone, server SURNAMES: the surname as written)
+  const bySurname = candidate.how === 'surname' && candidate.surname;
+  const written = bySurname ? candidate.surname : candidate.text;
+  if (written.split(/\s+/).length < 2 && !inText(full) && !bySurname) return 'not named in full';
   if (!inText(written)) return 'not named in the story';
-  if (fold(written) !== fold(full) && !page.redirected) return 'the name differs from the article';
+  if (fold(written) !== fold(full) && !page.redirected && !bySurname) return 'the name differs from the article';
   // every word of the name as written is in the article's title ("Prince Charles" is not "Charles III"; "Zelensky" is in
   // "Volodymyr Zelenskyy", "Erdogan" in "Recep Tayyip Erdoğan")
   const titleFolded = fold(full);
@@ -1319,7 +1690,31 @@ export function personProblem({ candidate, page, facts, flags, text, now = Date.
   if (candidate.namedThing) return 'a place or a thing named after a person';
   if (candidate.start > 6 && !candidate.said) return 'not the headline\'s subject';
   if ((facts.sitelinks || 0) < 2) return 'no public profile';
-  if (!roleAgreement(text, facts, { sport: !!flags.sport })) return 'the story gives another role';
+  if (!roleAgreement(text, facts, { sport: !!flags.sport }) && !bySurname) return 'the story gives another role';
+  return null;
+}
+
+/**
+ * Is this the obituary of a public figure? Their death is the story (the headline says it, or names an obituary), they
+ * open the headline, Wikidata records their death recently or the story says they died, nothing violent (a victim of
+ * violence never gets a portrait), and they are known in ten or more languages.
+ */
+export function isObituary({ candidate, page, facts, flags, now = Date.now() }) {
+  if (!flags.deathOf && !/\bobituary\b/i.test(flags.title || '')) return false;
+  if (flags.violent || candidate.start > 3) return false;
+  if ((facts.sitelinks || 0) < 10) return false;
+  const died = Number.isFinite(facts.died) ? facts.died : null;
+  if (died !== null && now - died > 400 * DAY) return false; // an anniversary, not an obituary
+  return died !== null || !page.living || /\b(?:obituary|dies|died|dead at|has died|passes away|passed away)\b/i.test(flags.title || '');
+}
+
+/** Why a grave story may not show this person's (sober) portrait: only public figures, never a victim of violence. */
+export function graveProblem({ facts, role, flags, obituary }) {
+  if (obituary) return flags.violent ? 'a victim of violence: no portrait' : null;
+  if (flags.deathOf) return 'a story of a death';
+  // a public figure speaking for an institution, or one known in 25 or more languages
+  const official = role && ['politics', 'royalty', 'religion', 'business', 'law', 'military'].includes(role.family);
+  if (!official && (facts.sitelinks || 0) < 25) return 'grave story: only a public figure in their role';
   return null;
 }
 

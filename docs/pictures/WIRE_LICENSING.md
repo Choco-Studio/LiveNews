@@ -30,8 +30,10 @@ month**, each aired several times and on five platforms. That is subscription te
    may be "rendered in the channel's pixel-art style (downscaled to 416×234, reduced to 24 colours, ordered dithering)"
    without distorting their editorial meaning, with the credit kept on screen.
 2. **AI-assisted is a disclosure, not a deal-breaker.** All four forbid training AI on their content; none of the terms
-   read forbids an AI-assisted channel from airing licensed pictures. The station never sends a picture to a model
-   (pictures go from the agency to the image cache to the viewer's pixelation). Say so in the order.
+   read forbids an AI-assisted channel from airing licensed pictures. An agency picture would never be sent to a model
+   (it goes from the agency to the image cache to the viewer's pixelation; the face reader, RIGHTS.md §4, reads only
+   open-licence portraits and must be kept off wire pictures). Say so in the order: the draft request is
+   `docs/pictures/AGENCY_REQUEST.md`.
 3. **Retelling and platforms.** Reuters' "broadcast once" clause and the per-platform pricing some agencies use (a
    YouTube upload counted as another site) must be negotiated for a 24/7 channel on five platforms.
 4. **Cost.** Getty's published plans (10 pictures a month) cannot serve ~1,200 a month; an Enterprise or a Reuters

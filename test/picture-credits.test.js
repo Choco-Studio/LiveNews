@@ -86,6 +86,16 @@ describe('the credit drawn', () => {
     assert.ok(ctx.fills.some((f) => f.c === P.ink), 'the credit plate');
     assert.ok(ctx.fills.every((f) => f.x >= 13 && f.x + f.w <= 384 - 13 + 1 && f.y >= 21 && f.y + f.h <= 36), JSON.stringify(ctx.fills));
   });
+  test('a FILE picture of an earlier event says its year in the tag ("FILE 2023"), the credit beside it, inside action-safe', () => {
+    const plain = fakeCtx();
+    drawPictureCredits(plain, { shot: 'full', storyId: 's1', images, pictureCredits });
+    const dated = fakeCtx();
+    const credits = new Map([['s1', { credit: 'FILE 2023 · EUROPEAN PARLIAMENT · CC BY 2.0 · PIXELATED', uncleared: false }]]);
+    assert.equal(drawPictureCredits(dated, { shot: 'full', storyId: 's1', images, pictureCredits: credits }), 1);
+    const tag = (ctx) => ctx.fills.filter((f) => f.c === P.black).reduce((w, f) => Math.max(w, f.w), 0);
+    assert.ok(tag(dated) > tag(plain), 'the year is in the tag');
+    assert.ok(dated.fills.every((f) => f.x >= 13 && f.x + f.w <= 384 - 13 + 1), JSON.stringify(dated.fills));
+  });
   test('a picture not cleared (a private preview) carries PREVIEW · NOT CLEARED under its credit', () => {
     const ctx = fakeCtx();
     drawPictureCredits(ctx, { shot: 'full', storyId: 's2', images, pictureCredits });

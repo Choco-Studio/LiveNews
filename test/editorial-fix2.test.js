@@ -215,6 +215,8 @@ describe('fix r2: a broken item never costs the feed', () => {
 describe('fix r2: credits on air', () => {
   test('the stop-gap credit always fits the source plate whole; the credit line is ready to draw', () => {
     assert.equal(sourceWithCredit('Bitport Herald', 'Ledger Line'), 'Bitport Herald / Photo: Ledger Line');
+    assert.match(sourceWithCredit('GLOBIT', 'FILE 2023 · Jane Doe · CC BY 4.0 · PIXELATED'), /^GLOBIT \/ File 2023: Jane Doe/, 'a FILE picture of an earlier event keeps its year');
+    assert.match(creditLine('FILE 2023 · Jane Doe · CC BY 4.0'), /^FILE 2023: JANE DOE/);
     assert.equal(sourceWithCredit('The Guardian', 'Getty Images/AFP via Getty Images'), 'The Guardian / Photo: Getty Images');
     assert.equal(sourceWithCredit('Pixelburg Post', 'Pixel Wire Agency'), 'Pixelburg Post / Photo: Pixel Wire');
     assert.equal(sourceWithCredit('The Washington Post', 'Associated Press'), 'The Washington Post', 'no room: the credit stays in imageCredit');

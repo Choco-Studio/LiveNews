@@ -162,5 +162,9 @@ export const config = {
     desk: !/^(0|false|no|off)$/i.test(env('PICTURE_DESK', '1')),
     contact: env('WIKIMEDIA_CONTACT', DEFAULT_CONTACT),
     dir: path.join(ROOT, 'data', 'pictures'),
+    // Openverse (server/openverse.js): institutions' own Flickr pictures, asked anonymously within its limits (200 a
+    // day announced; OPENVERSE_DAILY keeps the desk under it); OPENVERSE=off stops asking
+    openverse: !/^(0|false|no|off)$/i.test(env('OPENVERSE', '1')),
+    openverseDaily: Math.max(0, Math.min(190, Number(env('OPENVERSE_DAILY', '150')) || 0)),
   },
 };

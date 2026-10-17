@@ -13,6 +13,9 @@ from this machine), the relevance rules, how the desk copes with rate limits, th
 **what a lawyer should still confirm**. It is not legal advice.
 
 Code: `server/rights.js` (licences, the record, credits, the gate), `server/picturedesk.js` (the desk),
+`server/fileevents.js` (FILE pictures of the same actor, the seat of government), `server/openverse.js` (institutions'
+Flickr pictures through Openverse), `server/faces.js` and `tools/pictures/faces.mjs` (the face reader),
+`public/js/graphics/locator.js` and `topicboard.js` (the boards when nothing is cleared),
 `server/wikimedia.js` (the polite Wikimedia client and the kept answers), `server/imagesearch.js` (the Commons search),
 `server/footage.js` (clips get records too), the producer's picture stage, `server/archive.js` (the gate on old
 entries), `server/index.js` (`/api/img` serves only airable pictures), `public/js/graphics/picture.js` (the on-screen
@@ -26,15 +29,16 @@ compact form (`compactRights()`).
 
 | field | what it holds |
 | --- | --- |
-| `source` | `wikimedia-commons`, `nasa`, `operator` (a local feed's own files), `outlet` (never cleared) |
-| `via` | how it was found: `wikidata:P18`, `commons:search`, `commons:footage`, `nasa:images`, `nasa:article`, `outlet:…` |
+| `source` | `wikimedia-commons`, `nasa`, `flickr` (an institution's own Flickr picture, found through Openverse), `operator` (a local feed's own files), `outlet` (never cleared) |
+| `via` | how it was found: `wikidata:P18`, `commons:search`, `commons:file-protest` / `-strike` / `-session` / `-summit` (a FILE picture of the same actor), `openverse:flickr`, `openverse:file-…`, `commons:footage`, `nasa:images`, `nasa:article`, `outlet:…` |
 | `subject` | what it shows: `{ kind: person / thing:org / thing:structure / … / place, qid, label }` |
 | `licence` | `{ id, name, url }`: an SPDX id where one exists (`CC-BY-SA-4.0`, `CC0-1.0`), else named terms (`NASA-MUG`, `OGL-UK-3.0`, `PD-USGov`, `OUTLET`) |
 | `author` | the author or source as the licence asks it to be credited (markup, "Own work", URLs removed) |
-| `title`, `page`, `url` | the file's title, its original page (Commons file page, NASA library page), the rendition served |
+| `title`, `page`, `url` | the file's title, its original page (Commons file page, NASA library page, the Flickr photo page Openverse indexed), the rendition served |
 | `uses` | `{ editorial, commercial, derivative, pixelation }`: what the terms allow |
 | `restrictions` | non-copyright warnings the source gives (`personality`, `trademarked`, `insignia`) |
 | `label` | `FILE` unless the picture is of the event itself (`EVENT`: only a NASA photograph of the mission named in the story, taken in the two days before it) |
+| `year` | a FILE picture of an earlier event: the year it was taken (its EXIF date, else a date in the file); the tag then says `FILE 2023` |
 | `checkedAt` | when the terms were read for this picture |
 | `cleared`, `why` | cleared only with editorial **and** commercial **and** derivative use, a known licence, an author to credit where the licence asks one, an https picture, and no generator behind it; otherwise `why` says which |
 | `credit`, `attribution` | the on-screen credit and the full attribution (below) |
@@ -63,6 +67,10 @@ second (`CC BY-SA 3.0 de` is the 3.0 licence; a CC licence with no version is re
 | ESA standard terms | **no** | — | "shall not be used for a commercial purpose" |
 | UN Photo | **no** | — | "cannot be altered … or used to create derivative works" |
 | an outlet's or agency's photo | **no** | — | no licence; private preview only |
+
+A FILE picture of an earlier event of the same actor says the year it was taken in its tag: `FILE 2023 · AUTHOR ·
+CC BY-SA 4.0 · PIXELATED` (the producer's source plate keeps it too: `File 2023: AUTHOR`). An institution's Flickr
+picture credits the account as the licence asks (`FILE · EUROPEAN PARLIAMENT · CC BY 2.0 · PIXELATED`).
 
 The on-screen credit fits one line of the channel's micro type (60 characters); a longer one runs on two lines, the
 author on the first and the licence and `PIXELATED` on the second (`onAirCredit`, `creditLines`): the licence and
@@ -118,12 +126,31 @@ the lawyer (§8), not a rule.
 | 2 | **European Commission Audiovisual Service** (`audiovisual.ec.europa.eu/en/conditions-of-use`) | 200 | "Unless otherwise indicated … licensed under CC BY 4.0. … reuse is allowed provided appropriate credit is given and changes made are clearly indicated. Any reuse must not distort the original meaning"; personality rights and third-party works not covered; notice "© European Union, 202X, licensed under CC BY 4.0" | yes, indicated | yes | © European Union | through Commons (EC photos tagged CC BY 4.0); the portal has no public API |
 | — | **UN Photo** (`media.un.org/photo/en/guidelines`) | 200 | "UN photos cannot be altered, sold, redistributed or used to create derivative works"; prior written permission; "US $70.00 per photo" for film/video | **no** | — | UN Photo/… | **not used** |
 | — | **Company newsrooms** (Apple Newsroom, NVIDIA Newsroom multimedia, Airbus media library, SpaceX media) | 200 | no per-picture licence on the pages; site terms reserve all rights; press kits usually forbid alteration | unclear | unclear | — | **not used** (the brief: unclear terms, leave out) |
+| 3 | **Commons FILE pictures of the same named actor doing the same kind of thing** (`server/fileevents.js`) | as Commons | per file | per licence | per licence | per licence, with the year | yes, strictly (§4) |
+| 3 | **Openverse** (`api.openverse.org/v1/images/`), for **institutions' own Flickr accounts** only (`server/openverse.js`) | 200 anonymously; **timeouts at 10 s** (now 25 s); the index is sparse and dated for Flickr (the European Parliament's account: 240 pictures indexed of its 14,000, the newest indexed June 2025) | Openverse Terms of Service (docs.openverse.org/terms_of_service.html, effective 5 May 2022): "adhere to all rate limits"; "must not scrape the content in the Openverse catalog"; "must not use multiple machines to circumvent rate limits"; "respect and comply with the terms and conditions applicable to the content … including by providing proper attribution to CC-licensed works and respecting the terms and conditions of platforms hosting CC-licensed works"; Openverse "does not verify its licensing status"; a product made with the API "must prominently indicate that it was made using Openverse but is not endorsed or certified by Openverse"; it "reserves the right to charge fees for commercial uses". Limits announced in its headers: **20 requests a minute, 200 a day** anonymously | per licence (only CC BY, CC BY-SA, CC0 and US government works pass; Openverse's own filter `license_type=commercial,modification` is asked too) | per licence | the account's name, the licence, PIXELATED; the Flickr page in the description | yes: tier 1 accounts only (below), sober portraits and FILE events; 120–150 requests a day at most |
+| — | **Flickr's own pages** (`www.flickr.com`) | 200 | **robots.txt: "User-agent: * / Disallow: /"** for every robot it does not name (read live 17 Oct) | — | — | — | **never read by the desk**: the licence, the account and the date come from Openverse's index; the picture itself from `live.staticflickr.com` (its robots.txt refuses nothing), with the desk's User-Agent. Flickr's API would give the account's age and size and the date taken, but needs a key, and commercial use needs Flickr's permission: owner action |
+| 3 | **the seat of government** of the country a story about government opens on (the White House, the Palace of Westminster, the Berlaymont: `SEATS`, each title checked 17 Oct) | as Wikidata and Commons | per file | per licence | per licence | per licence | yes (§4) |
 | 3 | **Commons FILE photos of the city or structure** (free-text search, `server/imagesearch.js`) | as Commons | per file | per licence | per licence | per licence | yes, strictly (§4) |
-| 4 | nothing cleared fits | — | — | — | — | — | the place's map and the channel's boards (LISTA item 4); never a drawn picture |
+| 4 | nothing cleared fits | — | — | — | — | — | **the locator board** (`public/js/graphics/locator.js`): the country drawn and lit on the channel's map, the city dot with its ring, the place's name on a plate, as the montage airs it; no place: **the topic board** (`public/js/graphics/topicboard.js`): the story's topic as one of the channel's pixel glyphs (a chip for AI, a rocket for space, a flask for science, a chart for the economy…) with its name on a plate, and under a grave story or a story of crime no glyph, the section's name only; never a picture of the event drawn |
 
 Pictures from heads of state and governments that publish under open licences (kremlin.ru and president.gov.ua CC BY
 4.0, the European Parliament CC BY 4.0, the White House as a federal work) reach the desk the same way: through their
 Commons file, with the licence tagged there.
+
+**Openverse's safeguards against laundering** (Flickr licences are set by the uploader and reviewed by no one):
+
+1. **Trust tiers.** Tier 1: an institution's own account, by its Flickr address in the creator link Openverse indexed
+   (`INSTITUTIONS`, 13 accounts checked by hand on 17 Oct: the Office of the President of Ukraine, the European
+   Parliament, No 10, the White House, the US State Department, the UK Foreign Office and Home Office, DFID, Brazil's
+   Senate and Planalto, Chatham House, the Estonian EU presidency, South Africa's GCIS). Tier 2 (an account five years
+   old or more with 500 photos of its own) needs the account's age and size, which only Flickr's pages (refused to
+   robots) or its API (a key) give: **off**. Everything else is refused.
+2. **No other agency's picture.** A title or tag naming Reuters, AP, AFP, Getty, EPA, Anadolu, Xinhua, TASS, DPA, PA,
+   Shutterstock, Alamy, "all rights reserved", "courtesy of"… is refused (`AGENCY_CREDIT`). A watermark in the pixels
+   is not read by the desk: every Openverse pick is in the hand check, looked at on its contact sheet.
+3. **The date.** Indexed before the story; a year in its title after the story is refused; a FILE event says the year
+   its title gives (and is refused without one).
+4. **The record keeps the source page** (the Flickr photo page) and the licence as indexed, with when it was read.
 
 ## 4. Relevance rules (as strict as before, or stricter)
 
@@ -141,15 +168,26 @@ The desk (`server/picturedesk.js`) never shows a picture that is not of the stor
   them); **in the role the story gives** (`roleAgreement`: a family of roles agrees, and either the very role word
   with their country named in the story or a person known in 15+ languages, or the country with 5+; in a sports story,
   a sportsperson known in 15+ languages); every word of the name as written in the article's title ("Prince Charles"
-  is not "Charles III"), never a thing named after them ("Prince Charles cinema"); never on a story of their death,
-  never on a story of an accusation, an arrest, a search of their home or a raid, a trial or a conviction; **never on
-  a grave story** (harm, violence, conflict, a death, a person's illness or operation): the desk cannot see a face's
-  expression, and a person's usual picture is often a smile (Mamdani grinning under a shooting, the hand check of 17
-  Oct); an institution's building or the map tells those soberly. A portrait airs **framed whole** (head and
-  shoulders, the height of the frame, over the same picture blurred and darkened: `pixelate.js` `fit: 'portrait'`),
-  never cropped to the eyes or the hair.
-  **A surname alone is never enough**, however famous: "Bolsonaro maintaining edge over Lula in Brazil run-off" (October
-  2026) is about Flávio Bolsonaro, while "Bolsonaro" leads to his father on Wikipedia.
+  is not "Charles III"), never a thing named after them ("Prince Charles cinema"); never on a story of their death (but see
+  obituaries below), never on a story of an accusation, an arrest, a search of their home or a raid, a trial or a
+  conviction (ZXC v Bloomberg). A portrait airs **framed whole** (head and shoulders, the height of the frame, over the
+  same picture blurred and darkened: `pixelate.js` `fit: 'portrait'`), never cropped to the eyes or the hair.
+- **A grave story** (harm, violence, conflict, a person's illness or operation) shows a portrait only of the **public
+  figure it is about in their role** (an official of government, a monarch, a religious leader, a company's head, a
+  judge, a commander, or anyone known in 25+ languages: they speak about it, they lead the response), and only a
+  **sober** one: the face reader (below) must have read the picture as one face, big enough, calm, **no smile**. The
+  candidates are the person's Wikidata picture, then the files of their Commons category and their photographs on
+  Commons by name whose title speaks of no one else (no "with", "meets", "crowd", "family"), then an institution's own
+  Flickr picture of them (Openverse). A picture not read yet never airs: the decision waits for the reader. Never a
+  private person, never a victim, never the accused (as above).
+- **An obituary** of a public figure (their death is the headline's story, they open it, Wikidata records the death in
+  the last 400 days or the story says they died, known in 10+ languages, nothing violent): their sober portrait, read
+  by the face reader. A victim of violence never gets one.
+- **A surname alone** is enough only for the public figures the news names that way (`SURNAMES`: Trump, Putin,
+  Zelensky, Macron, Burnham, Xi, Modi, Lula, Musk, Pope Leo… 59 people, each article checked on Wikipedia on 17 Oct),
+  and only where no one else of that surname is named in the story ("Melania Trump"). Never an ambiguous one:
+  "Bolsonaro maintaining edge over Lula in Brazil run-off" (October 2026) is about Flávio Bolsonaro, while "Bolsonaro"
+  leads to his father; "Albanese" is also the UN's Francesca Albanese; "Medvedev" also a tennis player.
 - **A thing** within the first eight words of the headline; its item must fit the story (its description shares a
   word with it, or its kind fits the section); on a story of violence or conflict, no thing at all; where people were
   harmed, only an institution.
@@ -184,6 +222,30 @@ The desk (`server/picturedesk.js`) never shows a picture that is not of the stor
   rendition and never narrower than the 416 px full shot: nothing is upscaled) and keeping at least 35 % of itself in the 16:9 crop (a
   portrait keeps the head: `focusOf`, the client's `pixelate(..., { focusY })`).
 - **Labelled FILE** whenever it is not of the event itself (all but NASA's same-mission photographs of the day).
+- **A FILE picture of the same named actor doing the same kind of thing** (`server/fileevents.js`): the headline's
+  actor (within its first seven words) is a movement, a union, a party, a legislature, a bloc or a company (never an
+  armed group, a police force or a person), and the headline says it protests, strikes (workers: never an air strike or
+  "strikes a deal"), sits or votes (a legislature), or meets at a summit (a bloc). The Commons file must name the actor
+  (its Wikidata labels in eight languages, its aliases or its Commons category) and the action (in the languages its
+  photographers caption in), show no violent scene (no riot, tear gas, clashes, injured, arrests, fire), and say when it
+  was taken: before the story (never the story's own day), within ten years. It airs as `FILE 2023`. **Never under a
+  death or a disaster toll** (a death in the headline, a natural disaster or an outbreak, people harmed in the story);
+  **under a grave story never with a private person's face in the foreground**: the face reader must find no face of
+  9 % of the picture's height or more.
+- **The seat of government** of the country a story about government opens on (or its kicker or its demonym names:
+  "US Senate votes…", "Australia politics live: …", "Irish justice minister says…"), or the EU acting at the head of
+  the headline: its legislature for a vote, a bill, MPs, its government otherwise (`SEATS`, 38 countries and the EU,
+  each title checked on 17 Oct: a body's article, whose picture is its logo, is left out). Never under violence, a
+  death, a toll or an outbreak; never for a country met later in the headline ("Talks on Ukraine continue in Geneva").
+- **The face reader** (`tools/pictures/faces.mjs`, beside the station: the station runs no model). A face detector
+  (UltraFace RFB-320) and an expression model (FER+, emotion-ferplus-8), both ONNX under Apache-2.0, run by
+  onnxruntime-web 1.18.0 (MIT) in headless Chromium. Fetched once into `data/models` from **huggingface.co** (which
+  redirects to its CDN **us.aws.cdn.hf.co**) and **cdn.jsdelivr.net**: new hosts for this project. The desk queues
+  the pictures it needs read (`data/pictures/faces-queue.json`) and reads the verdicts (`faces.json`); a picture that
+  would not download stays queued, never taken for "no face". A verdict is sober with one face of 12 %+ of the
+  picture's height (a second face of 70 % its size or more is "two people"), detection score 0.85+, happiness 0.2 or
+  less, surprise 0.4 or less, neutral plus sadness 0.45 or more. Checked on 23 portraits by eye before use, and every
+  grave portrait of the measurement is in the hand check.
 
 ## 5. Rate limits and robustness
 
@@ -209,6 +271,13 @@ Wikimedia's limits (mediawiki.org "Wikimedia APIs/Rate limits", read 17 Oct 2026
 Measured from this machine, whose address is shared with other agents: Wikimedia answered 429 on about one request in
 four with Retry-After 10–56 s. The measurement tool waits pauses out; the station never does.
 
+**Openverse** (`server/openverse.js`): its own queue, one request at a time, 3.2 s apart (under 20 a minute), at most
+`OPENVERSE_DAILY` a day (150 by default, under the 200 announced), the day's count kept with the desk's answers so a
+restart does not reset it; a 429 pauses it for what Retry-After asks (a minute at least), until the next UTC day when
+the day's allowance is spent (`x-ratelimit-available-anon_sustained: 0`); answers kept a week; the same identifying
+User-Agent as Wikimedia's (the project's URL, never a personal address). Openverse is asked only for a grave story's
+public figure whose Commons pictures were all read and none is sober, and for a FILE event's actor.
+
 ## 6. Settings
 
 | variable | default | what it does |
@@ -216,6 +285,12 @@ four with Retry-After 10–56 s. The measurement tool waits pauses out; the stat
 | `PICTURE_RIGHTS` | `cleared` | `preview` lets the outlets' own photos stand in where nothing cleared fits, **for a private preview only**: such a picture shows `PREVIEW · NOT CLEARED` under its credit for as long as it is on screen, the episode carries `picturePreview: true` and `picturesCleared: false`, the server warns at start |
 | `PICTURE_DESK` | `1` | `0`: no cleared pictures are looked for (maps and boards) |
 | `WIKIMEDIA_CONTACT` | the project URL | the operator's email or URL in the User-Agent (without one Wikimedia allows 10 requests a minute) |
+| `OPENVERSE` | `1` | `0`: Openverse is not asked |
+| `OPENVERSE_DAILY` | `150` | Openverse requests a day at most (0–190; the anonymous allowance is 200) |
+
+The face reader runs beside the station: `NODE_USE_ENV_PROXY=1 node tools/pictures/faces.mjs --dir data/pictures`
+(after a measurement: `--dir <its out>`), on a schedule or by hand; until it has read a grave story's portraits, that
+story airs on its locator board.
 
 Outlet photos are not looked for at all by default (their article pages are not read for pictures), never served by
 `/api/img` (404 "no image"), and old archive entries keep theirs aside (`outletImage`): SEVEN DAYS and PAY ATTENTION
@@ -272,6 +347,23 @@ This is engineering, not legal advice. Before monetised publication, a media law
 12. **Names on screen**: that a credit giving the author's user name in Latin letters (a Cyrillic or Greek name
     transliterated; the original spelling in the description) and, for a long organisational author, on two lines, is
     attribution "in any reasonable manner based on the medium".
+13. **The face reader** reads the expression of faces in public figures' portraits (and looks for faces in FILE
+    pictures of events) to keep smiles off grave stories. Whether that is an "emotion recognition system" under the EU
+    AI Act (Art. 3(39); recital 18 excludes "the mere detection of readily apparent expressions … such as a frown or a
+    smile" unless used to infer emotions; Annex III lists emotion recognition as high-risk) and processing of personal
+    data under the GDPR (no identification is made, nothing is kept but the verdict; the journalism exemption): to
+    confirm before it runs in production. It must never read an agency's picture (AGENCY_REQUEST.md).
+14. **Identifiable people in FILE pictures of events** (protesters, strikers) outside grave stories: the pixel style
+    blurs faces, the picture is labelled FILE with its year, and it shows the same actor doing the same kind of thing;
+    confirm the privacy and defamation position (a person shown at an earlier protest under a new story about it).
+15. **Openverse's terms**: the "made with Openverse, not endorsed by it" notice (the channel's About page and video
+    descriptions), its right to charge for commercial use, and whether anonymous use by a monetised channel is
+    acceptable or a registered key is needed (owner action).
+16. **Flickr pictures**: Openverse's index is the record of the licence (the desk never reads flickr.com: its robots.txt
+    refuses robots); CC licences are irrevocable for a copy obtained under them, but a lawyer should confirm the index
+    and its date are enough evidence, and that fetching the file from `live.staticflickr.com` respects Flickr's terms.
+17. **The seat of government under a story about government** and **a curated surname list** (`SURNAMES`) are
+    editorial rules, not legal ones: listed here so the lawyer sees every way a person's picture can reach the screen.
 
 ## 9. Paid wire photos (a later upgrade)
 

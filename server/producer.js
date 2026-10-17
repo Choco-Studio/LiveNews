@@ -46,11 +46,13 @@ export function sourceWithCredit(outlet, credit) {
   if (!credit || ownCredit(credit, outlet)) return outlet;
   // a FILE photo from the image search ("FILE · Jane Doe · CC BY-SA") always says so on air: the source plate
   // may drop the author and the licence, never the word FILE (a viewer must not take it for the event)
-  const file = /^FILE\s*·\s*/i.exec(String(credit));
+  // (a FILE picture of an earlier event keeps its year: "FILE 2023 · ...")
+  const file = /^FILE(?: (\d{4}))?\s*·\s*/i.exec(String(credit));
   if (file) {
     const [author = '', licence = ''] = String(credit).slice(file[0].length).split(/\s*·\s*/);
-    for (const line of [`${outlet} / File: ${author} · ${licence}`, `${outlet} / File: ${author}`, `${outlet} / File photo`]) if (author && line.length <= SOURCE_MAX) return line;
-    const tail = ' / File photo';
+    const word = file[1] ? `File ${file[1]}` : 'File';
+    for (const line of [`${outlet} / ${word}: ${author} · ${licence}`, `${outlet} / ${word}: ${author}`, `${outlet} / ${word} photo`]) if (author && line.length <= SOURCE_MAX) return line;
+    const tail = ` / ${word} photo`;
     if (`${outlet}${tail}`.length <= SOURCE_MAX) return `${outlet}${tail}`;
     return `${String(outlet).slice(0, SOURCE_MAX - tail.length).replace(/\s+\S*$/, '')}${tail}`;
   }
@@ -63,9 +65,11 @@ export function sourceWithCredit(outlet, credit) {
 /** "PHOTO: <CREDIT>" in capitals, whole words, at most CREDIT_LINE_MAX characters (null when it cannot fit). */
 export function creditLine(credit) {
   // a FILE photo: "FILE: JANE DOE · CC BY-SA", else "FILE: JANE DOE", else "FILE PHOTO"
-  if (/^FILE\s*·/i.test(String(credit))) {
+  const file = /^(FILE(?: \d{4})?)\s*·/i.exec(String(credit));
+  if (file) {
     const [, author = '', licence = ''] = String(credit).split(/\s*·\s*/);
-    for (const line of [`FILE: ${author} · ${licence}`, `FILE: ${author}`, 'FILE PHOTO']) if (line.length <= CREDIT_LINE_MAX && !/: $/.test(line)) return line.toUpperCase();
+    const tag = file[1].toUpperCase();
+    for (const line of [`${tag}: ${author} · ${licence}`, `${tag}: ${author}`, `${tag} PHOTO`]) if (line.length <= CREDIT_LINE_MAX && !/: $/.test(line)) return line.toUpperCase();
   }
   for (const c of [credit, shortCredit(credit), bareCredit(credit)]) {
     const line = `PHOTO: ${String(c || '').toUpperCase()}`;
@@ -979,6 +983,13 @@ export class Producer {
       if (seg.type !== 'cross') planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
     }
     for (const item of ctx.episode.rundown) apply(item);
+    // a story with neither a picture nor a place shows the topic board (public/js/graphics/topicboard.js); under a grave
+    // story without its glyph: the story's segment says it (its emotion) or its words do
+    for (const item of ctx.episode.rundown) {
+      if (item.hasImage) continue;
+      const st = ctx.episode.segments.find((x) => x.type === 'story' && x.storyId === item.storyId);
+      if ((st && (st.emotion === 'serious' || st.emotion === 'sad')) || isGrave(`${item.headline || ''} ${st?.text || ''}`)) item.grave = true;
+    }
     if (desk) {
       // what a description or a publisher needs: every picture on air with its full attribution, and whether all are
       // cleared (false only in a private preview: such an episode is never to be published)

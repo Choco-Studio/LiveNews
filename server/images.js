@@ -167,7 +167,7 @@ export class ImageCache {
     if (!/^https?:\/\//i.test(url)) throw new Error('invalid URL');
     const { res } = await guardedFetch(this.fetch, url, {
       timeoutMs: 10000,
-      headers: { 'user-agent': /^https:\/\/[^/]*\bwikimedia\.org\//i.test(url) ? this.wikimediaAgent : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' },
+      headers: { 'user-agent': /^https:\/\/[^/]*\b(?:wikimedia\.org|staticflickr\.com)\//i.test(url) ? this.wikimediaAgent : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' },
       ...(this.lookup ? { lookup: this.lookup } : {}),
     });
     const cancel = async () => {

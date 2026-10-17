@@ -68,7 +68,8 @@ export function drawPictureCredits(ctx, scene) {
     const c = pictureCreditOf(scene, id);
     if (!c?.credit) continue;
     // (a picture of the event itself, a NASA photograph of that day's launch, says PHOTO, not FILE)
-    const lines = drawFileCredit(ctx, c.credit, y, /^FILE\b/i.test(c.credit) ? 'FILE' : 'PHOTO');
+    // (a FILE picture of an earlier event says its year in the tag: "FILE 2023")
+    const lines = drawFileCredit(ctx, c.credit, y, /^FILE\b/i.test(c.credit) ? /^FILE(?: \d{4})?/i.exec(c.credit)[0].toUpperCase() : 'PHOTO');
     y += 11 + 9 * ((lines || 1) - 1);
     if (c.uncleared) {
       drawPreviewTag(ctx, y);

@@ -4,7 +4,8 @@
 // headline board, pixelate.js, the credit overlay) in headless Chromium.
 //
 //   NODE_USE_ENV_PROXY=1 node tools/pictures/sheet.mjs --out data/pictures-measure --dest <dir> [--per 10] [--only picks|none|all]
-//        [--big <n>]   (also n stories at 4x, after only)
+//        [--big <n>]   (also n stories at 4x, after only)   [--grid]   (twelve picks a sheet, for the hand check)
+//        [--kinds grave-portrait,event,institution]   [--located]   [--name <file prefix>]
 //
 // Pictures are downloaded once into <out>/img/ (Wikimedia's with the desk's own User-Agent, one at a time, its
 // Retry-After obeyed). A local server on a free port serves public/ and the pictures (never port 8711).
@@ -44,7 +45,7 @@ async function download(url) {
   for (let attempt = 0; attempt < 6; attempt++) {
     if (wm && Date.now() < pauseUntil) await wait(pauseUntil - Date.now());
     try {
-      const res = await fetch(url, { headers: { 'user-agent': wm ? agentWm : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' }, signal: AbortSignal.timeout(20000) });
+      const res = await fetch(url, { headers: { 'user-agent': wm || /staticflickr\.com\//.test(url) ? agentWm : 'Mozilla/5.0 (compatible; LiveNewsBot/0.1)', accept: 'image/*' }, signal: AbortSignal.timeout(20000) });
       if (res.status === 429 || res.status === 503) {
         const ask = Number(res.headers.get('retry-after')) || 30;
         // (an original's download refused for ten minutes is skipped: the desk serves renditions, not originals)
@@ -70,6 +71,15 @@ async function download(url) {
 let list = results;
 if (only === 'picks') list = results.filter((r) => r.pick);
 else if (only === 'none') list = results.filter((r) => !r.pick);
+// --kinds grave-portrait,event,institution: only those picks (a grave story's sober portrait, a FILE picture of the same
+// actor, a seat of government); --located: only stories with a place (the locator board)
+if (args.kinds) {
+  const kinds = new Set(String(args.kinds).split(','));
+  const graveOf = (r) => !!(r.plan?.flags?.grave || r.plan?.flags?.harm || r.plan?.flags?.deathOf);
+  list = list.filter((r) => r.pick && ((kinds.has('grave-portrait') && r.pick.kind === 'portrait' && graveOf(r)) || kinds.has(r.pick.kind)));
+}
+if (args.located) list = list.filter((r) => r.location);
+if (args.unlocated) list = list.filter((r) => !r.location);
 if (args.limit) list = list.slice(0, Number(args.limit));
 const cases = [];
 let n = 0;
@@ -132,21 +142,21 @@ if (args.grid) {
   // the hand check: every cleared pick, twelve to a sheet, on the board with its credit
   const picked = cases.filter((c) => c.after.img);
   for (let i = 0; i < picked.length; i += 12) {
-    const file = path.join(dest, `grid-${String(i / 12 + 1).padStart(2, '0')}.png`);
+    const file = path.join(dest, `${args.name || 'grid'}-${String(i / 12 + 1).padStart(2, '0')}.png`);
     await shoot(`http://127.0.0.1:${port}/lab/pictures.html?grid=1`, picked.slice(i, i + 12), file);
     console.log(`[sheet] ${file}`);
   }
 } else {
   for (let i = 0; i < cases.length; i += per) {
-    const file = path.join(dest, `${only}-${String(i / per + 1).padStart(2, '0')}.png`);
+    const file = path.join(dest, `${args.name || only}-${String(i / per + 1).padStart(2, '0')}.png`);
     await shoot(`http://127.0.0.1:${port}/lab/pictures.html`, cases.slice(i, i + per), file);
     console.log(`[sheet] ${file}`);
   }
 }
 if (args.big) {
-  const bigCases = cases.filter((c) => c.after.img).slice(0, Number(args.big));
+  const bigCases = cases.filter((c) => c.after.img || (only === 'none' && (c.location || args.unlocated))).slice(0, Number(args.big));
   for (let i = 0; i < bigCases.length; i += 3) {
-    const file = path.join(dest, `big-${String(i / 3 + 1).padStart(2, '0')}.png`);
+    const file = path.join(dest, `${args.name ? `${args.name}-big` : 'big'}-${String(i / 3 + 1).padStart(2, '0')}.png`);
     await shoot(`http://127.0.0.1:${port}/lab/pictures.html?big=1`, bigCases.slice(i, i + 3), file);
     console.log(`[sheet] ${file}`);
   }

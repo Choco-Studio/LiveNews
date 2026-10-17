@@ -30,7 +30,9 @@ import { P } from '/js/palette.js';
 import { THEME_ACCENT } from '/js/cast.js';
 import { pixelate, loadImage } from '/js/pixelate.js';
 import { drawHeadlineFrame } from '/js/scenes/cards.js';
-import { drawWorldMap } from '/js/scenes/worldmap.js';
+import { drawWorldMap, warmMapData } from '/js/scenes/worldmap.js';
+import { prepareLocator, drawLocator } from '/js/graphics/locator.js';
+import { drawTopicBoard } from '/js/graphics/topicboard.js';
 import { drawPictureCredits } from '/js/graphics/picture.js';
 
 const THEME = { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' };
@@ -60,12 +62,16 @@ async function frame(c, v) {
   }
   const loc = c.location;
   const map = !card && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
-  if (map) drawWorldMap(ctx, 4, 4, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent, programId: c.programme, follow: true });
-  else if (!card) {
-    ctx.fillStyle = P.ink;
-    ctx.fillRect(0, 0, 384, 216);
-  }
-  drawHeadlineFrame(ctx, 4, 4, { index: 0, total: 1, headline: c.headline, source: v?.source ?? c.source, category: c.category || 'general', image: card, backdrop: map ? 'map' : null, programId: c.programme, accent });
+  // no picture: the locator board, as the montage airs it (studio.js: the director prepares it before the montage)
+  warmMapData();
+  const board = map ? prepareLocator(loc) : null;
+  if (board) drawLocator(ctx, board, loc, { accent, dt: 9 });
+  else if (map) drawWorldMap(ctx, 4, 4, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent, programId: c.programme, follow: true });
+  // no picture and no place: the topic board, as the montage airs it (the rights desk's side only; before, the
+  // montage's field)
+  const topic = !card && !map && v === c.after;
+  if (topic) drawTopicBoard(ctx, { headline: c.title || c.headline, category: c.category, grave: !!c.grave }, { accent, dt: 9 });
+  drawHeadlineFrame(ctx, 4, 4, { index: 0, total: 1, headline: c.headline, source: v?.source ?? c.source, category: c.category || 'general', image: card, backdrop: map || topic ? 'map' : null, programId: c.programme, accent });
   if (card && v.credit) {
     drawPictureCredits(ctx, { shot: 'montage', card: { index: 0, pic: card }, rundown: [{ storyId: 'x', imageCredit: v.credit, imageLabel: 'FILE', imageUncleared: !!v.uncleared }], images: new Map([['x', { card }]]) });
   }

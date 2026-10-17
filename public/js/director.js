@@ -3,6 +3,7 @@
 // and keeps the channel running forever.
 import { pixelate, loadImage } from './pixelate.js';
 import { pictureCreditsOf } from './graphics/picture.js';
+import { prepareLocator } from './graphics/locator.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION, TEASE_TILE, boardTitle } from './scenes/cards.js';
 import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
@@ -92,6 +93,7 @@ export class Director {
     this.channel = channel;
     setPresenters(channel.presenters);
     this.images = new Map(); // storyId -> { small, full, card }
+    this.locators = new Map(); // storyId -> a prepared locator board (graphics/locator.js), for a story with no picture
     this.recentAds = [];
     this.voices = new VoicePlayer({ audio }); // recorded neural voices from the server (voice/player.js)
     this.scene = {
@@ -111,6 +113,7 @@ export class Director {
       ticker: [],
       rundown: [],
       images: this.images,
+      locators: this.locators,
       replay: false,
       breaking: null,
       card: null,
@@ -823,6 +826,20 @@ export class Director {
     }
     const keep = new Set((episode.rundown || []).map((r) => r.storyId));
     if (this.images.size > 40) for (const id of this.images.keys()) if (!keep.has(id)) this.images.delete(id);
+    // a story with no picture gets its locator board (graphics/locator.js): its country lit on the channel's map, its
+    // dot and its name; prepared here, a frame at a time, so the montage only draws it
+    const unpictured = (episode.rundown || []).filter((r) => !r.hasImage && Number.isFinite(r.location?.lat) && Number.isFinite(r.location?.lon) && !this.locators.has(r.storyId));
+    unpictured.sort((a, b) => (teased.has(b.storyId) ? 1 : 0) - (teased.has(a.storyId) ? 1 : 0));
+    for (const r of unpictured) {
+      await frame();
+      try {
+        const board = prepareLocator(r.location);
+        if (board) this.locators.set(r.storyId, board);
+      } catch (err) {
+        console.warn('[director] locator', r.storyId, err.message);
+      }
+    }
+    if (this.locators.size > 60) for (const id of this.locators.keys()) if (!keep.has(id)) this.locators.delete(id);
   }
 
   setCast(episode) {
