@@ -16,6 +16,26 @@ function coverDraw(ctx, img, w, h, focusY = 0.4) {
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
 }
 
+// A portrait taller than the frame keeps the whole head: drawn the frame's height, centred, over the same picture
+// blurred and darkened (a crop of a tall headshot would show only the eyes to the mouth, or only the hair, under the
+// headline board: the hand check of 17 Oct). A portrait wide enough for the frame is cover-cropped as any picture.
+function portraitDraw(ctx, img, w, h, focusY) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (iw / ih >= (w / h) * 0.72) return coverDraw(ctx, img, w, h, focusY);
+  const tiny = document.createElement('canvas');
+  tiny.width = Math.max(2, Math.round(w / 16));
+  tiny.height = Math.max(2, Math.round(h / 16));
+  coverDraw(tiny.getContext('2d'), img, tiny.width, tiny.height, 0.4);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tiny, 0, 0, w, h);
+  ctx.fillStyle = 'rgba(6, 8, 16, 0.6)';
+  ctx.fillRect(0, 0, w, h);
+  const dw = Math.round((iw * h) / ih);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, iw, ih, Math.round((w - dw) / 2), 0, dw, h);
+}
+
 function kmeans(data, k, iterations = 8) {
   // Sample pixels for speed
   const samples = [];
@@ -69,12 +89,16 @@ function kmeans(data, k, iterations = 8) {
  * @param {number} h  output height in pixels
  * @returns {HTMLCanvasElement}
  */
-export function pixelate(img, w, h, { colors = 16, dither = 22, contrast = 1.12, saturation = 1.25 } = {}) {
+export function pixelate(img, w, h, { colors = 16, dither = 22, contrast = 1.12, saturation = 1.25, focusY = 0.4, fit = 'cover' } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  coverDraw(ctx, img, w, h);
+  // (focusY: where the crop sits in a tall picture; a portrait keeps the head, server/picturedesk.js focusOf)
+  const fy = Number.isFinite(focusY) ? Math.max(0, Math.min(1, focusY)) : 0.4;
+  // (fit 'portrait': a person's picture keeps the whole head, portraitDraw)
+  if (fit === 'portrait') portraitDraw(ctx, img, w, h, fy);
+  else coverDraw(ctx, img, w, h, fy);
   const imageData = ctx.getImageData(0, 0, w, h);
   const d = imageData.data;
 

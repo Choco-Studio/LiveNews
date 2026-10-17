@@ -26,6 +26,7 @@ import { CHANNEL } from '../pace.js';
 import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
 import { drawRecreation, recreationTop } from './recreation.js';
 import { FRAME, MARK_TIMING, nounOf } from './disclosure.js';
+import { drawPictureCredits } from './picture.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -561,7 +562,7 @@ export class Graphics {
     if (scene.shot === 'montage' && scene.card?.vid) {
       const credit = scene.rundown?.[scene.card.index]?.footage?.credit;
       if (credit) drawFileCredit(ctx, credit);
-    }
+    } else if (mode === 'news') drawPictureCredits(ctx, scene); // the picture on screen, credited as its licence asks
     if (mode === 'news') {
       if (scene.recreation) drawRecreation(ctx, scene.recreation, this.accentOf(scene));
       else drawStrap(ctx, t, this.strap);

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: cleared pictures</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 12px system-ui, sans-serif; }
+  h1 { font-size: 14px; margin: 10px 14px 4px; }
+  p { margin: 0 14px 8px; color: #8a8fa3; max-width: 1200px; }
+  .row { display: grid; grid-template-columns: 768px 768px; gap: 8px; padding: 6px 14px; border-top: 1px solid #1d2130; }
+  .row.big { grid-template-columns: 1536px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 576px); gap: 10px 8px; padding: 6px 14px; }
+  .grid canvas { width: 576px; height: 324px; }
+  .grid .cap { width: 576px; font-size: 11px; }
+  canvas { width: 768px; height: 432px; image-rendering: pixelated; display: block; background: #000; }
+  .big canvas { width: 1536px; height: 864px; }
+  .cap { color: #9aa0b6; padding: 2px 0 0; white-space: pre-wrap; }
+  .cap b { color: #e6e9f2; }
+</style>
+</head>
+<body>
+<h1>Cleared pictures: before (the outlet's photo) and after (the rights desk's pick, or the map)</h1>
+<p>Each story on the channel's own headline board (cards.js drawHeadlineFrame, as the montage airs it), the picture
+pixelated by the channel's own pixelate.js at the full shot's size (416x234, 24 colours, the desk's focus), and the
+picture's credit drawn by graphics/picture.js. No picture: the place's map, as the montage airs it. window.__render(cases)
+draws a list; ?big=1 draws each at 4x.</p>
+<div id="rows"></div>
+<script type="module">
+import { P } from '/js/palette.js';
+import { THEME_ACCENT } from '/js/cast.js';
+import { pixelate, loadImage } from '/js/pixelate.js';
+import { drawHeadlineFrame } from '/js/scenes/cards.js';
+import { drawWorldMap, warmMapData } from '/js/scenes/worldmap.js';
+import { prepareLocator, drawLocator } from '/js/graphics/locator.js';
+import { drawTopicBoard } from '/js/graphics/topicboard.js';
+import { drawPictureCredits } from '/js/graphics/picture.js';
+
+const THEME = { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' };
+const big = new URLSearchParams(location.search).get('big') === '1';
+const grid = new URLSearchParams(location.search).get('grid') === '1';
+
+async function frame(c, v) {
+  const cv = document.createElement('canvas');
+  cv.width = 384;
+  cv.height = 216;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const accent = THEME_ACCENT[THEME[c.programme]] || P.red;
+  let card = null;
+  if (v?.img) {
+    try {
+      const img = await loadImage(v.img);
+      const full = pixelate(img, 416, 234, { colors: 24, focusY: Number.isFinite(v.focus) ? v.focus : 0.4, fit: v.fit || 'cover' });
+      card = document.createElement('canvas');
+      card.width = 384;
+      card.height = 216;
+      card.getContext('2d').drawImage(full, -16, -9);
+    } catch (err) {
+      card = null;
+      v.failed = String(err?.message || err);
+    }
+  }
+  const loc = c.location;
+  const map = !card && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+  // no picture: the locator board, as the montage airs it (studio.js: the director prepares it before the montage)
+  warmMapData();
+  const board = map ? prepareLocator(loc) : null;
+  if (board) drawLocator(ctx, board, loc, { accent, dt: 9 });
+  else if (map) drawWorldMap(ctx, 4, 4, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent, programId: c.programme, follow: true });
+  // no picture and no place: the topic board, as the montage airs it (the rights desk's side only; before, the
+  // montage's field)
+  const topic = !card && !map && v === c.after;
+  if (topic) drawTopicBoard(ctx, { headline: c.title || c.headline, category: c.category, grave: !!c.grave }, { accent, dt: 9 });
+  drawHeadlineFrame(ctx, 4, 4, { index: 0, total: 1, headline: c.headline, source: v?.source ?? c.source, category: c.category || 'general', image: card, backdrop: map || topic ? 'map' : null, programId: c.programme, accent });
+  if (card && v.credit) {
+    drawPictureCredits(ctx, { shot: 'montage', card: { index: 0, pic: card }, rundown: [{ storyId: 'x', imageCredit: v.credit, imageLabel: 'FILE', imageUncleared: !!v.uncleared }], images: new Map([['x', { card }]]) });
+  }
+  return cv;
+}
+
+window.__render = async (cases) => {
+  const rows = document.getElementById('rows');
+  rows.textContent = '';
+  if (grid) {
+    // the hand check: the cleared picks only, three to a row, each with its story and its subject
+    const box = document.createElement('div');
+    box.className = 'grid';
+    for (const c of cases) {
+      const cell = document.createElement('div');
+      cell.append(await frame(c, c.after));
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = `#${c.n} [${c.programme}] ${c.grave ? 'GRAVE · ' : ''}${c.title.slice(0, 120)}\n${c.after.note}`;
+      cell.append(cap);
+      box.append(cell);
+    }
+    rows.append(box);
+    document.body.dataset.ready = '1';
+    return;
+  }
+  for (const c of cases) {
+    const row = document.createElement('div');
+    row.className = big ? 'row big' : 'row';
+    for (const [label, v] of big ? [['after', c.after]] : [['before', c.before], ['after', c.after]]) {
+      const cell = document.createElement('div');
+      cell.append(await frame(c, v));
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.innerHTML = `<b>${label.toUpperCase()}</b> ${v?.note || (v?.img ? '' : 'no picture: the map')}${v?.failed ? ` (picture failed: ${v.failed})` : ''}`;
+      cell.append(cap);
+      row.append(cell);
+    }
+    const head = document.createElement('div');
+    head.className = 'cap';
+    head.style.gridColumn = '1 / -1';
+    head.textContent = `#${c.n} [${c.programme}] ${c.grave ? 'GRAVE · ' : ''}${c.title}`;
+    rows.append(head, row);
+  }
+  document.body.dataset.ready = '1';
+};
+document.body.dataset.loaded = '1';
+</script>
+</body>
+</html>

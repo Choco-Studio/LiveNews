@@ -9,6 +9,8 @@ import { r, longDate, easeOut, zoneTime, STUDIO_TZ } from './util.js';
 import { lookOf, portraitOf, presenterName, THEME_ACCENT } from './cast.js';
 import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
+import { drawLocator } from './graphics/locator.js';
+import { drawTopicBoard } from './graphics/topicboard.js';
 import * as cards from './scenes/cards.js';
 import { drawScoreboard } from './scenes/cards-sport.js';
 import { drawOpen, warmStudioOpens } from './scenes/opens.js';
@@ -201,9 +203,16 @@ export class Renderer {
         if (f) this.drawFootage(ctx, f);
         const loc = item.location;
         const map = !card.pic && !f && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
-        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        // no picture: the story's locator board (graphics/locator.js, prepared by the director before the montage),
+        // else the animated map shot
+        const board = map ? scene.locators?.get(item.storyId) : null;
+        if (board) drawLocator(ctx, board, loc, { accent: THEME_ACCENT[program?.theme] || P.red, dt });
+        else if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        // no picture and no place: the topic board (graphics/topicboard.js), as the locator board for a story with one
+        const topic = !card.pic && !f && !map && program?.theme !== 'sport';
+        if (topic) drawTopicBoard(ctx, item, { accent: THEME_ACCENT[program?.theme] || P.red, dt });
         // (FULL TIME, the sport theme: the chip is the story's sport tag, as on its strap)
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, kicker: program?.theme === 'sport' ? item.kicker : null, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, kicker: program?.theme === 'sport' ? item.kicker : null, image: card.pic || null, backdrop: map || f || topic ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'tease': {
         // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
@@ -217,8 +226,12 @@ export class Renderer {
         if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
         const loc = item.location;
         const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
-        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
-        return cards.drawHeadlineFrame(ctx, t, dt, { headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme], tag: 'STILL TO COME', pips: false, tagIn: true });
+        const board = map ? scene.locators?.get(item.storyId) : null;
+        if (board) drawLocator(ctx, board, loc, { accent: THEME_ACCENT[program?.theme] || P.red, dt });
+        else if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        const topic = !card.pic && !map && !!item.storyId && program?.theme !== 'sport';
+        if (topic) drawTopicBoard(ctx, item, { accent: THEME_ACCENT[program?.theme] || P.red, dt });
+        return cards.drawHeadlineFrame(ctx, t, dt, { headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map || topic ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme], tag: 'STILL TO COME', pips: false, tagIn: true });
       }
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });

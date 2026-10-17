@@ -86,3 +86,21 @@ test('an export with an asset without a record is refused; on air the strict gat
   assert.ok(s.segments[2].footage, 'free FILE footage stays');
   assert.deepEqual(auditItem(s).missing, [], 'nothing without a record airs');
 });
+
+test('the picture desk\'s own record decides: cleared airs and is credited, an outlet photo in a preview never counts as licensed', () => {
+  const seg = (storyId, imageRights) => ({ type: 'story', storyId, source: 'Harbour Herald', outlet: 'Harbour Herald', hasImage: true, imageRights });
+  const cleared = { source: 'commons', licence: 'CC BY-SA 4.0', author: 'Jane Doe', credit: 'FILE 2023 · JANE DOE · CC BY-SA 4.0 · PIXELATED', attribution: 'Jane Doe, CC BY-SA 4.0, via Wikimedia Commons (pixelated)', cleared: true };
+  const outlet = { source: 'outlet', licence: 'OUTLET', author: 'Harbour Herald', credit: 'Harbour Herald', cleared: false };
+  const episode = { segments: [seg('s1', cleared), seg('s2', outlet)], rundown: [] };
+  const audit = auditItem(episode);
+  const pictures = audit.assets.filter((a) => a.kind === 'picture');
+  assert.equal(pictures.find((a) => a.storyId === 's1').ok, true, 'a cleared record (even a FILE-year credit) is licensed');
+  assert.equal(pictures.find((a) => a.storyId === 's1').credit, cleared.attribution);
+  const bad = pictures.find((a) => a.storyId === 's2');
+  assert.equal(bad.ok, false, 'licence "OUTLET" is not a licence');
+  assert.match(bad.reason, /not cleared/);
+  const r = rightsGate(episode, { mode: 'strict', annotate: false });
+  assert.equal(r.dropped, 1);
+  assert.equal(episode.segments[0].hasImage, true);
+  assert.equal(episode.segments[1].hasImage, false);
+});

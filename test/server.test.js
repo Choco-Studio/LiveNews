@@ -148,7 +148,9 @@ describe('server/index.js: HTTP API of a running channel', () => {
   let app;
   const real = JSON.parse(fs.readFileSync(path.join(REPO, 'config', 'channel.json'), 'utf8'));
   before(async () => {
-    app = await startApp();
+    // (a private preview, PICTURE_RIGHTS=preview: the stub feeds' pictures are an outlet's own, which the rights desk
+    // never clears, so only a preview serves them; the default refuses them, "no AI provider available" below)
+    app = await startApp({ PICTURE_RIGHTS: 'preview' });
     await stationReady(app);
   });
   after(() => app?.stop());
@@ -495,6 +497,13 @@ describe('server/index.js: no AI provider available', () => {
     assert.deepEqual(res.json.status.queue, []);
     assert.match(res.json.status.lastError, /no AI provider available/);
     assert.equal(res.json.status.stories >= 100, true, 'the news desk itself works');
+  });
+
+  test("by default an outlet's own photo is never served: it has no cleared rights record (docs/pictures/RIGHTS.md)", async () => {
+    await app.waitFor(async () => (await app.request('/api/status')).json.stories >= 100, 'the news desk to fill');
+    const res = await app.request(`/api/img/${storyId('https://stub.test/article/0')}`);
+    assert.equal(res.status, 404);
+    assert.match(res.json.error, /no image/);
   });
 
   test('the rest of the API still works', async () => {

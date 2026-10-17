@@ -70,6 +70,12 @@ function fixtureOutlets() {
 /** A picture's rights record: the picture pipeline's own (imageRights), a free FILE licence, or a fixture's. */
 function pictureRecord(seg) {
   const r = seg.imageRights;
+  // the picture desk's own record (server/rights.js compactRights): its verdict decides; an outlet's photo in a private
+  // preview carries a record too, never cleared
+  if (r && typeof r.cleared === 'boolean') {
+    if (r.cleared) return { ok: true, class: 'picture', credit: r.attribution || `${r.credit || r.author || r.source}${r.licence ? ` (${r.licence})` : ''}` };
+    return { ok: false, class: 'picture', credit: r.credit || null, reason: `a picture whose rights record is not cleared (${r.licence || 'no licence'}${r.why ? `: ${r.why}` : ''})` };
+  }
   if (r && r.licence && (r.credit || r.author || r.source)) return { ok: true, class: 'picture', credit: `${r.credit || r.author || r.source}${r.licence ? ` (${r.licence})` : ''}` };
   const credit = String(seg.imageCredit || '');
   const file = /^FILE\s*·\s*([^·]+)·\s*(.+)$/i.exec(credit);

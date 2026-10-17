@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pictureMode } from './rights.js';
+import { DEFAULT_CONTACT } from './wikimedia.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -148,5 +150,21 @@ export const config = {
     providers: ((v) => (v === 'off' || v === 'none' ? [] : v.split(/[\s,]+/).filter((p) => ['commons', 'google', 'bing'].includes(p))))(env('IMAGE_SEARCH', 'commons').trim().toLowerCase()),
     google: { key: env('GOOGLE_CSE_KEY', ''), cx: env('GOOGLE_CSE_CX', '') },
     bing: { key: env('BING_IMAGE_KEY', '') },
+  },
+  // The rights desk (server/picturedesk.js, docs/pictures/RIGHTS.md; owner 17 Oct: "no sanction risk and no loss of
+  // quality"): only pictures the channel may publish air, each with its rights record (Wikidata subjects and Commons,
+  // NASA, Commons FILE photos of the place). PICTURE_RIGHTS=preview lets the outlets' own photos stand in where nothing
+  // cleared fits, for a PRIVATE preview only: the screen says PREVIEW · NOT CLEARED and the episode is marked as never to
+  // be published. PICTURE_DESK=off stops looking (stories then air on their maps and boards). WIKIMEDIA_CONTACT names
+  // the operator (an email or a URL) in the User-Agent Wikimedia's rate limits ask for.
+  pictures: {
+    rights: pictureMode(env('PICTURE_RIGHTS', 'cleared')),
+    desk: !/^(0|false|no|off)$/i.test(env('PICTURE_DESK', '1')),
+    contact: env('WIKIMEDIA_CONTACT', DEFAULT_CONTACT),
+    dir: path.join(ROOT, 'data', 'pictures'),
+    // Openverse (server/openverse.js): institutions' own Flickr pictures, asked anonymously within its limits (200 a
+    // day announced; OPENVERSE_DAILY keeps the desk under it); OPENVERSE=off stops asking
+    openverse: !/^(0|false|no|off)$/i.test(env('OPENVERSE', '1')),
+    openverseDaily: Math.max(0, Math.min(190, Number(env('OPENVERSE_DAILY', '150')) || 0)),
   },
 };

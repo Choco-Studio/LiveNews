@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: faces and expressions</title>
+</head>
+<body>
+<p>The picture desk's face reader (tools/pictures/faces.mjs): a face detector (UltraFace RFB-320) finds the faces in a
+picture, an expression model (FER+) reads each one. window.__score(url) answers
+{ w, h, faces: [{ x, y, w, h, score, emotions: { neutral, happiness, surprise, sadness, anger, disgust, fear, contempt } }] }.
+Models and the ONNX runtime are served from data/models (fetched once by the tool).</p>
+<script src="/models/ort/ort.wasm.min.js"></script>
+<script>
+const EMOTIONS = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt'];
+let detector = null;
+let reader = null;
+async function load() {
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.simd = true;
+  ort.env.wasm.wasmPaths = '/models/ort/';
+  detector = await ort.InferenceSession.create('/models/version-RFB-320.onnx', { executionProviders: ['wasm'] });
+  reader = await ort.InferenceSession.create('/models/emotion-ferplus-8.onnx', { executionProviders: ['wasm'] });
+  document.body.dataset.loaded = '1';
+}
+function loadImage(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('image failed'));
+    img.src = url;
+  });
+}
+function iou(a, b) {
+  const x0 = Math.max(a.x0, b.x0), y0 = Math.max(a.y0, b.y0), x1 = Math.min(a.x1, b.x1), y1 = Math.min(a.y1, b.y1);
+  const inter = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  return inter / ((a.x1 - a.x0) * (a.y1 - a.y0) + (b.x1 - b.x0) * (b.y1 - b.y0) - inter);
+}
+async function detect(img) {
+  const W = 320, H = 240;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data;
+  const input = new Float32Array(3 * W * H);
+  for (let i = 0; i < W * H; i++) {
+    input[i] = (d[i * 4] - 127) / 128;
+    input[W * H + i] = (d[i * 4 + 1] - 127) / 128;
+    input[2 * W * H + i] = (d[i * 4 + 2] - 127) / 128;
+  }
+  const out = await detector.run({ [detector.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, H, W]) });
+  const scores = out.scores.data;
+  const boxes = out.boxes.data;
+  const n = scores.length / 2;
+  const cand = [];
+  for (let i = 0; i < n; i++) {
+    const s = scores[i * 2 + 1];
+    if (s < 0.7) continue;
+    cand.push({ s, x0: boxes[i * 4], y0: boxes[i * 4 + 1], x1: boxes[i * 4 + 2], y1: boxes[i * 4 + 3] });
+  }
+  cand.sort((a, b) => b.s - a.s);
+  const keep = [];
+  for (const b of cand) if (!keep.some((k) => iou(k, b) > 0.3)) keep.push(b);
+  return keep;
+}
+async function read(img, box) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  // the face box, squared and widened a little (the expression model was trained on loose face crops)
+  const cx = ((box.x0 + box.x1) / 2) * iw, cy = ((box.y0 + box.y1) / 2) * ih;
+  const side = Math.max((box.x1 - box.x0) * iw, (box.y1 - box.y0) * ih) * 1.1;
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, 64, 64);
+  g.drawImage(img, cx - side / 2, cy - side / 2, side, side, 0, 0, 64, 64);
+  const d = g.getImageData(0, 0, 64, 64).data;
+  const input = new Float32Array(64 * 64);
+  for (let i = 0; i < 64 * 64; i++) input[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const out = await reader.run({ [reader.inputNames[0]]: new ort.Tensor('float32', input, [1, 1, 64, 64]) });
+  const logits = Array.from(out[reader.outputNames[0]].data);
+  const m = Math.max(...logits);
+  const e = logits.map((v) => Math.exp(v - m));
+  const sum = e.reduce((a, b) => a + b, 0);
+  return Object.fromEntries(EMOTIONS.map((k, i) => [k, +(e[i] / sum).toFixed(4)]));
+}
+window.__score = async (url) => {
+  const img = await loadImage(url);
+  const faces = [];
+  for (const b of await detect(img)) {
+    const emotions = await read(img, b);
+    faces.push({ x: +b.x0.toFixed(4), y: +b.y0.toFixed(4), w: +(b.x1 - b.x0).toFixed(4), h: +(b.y1 - b.y0).toFixed(4), score: +b.s.toFixed(3), emotions });
+  }
+  return { w: img.naturalWidth, h: img.naturalHeight, faces };
+};
+load().catch((err) => {
+  document.body.dataset.loaded = 'error';
+  document.body.dataset.error = String(err && err.message || err);
+});
+</script>
+</body>
+</html>
