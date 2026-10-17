@@ -47,16 +47,15 @@ The round's score is its lowest category.
   against the words, the crop. Text posts were read whole and counted against each network's own measure.
 - **The live supervisor** ran into files against a local playback server, with a page crash simulated by killing its
   own stream's renderer process.
-- **Files:** `publishing/` in the session's scratch folder (its full path is in the hand-back), never in git. It
-  holds:
-  - one folder per run, each with `clips/`: round 2's seven, and round 3's `final-cosmos-17`, `final-weather` and
-    `final-quiz`;
-  - `best/`, the best clips with their contact sheets;
-  - `vertical-4x/`, the vertical frames at 4x;
-  - `upload-cosmos-17/`, the whole programme;
+- **Files:** `publishing/` in the session's scratch folder (its full path is in the hand-back), never in git. The
+  earlier rounds' clips were deleted when round 4 replaced them. It holds round 4's:
+  - one folder per run (`r4-quiz`, `r4-cosmos-17`, `r4-fulltime-demo`, `r4-news60`, `r4-sevendays`, `r4-weather`),
+    each with `clips/` where the run made any;
+  - `r4-upload-cosmos-17/`, the whole programme;
+  - `r4-sheet/`, the vertical frames at 4x with the platforms' covered zones tinted;
   - `posts/` and `posts-phase2/`;
-  - `queue-final/`, the final queue;
-  - `approval-page.png`.
+  - `queue-r4/`, the round's queue;
+  - `approval-page.png` and `approval-tiktok-card.png`.
 
 ---
 
@@ -262,7 +261,7 @@ findings below.
 
 ---
 
-## Round 3 (final)
+## Round 3
 
 **What ran:** the clip factory again, with every fix, on three episodes:
 
@@ -443,24 +442,271 @@ linked, and its thumbnail is now the presenter's close shot with the lead set on
 
 ---
 
+## Round 4: the coordinator's review, and the panel again
+
+Round 3 handed back at 9.8. The coordinator's own review of the merged work (bb7df4f, the real compliance module
+loaded) found eight things the panel had missed. Each was traced to where it starts and fixed there, with a test.
+
+### What the review found, and why
+
+1. **Text posts copied their sources.** X #1 carried 22 words from the BBC. The panel had read the posts for tone and
+   length, never against the compliance desk's verbatim rule. Two causes:
+   - the posts writer treated "the headline as the outlet wrote it" as the post's headline;
+   - an aired line was checked against nothing, and the channel's aired text is largely the outlet's (the compliance
+     desk measured 80 % of stories over the rule against title and summary alone).
+
+   **Fixed** in two locks:
+   - The real `preflight` measures a text post against its `sourceTexts` with `storyReport` (12 words, 20 %; an
+     attributed quotation exempt), on the words the network would show (`postWords`; the adapter's `postText`). It
+     holds a copy, and warns when it had only titles and summaries to check by.
+   - Upstream, `posts.js` and the new `wording.js` write only what passes: the channel's aired headline when it is its
+     own words (`ownWords`); otherwise its label and the outlet's headline as an attributed citation beside the link
+     (`BBC Science: “Evacuation orders as fast-moving California wildfire burns homes”`); an aired line only when the
+     article is at hand to check it against, and it passes. No article cache exists yet, so today's posts carry no
+     aired lines. Clip titles and leads (`clipmeta.js`) and the upload's chapters and sources (`uploads.js`) follow the
+     same rule; a citation is never cut.
+   - "Outlet headlines in posts" is item 10 of the lawyer's list (`compliance.md`): NLA v Meltwater [2011] EWCA Civ
+     890, DSM Art. 15's "very short extracts", InfoSoc Art. 5(3)(d), CDPA s.30.
+   - Tested on the real wildfire case end to end with the real module: the copied post is held, the cited one passes,
+     a bare headline is held, a URL's slug is not counted.
+2. **Tracking parameters in links** (`at_medium=RSS&at_campaign=rss` on the BBC's). `cleanLink` removes `utm_*`,
+   `at_*`, `fbclid`, `gclid` and twenty more, keeps every other parameter and the fragment, and returns a link with
+   none of them exactly as given. Every post, clip text and upload uses it.
+3. **The Pope's cancer surgery was classed not grave.** The archive's `grave` means only "read sad" (the quiz's
+   grave-day rule is calibrated on it), and every hard story archives as `grave: false, serious: true`. Round 3's fix
+   for item 9 had read `grave: false` as the channel judging the story light. Now a post is grave when it was read
+   sad, when its words are grave in their grave sense (`severity` ≥ 2), or when it is a named person's illness
+   (`personsIllness`). The archive is unchanged, because the quiz depends on it.
+4. **A background line as the news line** ("Mark Wahlberg has started companies of his own…"). A line must say
+   something new (`saysSomethingNew`: a figure, a time, an event reported, or a name the headline lacks).
+5. **Vertical composition.**
+   - HOW MANY? and the headline montage left the stage's lower half empty. HOW MANY? now gives it a job all question
+     long: YOUR GUESS? at 2x over an empty answer box with a blinking cursor (and the countdown when it runs on the
+     board), then THE ANSWER, the figure landing in the box at 3x in the reveal's yellow. The montage has no captions,
+     so its stage runs on to row 300 and the plate grows with its lines.
+   - The safe areas: words reached the right 12 % (the caption box, the programme's tag, the boards' right edges) and
+     the foot carried the source line. Every word is now set in the safe column x 8–188 (`SAFE`, `boardBox`); the
+     source moved onto the stage (a plate at its top left: in a clip the hook covers the title band, see the first
+     pass, item 9); the foot holds only the rule and the logo. Maps and pictures fill the frame, with sea or picture
+     only under the buttons. A test checks every board, card and band word by word.
+6. **The compliance notes.** `checkClip` reads the vertical frame and the recreation's vertical layout (note 1). The
+   AI mark is drawn once (note 2): `drawBugOnly` asks the top row for no mark, proven by a test that fails without it.
+7. **"And finally:" on PAY ATTENTION's masked question.** The quiz desk took the sentence with its running-order
+   label. `desk.js` strips the label (`unlabelled`) where the figure's sentence is chosen; PAY ATTENTION was remade
+   from the archive and the TSMC question now reads "Taiwanese chip giant TSMC said on Thursday…".
+8. **This desk's own list.**
+   - FULL TIME's COMING UP and THE MOMENT ON THE BOARD in vertical (`vsport.js`), SEVEN DAYS' week diary (up to five
+     days, no headline cut), NEWS IN 60's progress rule.
+   - TikTok's choices on the approval page: privacy (no default), comments, duets, stitches and the Music Usage
+     Confirmation, saved per item. With `TIKTOK_MODE=direct`, a TikTok item cannot be approved without them.
+   - A real FULL TIME edition: **not possible yet.** The only FULL TIME in the archive is the fictional fixture league
+     of 13 Oct, and this weekend's results are not in. The factory ran it as a **demo** (never queued), with demo
+     fixtures given to its COMING UP so the board could be judged in an edition. Its director did not cut to the
+     chalkboard (the moment stayed on the presenter), so the chalkboards were judged in the vertical sport lab.
+
+### What ran
+
+- PAY ATTENTION made again from the archive (17 Oct 14:20, 65 segments, all voiced) with the quiz desk's fix, and a
+  demo FULL TIME (13 Oct, the fixture league, marked demo).
+- The clip factory on seven episodes, both formats where they apply:
+  - PAY ATTENTION: 10 clips, all queued and passing the real gate;
+  - COSMOS DESK 17 Oct: no clip (10 of its 11 stories copy their sources), and its whole-programme upload, held;
+  - WORLD NOW and NEWS IN 60: no clip (no Phase 1 moment; their stories copy too);
+  - SEVEN DAYS: vertical, for the sheets (10 of its 15 stories copy);
+  - WORLD WEATHER: 4 clips of its two boards, never queued: the gate refuses them as demo data, as it should;
+  - the demo FULL TIME: 6 vertical clips, never queued.
+- Two days of text posts for every network with the real compliance module, and Phase 2's into the round's queue.
+- The approval page on that queue (the TikTok block).
+- A sheet of every vertical frame type at 4x, with the platforms' covered zones tinted (right 12 %, bottom 20 %).
+
+### First pass: what the panel found
+
+**Standards editor.**
+
+1. **Round 3's grave problem came back with the Pope fix.** Counting the words' severity 2 made a gym chain ("sank
+   money into") and a cell-therapy discovery ("cancer-fighting cells") wait for the owner as grave, the very thing
+   round 3 item 9 had fixed by the wrong means. The cause was in the words, not the rule: both are grave words in
+   another sense.
+2. **Labels the story does not bear out.** The channel's kicker and map, as archived, said VOLCANO for black-hole
+   "eruptions", JUSTICE · USA for a trial in Mexico, EDUCATION for a school shooting. A post's label repeated them.
+3. **A death named in other words was not grave:** "Russian man linked to deadly London hospitals hack arrested".
+
+**Platform growth specialist / robustness.**
+
+4. **The real module held every YouTube Short.** The factory's gate (and the upload's) was given only the flag
+   `containsSyntheticMedia`; the real check also asks for `selfDeclaredMadeForKids: false` on the same line. The
+   upload itself sends it, and the stub never asked, so round 3 never saw it: in this round's first run every Short
+   was `held` as `flag-missing`, and the whole-programme upload would have been too.
+
+**Pixel artist.**
+
+5. **HOW MANY?'s middle still empty in the real edition.** The new job (YOUR GUESS? over the countdown) appeared
+   only with the countdown, and in the real edition the countdown runs over the players' faces: on the board, the
+   lower half was empty for the whole read.
+6. **The week's table cut a name mid-word:** "PENNY STER…".
+
+**Standards editor, on the new TikTok block.**
+
+7. **Interactions on by default.** The adapter turned comments, duets and stitches off only when a choice said
+   `false`, so an item with no choices saved would have gone out with all three on. TikTok's guidelines want none on
+   unless the creator turns it on.
+
+**Standards editor, on the clips.**
+
+8. **The clips repeat the outlet's sentences, and no gate measured them.** Item 1 of the review was about the posts,
+   but a clip carries its stories' aired words twice, in the voice and in the burned-in captions. The real `preflight`
+   lints an episode's words against their sources only when it is given `getStory`, and neither the factory, nor the
+   upload, nor the publisher gave it: every clip passed with the warning "no getStory given". Measured against the
+   archive's titles and summaries, 10 of COSMOS DESK's 11 stories, 12 of WORLD NOW's 13, all 6 of NEWS IN 60's and 10
+   of SEVEN DAYS' 15 break the rule (the offline fallback writer's text). PAY ATTENTION has no story segments: its
+   questions are quoted and credited.
+
+**Pixel artist and standards editor, on the 4x sheet.**
+
+9. **The source went from one covered place to another.** This round moved the source line out of the foot (the
+   feeds cover it) into the title band, beside the story's tag. But in a clip the hook is laid over the mast and the
+   title band all clip long: the source was on no frame of any vertical news clip, and NEWS IN 60's new progress rule,
+   also in the band, with it. The tests drew the master's bands, not the clip.
+10. **A credit cut that fitted:** "SOURCE: GUARDIA…". The micro-face credits were measured with the body face's
+    widths, which are wider, so a source that fitted was cut.
+
+**Social video producer, on the approval page.**
+
+11. **The owner could not read why a clip was held.** With the verbatim rule at the gate, most news clips are held,
+    and the card gave the compliance desk's own message, in English, to an owner who reads Spanish.
+
+**Platform growth specialist, on the whole-programme upload.**
+
+12. **"In this edition: …; Story 1 · BBC Science; …".** A story with no words of its own to name it by got the
+    chapters' fallback in the summary too, numbered from the wrong count (the third story as "Story 1").
+
+**Pixel artist, on FULL TIME's new boards (the demo edition and the lab).**
+
+13. **A long side ran under the sport's icon** on COMING UP: "WOLVERHAMPTON WANDERER" with the ball over its last
+    letters. The column did not leave the icon its room.
+
+**Standards editor, on the 4x sheet's hooks.**
+
+14. **The burned-in title can be the outlet's headline.** A clip's hook is often the story's aired headline, and the
+    verbatim lint measures the aired text, not the headline: a story whose sentences are its own could still carry
+    the outlet's headline, unattributed, as the clip's title in the picture.
+
+**Standards editor, on SEVEN DAYS' diary.**
+
+15. **A line cut mid-clause:** "VATICAN CONFIRMS POPE LEO'S SURGERY WAS". The weekly writer cuts each day's headline
+    to 40 characters at a word, and here the word was "was". The vertical diary would have had room for the whole
+    headline; the horizontal board has one line.
+
+### Fixes after the first pass
+
+- **1, grave words in their grave sense.** At the source: `facts.js` gets two lookalikes with the channel's others,
+  money "sunk" into something and "cancer-fighting" (and -killing, -detecting…) research, with the real sentences as
+  tests; a ferry that sank and the Pope's cancer stay grave. On air this only stops two non-grave senses from reading
+  as grave.
+- **2, labels borne out** (`wording.js` `storyLabel(story, words)`): a kicker is kept only when a word of the story's
+  own title or summary bears its stem out, a place only when its name is there; with words to check, no desk name
+  stands in. "Volcano." and "Justice · USA." are gone; "Oregon, USA." stays without "Education".
+- **3.** "Deadly", "fatal" and "lethal" make a post grave.
+- **4, the flags the adapter really sends.** YouTube's `aiFlags` returns both fields it sends; the upload's gate uses
+  the adapter's flags instead of its own literal. A test runs the real check on every video adapter's flags.
+- **5, HOW MANY?'s middle all question long:** YOUR GUESS? over an empty answer box with a blinking cursor from the
+  board's first second, the countdown under it when it runs there, THE ANSWER in the box at the reveal. The box is one
+  width whatever the answer.
+- **6.** The table's names are whole, or as the boards call the player ("PENNY S.", "PENNY"), never cut mid-word.
+- **7.** Comments, duets and stitches are off unless ticked.
+- **8, the clips measured too.** The factory, the upload and the publisher give the gate the clip's own stories'
+  sources (`clipGetStory`, from `archiveGetStory`); a clip that copies is held (`verbatim`). Upstream, the factory
+  runs the lint before it chooses: a moment whose story copies is refused (`markCopied`) and not made, so the factory
+  spends its clips on moments that can go out.
+- **9, the source on the stage.** Over a single, a map or a picture, the story's source sits on a plate at the stage's
+  top left, inside the safe column, while its strap is up; NEWS IN 60's rule runs along the stage's top edge. A board,
+  the montage and a recreation carry their own. The test now draws the plate and the rule where a clip shows them.
+- **10.** Micro credits are fitted in the micro face (`microFit`), so a source is cut only when it truly does not fit.
+- **11.** Each held card says why in Spanish (`RULE_ES`: "Copia palabras del medio…", "Son datos de prueba…"), with
+  the desk's own message under it; the owner's guide says what the most frequent one means.
+- **12.** The numbered fallback is a chapter's only; the title and the summary leave such a story out.
+- **13.** A row whose side is too long gives up its icon; a side that still does not fit is set in the micro face,
+  whole. The vertical sport lab shows COMING UP and the three chalkboards now.
+- **14.** `ownHook`: a hook that is the aired headline stays only when the headline is the channel's own words against
+  the story's sources; otherwise the story's label as its words bear it out ("WILDFIRE: / CALIFORNIA, USA"), else
+  the programme's name.
+- **15.** At the source (`weeklywriter.js` `clipWords`): a board line cut to its room never ends on a word that needs
+  the next ("…surgery", not "…surgery was"), on air too. The sheet's SEVEN DAYS frame is from the material made
+  before the fix.
+- **Tests:** 131 publishing tests, up from 113, and new compliance and facts cases. The new ones cover, on the real
+  cases of 16–17 Oct: the verbatim rule on posts (the real `preflight`, the wildfire post copied and cited), on clips
+  (`clipGetStory`, `markCopied`, `ownHook`); `cleanLink`; labels borne out; grave (the Pope, the gym, the discovery,
+  the hack); the TikTok block and its defaults; the Spanish reasons; the adapters' flags under the real check; the
+  vertical label and the single mark; HOW MANY?'s middle; the week diary; COMING UP's long sides; the table's names;
+  micro credits; the source plate and NEWS IN 60's rule where a clip shows them.
+
+### Second pass: the sheets, the queue, the posts
+
+Everything the fixes touched was made again: PAY ATTENTION's clips in both formats, COSMOS DESK and its upload, the
+demo FULL TIME, and vertical masters of WORLD NOW, NEWS IN 60 and SEVEN DAYS for the sheets.
+
+**The 4x sheets** (the channel's pixel at 4x, the platforms' covered zones tinted red: the right 12 % and the bottom
+20 %):
+
+- `vertical-4x-quiz.png`: the round card, HOW MANY? while it is read (YOUR GUESS? over the empty box) and at the
+  reveal (THE ANSWER, 68.7 % in the box), a player's single, WHERE's pins, LETTER BY LETTER, DOUBLE OR NOTHING, the
+  final score, the week's table (PENNY STERLING whole), the end card.
+- `vertical-4x-news-sport.png`: the headline montage and STILL TO COME on their tall stage, singles with the source
+  on the stage, the map, and the demo FULL TIME's RESULT card, a result in a run of stories and THE NUMBER.
+- `vertical-4x-programmes.png`: NEWS IN 60 (its minute along the stage's top), SEVEN DAYS' week diary, THE WEEK IN
+  NUMBERS and the two-way, WORLD WEATHER's two boards and a continent map, and the demo FULL TIME's SCORE CENTRE and
+  COMING UP.
+- `vertical-4x-sport-boards-lab.png`: COMING UP (three fixtures; the longest sides) and the three chalkboards, from
+  the vertical sport lab.
+
+In every frame the factory's clips use, every word is inside x 8–188 and above row 300; under the tint there is only
+picture (the map's sea, the studio, the ground) and the logo. One frame on the programmes sheet is there to show what
+remains: WORLD WEATHER's continent map behind the presenter is still a window on the horizontal frame, and its own
+labels reach the right band, one cut at the edge ("MEXICO C…"). No weather clip uses that shot; it stays on the list
+below.
+
+**The queue** (`queue-r4`, Phase 2 settings, dry run): PAY ATTENTION's five moments on YouTube, TikTok, Instagram and
+Facebook (25 clip items, all passing the real gate, YouTube's included), the ten Phase 2 text posts, and the COSMOS
+DESK upload, held: its stories copy their sources. COSMOS DESK, WORLD NOW, NEWS IN 60 and SEVEN DAYS made no clip:
+every moment they had told a story whose aired words copy their source, and the factory says so in its summary.
+
+**The posts** of 16 and 17 Oct: every post's words are the channel's own or a cited headline, and the real
+`preflight` passes all of them. The labels left are the ones the story bears out (Wildfire · California, USA;
+Protests · France; Oregon, USA), and only the stories that should wait for the owner do: deaths, harm, a named
+person's illness, or read sad on air.
+
+### The final table
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Clip quality | 9.8 | Under the verbatim rule the offline material gives no news clip today (the fallback writer copies; `verbatim.md` §5 is the writer team's). The quiz's clips are whole. A clip can still open on a board's first wiping frames (round 3's B). Offline, no story has its picture |
+| Vertical design | 9.8 | FULL TIME is proven on a demo edition and the lab only. WORLD WEATHER's map shots are still a window on the horizontal frame, whose labels can reach the right band (no weather clip uses them). A montage headline past four lines at 2x drops to 1x |
+| Text posts | 9.8 | Until the articles are cached, a post is a label and a cited headline, with no line of the channel's own. A short aired headline under the six-word floor (Kenya confirms third Ebola case) passes as the channel's though it is the outlet's first five words |
+| Pipeline robustness | 9.8 | The factory, the upload and the publisher now give the gate the same flags and sources. A clip queued before a fix is only checked again at publish time (there is no re-gate of the queue), and the live supervisor is proven into files only |
+| Compliance integration | 9.8 | The verbatim rule on posts, clips and uploads, the vertical label, one mark, the YouTube audience flag, the reasons in Spanish. C2PA signing is not set up |
+| Tests | 9.8 | 131 publishing tests (113 in round 3), plus the compliance and facts tests. Rendering is still judged by eye on the sheets: the tests drew the master's title band, which a clip covers, and the sheet caught it (item 9) |
+
+**Round 4: 9.8**
+
+
+---
+
 ## Notes for the compliance desk (integration)
 
-The publishing desk calls the compliance desk only through `server/publish/compliance.js`. On 17 Oct 2026 the
-contract tests passed against the compliance desk's module in its own branch. Five points to settle when the two
-branches meet:
+The publishing desk calls the compliance desk only through `server/publish/compliance.js`. The two branches met on
+17 Oct 2026 (bb7df4f), and the desk loads the real module. The five points, the first two settled in round 4:
 
-1. **The vertical picture is composed again, not cropped.** The factory and the publisher pass
+1. **The vertical picture is composed again, not cropped** (settled in round 4). The factory and the publisher pass
    `frame: { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } }`.
-   - The mark check passes: the mark is at x 57–74 of 216, at 5x.
-   - `frameGeometry` lays the recreation label out in 16:9 coordinates (x up to about 372), so a vertical clip with a
-     recreation is refused as `label-out-of-frame`. That is the safe side, and Phase 1 has no recreations.
-   - Before Phase 2, `checkClip` should accept the vertical layout: the label is drawn natively at 1x at the stage's top
-     right (`public/js/clip/vertical.js` `recreationLabel`), and the factory measures its presence in every frame of the
-     recreation (`labelFrames`).
-2. **The AI mark.** `public/js/clip/mark.js` draws `graphics/disclosure.js` `drawMark` (closed) when that module is in
-   the build, docked to the bug (`clip/graphics.js` `drawBugOnly`), and a stand-in of the same shape until then. When
-   the real `bug.js` draws the mark inside `drawTopRow`, the clip's bug, which is clipped to `BUG_W`, does not draw it
-   twice.
+   `frameGeometry` reads that layout, and `recreationLayout(rec, frame)` sets the label for it: the plates at the
+   stage's top right inside the platforms' safe column, in the body face (35 px on 1920), the role and name at the
+   stage's foot. `checkClip` accepts a vertical clip whose label is whole, in frame and legible, and refuses one that
+   is not (`label-out-of-frame`, `label-illegible`): `test/compliance-clips.test.js`. The mark check expects the mark
+   docked to the bug at (8 + bug width + 1, 10).
+2. **The AI mark is drawn once** (settled in round 4). `public/js/clip/mark.js` draws `graphics/disclosure.js`
+   `drawMark` when that module is in the build, docked to the bug (`clip/graphics.js` `drawBugOnly`), and a stand-in
+   of the same shape until then. `drawBugOnly` asks the top row for no mark of its own (`mark: false`), so the real
+   `bug.js` cannot add a second; a test draws the bug and counts one mark's width of yellow.
 3. **`markFile` throws** when a file cannot be signed. The door catches it and returns `{ ok: false, reason }`, and the
    publisher then holds a live item. The mark goes on a copy (`<clip>.c2pa.mp4`, through `opts.output`), which
    `readMark` reads back.
@@ -486,18 +732,29 @@ branches meet:
 
 **The other desks':**
 
-5. The compliance module merged (it replaces the stub on its own), with C2PA signing set up (`c2patool` and a signing
-   identity). Then the five integration points above, above all the vertical recreation label before Phase 2.
+5. C2PA signing set up (`c2patool` and a signing identity). The compliance module is merged; notes 1 and 2 above are
+   settled.
 6. Real pictures in the stories (the cleared-pictures desk). Offline, the light stories show the studio, boards and maps
    only, and a story clip would hold better with its picture.
-   - The quiz desk's masked question should leave out a running-order label ("And finally:"). This desk's texts already
-     do; the board does not.
+7. **The writer composing its own sentences** (`verbatim.md` §5, the writer team's). Until it does, the verbatim
+   rule holds most news: on 17 Oct 10 of COSMOS DESK's 11 stories broke it (12 of WORLD NOW's 13, all 6 of NEWS IN
+   60's, 10 of SEVEN DAYS' 15), so the factory made no COSMOS DESK clip and its upload is held. PAY ATTENTION, whose
+   questions are quoted and credited, is unaffected.
+8. The articles' cache (`data/compliance/articles`, the compliance desk's audit). Until it is filled, a text post
+   carries no line of the channel's aired text, because no aired sentence can be checked against the article it may
+   come from: a post is the channel's label and the outlet's headline cited.
+9. The writer's kickers and map places: on 17 Oct the channel said VOLCANO for black-hole "eruptions", JUSTICE · USA for
+   a trial in Mexico and EDUCATION for a school shooting. This desk leaves out any label a story's own words do not
+   bear out, but the channel aired them.
 
 **This desk's, next:**
 
-7. FULL TIME's COMING UP and chalkboard, WORLD WEATHER's world-map "graphic" shot, and SEVEN DAYS' and NEWS IN 60's
-   own graphics in the vertical picture (none is a moment the factory picks yet).
-8. A real FULL TIME edition through the factory. The vertical RESULT card and SCORE CENTRE are proven on the sport
-   lab's cases only, because the offline material has no sport.
-9. TikTok's privacy choice on the approval page, for the day the app is audited and Direct Post replaces the inbox.
-10. After two weeks of numbers (`plan.md` §7), the weights of the kinds of moment (`moments.js` `KIND_BASE`).
+10. WORLD WEATHER's map shots in the vertical picture (each continent's map and the "graphic" world map): a window on
+    the horizontal frame whose labels can reach the feeds' right band and be cut at the edge. Not a moment the
+    factory picks yet.
+11. FULL TIME's first real edition (when the weekend's results are in the archive) through the factory and judged in
+    vertical before its clips are approved. Until then its four vertical boards are proven on the sport lab's cases
+    and a demo edition.
+12. A re-gate of the queue (`tools/publish`): a clip queued before a rule changed is checked again only when it is
+    published.
+13. After two weeks of numbers (`plan.md` §7), the weights of the kinds of moment (`moments.js` `KIND_BASE`).

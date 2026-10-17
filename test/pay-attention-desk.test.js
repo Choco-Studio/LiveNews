@@ -210,6 +210,10 @@ describe('places and figures (§4.1)', () => {
     const owls = usableFigure(entry({ title: 'Barn owls ringed', text: 'A barn owl and 15 chicks are ringed to see if the farming works.', numbers: [{ value: '15', label: 'CHICKS' }] }));
     assert.equal(owls.exact, true);
     assert.equal(owls.masked, 'A barn owl and ▮▮ chicks are ringed to see if the farming works.');
+    // 17 Oct: the board showed "AND FINALLY: TAIWANESE CHIP GIANT TSMC…", the presenter's running-order label with it
+    const tsmc = usableFigure(entry({ title: 'Taiwan chip TSMC says net profit hit record', text: 'And finally: Taiwanese chip giant TSMC said on Thursday that net profit soared 68.7% to a record high in the third quarter.', numbers: [{ value: '68.7%', label: 'NET PROFIT UP' }] }));
+    assert.equal(tsmc.masked, 'Taiwanese chip giant TSMC said on Thursday that net profit soared ▮▮▮▮▮ to a record high in the third quarter.');
+    assert.equal(tsmc.sentence, 'Taiwanese chip giant TSMC said on Thursday that net profit soared 68.7% to a record high in the third quarter.');
   });
 });
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // A day of text posts (server/publish/posts.js; the plan: docs/publishing/plan.md §4): the day's most-told stories
 // from the archive, one post per network each (X, Threads, Bluesky, Facebook, Telegram), every one opening
-// "AI-generated:", the outlet credited and linked, only what aired. Written to a file to read; with --enqueue, into
+// "AI-generated:", in the channel's own words, the outlet's headline cited beside its link (the verbatim rule: an
+// aired sentence only when the compliance desk's article cache proves it the channel's own, data/compliance/articles,
+// filled by tools/compliance/verbatim-audit.mjs). Written to a file to read; with --enqueue, into
 // the publishing queue as well (dry run), where the scheduler gives each its time within the network's hours and
 // spacing.
 //
@@ -13,8 +15,9 @@ import { fileURLToPath } from 'node:url';
 import { dayStories, postsFor } from '../../server/publish/posts.js';
 import { PLATFORMS, DAILY, xLength, graphemes } from '../../server/publish/platforms.js';
 import { PublishQueue, localParts } from '../../server/publish/queue.js';
-import { preflight, usingStub } from '../../server/publish/compliance.js';
+import { preflight, usingStub, archiveGetStory } from '../../server/publish/compliance.js';
 import { telegramHtml } from '../../server/publish/adapters/telegram.js';
+import { makeAdapter } from '../../server/publish/adapters/index.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -48,6 +51,9 @@ for (const f of fs.readdirSync(archiveDir).filter((x) => x.endsWith('.jsonl'))) 
   }
 }
 const stories = dayStories(entries, { day, timeZone: tz, limit });
+// the articles the compliance desk's audit cached (the only proof an aired sentence is not the outlet's own)
+const getStory = archiveGetStory({ dataDir: path.join(root, 'data') });
+for (const s of stories) s.articles = [...new Set((s.ids || [s.id]).map((id) => getStory(id)?.body).filter(Boolean))];
 // our clip on a story, when the factory made one (its URL exists only once published: a dry run has none)
 const clipsByStory = new Map();
 for (let i = 0; i < args.length; i++) {
@@ -70,8 +76,10 @@ for (const [rank, s] of stories.entries()) {
     // each network takes its own top stories, up to its cap for the phase
     if (rank >= capOf(net)) continue;
     const p = posts[net];
-    const gate = preflight({ kind: 'text', text: p.text, platforms: [net] });
-    all.push({ rank: rank + 1, platform: net, story: { id: s.id, ids: s.ids, title: s.title, source: s.source, link: s.link, grave: !!s.grave, airings: s.airings, programmes: s.programmes }, text: p.text, links: p.links, grave: !!s.grave, length: net === 'x' ? xLength(p.text) : net === 'bluesky' ? graphemes(p.text) : [...p.text].length, limit: PLATFORMS[net].text.post || PLATFORMS[net].text.message, compliance: { ok: gate.ok, violations: gate.violations || [], stub: usingStub } });
+    // the gate measures what the network will show (Telegram composes its message from the title and the links)
+    const shown = makeAdapter(net, { env: {}, dryRun: true }).postText({ ...p, platform: net });
+    const gate = preflight({ kind: 'text', text: shown, platforms: [net], sourceTexts: p.sourceTexts });
+    all.push({ rank: rank + 1, platform: net, story: { id: s.id, ids: s.ids, title: s.title, source: s.source, link: s.link, grave: !!s.grave, airings: s.airings, programmes: s.programmes, articles: s.articles.length }, title: p.title, sourceTexts: p.sourceTexts, text: p.text, links: p.links, grave: !!s.grave, length: net === 'x' ? xLength(p.text) : net === 'bluesky' ? graphemes(p.text) : [...p.text].length, limit: PLATFORMS[net].text.post || PLATFORMS[net].text.message, compliance: { ok: gate.ok, violations: gate.violations || [], stub: usingStub } });
   }
 }
 
@@ -90,8 +98,9 @@ for (const p of all) {
     kind: 'text',
     platform: p.platform,
     postKind: 'story',
-    title: p.story.title,
+    title: p.title,
     text: p.text,
+    sourceTexts: p.sourceTexts,
     links: p.links,
     grave: p.grave,
     source: { storyIds: p.story.ids || [p.story.id], airedAt: null },
@@ -120,7 +129,7 @@ for (const net of NETS) {
     const lp = p.at ? localParts(p.at, tz) : null;
     lines.push(`-- ${lp ? `${String(lp.h).padStart(2, '0')}:${String(lp.m).padStart(2, '0')}` : 'unscheduled'} · #${p.rank} · ${p.length}/${p.limit}${p.grave ? ' · GRAVE: waits for the owner' : ''}${p.compliance.ok ? '' : ` · HELD: ${p.compliance.violations.map((v) => v.rule).join(', ')}`}`);
     // Telegram: the message as sent (HTML: the headline bold, the text, the links)
-    lines.push(net === 'telegram' ? telegramHtml({ title: p.story.title, text: p.text, links: p.links }) : p.text);
+    lines.push(net === 'telegram' ? telegramHtml({ title: p.title, text: p.text, links: p.links }) : p.text);
     if (net === 'bluesky') lines.push(`   [link card: ${p.links[0]?.url}]`);
     lines.push('');
   }

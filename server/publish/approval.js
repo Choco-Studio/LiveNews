@@ -49,6 +49,30 @@ export function insideRoots(file, roots) {
 export const groupOf = (it) => (it.kind === 'clip' ? `clip|${it.source?.momentId || ''}|${it.format || ''}` : it.kind === 'text' ? `text|${(it.source?.storyIds || []).slice().sort().join(',')}` : `episode|${it.source?.episodeId || it.id}`);
 
 /** What the page shows of an item (no file paths: media go through /media/<id>/<kind>). */
+/** Why the compliance desk held an item, in the owner's words (its own message, in English, stays under it). */
+export const RULE_ES = Object.freeze({
+  verbatim: 'Copia palabras del medio: el texto o la voz repiten sus frases. No sale hasta que el canal lo cuente con sus propias palabras.',
+  demo: 'Son datos de prueba (demostración): nunca se publican.',
+  'flag-missing': 'Falta la marca de «contenido generado por IA» que exige la red.',
+  'flag-unavailable': 'Esta red no tiene marca de IA automática: hay que ponerla a mano o no publicar aquí.',
+  'election-hold': 'Periodo electoral: este contenido espera a que pase la votación.',
+  'election-silence': 'Jornada de reflexión: no se publica nada sobre la votación.',
+  'review-missing': 'Falta tu revisión de la recreación.',
+  'label-out-of-frame': 'La etiqueta de recreación no se ve entera en este formato.',
+  'label-illegible': 'La etiqueta de recreación se vería demasiado pequeña.',
+  'quote-cut': 'El clip corta una cita o una frase por la mitad.',
+  'editorial-contact-missing': 'Falta el contacto editorial (EDITORIAL_CONTACT) en la configuración.',
+  'text-disclosure-missing': 'Falta el aviso «AI-generated:» al principio del texto.',
+  unmarked: 'El vídeo no lleva la firma de procedencia (C2PA).',
+  'rights-missing': 'Falta el permiso de uso de una foto o un vídeo.',
+});
+
+/** TikTok's privacy levels (creator_info's privacy_level_options name them; the owner picks one, no default). */
+export const TIKTOK_PRIVACY = Object.freeze(['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'SELF_ONLY']);
+
+/** A TikTok item's choices as the page shows them (nothing chosen until the owner chooses it). */
+const tiktokView = (t = {}) => ({ privacy: TIKTOK_PRIVACY.includes(t?.privacy) ? t.privacy : null, allowComment: t?.allowComment === true, allowDuet: t?.allowDuet === true, allowStitch: t?.allowStitch === true, consent: t?.consent === true });
+
 export function itemView(it, { tz = 'Europe/London' } = {}) {
   const p = PLATFORMS[it.platform] || {};
   const at = it.schedule?.at || null;
@@ -71,16 +95,21 @@ export function itemView(it, { tz = 'Europe/London' } = {}) {
     has: { video: !!it.media?.video, thumb: !!it.media?.thumb, contact: !!it.media?.contact, captions: !!it.media?.captions },
     programme: it.source?.programId || null,
     score: it.score ?? null,
-    compliance: { ok: it.compliance?.ok !== false, stub: !!it.compliance?.stub, violations: (it.compliance?.violations || []).map((v) => ({ rule: v.rule, message: v.message })), warnings: it.compliance?.warnings || [] },
+    compliance: { ok: it.compliance?.ok !== false, stub: !!it.compliance?.stub, violations: (it.compliance?.violations || []).map((v) => ({ rule: v.rule, message: v.message, es: RULE_ES[v.rule] || null })), warnings: it.compliance?.warnings || [] },
     disclosure: it.disclosure?.[it.platform] || null,
     sample: !!it.sample,
     schedule: lp ? { at, day: lp.day, time: `${String(lp.h).padStart(2, '0')}:${String(lp.m).padStart(2, '0')}`, tz: it.schedule?.tz || tz } : null,
     history: (it.history || []).slice(-6).map((h) => ({ at: h.at, action: h.action, by: h.by })),
+    tiktok: it.platform === 'tiktok' ? tiktokView(it.tiktok) : null,
   };
 }
 
-export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now() } = {}) {
+export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now(), env = process.env } = {}) {
   if (!queue) throw new Error('the approval page needs the queue');
+  // TikTok's route (adapters/tiktok.js): the inbox (the owner finishes the post in the TikTok app, privacy there), or a
+  // direct post, where the owner's privacy, interaction choices and consent are given here, item by item
+  const tiktokMode = String(env.TIKTOK_MODE || 'inbox').toLowerCase() === 'direct' ? 'direct' : 'inbox';
+  const tiktokReady = (it) => it.platform !== 'tiktok' || tiktokMode !== 'direct' || (TIKTOK_PRIVACY.includes(it.tiktok?.privacy) && it.tiktok?.consent === true);
   const token = crypto.randomBytes(24).toString('hex');
   const roots = [queue.dir, ...mediaRoots].map((r) => path.resolve(r));
   let port = 0;
@@ -127,7 +156,7 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     const items = queue.list().map((it) => itemView(it, { tz: queue.tzOf(it.platform) }));
     const counts = {};
     for (const it of items) counts[it.status] = (counts[it.status] || 0) + 1;
-    return {
+    return { tiktokMode,
       settings: { phase: s.phase, dryRun: s.dryRun !== false, timezone: s.timezone, modes: s.modes, live: s.live },
       platforms: Object.fromEntries(Object.entries(PLATFORMS).map(([k, p]) => [k, { label: p.name || k, kind: p.kind }])),
       modes: MODES,
@@ -201,8 +230,10 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     let it = null;
     if (name === 'approve') {
       if (before.compliance && before.compliance.ok === false) return send(res, 409, { error: 'compliance', message: 'Este elemento no pasó el control de cumplimiento y no puede aprobarse.' });
+      if (!tiktokReady(before)) return send(res, 409, { error: 'tiktok', message: 'TikTok (publicación directa): elige la privacidad y acepta la confirmación de uso de música antes de aprobar.' });
       // "approve on every network": the same piece's other pending items, each still under its own compliance verdict
-      const ids = body.all === true ? queue.list({ status: 'pending' }).filter((x) => groupOf(x) === groupOf(before) && x.compliance?.ok !== false).map((x) => x.id) : [];
+      // (a TikTok sibling waiting for its own choices is left to wait for them)
+      const ids = body.all === true ? queue.list({ status: 'pending' }).filter((x) => groupOf(x) === groupOf(before) && x.compliance?.ok !== false && tiktokReady(x)).map((x) => x.id) : [];
       for (const one of [...new Set([id, ...ids])]) {
         it = queue.approve(one, 'owner');
         const rv = compliance.recordReview(one, { by: 'owner', verdict: 'approve', note: 'approval page' }, { dataDir });
@@ -212,6 +243,12 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     } else if (name === 'reject') {
       it = queue.reject(id, 'owner', typeof body.reason === 'string' ? body.reason.slice(0, 300) : '');
       compliance.recordReview(id, { by: 'owner', verdict: 'reject', note: typeof body.reason === 'string' ? body.reason.slice(0, 300) : '' }, { dataDir });
+    } else if (name === 'tiktok') {
+      if (before.platform !== 'tiktok') return send(res, 400, { error: 'not a TikTok item' });
+      if (body.privacy !== null && body.privacy !== undefined && !TIKTOK_PRIVACY.includes(body.privacy)) return send(res, 400, { error: 'privacy' });
+      if (['published', 'publishing'].includes(before.status)) return send(res, 409, { error: 'already out' });
+      const t = { privacy: body.privacy || null, allowComment: body.allowComment === true, allowDuet: body.allowDuet === true, allowStitch: body.allowStitch === true, consent: body.consent === true };
+      it = queue.save(queue.note({ ...before, tiktok: t }, 'tiktok choices', 'owner', { privacy: t.privacy }));
     } else if (name === 'edit') {
       it = queue.edit(id, { title: typeof body.title === 'string' ? body.title.slice(0, 500) : undefined, text: typeof body.text === 'string' ? body.text.slice(0, 5000) : undefined }, 'owner');
     } else return send(res, 404, { error: 'no such action' });
@@ -232,7 +269,7 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, state());
     let m = /^\/media\/([a-z0-9-]{1,80})\/(video|thumb|contact|captions)$/i.exec(p);
     if (req.method === 'GET' && m) return media(res, req, m[1], m[2]);
-    m = /^\/api\/(approve|reject|edit|settings|schedule)$/.exec(p);
+    m = /^\/api\/(approve|reject|edit|tiktok|settings|schedule)$/.exec(p);
     if (req.method === 'POST' && m) return action(req, res, m[1]);
     return send(res, 404, { error: 'not found' });
   }
@@ -303,6 +340,8 @@ function page(token, nonce) {
   .comp { font-size: 13px; padding: 6px 8px; border-radius: 6px; background: #12261b; color: #bfeccf; }
   .comp.bad { background: #2b1416; color: #ffc9cc; }
   .dim { color: var(--dim); font-size: 13px; }
+  fieldset.tiktok { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; display: grid; gap: 4px; font-size: 14px; }
+  fieldset.tiktok legend { font-weight: 600; padding: 0 4px; }
   details { font-size: 13px; color: var(--dim); }
   a { color: #8ab4ff; }
   .settings { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; display: none; }
@@ -430,9 +469,11 @@ function card(i) {
   if (i.links.length) c.append(el('div', { class: 'dim' }, document.createTextNode('Enlaces: '), ...i.links.map((l, n) => el('span', {}, n ? document.createTextNode(' · ') : null, el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', text: l.label })))));
   const comp = el('div', { class: 'comp' + (i.compliance.ok ? '' : ' bad') });
   if (i.compliance.ok) comp.textContent = 'Cumplimiento: correcto' + (i.compliance.stub ? ' (control provisional)' : '') + (i.disclosure ? ' · etiqueta de IA puesta' : '');
-  else comp.append(el('b', { text: 'Retenido por cumplimiento:' }), ...i.compliance.violations.map((v) => el('div', { text: '· ' + v.message })));
+  else comp.append(el('b', { text: 'Retenido por cumplimiento:' }), ...i.compliance.violations.map((v) => el('div', {}, document.createTextNode('· ' + (v.es || v.message)), v.es ? el('div', { class: 'dim', text: v.message }) : null)));
   c.append(comp);
   if (i.schedule) c.append(el('div', { class: 'dim', text: 'Saldría el ' + i.schedule.day + ' a las ' + i.schedule.time + ' (' + i.schedule.tz + ')' }));
+  const tt = i.tiktok ? tiktokBox(i) : null;
+  if (tt) c.append(tt.box);
   if (i.has.contact) {
     const d = el('details', {}, el('summary', { text: 'Hoja de contactos (fotogramas)' }));
     d.addEventListener('toggle', () => {
@@ -442,22 +483,56 @@ function card(i) {
   }
   if (i.description) c.append(el('details', {}, el('summary', { text: 'Descripción completa' }), el('pre', { style: 'white-space:pre-wrap', text: i.description })));
   const done = ['published', 'publishing'].includes(i.status);
-  const approve = el('button', { class: 'btn approve', text: 'Aprobar', onclick: () => act('approve', i, { title, text }) });
+  const approve = el('button', { class: 'btn approve', text: 'Aprobar', onclick: () => act('approve', i, { title, text, tt }) });
   approve.disabled = done || !i.compliance.ok || i.status === 'approved' || i.status === 'scheduled';
+  // (a direct TikTok post waits for the owner's privacy and consent: TikTok allows no default)
+  if (tt && S.tiktokMode === 'direct') {
+    const gate = () => { approve.disabled = done || !i.compliance.ok || i.status === 'approved' || i.status === 'scheduled' || !tt.ready(); };
+    tt.box.addEventListener('change', gate);
+    gate();
+  }
   const sibs = S.items.filter((x) => x.group === i.group && x.id !== i.id && x.status === 'pending' && x.compliance.ok);
-  const all = sibs.length && i.status === 'pending' ? el('button', { class: 'btn approve', text: 'Aprobar en ' + (sibs.length + 1) + ' redes', title: 'También: ' + sibs.map((x) => x.platformLabel).join(', '), onclick: () => act('approve', i, { title, text }, true) }) : null;
+  const all = sibs.length && i.status === 'pending' ? el('button', { class: 'btn approve', text: 'Aprobar en ' + (sibs.length + 1) + ' redes', title: 'También: ' + sibs.map((x) => x.platformLabel).join(', '), onclick: () => act('approve', i, { title, text, tt }, true) }) : null;
   if (all) all.disabled = approve.disabled;
   const reject = el('button', { class: 'btn reject', text: 'Rechazar', onclick: () => act('reject', i) });
   reject.disabled = done || i.status === 'rejected';
-  const save = el('button', { class: 'btn save', text: 'Guardar cambios', onclick: () => act('edit', i, { title, text }) });
+  const save = el('button', { class: 'btn save', text: 'Guardar cambios', onclick: () => act('edit', i, { title, text, tt }) });
   save.disabled = done;
   if (sibs.length) c.append(el('div', { class: 'dim', text: 'El mismo clip espera también en: ' + sibs.map((x) => x.platformLabel).join(', ') }));
   c.append(el('div', { class: 'row' }, approve, all, reject, save));
   return c;
 }
+function tiktokBox(i) {
+  const t = i.tiktok;
+  const box = el('fieldset', { class: 'tiktok' }, el('legend', { text: 'TikTok' }));
+  box.append(el('div', { class: 'dim', text: S.tiktokMode === 'direct' ? 'Publicación directa: elige quién puede verlo (TikTok no deja un valor por defecto).' : 'Ahora el vídeo llega a tu bandeja de TikTok y allí eliges la privacidad. Lo que marques aquí se usará cuando TikTok apruebe la publicación directa.' }));
+  const opts = [['PUBLIC_TO_EVERYONE', 'Todo el mundo'], ['MUTUAL_FOLLOW_FRIENDS', 'Amigos'], ['FOLLOWER_OF_CREATOR', 'Seguidores'], ['SELF_ONLY', 'Solo yo']];
+  const radios = opts.map(([v, label]) => {
+    const r = el('input', { type: 'radio', name: 'tt-' + i.id, value: v });
+    if (t.privacy === v) r.checked = true;
+    box.append(el('label', { class: 'opt' }, r, document.createTextNode(' ' + label)));
+    return r;
+  });
+  box.append(el('div', { class: 'dim', text: 'TikTok dirá qué opciones admite tu cuenta. Mientras la app no esté auditada, todo sale como «Solo yo».' }));
+  const check = (key, label) => {
+    const x = el('input', { type: 'checkbox' });
+    x.checked = !!t[key];
+    box.append(el('label', { class: 'opt' }, x, document.createTextNode(' ' + label)));
+    return x;
+  };
+  const comment = check('allowComment', 'Permitir comentarios');
+  const duet = check('allowDuet', 'Permitir dúos');
+  const stitch = check('allowStitch', 'Permitir stitch');
+  const consent = check('consent', 'Acepto la confirmación de uso de música de TikTok (Music Usage Confirmation)');
+  box.append(el('div', { class: 'dim', text: 'Contenido de marca: no (el canal no publica contenido pagado). Etiqueta «Generado con IA»: siempre puesta.' }));
+  const value = () => ({ privacy: (radios.find((r) => r.checked) || {}).value || null, allowComment: comment.checked, allowDuet: duet.checked, allowStitch: stitch.checked, consent: consent.checked });
+  const changed = () => JSON.stringify(value()) !== JSON.stringify({ privacy: t.privacy, allowComment: t.allowComment, allowDuet: t.allowDuet, allowStitch: t.allowStitch, consent: t.consent });
+  return { box, value, changed, ready: () => !!value().privacy && consent.checked };
+}
 async function act(name, i, f, all = false) {
   try {
     if (f && (f.title.value !== i.title || f.text.value !== i.text)) await post('/api/edit', { id: i.id, title: f.title.value, text: f.text.value });
+    if (f?.tt && f.tt.changed()) await post('/api/tiktok', { id: i.id, ...f.tt.value() });
     if (name === 'approve') await post('/api/approve', { id: i.id, all });
     if (name === 'reject') await post('/api/reject', { id: i.id, reason: prompt('¿Por qué? (opcional)') || '' });
     toast(name === 'approve' ? 'Aprobado' : name === 'reject' ? 'Rechazado' : 'Guardado');

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Archive } from '../server/archive.js';
-import { writeWeekly, relabelTime, cleanAired, weekdayOf } from '../server/weeklywriter.js';
+import { writeWeekly, relabelTime, cleanAired, weekdayOf, clipWords } from '../server/weeklywriter.js';
 import { Producer } from '../server/producer.js';
 import { loadChannel } from '../server/channel.js';
 
@@ -145,4 +145,10 @@ test('a thin week is no programme; the producer airs it only with the week in ha
   assert.equal(p.canProduce(ch, 'seven-days'), false, 'not again within 3 hours');
   const empty = new Producer({ config: {}, newsDesk: { get: () => null }, chain: null, archive: new Archive(), log: { info() {} } });
   assert.equal(empty.canProduce(ch, 'seven-days'), false);
+});
+
+test('a board line cut to its room never ends on a word that needs the next (SEVEN DAYS, 17 Oct)', () => {
+  assert.equal(clipWords("Vatican confirms Pope Leo's surgery was successful", 40), "Vatican confirms Pope Leo's surgery");
+  assert.equal(clipWords('Pope Leo XIV will have surgery', 40), 'Pope Leo XIV will have surgery');
+  assert.equal(clipWords('Talks on the future of the bridge are set to resume', 30), 'Talks on the future');
 });

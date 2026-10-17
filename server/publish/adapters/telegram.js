@@ -30,6 +30,11 @@ export class TelegramAdapter extends Adapter {
   static env = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'];
   static limits = { perMinute: 20, perDay: 40 };
 
+  /** The message as a reader sees it: the bold title, the text and the links' labels (the citation), no markup. */
+  postText(item) {
+    return telegramHtml(item).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+\n/g, '\n');
+  }
+
   plan(item) {
     if (item.media?.video) {
       const v = this.fileInfo(item.media.video);

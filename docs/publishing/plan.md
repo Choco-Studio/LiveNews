@@ -83,19 +83,44 @@ first the news programmes' light and explainer moments, then their leads, never 
 The day's most-told stories each get one post per network: the most airings, leads counting double, breaking news
 first (`posts.js` `dayStories`). Each post has:
 
+**Every word is the channel's own, or the outlet's cited** (`wording.js`; the compliance desk's verbatim rule,
+`verbatim.md`: no run of more than 12 words copied from the story's sources, at most 20 % of the words copied).
+
 1. "AI-generated:"
-2. The headline as the outlet wrote it.
-3. One line of what is new: the sentence the channel said that is most about the headline's subject without repeating
-   it. It is whole, under 200 characters, with no pronoun before a name, no clause that needs another, no time that
-   points back ("At the time…"), no set-up for a quote the post will not carry ("here is how she put it"), no
-   adjective of opinion, and the trailing attribution removed. When nothing qualifies, the headline goes alone.
-4. The credit ("via NPR Science", "Source: The Guardian") and the article's link.
+2. **The post's own headline:** the channel's aired headline when it passes the rule against the story's sources, else
+   the channel's label of the story, made from its facts: its kicker and its place ("Wildfire · California, USA"),
+   each only when the story's own title and summary bear it out. On 17 Oct the channel's kicker and map said VOLCANO
+   for black-hole "eruptions" and JUSTICE · USA for a trial in Mexico: such a label is left out, and the citation
+   speaks alone.
+3. **One line of what is new**, only when the article itself is at hand to check it against
+   (`data/compliance/articles`, the compliance desk's audit cache) and it passes the rule. The channel's aired text is
+   largely the outlet's: the compliance desk measured it, so an aired sentence checked against the title and summary
+   alone could still be the article's own. With the article, the line is the aired sentence most about the headline's
+   subject that says something new: a figure, a time, a name the headline does not have, or an event reported, never
+   background ("he has started companies of his own"). It is whole, under 200 characters, with no pronoun before a
+   name, no clause that needs another, no time that points back ("At the time…"), no set-up for a quote the post will
+   not carry ("here is how she put it"), no adjective of opinion, and no trailing attribution.
+4. **The credit beside the article's link:** "via NPR Science" when the headline is the channel's own; else the
+   outlet's headline as an attributed citation ('BBC Science: “Evacuation orders as fast-moving California wildfire
+   burns homes”'), whole and in quotation marks. A link carries no tracking parameters (`utm_*`, `at_*`, `fbclid`,
+   `gclid` and the like); everything else in it is kept.
 5. Our clip's link, when the clip is published and the post has room.
 
-No emoji, ever, and no joke. A grave story's post waits for the owner whatever the mode. "Grave" is the channel's own
-call when it made one: a cure for a cancer is not grave news, though the word is there. Harm to people is always
-grave. The words alone (`severity`) decide only for a story the channel never classed. On X, a link costs $0.20 a
-post, so X takes the day's top 3–8 stories only. A day's posts are made with `tools/publish/posts.mjs --day`.
+The compliance desk's `preflight` measures every post as its network will show it (Telegram composes its message from
+the title and the links) against the story's sources, and holds one that copies.
+
+No emoji, ever, and no joke. A grave story's post waits for the owner whatever the mode. A story is grave when:
+
+- it was read sad on air (the archive's `grave`, which means only that);
+- or its words are grave (`facts.js` `severity` 2 or more: deaths, harm, illness), in their grave sense: money
+  "sunk" into a gym chain and "cancer-fighting" cells are not (`facts.js` lookalikes, with the channel's others);
+- or it is a named person's illness;
+- or it names a death in other words ("deadly", "fatal", "lethal": "Russian man linked to deadly London hospitals
+  hack arrested").
+
+The archive's `grave: false` does not mean the channel judged a story light: every story read "serious" archives
+that way, a pope's cancer among them. On X, a link costs $0.20 a post, so X takes the day's top 3–8 stories only. A
+day's posts are made with `tools/publish/posts.mjs --day`.
 
 ## 5. Full programmes on YouTube (Phase 2)
 

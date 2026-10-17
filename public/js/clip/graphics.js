@@ -99,7 +99,8 @@ export function drawBugOnly(ctx, t, onAt, x = TOP.x, y = TOP.y) {
     ctx.beginPath();
     ctx.rect(TOP.x, TOP.y, BUG_W, TOP.h);
     ctx.clip();
-    drawTopRow(ctx, t, { onAt, replay: false, program: null, programIn: null, programOut: null, clock: '' });
+    // (mark: false: the bug's row draws no mark of its own, clipped or not; the clip's one mark is drawn below)
+    drawTopRow(ctx, t, { onAt, replay: false, program: null, programIn: null, programOut: null, clock: '', mark: false });
   } finally {
     ctx.restore();
   }

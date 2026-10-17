@@ -14,8 +14,10 @@
 //
 //   recreationOf(booking, seg)     what the graphics show: { name, role, line, credit } (scene.recreation)
 //   recreationLayout(rec, frame)   the plates, where they go and whether every word fits (server/compliance/clips.js
-//                                  checks a clip's crop against it)
-//   drawRecreation(ctx, rec, accent)
+//                                  checks a clip's crop against it); frame { vertical: box }: the publishing desk's
+//                                  vertical picture (216x384, public/js/clip/vertical.js), the plates set natively at
+//                                  the stage's top right and its foot
+//   drawRecreation(ctx, rec, accent, frame)
 //   RECREATION                     the label's geometry (top-right, under the clock)
 import { P } from '../palette.js';
 import { drawText, measureText, wrapLines } from '../font.js';
@@ -117,6 +119,7 @@ export function evenLines(text, room, font = 'body', most = 4) {
  * narrow for it).
  */
 export function recreationLayout(rec, frame = FRAME) {
+  if (frame?.vertical) return verticalLayout(rec || recreationOf(null, {}), frame.vertical);
   const r = rec || recreationOf(null, {});
   const plates = [];
   const lost = [];
@@ -181,6 +184,52 @@ export function recreationLayout(rec, frame = FRAME) {
 }
 
 /**
+ * The vertical picture's label (the publishing desk's 9:16 frame, 216x384 at 1x, scaled 5x): the same plates, set
+ * natively for the tall frame, every word whole and in the body face (7 px capitals: 35 px on the 1920 px picture,
+ * over the 30.7 px a label needs). The label stacks at the stage's top right, 8 px in; the name super sits at the
+ * stage's foot, 8 px in from the left. `box` = the stage { x, y, w, h } in the vertical frame.
+ */
+function verticalLayout(r, box) {
+  const plates = [];
+  const lost = [];
+  const { h } = RECREATION;
+  const right = box.x + box.w - 8;
+  const left = box.x + 8;
+  const room = right - left;
+  const m = /^(RECREATION)\s*(.*)$/.exec(String(r.line || LINE));
+  const rest = (m ? m[2] : String(r.line || LINE)).replace(/^[—–-]\s*/, '');
+  let yy = box.y + 4;
+  plates.push({ role: 'mark', x: right - HEAD_W, y: yy, w: HEAD_W, h, color: P.yellow, text: HEAD, ink: P.black, ai: true });
+  yy += h + 1;
+  for (const ln of evenLines(rest, room - 9)) {
+    const w = measureText(ln) + 9;
+    if (w > room) lost.push(ln);
+    plates.push({ role: 'line', x: right - w, y: yy, w, h, color: P.black, text: ln, ink: P.white });
+    yy += h + 1;
+  }
+  for (const ln of evenLines(String(r.credit || ''), room - 10)) {
+    const w = measureText(ln) + 10;
+    if (w > room) lost.push(ln);
+    plates.push({ role: 'credit', x: right - w, y: yy, w, h, color: P.ink, text: ln, ink: P.silver });
+    yy += h + 1;
+  }
+  if (HEAD_W > room) lost.push(HEAD);
+  const label = plates.reduce((b, p) => ({ x0: Math.min(b.x0, p.x), y0: Math.min(b.y0, p.y), x1: Math.max(b.x1, p.x + p.w), y1: Math.max(b.y1, p.y + p.h) }), { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  // the name super at the stage's foot: the role on the accent tag, the name on the ink bar, both wrapping whole
+  const nameRoom = room - 10;
+  const nameLines = upTo(String(r.name || ''), nameRoom, 2, lost);
+  const roleLines = upTo(r.role ? r.role : FEATURE, nameRoom, 2, lost);
+  const barH = 13 + (nameLines.length - 1) * 10;
+  const tagH = 11 + (roleLines.length - 1) * 10;
+  const barY = box.y + box.h - 2 - barH;
+  const tagW = Math.max(...roleLines.map((l) => measureText(l))) + 10;
+  const barW = Math.max(...nameLines.map((l) => measureText(l))) + 10;
+  plates.push({ role: 'role', x: left, y: barY - tagH, w: tagW, h: tagH, color: null, text: roleLines.join('\n'), lines: roleLines });
+  plates.push({ role: 'name', x: left, y: barY, w: Math.min(room, barW), h: barH, color: P.ink, text: nameLines.join('\n'), lines: nameLines });
+  return { plates, label, whole: lost.length === 0, lost, vertical: true };
+}
+
+/**
  * At most `max` lines of `text` in `room` px, whole words. When even that cannot hold it, the last line is fitted and
  * the words left out go to `lost` (the layout is then not whole, and the publish check refuses the window).
  */
@@ -213,9 +262,9 @@ export function recreationTop(rec) {
 export const RECREATION_WINDOW = '9x16@64';
 
 /** The label (top-right, or stacked in a clip's window) and the name super, static from the first frame. */
-export function drawRecreation(ctx, rec, accent = P.red) {
+export function drawRecreation(ctx, rec, accent = P.red, frame = FRAME) {
   if (!rec) return;
-  const L = recreationLayout(rec, FRAME);
+  const L = recreationLayout(rec, frame);
   for (const p of L.plates) {
     if (p.role === 'mark') {
       rect(ctx, p.x, p.y, p.w, p.h, p.color);

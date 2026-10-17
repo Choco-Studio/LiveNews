@@ -53,6 +53,11 @@ const NOT_GRAVE_SENSES = [
   /\bdead (?:rubber|ball|heat)\b|\bkill(?:s|ed|ing)? off (?:the|their|any) (?:game|tie|contest|match|hopes?)\b|\bwar of words\b/gi,
   /\b(?:shooting (?:guard|percentage|boots|practice|form|range|touch)|three-point shooting|free-throw shooting)\b/gi,
   /\bmissing (?:out|from (?:the )?(?:squad|team|line-up|lineup|side|starting)|piece|link)\b/gi,
+  // money sunk into a business ("Mark Wahlberg, who once sank money into a gym chain", TechCrunch 16 Oct) and research
+  // against a disease ("a never-ending supply of cancer-fighting cells", ScienceDaily 15 Oct); a ship that sank, and a
+  // person's cancer, stay grave
+  /\b(?:sank|sunk|sinks?|sinking)\s+(?:(?:his|her|their|its|the|a|some|more|of)\s+){0,2}(?:money|cash|millions|billions|funds|savings|fortunes?|[$£€]\s?[\d.,]+(?:\s*(?:m|bn|k|million|billion))?)(?![\w])/gi,
+  /\bcancer-(?:fighting|killing|hunting|targeting|detecting|spotting|sniffing)\b/gi,
 ];
 // What says a grave-sounding event harmed no one ("Moderate earthquake shakes northern Chile, no damage reported").
 const HARM_NEGATED = /\b(?:no (?:reports? of )?(?:damage|injuries|injured|casualties|deaths|victims)(?:\s+(?:or|and|nor)\s+(?:damage|injuries|injured|casualties|deaths|victims))?|no one (?:was )?(?:hurt|injured|killed)|nobody (?:was )?(?:hurt|injured|killed)|without (?:injuries|casualties)|false alarm|(?:a|the) drill\b)/gi;

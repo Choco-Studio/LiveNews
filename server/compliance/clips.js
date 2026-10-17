@@ -24,6 +24,7 @@ export { RECREATION_WINDOW };
 import { BUG_W } from '../../public/js/graphics/bug.js';
 import { markWidth } from '../../public/js/graphics/disclosure.js';
 import { TOP } from '../../public/js/graphics/layout.js';
+import { V, VW, VH, boardBox } from '../../public/js/clip/layout.js';
 import { disclosureFor, recreationsIn } from './disclosure.js';
 import { electionHold, silenceHold, loadCalendar } from './elections.js';
 import { roleKind } from '../guests/restage.js';
@@ -99,9 +100,16 @@ export function timelineFromRecording(episode, report, { offset = 0 } = {}) {
  * The clip's picture geometry. `frame` = { crop: { x, y, w, h } in the 384x216 canvas, output: { w, h } px,
  * place: { x, y, w, h } where the crop lands in the output (default: fills it), window: '9x16@131' | { x, w } | null
  * (the window the graphics were laid out in: tools/record.mjs with ?frame=...) }. Missing: the whole 16:9 frame at
- * 1920x1080.
+ * 1920x1080. `layout: 'vertical-216x384'`: the publishing desk's vertical picture, composed natively at 216x384 (its
+ * crop is the whole of that canvas, and its graphics are laid out for it: `vertical` in the result).
  */
 export function frameGeometry(frame = {}) {
+  if (frame.layout === 'vertical-216x384') {
+    const crop = { x: 0, y: 0, w: VW, h: VH, ...(frame.crop || {}) };
+    const output = { w: 1080, h: 1920, ...(frame.output || {}) };
+    const place = { x: 0, y: 0, w: output.w, h: output.h, ...(frame.place || {}) };
+    return { crop, output, place, window: { active: false, x: 0, w: VW }, scale: Math.min(place.w / crop.w, place.h / crop.h), vertical: true };
+  }
   const crop = { x: 0, y: 0, w: SRC_W, h: SRC_H, ...(frame.crop || {}) };
   const output = { w: 1920, h: 1080, ...(frame.output || {}) };
   const place = { x: 0, y: 0, w: output.w, h: output.h, ...(frame.place || {}) };
@@ -189,13 +197,15 @@ export function checkClip(clip = {}, opts = {}) {
     const g = frameGeometry(clip.frame || {});
     const c = { x: g.crop.x, y: g.crop.y, w: g.crop.w, h: g.crop.h };
     const need = legibleCap(g.output.h);
-    const mx = (g.window.active ? g.window.x + 4 : TOP.x) + BUG_W + 1;
-    const mark = { x0: mx, y0: TOP.y, x1: mx + markWidth(0), y1: TOP.y + TOP.h };
+    // (the vertical picture docks the mark to the bug in its mast: clip/vertical.js drawMast, 8 px in, 10 down)
+    const mx = g.vertical ? 8 + BUG_W + 1 : (g.window.active ? g.window.x + 4 : TOP.x) + BUG_W + 1;
+    const my = g.vertical ? 10 : TOP.y;
+    const mark = { x0: mx, y0: my, x1: mx + markWidth(0), y1: my + TOP.h };
     if (!inside(mark, c)) v('mark-out-of-frame', `the AI mark (x ${mark.x0}-${mark.x1}) is outside the crop (x ${c.x}-${c.x + c.w}): record the clip with ?frame=${g.window.active ? '…' : '9x16'} so it is laid out inside`, { mark, crop: c });
     for (const rec of inRange) {
       const booking = episode?.guests?.[rec.id] || null;
       const seg = episode?.segments?.[rec.index] || {};
-      const L = recreationLayout(recreationOf(booking, seg), g.window);
+      const L = recreationLayout(recreationOf(booking, seg), g.vertical ? { vertical: boardBox({ x: 0, y: V.stage.y, w: VW, h: V.stage.h }) } : g.window);
       if (!L.whole) v('label-out-of-frame', `the label or the name super loses words in this window: ${L.lost.join(' / ')}`, { recreation: rec.id });
       if (!inside(L.label, c)) v('label-out-of-frame', `the AI RECREATION label and its SOURCE (x ${L.label.x0}-${L.label.x1}, y ${L.label.y0}-${L.label.y1}) are not inside the crop (x ${c.x}-${c.x + c.w}): record with ?frame=${aspectOf(g)}@${c.x}`, { recreation: rec.id, label: L.label, crop: c });
       // the smallest capitals of the label: the body face's 7 px, or the micro face's 5 px for the source in a window

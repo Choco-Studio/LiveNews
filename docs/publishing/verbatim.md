@@ -72,7 +72,18 @@ Written 17 October 2026. The writer team owns `server/writer.js` and `server/pro
   - an AI writer gets the violating sentences back with "say this in your own words; keep only facts, names, numbers and attributed quotations";
   - the fallback writer must not emit them (§5).
 
-**The last net.** `preflight` (publish time) refuses an episode whose lint fails (`verbatim`, default `block`).
+**The last net.** `preflight` (publish time) refuses an episode whose lint fails (`verbatim`, default `block`). The
+publishing desk gives it a clip's own stories' sources (`clipGetStory`, from `archiveGetStory`), so a clip is measured
+on the words it carries, voice and captions, and not held for a story of its episode it does not show. On 17 Oct the
+offline material broke the rule in most news stories, so most news clips are held until the writer complies (§5).
+
+**Text posts.** `preflight` measures a text post (`kind: 'text'`) the same way when it carries `sourceTexts` (the
+titles and summaries of the stories it tells, and their articles when cached): the post's words (its links, hashtags
+and entities left out, `postWords`) against them, with `storyReport` at 12 words and 20 %. An attributed quotation is
+exempt, so an outlet's headline cited beside its link ('BBC Science: “…”') passes and the same headline unquoted does
+not. A post with no source texts gets a warning, and so does one checked against titles and summaries only. The
+publishing desk's posts writer applies the same rule before a post is written (`server/publish/posts.js`,
+`wording.js`).
 
 **The live stream's net: the launch report.** The stream has no publish step, so `launchReport()` (`node tools/compliance/cli.mjs launch`) measures what aired. `archiveSample()` reads the last 300 real stories of `data/archive` and checks each one's reading and analysis against its title and summary, and against its article when this audit has cached it in `data/compliance/articles`. Launch is blocked while more than 5 % of those stories break the rule. On 17 Oct 2026 the rate is 80.3 % against title and summary alone (241 of 300), and 99 % with the articles (297 of 300, 280 articles cached). It takes about a third of a second.
 

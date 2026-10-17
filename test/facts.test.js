@@ -239,6 +239,12 @@ describe('severity: grave by sense and harm, not by keyword (fix round 1)', () =
       ['Seville records 44 degrees as Spain issues heat alert. Spain has declared a red alert.', true, 3, false],
       ['Building collapses in Lagos, 10 dead', true, 3, false],
       ['Earthquake kills 12 in Peru; no damage reported at the airport', true, 3, false],
+      // (17 Oct: a gym chain and a cancer-research discovery were grave by a word in another sense)
+      ['Mark Wahlberg, who once sank money into a gym chain that got kicked off the NYSE, is now building his own', false, 0, false],
+      ['The investor sank $40 million into the start-up', false, 0, false],
+      ['USC scientists discover how to create a never-ending supply of cancer-fighting cells', false, 0, false],
+      ['Ferry sank off the coast with 40 people on board', true, 2, false],
+      ['Pope to return to Vatican after cancer surgery', true, 2, false],
     ];
     for (const [text, grave, sev, mild] of rows) {
       assert.equal(isGrave(text), grave, `grave: ${text}`);

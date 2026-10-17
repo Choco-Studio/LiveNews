@@ -24,6 +24,13 @@ export const V = Object.freeze({
 });
 /** The part of the frame no feed covers (TikTok, Reels and Shorts measured together: docs/publishing/vertical.md §2). */
 export const PLATFORM_SAFE = Object.freeze({ left: 8, right: 188, top: 32, bottom: 300 });
+/**
+ * The column every word a viewer must read keeps to: x 8-188 (TikTok's, Reels' and Shorts' buttons cover the right
+ * 12 %, their caption and handle the bottom 20 %). `cx` is its middle: what is centred is centred there.
+ */
+export const SAFE = Object.freeze({ x: PLATFORM_SAFE.left, right: PLATFORM_SAFE.right, w: PLATFORM_SAFE.right - PLATFORM_SAFE.left, cx: (PLATFORM_SAFE.left + PLATFORM_SAFE.right) >> 1 });
+/** A board's box on a stage: the stage's rows, its right edge where the safe column ends (a board keeps 8 px in). */
+export const boardBox = (box) => ({ ...box, w: SAFE.right + 8 - box.x });
 /** The horizontal channel's frame (the renderer's picture the vertical one is composed from). */
 export const HW = 384;
 export const HH = 216;

@@ -313,6 +313,7 @@ Everything the feature already does stays:
 - **Line breaks** fall where a subtitler would put them (`evenLines`): never after a word that binds to the next ("OF", "THE"), at a natural point when one fits (after "SOURCE:", before "OF" or "FROM"), and otherwise where the lines are most even, with no lone word left under the rest. So the tag reads CHIEF EXECUTIVE / OF NIMBUS RAIL, and a long source reads SOURCE: / THE WALL STREET JOURNAL with the outlet's name whole. A role or name that even four lines cannot hold is reported, and the publish check refuses that window: a word is never dropped silently.
 - The clock and the ticker stay out of a clip.
 - `recreationLayout(rec, frame)` is the single source of where every plate goes. The renderer draws from it and the publish check verifies the crop against it.
+- **The publishing desk's vertical picture** is composed again, not cropped (`frame.layout: 'vertical-216x384'`, output 1080 × 1920, scale 5; `docs/publishing/vertical.md`). With `frame.vertical`, `recreationLayout` sets the label for that frame: the plates (AI RECREATION, WORDS FROM PUBLIC STATEMENTS, the source's credit) at the stage's top right inside the platforms' safe column, all in the body face (35 px on 1920), and the role and name at the stage's foot. `checkClip` (`frameGeometry`) reads the same layout, so a vertical clip passes when its label is whole, inside the frame and the stage, and legible at the output size. It is refused as `label-out-of-frame` or `label-illegible` otherwise (`test/compliance-clips.test.js`). The AI mark is checked docked to the bug at (8 + bug width + 1, 10), and the clip draws it once.
 - **Tested** on centred, left and right 9:16, 1:1, 4:5 and 3:4 windows with long outlets, names and real long roles (Secretary-General of the United Nations, Director-General of the World Health Organization) (`test/compliance-onair.test.js`). Rendered at 4x in 9:16, 1:1 and 4:5.
 - **Legibility.** The label's smallest capitals must be at least 1.6 % of the published picture's height (16 px minimum). These are the body face's 7 px, or the micro face's 5 px for the source in a window, which is 44 px on a 1920 px picture. A whole 16:9 frame shrunk into a 9:16 picture gives 19.7 px on 1920. That fails, and the check says to crop to the window instead.
 
@@ -497,7 +498,7 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 | `lintEpisode(episode, { getStory, strict })` | the episode and the stories' `{ title, summary, body }` | `{ ok, stories, violations }` |
 | `archiveSample({ dataDir, cacheDir, limit })` | the archive (`data/archive`) and the audit's article cache | `{ stories, violating, rate, withArticle, examples }` |
 | `archiveGetStory({ dataDir, cacheDir })` | same | `getStory(id)` for `lintEpisode` and `preflight` when the news desk is not at hand |
-| `preflight(item, opts)` | a clip (as above) plus `{ files, text }`; `opts` also `{ getStory, verbatim: 'block'\|'warn', env }` | `{ ok, violations, warnings, disclosure, credits, description, recreations }` |
+| `preflight(item, opts)` | a clip (as above) plus `{ files, text, sourceTexts }` (a text post's story sources: the outlet's title, summary and article, measured with the verbatim rule; an attributed quotation is exempt); `opts` also `{ getStory, verbatim: 'block'\|'warn', env }` | `{ ok, violations, warnings, disclosure, credits, description, recreations }` |
 | `launchReport({ env, dataDir })` | the environment and the archive | `{ ready, blockers, warnings, c2pa, watermark, calendar, verbatim }` |
 | `ComplianceRegister` | `{ dir }` (the server's: `sharedRegister(dataDir)`) | publications, reviews, complaints, triage, actions, blocks, corrections (§7) |
 
@@ -537,6 +538,15 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 7. **Elections.** Is the rule (30 days, silence periods, fail closed) proportionate? Do the EU political advertising rules (Regulation 2024/900) touch anything we do?
 8. **Platforms.** Confirm the YouTube live disclosure path and TikTok's current guideline wording, which could not be read from here.
 9. **General media law for the news text.** These are not AI rules, but every news outlet has them, and the writer and the cast follow whatever the lawyer sets: contempt of court and reporting restrictions in the UK (active proceedings, anonymity orders); the anonymity of victims of sexual offences and of minors in the UK and in Spain; the Spanish right of reply (LO 2/1984) and how fast it must be answered; and what an AI presenter may say about someone accused but not convicted.
+10. **Outlet headlines in posts and descriptions.** The publishing desk posts in the channel's own words and shows an
+   outlet's headline only as an attributed citation, whole and in quotation marks, beside the link to the outlet's
+   article. The networks' link cards show it too, and Bluesky's card is built from it. The full programmes' descriptions
+   list each source the same way. In the UK, *NLA v Meltwater* ([2011] EWCA Civ 890) held that a headline can be a
+   literary work in its own right. In the EU, the press publishers' right (Art. 15 DSM, Directive 2019/790) leaves
+   hyperlinking and "individual words or very short extracts" free. Confirm that a whole headline, quoted and
+   attributed with its link, is free use: a "very short extract", or a quotation (Art. 5(3)(d) InfoSoc; UK CDPA s. 30).
+   Confirm the same for the channel's on-screen strap and a clip's hook, which show the aired headline with the source
+   credited beneath.
 
 **What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 

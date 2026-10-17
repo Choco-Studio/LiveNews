@@ -102,6 +102,30 @@ test('the label in a 9:16 crop: refused from a 16:9 render, accepted when record
   assert.deepEqual(rules(checkClip({ ...base, frame: { output: { w: 1920, h: 1080 } } }, opts)), []);
 });
 
+test('the publishing desk\'s vertical picture: its own label accepted when truly in frame, refused when not', async () => {
+  const { recreationLayout, recreationOf } = await import('../public/js/graphics/recreation.js');
+  const { V, VW, SAFE, boardBox } = await import('../public/js/clip/layout.js');
+  const ep = episode({ outlet: 'Associated Press' });
+  const base = { id: 'c1', kind: 'short', episode: ep, range: { start: 4, end: 10.4 }, timeline: timeline(ep), platforms: ['youtube'], flags: FLAGS };
+  const opts = { now: NOW, calendar: QUIET, register: reviewed() };
+  const vertical = { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } };
+  // the clip's own layout (clip/vertical.js draws exactly these plates): whole, inside the frame, legible
+  assert.deepEqual(rules(checkClip({ ...base, frame: vertical }, opts)), []);
+  const L = recreationLayout(recreationOf(ep.guests[ep.segments[1].reporter], ep.segments[1]), { vertical: boardBox({ x: 0, y: V.stage.y, w: VW, h: V.stage.h }) });
+  assert.ok(L.whole);
+  assert.ok(L.label.x0 >= SAFE.x && L.label.x1 <= SAFE.right, `the label in the safe column: ${JSON.stringify(L.label)}`);
+  assert.ok(L.plates.every((p) => p.x >= SAFE.x && p.x + p.w <= SAFE.right && p.y >= V.stage.y && p.y + p.h <= V.stage.y + V.stage.h), 'every plate on the stage, clear of the feed\'s buttons');
+  assert.ok(L.plates.some((p) => p.role === 'mark' && p.ai), 'AI RECREATION, the AI mark first');
+  // the same picture shrunk to half size: the label's capitals too small to read
+  assert.deepEqual(rules(checkClip({ ...base, frame: { ...vertical, output: { w: 432, h: 768 } } }, opts)), ['label-illegible']);
+  // a name the label cannot hold whole in two lines: refused, never cut
+  const long = episode({ name: 'Maximiliana Theodora Alexandrina-Wolkenstein-Trostburg von Hohenberg-Liechtenstein', outlet: 'Associated Press' });
+  const r = checkClip({ ...base, episode: long, timeline: timeline(long), frame: vertical }, opts);
+  assert.ok(rules(r).includes('label-out-of-frame'), JSON.stringify(r.violations));
+  // the AI mark sits in the vertical mast, inside the frame
+  assert.ok(!rules(checkClip({ ...base, frame: vertical }, opts)).includes('mark-out-of-frame'));
+});
+
 test('the platforms\' flags: missing ones refuse; Facebook has none, so a recreation goes there only labelled by hand', () => {
   const ep = episode();
   const base = { id: 'c1', kind: 'clip', episode: ep, range: { start: 4, end: 10.4 }, timeline: timeline(ep) };
@@ -117,6 +141,22 @@ test('the platforms\' flags: missing ones refuse; Facebook has none, so a recrea
   const kids = checkClip({ ...base, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: true } } }, opts);
   assert.deepEqual(kids.violations.map((v) => [v.rule, v.field]), [['flag-missing', 'selfDeclaredMadeForKids']]);
   assert.equal(kids.disclosure.platforms.youtube.selfDeclaredMadeForKids, false);
+});
+
+test('the publishing desk\'s adapters send the flags this check asks for (the factory\'s and the upload\'s gate use them)', async () => {
+  // 17 Oct: the YouTube adapter told the gate only containsSyntheticMedia, so every Short the factory made was held as
+  // flag-missing (selfDeclaredMadeForKids) by the real check, although the upload itself sends it
+  const { makeAdapter } = await import('../server/publish/adapters/index.js');
+  const ep = episode();
+  const base = { id: 'c1', kind: 'short', episode: ep, range: { start: 11, end: 17 }, timeline: timeline(ep) };
+  const opts = { now: NOW, calendar: QUIET, register: reviewed() };
+  for (const p of ['youtube', 'tiktok', 'instagram']) {
+    const flags = { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ kind: 'clip', source: { programId: 'world-now' } }) };
+    const r = checkClip({ ...base, platforms: [p], flags }, opts);
+    assert.deepEqual(r.violations.filter((v) => /^flag-/.test(v.rule)), [], `${p}: ${JSON.stringify(flags)}`);
+  }
+  const ep2 = makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: 'cosmos' } });
+  assert.deepEqual(ep2, { containsSyntheticMedia: true, selfDeclaredMadeForKids: false }, 'a whole programme\'s upload too');
 });
 
 test('election periods: a politician of a country inside its window is held; a scientist is not; silence holds a clip about the vote', () => {

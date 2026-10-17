@@ -6,6 +6,8 @@
 //   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), checkClip(clip, opts),
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
+//   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
+//   clipGetStory(storyIds, getStory) that, for the stories one clip tells only
 //   usingStub   true while the stub stands in
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,6 +31,23 @@ export const checkClip = (clip, opts = {}) => mod.checkClip(clip, opts);
 export const describe = (item, o = {}) => (mod.describe ? mod.describe(item, o) : [...mod.disclosureFor(item).description.lines, ...(o.credits?.length ? ['', 'Credits:', ...o.credits.map((c) => `· ${c}`)] : [])].join('\n'));
 export const textPost = (item, o = {}) => (mod.textPost ? mod.textPost(item, o) : `AI-generated: ${item.text}`);
 export const buildManifest = (item, o = {}) => (mod.buildManifest ? mod.buildManifest(item, o) : { title: o.title || null });
+/** The verbatim measure of a text against its sources (the compliance desk's rule: runs of 12, a share of 20 %). */
+export const storyReport = (text, sources, o = {}) => mod.storyReport(text, sources, o);
+/**
+ * The stories' sources as the archive keeps them, with the article where the compliance desk's audit cached it:
+ * getStory(id) -> { title, summary, body } or null. The stub has no cache: body is always null there.
+ */
+export const archiveGetStory = (o = {}) => (mod.archiveGetStory ? mod.archiveGetStory(o) : () => null);
+/** The verbatim lint of an episode's stories (the stub has none: everything passes there, as before). */
+export const lintEpisode = (episode, o = {}) => (mod.lintEpisode ? mod.lintEpisode(episode, o) : { ok: true, stories: [], violations: [] });
+/**
+ * The gate's getStory for one clip or post: the sources of the stories it tells only (a clip's episode tells others it
+ * does not carry). preflight's verbatim lint then measures the clip's own aired words against their sources.
+ */
+export function clipGetStory(storyIds, getStory) {
+  const ids = new Set((storyIds || []).filter(Boolean));
+  return (id) => (ids.has(id) && typeof getStory === 'function' ? getStory(id) : null);
+}
 
 /** The publish-time gate: preflight when the module has it, else checkClip (video) or the text prefix rule. */
 export function preflight(item, opts = {}) {

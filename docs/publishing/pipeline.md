@@ -91,6 +91,16 @@ For each item whose time has come:
 2. **The compliance gate**, again, at the moment of publishing (`compliance.preflight`). It gets the clip's episode,
    its recording's report, its range, its frame (vertical: 216 × 384 at 5x), the flags its adapter will actually send
    (`aiFlags`), its text, its publish time and the register. Any violation holds the item and sends nothing.
+   A text post is checked as the network will show it: its text is the adapter's own `postText(item)` (Telegram's
+   HTML with the tags stripped, the others' text as it is), and it carries its `sourceTexts` (the titles and summaries
+   of the stories it tells, plus the article when the compliance desk's cache has it), so the verbatim rule (no run of
+   12 copied words, no more than 20 % copied, an attributed quotation exempt) is checked on the words that would go
+   out. The posts writer checks the same rule upstream (`posts.js`), so a copied line is dropped before it is written,
+   and the gate is the second lock.
+   A clip carries its stories' aired words twice, in the voice and in the burned-in captions, so its gate is given
+   their sources too (`clipGetStory(item.source.storyIds, archiveGetStory({ dataDir }))`: the clip's own stories only,
+   not the rest of its episode). The factory, the upload and the publisher all pass it, and a clip whose words copy is
+   held (`verbatim`). Until the writer composes its own sentences (`verbatim.md` §5), that is most news clips.
 3. **The C2PA mark.** `compliance.markFile` signs a copy beside the clip (`.c2pa.mp4`), never the clip itself, whose
    hash stays its identity in the ledger. The real module's `readMark` then reads it back. An unmarked file is never
    sent live: it is held. The signed copy is what gets uploaded.

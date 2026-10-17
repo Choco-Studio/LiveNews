@@ -11,7 +11,7 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import { seg, easeOutQuint } from '../gfx/index.js';
-import { VW, VH, HW, HH, V } from './layout.js';
+import { VW, VH, HW, HH, V, SAFE } from './layout.js';
 import { drawBugOnly, drawProgrammeTag } from './graphics.js';
 import { groundOf } from './vertical.js';
 
@@ -37,7 +37,7 @@ export const sizeOf = (format) => (format === 'vertical' ? { w: VW, h: VH } : { 
 export function drawHook(ctx, { format = 'vertical', lines = [], programme = '', accent = P.red, t = 9, profile = 'normal' } = {}) {
   const ls = (lines || []).slice(0, 3).map((l) => String(l).toUpperCase());
   // two short lines at 2x; a whole headline too long for that in the body face, up to three lines (moments.js)
-  const big = ls.length <= 2 && ls.every((l) => measureText(l, 2) <= (format === 'vertical' ? VW - 15 - 8 : 300));
+  const big = ls.length <= 2 && ls.every((l) => measureText(l, 2) <= (format === 'vertical' ? SAFE.right - 15 : 300));
   const sc = big ? 2 : 1;
   const pitch = big ? 18 : 10;
   const lineH = 7 * sc;
@@ -49,11 +49,11 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     const bw = drawBugOnly(ctx, t, 0, 8, 10);
     const line = ls.join(' ');
     // 2x when it fits beside the bug and its AI mark, else the body face (never over the mark)
-    const big = measureText(line, 2) <= VW - 8 - 6 - (8 + bw + 4);
+    const big = measureText(line, 2) <= SAFE.right - 6 - (8 + bw + 4);
     const w = measureText(line, big ? 2 : 1);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
-    ctx.fillRect(VW - 8 - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
-    drawText(ctx, line, VW - 8 - w, big ? 9 : 13, big ? S.white2 : S.white);
+    ctx.fillRect(SAFE.right - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
+    drawText(ctx, line, SAFE.right - w, big ? 9 : 13, big ? S.white2 : S.white);
     return;
   }
   if (format === 'vertical') {
@@ -62,7 +62,7 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     drawBugOnly(ctx, t, 0, 8, 10);
     if (programme) {
       const w = measureText(programme) + 8;
-      drawProgrammeTag(ctx, VW - 8 - w, 10, programme, accent);
+      drawProgrammeTag(ctx, SAFE.right - w, 10, programme, accent);
     }
     const n = ls.length;
     const h = n * pitch - (pitch - lineH);
@@ -124,7 +124,8 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
   const { w, h } = sizeOf(format);
   ctx.drawImage(groundOf(w, h, { cy: h * 0.42 }), 0, 0);
   const vertical = format === 'vertical';
-  const cx = Math.round(w / 2);
+  // vertical: centred on the safe column (the feed's buttons cover the right edge)
+  const cx = vertical ? SAFE.cx : Math.round(w / 2);
   // the logo: horizontal, the full lock-up at 3x; vertical (216 wide: the lock-up at 2x is 250), the emblem at 4x over
   // the channel's bug at 2x
   const parts = vertical
@@ -161,7 +162,7 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
     rise(ctx, `FROM ${String(programme).toUpperCase()}`, cx, y, seg(t, 0.8, 0.35), S.white, 'center');
     y += 14;
   }
-  rise(ctx, live ? 'NEWS 24 HOURS A DAY · WATCH LIVE' : 'NEWS 24 HOURS A DAY', cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
+  rise(ctx, live ? (vertical ? 'NEWS 24/7 · WATCH LIVE' : 'NEWS 24 HOURS A DAY · WATCH LIVE') : vertical ? 'NEWS 24/7' : 'NEWS 24 HOURS A DAY', cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
   // the disclosure, at the foot of the safe area (vertical) or of the frame
   const dy = vertical ? Math.max(272, y + 22) : h - 22;
   rise(ctx, 'PRESENTERS ARE AI-GENERATED CHARACTERS', cx, dy, seg(t, 1.1, 0.3), S.microSilver, 'center');

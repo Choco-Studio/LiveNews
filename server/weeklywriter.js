@@ -96,12 +96,17 @@ function retell(entry, max, timeZone) {
   return sentencesOf(relabelTime(cleanAired(entry.text), day)).slice(0, max).join(' ');
 }
 
-/** A board line within `max` characters, cut at a word (never "a day-long cl"). */
-const clipWords = (s, max) => {
+/**
+ * A board line within `max` characters, cut at a word (never "a day-long cl"), and never on a word that needs the
+ * next ("Vatican confirms Pope Leo's surgery was", SEVEN DAYS 17 Oct: the line ends at "surgery").
+ */
+const WEAK_END = /\s+(?:a|an|the|of|to|in|on|at|by|for|from|with|as|and|or|but|that|its|their|his|her|is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|after|before|over|into)$/i;
+export const clipWords = (s, max) => {
   const t = String(s ?? '').trim();
   if (t.length <= max) return t;
-  const cut = t.slice(0, max + 1).replace(/\s+\S*$/, '');
-  return cut.replace(/[\s,;:–-]+$/, '');
+  let cut = t.slice(0, max + 1).replace(/\s+\S*$/, '').replace(/[\s,;:–-]+$/, '');
+  while (WEAK_END.test(cut)) cut = cut.replace(WEAK_END, '').replace(/[\s,;:–-]+$/, '');
+  return cut;
 };
 
 /**

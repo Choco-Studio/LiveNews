@@ -170,10 +170,32 @@ test('live (a fake network): the requests go out, the answer is read, nothing se
 
 test('aiFlags: the AI fields each adapter really sends (what the publisher\'s gate checks)', () => {
   const flags = (id, item = CLIP) => makeAdapter(id, { env: {}, fetchImpl: noFetch }).aiFlags(item);
-  assert.deepEqual(flags('youtube'), { containsSyntheticMedia: true });
+  // (YouTube: the audience too, on the same line of the compliance desk's check; without it every Short was held as
+  // flag-missing by the real module, 17 Oct)
+  assert.deepEqual(flags('youtube'), { containsSyntheticMedia: true, selfDeclaredMadeForKids: false });
   assert.deepEqual(flags('tiktok'), { is_aigc: true });
   assert.deepEqual(flags('instagram'), { is_ai_generated: true });
   assert.deepEqual(flags('facebook'), {}, 'no API field');
   // the flag follows the item, so an item that turned it off is caught by the gate, not hidden
-  assert.deepEqual(flags('youtube', { ...CLIP, disclosure: { youtube: { containsSyntheticMedia: false } } }), { containsSyntheticMedia: false });
+  assert.deepEqual(flags('youtube', { ...CLIP, disclosure: { youtube: { containsSyntheticMedia: false } } }), { containsSyntheticMedia: false, selfDeclaredMadeForKids: false });
+});
+
+test('the gate measures a clip\'s own stories\' aired words against their sources (clipGetStory), not its episode\'s others', async () => {
+  const C = await import('../server/publish/compliance.js');
+  const summary = 'Evacuation orders in California are in effect due to a rapidly growing wildfire that has already burned six homes in the southern Los Angeles area.';
+  const episode = {
+    id: 'e1', program: { id: 'world-now', title: 'WORLD NOW' }, storyIds: ['s1', 's2'],
+    segments: [
+      { type: 'story', storyId: 's1', headline: 'Wildfire burns homes', text: summary, source: 'BBC Science' },
+      { type: 'story', storyId: 's2', headline: 'Owls in the park', text: 'Four barn owl chicks were counted in Riverside Park on Tuesday, birders said.', source: 'NPR' },
+    ],
+  };
+  const sources = { s1: { title: 'Evacuation orders as fast-moving California wildfire burns homes', summary, body: null }, s2: { title: 'A rare family of barn owls moved into Manhattan', summary: 'Barn owls are nesting in Manhattan this autumn.', body: null } };
+  const getStory = (id) => sources[id] || null;
+  const gate = (ids) => C.preflight({ id: 'c1', kind: 'short', episode, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-generated: owls.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory: C.clipGetStory(ids, getStory) });
+  const verbatim = (r) => (r.violations || []).filter((v) => v.rule === 'verbatim');
+  if (C.usingStub) return; // (the stub has no episode lint)
+  assert.equal(verbatim(gate(['s2'])).length, 0, 'the owls clip carries no copied words');
+  assert.ok(verbatim(gate(['s1'])).length > 0, 'the wildfire clip reads the outlet\'s sentence');
+  assert.equal(C.clipGetStory(['s2'], getStory)('s1'), null);
 });
