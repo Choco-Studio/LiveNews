@@ -684,17 +684,152 @@ desk and the election calendar ask Wikimedia with clients of their own, outside 
 station runs the round-8 code with an empty store until it is merged and restarted (its store can start from this
 worktree's `data/pictures/answers.json`).
 
+## Round 10 — SEVEN DAYS off the station's thread, one Wikimedia queue for every desk
+
+The coordinator's brief, for the beta: **SEVEN DAYS blocks the station once per edition** (121 s here, 212 s on
+8711): group the week cheaply and without blocking (the event loop never held more than about 100 ms), with the same
+output, proven on the real archive; **three desks bypass the shared Wikimedia queue** (the footage desk, the guests'
+identity desk, the election calendar): route them through it, priorities sane, requests counted by desk; then a live
+re-measure of at least 45 minutes.
+
+**1. The week's grouping** (`server/weekgroups.js`, `server/weekgrouper.js`, `server/weekworker.js`). The old one was a
+greedy walk: each airing joins the first group, in the order the groups began, holding an airing of its section that
+`sameStory` calls the same event. On the 5,881 airings of 18 Oct (a copy of the live archive) it called `sameStory`
+1,099,151 times: 81–129 s at once, with the event loop held throughout. The new one walks the same way and gives the
+same groups in the same order, but asks far less:
+
+- `sameStory` reads an airing's words (story, section, outlet, headline, summary) and one thing more: whether it has
+  read that airing before (it sets the airing's keywords on it then, and its rule for an outlet's update needs them on
+  both). So each answer is asked once for each pair of word sets in each of those states, and given again to every other
+  telling with the same words in the same state, with what `sameStory` would have set on it. A first version that asked
+  once a pair of word sets, whatever the state, gave the same groups on the real archive but not on every synthetic week
+  of the test: the state is part of the answer, and it is now part of the key;
+- each edition reads fresh copies of the airings, so it groups as the first edition after a restart would (the old
+  grouping drifted with what the quiz desk and earlier editions had read on the same objects);
+- the answers between two airings both already read never change: kept for the next edition (a byte a pair), while
+  the storm names the desk knows stay the same;
+- it runs in a thread of its own, which keeps the week's airings (sent a few hundred at a time, then only the new ones)
+  and its answers; the station's thread only scores the groups that come back. Should the thread fail, the week is
+  grouped on the station's thread in slices of 20 ms. SEVEN DAYS's readiness was already a count (round 9); the week is
+  grouped once, in the background, two minutes after a start.
+
+| the week's grouping (5,881 airings of 18 Oct) | `sameStory` calls | took | longest hold of the station's thread: timer late / own processor time | groups and SEVEN DAYS's stories, in order |
+| --- | --- | --- | --- | --- |
+| old, before round 10 (one block) | 1,099,151 | 129.3 s | 129.3 s / 73.7 s | — |
+| new, at once | 460,049 | 58.3 s | 58.3 s / 38.8 s | identical |
+| new, in slices of 20 ms (if the thread fails) | 460,049 | 56.1 s | 141 ms / 36 ms | identical |
+| new, slices, the next edition (answers kept) | 5,268 | 7.2 s | 220 ms / 28 ms | identical |
+| **new, in its thread (on air)** | 460,049 (in the thread) | 64.2 s | **176 ms / 45 ms** | identical |
+| **new, thread, the next edition** | 5,268 (in the thread) | 7.8 s | **86 ms / 17 ms** | identical |
+
+Measured with `tools/pictures/weekdiff.mjs` at a load average of 12 (the old grouping took 81–129 s over four runs,
+83.5 s in a quieter one, where the thread held the station at most 136 ms the first time and 15 ms the next). The
+profile before: one stretch of 87.5 s on the station's thread, all of it `sameStory` under the week's grouping (the
+round-9 profile of the live station showed the same, 60 % of its time); after: the station's thread only scores the
+groups that come back. In the live runs below SEVEN DAYS was ready in 7.2 s and 6.2 s (121.5 s in round 9, 212 s on
+8711): the week grouped in the thread two minutes after the start (463,496 calls, 46.7 s there), then again for the
+edition with the answers kept (6,011 calls, 5.5 s there).
+
+On the real archive the groups, their scores and the SEVEN DAYS body (its stories, in order) are identical to the old
+grouping's in every mode (`tools/pictures/weekdiff.mjs`); `test/week-grouping.test.js` keeps the old grouping beside the
+new one and compares them on 40 random weeks with a `sameStory`-like test that keeps state the way the real one does,
+on the next edition with the answers kept, on airings another desk had read, and with the real `sameStory` on real
+headlines, in the thread.
+
+This machine is shared (a load average of 10–15 on four processors during the round): a timer that should fire every
+10 ms came up to 53 ms late in a process doing nothing at all, and up to 250–430 ms late while another thread of the
+same process was busy. So the event loop's hold is given two ways: how late its timer came (`maxMs`, what a programme
+waiting on it would see) and the processor time the station's own thread spent between two turns (`ownMaxMs`, how
+long its own work held it; `server/loopwatch.js`, `/api/wikimedia`).
+
+**2. One Wikimedia queue for every desk** (`server/wikimedia.js`). The footage desk's Commons searches, the guests'
+identity desk's Wikidata lookups and the election calendar's query now go through the picture desk's client: one
+request at a time, 1.1 s apart, one User-Agent, one pause on a 429 for what Retry-After asks. The queue takes the most
+urgent request first: 0, the episode being made (its footage, its speakers, its undecided pictures); 1, the next
+programmes' pictures; 2, the rest of the news desk; 3, background work (the archive's pictures, the election calendar).
+During a pause a request of the episode being made is refused at once (the episode airs with what is known) and
+background work waits the pause out in the queue; a footage clip (a media file) has a pause of its own, since
+`upload.wikimedia.org` limits media apart from the API. Every request is counted by host and by desk, with the
+refusals: `/api/wikimedia` and `/api/pictures/ahead`. The orchestrator's image search (`/api/tools/image-search`), found
+after the runs asking Commons with its own fetch, goes through the queue too (desk `search`; a search a pause refused is
+not kept). Two media fetches stay outside the queue, with the same User-Agent: the screen's own fetch of a picture that
+airs (once a picture: a refusal there would drop the picture for half an hour) and the face reader's (a child process,
+one picture at a time, a second apart, each 429 waited out).
+
+**3. Measured live** (`PORT=8733`, the real station path and real feeds, a headless playout recording each episode:
+run 1 00:49–01:49, before the last fixes of the event loop; **run 2 02:07–03:00**, on the code committed, with a CPU
+profile of the whole run; the round-9 run 2 for comparison).
+
+| measure | round 9, run 2 (90 min) | round 10, run 1 (60 min) | **round 10, run 2 (52 min)** |
+| --- | --- | --- | --- |
+| programmes, stories aired | 13 and a weather, 166 | 9, 105 | **8, 100** |
+| aired with a cleared picture | 48 (28.9 %) | 27 (25.7 %) | **27 (27.0 %)** |
+| the desk found one (the same stories) | 31.0 % | 27.2 % | **28.1 %** |
+| decision ready when the episode was made | 164 / 166 | 104 / 105 | **100 / 100** |
+| Wikimedia requests, answered 429 | 401, 79 (the picture desk's alone) | 15, 8 | **17, 4** |
+| 429s by host | en.wikipedia 36 of 127, Commons 43 of 163, Query Service 0 of 111 | Commons 4 of 6, Wikidata 2 of 2, en.wikipedia 2 of 5, Query Service 0 of 2 | **Commons 1 of 6, Wikidata 1 of 3, en.wikipedia 2 of 5, Query Service 0 of 2, upload 0 of 1** |
+| requests by desk | footage, guests and elections not counted (outside the queue) | pictures 10, footage 3, guests 2 | **pictures 9, footage 5, guests 3** |
+| the queue paused | 2,732 s (half the run) | 129 s | **72 s** |
+| SEVEN DAYS ready in | 121.5 s (one block) | 7.2 s | **6.2 s** |
+| the event loop's longest hold | 121.5 s (the week's grouping) | 10.1 s (at the start) | **10.2 s (the offline writer)** |
+| holds over 1 s, over 100 ms | — | 6, 106 | **6, 50** |
+
+- **The week no longer holds the station.** Every hold over a second in run 2 was the offline writer
+  (`providers/mock.js` `writeEpisode` under the producer's `make` and `deepen`: 10.2, 7.5, 6.5, 2.8, 1.6 and 1.1 s,
+  each while an episode was made; no AI provider answered from this machine, so it wrote them all) or the news desk's
+  refresh at the start (`sameStory` under `updateTrending`, 1.7 s): the CPU profile of the whole run. None was the
+  week's grouping or the picture desk. The minute the week was first grouped had 3 holds over 100 ms, an ordinary
+  minute 0–2.
+- **Few requests, still 429s.** 17 requests in 52 minutes, one every three minutes, still drew 4 429s (8 of 15 in
+  run 1): the address is shared (8711 runs beside it, and other agents). Each was waited out, every desk paused
+  together: 72 s in all, against 2,732 s in round 9. The requests are few because the desk's store already held the
+  decisions round 9 made (it decided 1,283 stories in its run; here 175 stories were tried and the picture desk asked
+  9 times); the footage desk (5) and the guests' identity desk (3) are now counted and paced with it, and the election
+  calendar asked nothing in the window (its calendar was under a day old).
+- **Coverage**: 27.0 % of the aired stories with a cleared picture, against 28.1 % for the desk's own decisions for
+  the same stories (the 89 whose decision its store holds under the headline they aired with). WORLD NOW ran grave
+  again (12.5 %); TECH BYTES 30.0 %, NEWS IN 60 40.0 %, SEVEN DAYS 41.2 %. Round 9's 28.9 % was the same desk on other
+  news.
+- **Ready ahead**: all 100 aired stories had their decision ready when their episode was made; a fresh story's wait
+  for its decision: median 2 s, the longest 57 s.
+
+**4. Found on the way.**
+
+- **The quiz desk's reading of the week** (`quizEvents`, its own grouping by `sameStory`) held the station 8.4 s the
+  first time after a start and about 0.8 s after: the picture queue's archive tier called it every ten minutes to put
+  PAY ATTENTION's candidates first. Removed: the archive tier now takes the most told stories first. PAY ATTENTION's
+  own readiness (`ready()` → `plan()` → `quizEvents`, every five minutes while an edition is due) still does it; that
+  is the quiz desk's code, reported.
+- **Smaller holds of the station's thread**, found in the profiles and fixed: the answer store was written at once
+  every idle turn (0.24 s; now built and written in slices, `KeptAnswers.saveAsync`); the next programmes' stories were
+  selected every 30 s (0.2–0.26 s each; now every 3 minutes); the archive applied its later pictures with a scan of the
+  whole archive for each (0.11–0.15 s at the start; now each story's entries are looked up once, 0.01 s, the same
+  entries on the real archive).
+- **Other desks' holds**, reported: the offline writer (up to 10 s an episode, above); the news desk's refresh
+  (`sameStory` under `updateTrending`, 1.5–1.7 s at the start); `/api/next`'s stock of candidates (0.3–0.5 s).
+
+**What is still open.** The offline writer holds the station up to 10 s an episode, and the quiz desk's readiness 8 s
+after a start (other desks' code; both could run in a thread as the week now does). Wikimedia still answers 429 to this
+shared address whatever the station asks, and two media fetches (the screen's, the face reader's) keep pauses of their
+own. Coverage stays where the free licences and grave news put it (27–29 % on air); the 75 % target is the owner's
+decision.
+
 ## Final table
 
-| category | r1 | r2 | r3 | r4 | r5 | r6 | r7 | r8 | **round 9** | why |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | 8.5 | 8.5 | **8.5** | round 9: unchanged; PICTURE THIS now draws its picture's licence credit while it shows (it showed none), and a picture put on an archived story afterwards is a cleared record for that very picture. round 8: unchanged; a rotation's portraits pass every check the first one does (cleared terms read from the source, credited, full name, one person read by the face reader); the boards draw no picture, only the story's own words, the writer's figures, an attributed quote and a Wikipedia description. Round 7: every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
-| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | 8.5 | 8.5 | **8.5** | round 9: the same desk and rules; the archive's pictures are the desk's decisions for those very stories. round 8: the cleared picks as round 7 (judged on the picks: 0 wrong person, 0 misleading, 17 % weak); the board's place is scored on its own (0 wrong in 248, below). Round 7: 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
-| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | 3.5 | 3.5 | **3.5** | round 9: on air live, 28.9 % of 166 stories (0 % on the live station before), the desk's own coverage of the same stories 31.0 %, 164 of 166 decided before their episode was made; tonight's grave news is below the samples' 34 %, and the 75 % target is the owner's decision. round 8: as measured in round 7 and not chased (the owner's decision: a wire licence, or the free-licence ceiling of 67 %). Round 7: 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
-| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | 8.0 | 8.5 | **8.5** | round 9: unchanged. round 8: the floor for two stories in three is now the story's own element (topic board 9.0) or its right place (locator 8.5), and a public figure's portraits rotate; still a board, not a picture, for most of the news. Round 7: the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
-| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | **9.5** | round 9: production never waits for Wikimedia; decisions are made ahead, kept across restarts, in the order things air; a 429 is waited out in the background; the station's event loop is no longer held by the weekly's check; a story keeps the picture it airs with. Not higher: Wikipedia rate-limits this shared address, and SEVEN DAYS still blocks two minutes when it is made. round 8: the station runs the face reader and starts it again (backoff, off with `FACE_READER`, never outliving the station); a rotation never changes a picture under a story already on air; one file never under two stories of an episode. Round 7: every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
-| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | 9.0 | 9.0 | **9.0** | round 9: the queue's order, pauses, back-off and Wikipedia rule, the producer reading only ready decisions, the archive's pictures, the lean rotation, the merged query, the pin and the spread, the weekly's count, PICTURE THIS's credit. round 8: every place of the hand check that went wrong, every board kind and its box, the board's words from real headlines, the actor rules, the rotation and the producer's one-file rule, the supervisor with a fake child and a real one, the credit beside the tag. Round 7: the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
-| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | 3.5 | **3.5** | coverage |
+| category | r1 | r2 | r3 | r4 | r5 | r6 | r7 | r8 | r9 | **round 10** | why |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | 8.5 | 8.5 | 8.5 | **8.5** | round 10: unchanged (the same sources and records); every Wikimedia request of the station now carries the one compliant User-Agent through one queue. round 9: unchanged; PICTURE THIS now draws its picture's licence credit while it shows (it showed none), and a picture put on an archived story afterwards is a cleared record for that very picture. round 8: unchanged; a rotation's portraits pass every check the first one does (cleared terms read from the source, credited, full name, one person read by the face reader); the boards draw no picture, only the story's own words, the writer's figures, an attributed quote and a Wikipedia description. Round 7: every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
+| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | 8.5 | 8.5 | 8.5 | **8.5** | round 10: unchanged (the same desk and rules). round 9: the same desk and rules; the archive's pictures are the desk's decisions for those very stories. round 8: the cleared picks as round 7 (judged on the picks: 0 wrong person, 0 misleading, 17 % weak); the board's place is scored on its own (0 wrong in 248, below). Round 7: 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
+| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | 3.5 | 3.5 | 3.5 | **3.5** | round 10: on air live, 27.0 % of 100 stories in 52 minutes (25.7 % of 105 in a first run), the desk's own decisions for the same stories 28.1 %, 100 of 100 decided before their episode was made; WORLD NOW's grave news 12.5 %. round 9: on air live, 28.9 % of 166 stories (0 % on the live station before), the desk's own coverage of the same stories 31.0 %, 164 of 166 decided before their episode was made; tonight's grave news is below the samples' 34 %, and the 75 % target is the owner's decision. round 8: as measured in round 7 and not chased (the owner's decision: a wire licence, or the free-licence ceiling of 67 %). Round 7: 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
+| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | 8.0 | 8.5 | 8.5 | **8.5** | round 10: unchanged. round 9: unchanged. round 8: the floor for two stories in three is now the story's own element (topic board 9.0) or its right place (locator 8.5), and a public figure's portraits rotate; still a board, not a picture, for most of the news. Round 7: the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
+| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.5 | **9.5** | round 10: SEVEN DAYS no longer holds the station (its week grouped in a thread of its own, the same stories in the same order: ready in 6.2 s, 121.5 s before; the station's thread at most 45 ms of its own work a turn meanwhile); every Wikimedia request of the station is paced through one queue and waits out one pause (72 s paused in 52 minutes, 2,732 s in 90 before), counted by desk. Not higher: the station's thread is still held by other desks' work (the offline writer up to 10 s an episode, the quiz desk's readiness 8 s after a start), Wikimedia still rate-limits the shared address, and two media fetches keep pauses of their own. round 9: production never waits for Wikimedia; decisions are made ahead, kept across restarts, in the order things air; a 429 is waited out in the background; the station's event loop is no longer held by the weekly's check; a story keeps the picture it airs with. Not higher: Wikipedia rate-limits this shared address, and SEVEN DAYS still blocks two minutes when it is made. round 8: the station runs the face reader and starts it again (backoff, off with `FACE_READER`, never outliving the station); a rotation never changes a picture under a story already on air; one file never under two stories of an episode. Round 7: every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
+| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | 9.0 | 9.0 | 9.0 | **9.0** | round 10: the old week grouping kept verbatim beside the new and compared on 40 random weeks, on the next edition, on airings another desk had read, on real headlines and in the thread; the queue's priorities, pause and refusals, each desk's routing, the media pause, the event loop's watch; the real archive compared in every mode (`tools/pictures/weekdiff.mjs`). round 9: the queue's order, pauses, back-off and Wikipedia rule, the producer reading only ready decisions, the archive's pictures, the lean rotation, the merged query, the pin and the spread, the weekly's count, PICTURE THIS's credit. round 8: every place of the hand check that went wrong, every board kind and its box, the board's words from real headlines, the actor rules, the rotation and the producer's one-file rule, the supervisor with a fake child and a real one, the credit beside the tag. Round 7: the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
+| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | 3.5 | 3.5 | **3.5** | coverage |
+
+**Round 10: the gate is not met (3.5: coverage). The station no longer stalls for SEVEN DAYS (ready in 6.2 s
+instead of 121.5 s, its week grouped in a thread of its own with the same stories in the same order), and every
+Wikimedia request it makes waits out one pause with the others (72 s paused in 52 minutes, 2,732 s in 90 before);
+27.0 % of the stories aired live with a cleared picture.**
 
 **Round 9: the gate is not met (3.5: coverage). The desk's coverage now reaches the air: 28.9 % of the stories aired
 live with a cleared picture, against 0 % on the live station before and 31.0 % for the desk's own decisions on the same

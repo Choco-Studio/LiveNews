@@ -327,16 +327,21 @@ export class ImageSearch {
     const hit = this.cache.get(query);
     if (hit && Date.now() - hit.at < 3600_000) return hit.results;
     const results = [];
+    let failed = false;
     for (const p of this.providers) {
       try {
-        if (p === 'commons') results.push(...parseCommons(await this.getJson(commonsUrl(query))));
+        // (Commons through the station's one Wikimedia queue when there is one: its pacing, its pause on a 429)
+        if (p === 'commons') results.push(...parseCommons(this.wikimedia ? await this.wikimedia.json(commonsUrl(query), { desk: 'search', priority: 1 }) : await this.getJson(commonsUrl(query))));
         else if (p === 'google') results.push(...parseGoogle(await this.getJson(googleUrl(query, this.google))));
         else if (p === 'bing') results.push(...parseBing(await this.getJson(bingUrl(query), { 'Ocp-Apim-Subscription-Key': this.bing.key })));
       } catch (err) {
-        if (this.failures++ < 3) this.log.warn?.(`[images] ${p} search failed (${err.message})`);
+        failed = true;
+        if (!err.paused && this.failures++ < 3) this.log.warn?.(`[images] ${p} search failed (${err.message})`);
       }
     }
     const usable = results.filter(usableResult);
+    // (a search a pause or a failure cut short is not kept: asked again next time)
+    if (failed) return usable;
     this.cache.set(query, { at: Date.now(), results: usable });
     if (this.cache.size > 300) this.cache.delete(this.cache.keys().next().value);
     return usable;

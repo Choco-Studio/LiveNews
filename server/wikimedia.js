@@ -1,6 +1,6 @@
 // One polite client for every Wikimedia service the station reads (Wikipedia's, Commons' and Wikidata's Action API, the
-// Wikidata Query Service): the picture desk, the footage desk, the guests' identity desk and the election calendar
-// all ask through it (round 10), and a small kept store of their answers.
+// Wikidata Query Service): the picture desk, the footage desk, the guests' identity desk, the election calendar and
+// the orchestrator's image search all ask through it (round 10), and a small kept store of their answers.
 //
 // Wikimedia's API rate limits (mediawiki.org Wikimedia_APIs/Rate_limits, read 17 Oct 2026) are per client across ALL
 // its sites: 10 requests a minute with no identifying User-Agent, 200 with a compliant one (a name and contact

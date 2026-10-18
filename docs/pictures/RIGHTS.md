@@ -268,17 +268,19 @@ Wikimedia's limits (mediawiki.org "Wikimedia APIs/Rate limits", read 17 Oct 2026
 3 at once at most, Retry-After obeyed. `server/wikimedia.js`:
 
 - **one queue for every Wikimedia request of the station** (round 10): the picture desk, the footage desk (its Commons
-  searches), the guests' identity desk (Wikidata) and the election calendar (the Query Service) all ask through it, one
-  request at a time, 1.1 s apart, with one compliant User-Agent carrying the operator's contact (`WIKIMEDIA_CONTACT`);
-  pictures from `upload.`/`thumb.wikimedia.org` are fetched with the same agent (the generic one is refused: "Your
-  request does not comply with our robot policy");
+  searches), the guests' identity desk (Wikidata), the election calendar (the Query Service) and the orchestrator's
+  image search (`/api/tools/image-search`) all ask through it, one request at a time, 1.1 s apart, with one compliant
+  User-Agent carrying the operator's contact (`WIKIMEDIA_CONTACT`); pictures from `upload.`/`thumb.wikimedia.org` are
+  fetched with the same agent (the generic one is refused: "Your request does not comply with our robot policy");
 - the queue takes the most urgent request first: 0, the episode being made (its footage, its speakers, its undecided
   pictures); 1, the next programmes' pictures; 2, the rest of the news desk; 3, background work (the archive's
   pictures, the election calendar); then in the order asked;
 - a 429 or 503 pauses the whole queue, every desk, for what Retry-After asks (5 s at least, 15 min at most); while
   paused, a request of the episode being made is refused at once (the episode airs with what is known), and background
   work waits the pause out in the queue; a media file (a footage clip) has a pause of its own, as
-  `upload.wikimedia.org` limits media apart from the API;
+  `upload.wikimedia.org` limits media apart from the API. Two media fetches stay outside it, with the same agent: the
+  screen's own fetch of a picture that airs (once a picture; a refusal there would drop the picture for half an hour),
+  and the face reader's (a child process: one picture at a time, a second apart, each 429 waited out);
 - every request is counted by host and by desk (`/api/wikimedia`, operator; also in `/api/pictures/ahead`): who
   spends the allowance, who was refused during a pause;
 - batches: 50 titles a Wikipedia request, 40 items a Wikidata query, 50 files a Commons request; every answer kept on
@@ -348,7 +350,7 @@ next, and gives the same groups in the same order (`server/weekgroups.js`: each 
 pair of word sets in each reading state, and given again to every other telling with the same words;
 `test/week-grouping.test.js` and `tools/pictures/weekdiff.mjs` compare it with the old grouping). On the 5,881
 airings of 18 Oct: 460,049 calls of sameStory instead of 1,099,151, and 5,268 for the next edition; the station's thread
-held at most a few tens of milliseconds. Should the thread fail, the week is grouped on the station's thread in slices
+did at most about 45 ms of its own work at a time meanwhile, and SEVEN DAYS was ready in 6.2 s live (121.5 s before). Should the thread fail, the week is grouped on the station's thread in slices
 of 20 ms. `/api/wikimedia` gives the event loop's longest hold since the start (and its own processor time then: on a
 machine shared with other work the thread also waits for the processor).
 

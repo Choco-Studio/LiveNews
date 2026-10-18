@@ -11,6 +11,7 @@ import { WikimediaClient, wikimediaAgent } from '../server/wikimedia.js';
 import { FootageDesk } from '../server/footage.js';
 import { IdentityDesk } from '../server/guests/identity.js';
 import { fetchCalendar } from '../server/compliance/elections.js';
+import { ImageSearch } from '../server/imagesearch.js';
 import { LoopWatch } from '../server/loopwatch.js';
 
 const reply = (data, status = 200, headers = {}) => ({ ok: status >= 200 && status < 300, status, headers: { get: (k) => headers[k.toLowerCase()] ?? null }, text: async () => JSON.stringify(data), json: async () => data, body: null });
@@ -142,6 +143,24 @@ describe('the desks that ask Wikimedia, through the one queue', () => {
     assert.equal(asked.length, 1);
     assert.match(asked[0].url, /query\.wikidata\.org\/sparql/);
     assert.equal(wm.status().desks.elections.requests, 1);
+  });
+
+  test("the orchestrator's image search: Commons through the queue; a search a pause refused is not kept", async () => {
+    const page = { title: 'File:Lisbon.jpg', imageinfo: [{ url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lisbon.jpg', thumburl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Lisbon.jpg/1280px-Lisbon.jpg', thumbwidth: 1280, thumbheight: 853, width: 4000, height: 2667, mime: 'image/jpeg', extmetadata: { LicenseShortName: { value: 'CC BY 4.0' }, Artist: { value: 'Jane Doe' } } }] };
+    const { wm, asked } = client({ answer: () => reply({ query: { pages: [page] } }) });
+    let direct = 0;
+    const search = new ImageSearch({ wikimedia: wm, fetchImpl: async () => (direct++, reply({})), log: { warn() {} } });
+    wm.pausedUntil = wm.now() + 60_000;
+    assert.deepEqual(await search.search('Lisbon'), [], 'refused while paused');
+    assert.equal(wm.status().desks.search.refused, 1);
+    wm.pausedUntil = 0;
+    await search.search('Lisbon');
+    await search.search('Lisbon');
+    assert.equal(asked.length, 1, 'asked once the pause was over, then kept');
+    assert.match(asked[0].url, /commons\.wikimedia\.org\/w\/api\.php/);
+    assert.equal(asked[0].agent, wikimediaAgent());
+    assert.equal(wm.status().desks.search.requests, 1);
+    assert.equal(direct, 0, 'never its own fetch');
   });
 });
 
