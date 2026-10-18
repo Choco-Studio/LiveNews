@@ -7,8 +7,10 @@
 //   airModeOf(x)            'recorded' for the playout's modes ('recorded', 'playout', 'prerecorded'), else 'live'
 //   isRecorded(x)
 //   onAirTag(mode)          the top row's tag: { text: 'LIVE', pip: true } or { text: '24/7', pip: false }
-//   endCardLine(name, mode) the end card's second line
+//   endCardLine(name, stream) a programme end card's second line: LIVE only for a live stream, no claim without one
 //   startTag(mode)          the start screen's tag
+//   streamOfChannel(channel)  the server's `stream` ('live', 'recorded', 'none'); an older server: from its airMode
+//   pageMode(channel)       the page's labels: 'live' only when the channel streams live, else 'recorded' (never LIVE)
 //   streamOf({ url, recorded })  what a clip may point to: 'live', 'recorded' or 'none' (no stream to watch)
 //   watchLine(stream, { vertical })  a clip end card's line about where to watch, or null
 //   falseLive(text)         the first phrase in `text` that claims the programme is live, or null
@@ -23,8 +25,28 @@ const LIVE_TAG = Object.freeze({ text: 'LIVE', pip: true });
 const MARK_TAG = Object.freeze({ text: '24/7', pip: false });
 export const onAirTag = (mode) => (isRecorded(mode) ? MARK_TAG : LIVE_TAG);
 
-export const endCardLine = (name, mode) => `${name} · ${isRecorded(mode) ? '24 HOURS A DAY' : 'LIVE 24 HOURS'}`;
+/**
+ * A programme end card's second line ("STAY WITH US" above it): LIVE 24 HOURS only when the channel streams live, NEWS 24
+ * HOURS A DAY for the pre-rendered stream, and the channel's name alone without a stream (the manual beta: a whole
+ * programme uploaded from its recording must not promise a stream that does not exist). `stream`: streamOf's value
+ * (the playout's own mode names count as recorded).
+ */
+export function endCardLine(name, stream) {
+  if (stream === 'live') return `${name} · LIVE 24 HOURS`;
+  if (isRecorded(stream)) return `${name} · NEWS 24 HOURS A DAY`;
+  return name;
+}
 export const startTag = (mode) => (isRecorded(mode) ? 'NEWS • 24 HOURS' : 'LIVE • 24 HOURS');
+
+/** The server's `stream` for this channel (/api/channel); a server that does not send one: from its airMode, no live. */
+export function streamOfChannel(channel) {
+  const s = channel?.stream;
+  if (s === 'live' || s === 'recorded' || s === 'none') return s;
+  return isRecorded(channel?.airMode) ? 'recorded' : 'none';
+}
+
+/** The page's labels (top row, opens, start screen, idle wall, tab): LIVE only when the channel streams live. */
+export const pageMode = (channel) => (streamOfChannel(channel) === 'live' ? 'live' : 'recorded');
 
 /**
  * What a clip published off the channel may point a viewer to (its end card, clip/cards.js drawEndCard): a stream only

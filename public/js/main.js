@@ -2,7 +2,7 @@ import { AudioEngine } from './audio.js';
 import { Renderer, W, H } from './studio.js';
 import { Director } from './director.js';
 import { clipOptions, clipSizes, installClip } from './clip/index.js';
-import { isRecorded } from './airmode.js';
+import { isRecorded, pageMode } from './airmode.js';
 
 const params = new URLSearchParams(location.search);
 // ?clip=1 / ?format=vertical: the publishing desk's recordings (clip/index.js); nothing changes on air without them
@@ -23,8 +23,9 @@ const renderer = new Renderer(source, audio, { v2, perf: params.get('perf') === 
 const channel = await fetch('/api/channel')
   .then((r) => r.json())
   .catch(() => ({ name: 'GLOBIT 24', slogan: '', presenters: {}, programs: {}, rotation: [] }));
-// pre-rendered playout (the station's PLAYOUT mode, docs/publishing/playout.md): nothing says LIVE, not even the tab
-const recorded = isRecorded(channel.airMode);
+// LIVE only when the channel streams live (the server's `stream`, airmode.js pageMode): pre-rendered playout
+// (docs/publishing/playout.md) or no public stream at all (the manual beta), nothing says LIVE, not even the tab
+const recorded = isRecorded(pageMode(channel));
 document.title = `${channel.name} · ${recorded ? '24/7' : 'Live'}`;
 // ?beds=0: no live music beds (a recorder that renders its own beds passes it)
 const player = new Director({ audio, channel, v2, music: params.get('beds') !== '0' });

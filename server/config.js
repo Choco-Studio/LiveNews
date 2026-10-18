@@ -96,6 +96,9 @@ export const config = {
   // nothing on screen or in the words says LIVE. Unset: the live channel as ever.
   playout: /^(1|true|yes|on)$/i.test(env('PLAYOUT', '0').trim()),
   playoutDir: path.resolve(ROOT, env('PLAYOUT_DIR', path.join('data', 'playout'))),
+  // The channel's public stream (its watch page, e.g. the YouTube live URL; docs/publishing/setup.md). Only with it may
+  // the channel say where to watch it, and only a live one (not PLAYOUT) may say LIVE (public/js/airmode.js streamOf)
+  liveUrl: env('CHANNEL_LIVE_URL', '').trim(),
   rotationStart,
   draftsOnAir,
   quizView,

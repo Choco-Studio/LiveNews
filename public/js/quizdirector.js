@@ -15,7 +15,7 @@ import { BOTH_DESKS, BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSc
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { hasRevealView } from './scenes/cards-quiz-more.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
-import { endCardLine } from './airmode.js';
+import { endCardLine, streamOfChannel } from './airmode.js';
 import { STINGER_DURATION } from './scenes/cards.js';
 import { loadPicture } from './pixelate.js';
 
@@ -326,7 +326,7 @@ export async function playQuiz(d, episode) {
   await sleep(hold * 1000);
   await d.stinger(() => {
     s.quizStrip = null;
-    d.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(d.channel.name, d.channel.airMode) } });
+    d.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(d.channel.name, streamOfChannel(d.channel)) } });
   });
   await sleep(paceFor(s.program?.id).holds.endcard * 1000);
   d.quiz = null;

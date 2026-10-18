@@ -106,7 +106,7 @@ function recordSeconds(ep) {
 
 // ---------------------------------------------------------------- 1. the masters
 
-const pb = createPlaybackServer({ root, pictureDir: opt('pictures') ? path.resolve(opt('pictures')) : null });
+const pb = createPlaybackServer({ root, pictureDir: opt('pictures') ? path.resolve(opt('pictures')) : null, stream }); // (the master's own end card: the same rule)
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 // (a playout master is exactly the programme as it aired: its own length, from its report)

@@ -37,11 +37,37 @@ test('the air mode: recorded for playout, live otherwise; the labels each mode s
   assert.deepEqual(onAirTag('live'), { text: 'LIVE', pip: true });
   assert.deepEqual(onAirTag('recorded'), { text: '24/7', pip: false });
   assert.equal(endCardLine('GLOBIT 24', 'live'), 'GLOBIT 24 · LIVE 24 HOURS', 'the live channel as before');
-  assert.equal(endCardLine('GLOBIT 24', 'recorded'), 'GLOBIT 24 · 24 HOURS A DAY');
+  assert.equal(endCardLine('GLOBIT 24', 'recorded'), 'GLOBIT 24 · NEWS 24 HOURS A DAY');
   assert.equal(falseLive(endCardLine('GLOBIT 24', 'recorded')), null);
   assert.equal(falseLive(startTag('recorded')), null);
   assert.equal(startTag('live'), 'LIVE • 24 HOURS');
   assert.equal(falseLive(onAirTag('recorded').text), null);
+});
+
+test('no stream, no claim: a programme end card and the page say LIVE only when the channel streams live', async () => {
+  const { streamOfChannel, pageMode } = await import('../public/js/airmode.js');
+  const { Station } = await import('../server/station.js');
+  const { channelView } = await import('../server/publish/playback.js');
+  const make = (config) => new Station({ config: { queueSize: 1, clock: false, ...config }, newsDesk: { stories: new Map(), uncovered: () => [], feedStatus: {}, lastRefresh: 0 }, producer: { canProduce: () => false, produce: async () => null }, chain: { status: () => [] }, log: { info() {}, warn() {}, error() {} } });
+  const URL_ = 'https://www.youtube.com/@globit24/live';
+  const cases = [
+    [make({}), 'none', 'GLOBIT 24'],
+    [make({ liveUrl: URL_ }), 'live', 'GLOBIT 24 · LIVE 24 HOURS'],
+    [make({ liveUrl: URL_, playout: true }), 'recorded', 'GLOBIT 24 · NEWS 24 HOURS A DAY'],
+    [make({ playout: true }), 'none', 'GLOBIT 24'],
+  ];
+  for (const [st, stream, line] of cases) {
+    const ch = st.publicChannel();
+    assert.equal(ch.stream, stream);
+    assert.equal(endCardLine(ch.name, streamOfChannel(ch)), line);
+    assert.equal(pageMode(ch) === 'live', stream === 'live', 'the top row, start screen and tab say LIVE only for a live stream');
+  }
+  // an older server's channel (no stream field): no claim; the publishing desk's recordings: none unless told
+  assert.equal(streamOfChannel({ name: 'GLOBIT 24' }), 'none');
+  assert.equal(streamOfChannel({ airMode: 'recorded' }), 'recorded');
+  assert.equal((await channelView()).stream, 'none');
+  assert.equal((await channelView(undefined, { stream: 'recorded' })).airMode, 'recorded');
+  for (const f of ['../tools/publish/factory.mjs', '../tools/publish/upload.mjs']) assert.match(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), /createPlaybackServer\(\{[^}]*stream/, f);
 });
 
 test('the page draws the recorded tags where it drew LIVE (top row, opens, end cards, start screen, idle wall, tab)', () => {
@@ -53,6 +79,7 @@ test('the page draws the recorded tags where it drew LIVE (top row, opens, end c
   assert.match(src('scenes/cards.js'), /startTag\(recorded \? 'recorded' : 'live'\)/);
   assert.match(src('set.js'), /livePill\(c, tx, ty \+ 22, t, !!scene\.recorded\)/);
   assert.match(src('main.js'), /recorded \? '24\/7' : 'Live'/);
+  assert.match(src('main.js'), /const recorded = isRecorded\(pageMode\(channel\)\)/);
   // every "LIVE 24 HOURS" end card goes through endCardLine (the director and the quiz director)
   for (const f of ['director.js', 'quizdirector.js']) {
     assert.doesNotMatch(src(f), /· LIVE 24 HOURS`/, f);

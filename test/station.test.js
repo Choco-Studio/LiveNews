@@ -989,7 +989,7 @@ describe('Station.status and publicChannel', () => {
 
   test('publicChannel() is the browser view of the current channel, with no prompt-only fields', () => {
     const { station, state } = makeStation();
-    assert.deepEqual(station.publicChannel(), publicChannel(state.channel));
+    assert.deepEqual(station.publicChannel(), { ...publicChannel(state.channel), stream: 'none' }, 'and no stream configured: no claim (airmode.js streamOf)');
     const json = JSON.stringify(station.publicChannel());
     assert.ok(!json.includes('personality') && !json.includes('storyLength'));
   });

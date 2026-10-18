@@ -3,6 +3,7 @@ import { isBreaking, notNews } from './news.js';
 import { publicError } from './usage.js';
 import { quizRefuses } from './quiz/desk.js';
 import { IDENT_AIR } from '../public/js/pace.js';
+import { streamOf } from '../public/js/airmode.js';
 
 /** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
 function publicFeedStatus(feeds) {
@@ -549,7 +550,10 @@ export class Station {
   }
 
   publicChannel() {
-    return { ...publicChannel(this.channel()), ...(this.playout ? { airMode: 'recorded' } : {}) };
+    // `stream`: what the page may say about where and how it airs (airmode.js streamOf): 'live' only with a public
+    // stream address (CHANNEL_LIVE_URL) and real-time air; 'recorded' with the address under playout; 'none' without one
+    const stream = streamOf({ url: this.config?.liveUrl || null, recorded: this.playout });
+    return { ...publicChannel(this.channel()), ...(this.playout ? { airMode: 'recorded' } : {}), stream };
   }
 
   status() {

@@ -134,12 +134,14 @@ would have held (`strict-would-hold` in `events.jsonl`).
 Anything pre-recorded never says LIVE. In PLAYOUT mode the station tells the page (`/api/channel` → `airMode:
 'recorded'`), and `public/js/airmode.js` decides every label. A clip's end card points to a stream only when the
 stream's address is set (`CHANNEL_LIVE_URL`, the one the descriptions link): without it (the manual beta has no stream)
-the card says nothing about where to watch, in either column.
+the card says nothing about where to watch, in either column. The same rule holds for the page (the server's `stream`,
+`airmode.js` `pageMode`): without a live stream nothing says LIVE, and a programme's end card shows the channel's name
+alone, also in the recordings the publishing desk makes (`server/publish/playback.js` `stream`).
 
 | Where | Live channel | Pre-rendered playout |
 | --- | --- | --- |
 | Top row tag (`graphics/bug.js`; the opens' lock-up, `opens/kit.js`) | LIVE, red pip | **24/7**, silver, no pip (REPLAY stays REPLAY) |
-| End card (`director.js`, `quizdirector.js`) | GLOBIT 24 · LIVE 24 HOURS | GLOBIT 24 · 24 HOURS A DAY |
+| End card (`director.js`, `quizdirector.js`) | GLOBIT 24 · LIVE 24 HOURS | GLOBIT 24 · NEWS 24 HOURS A DAY |
 | Start screen (`scenes/cards.js`) | LIVE • 24 HOURS | NEWS • 24 HOURS |
 | A clip's end card (`clip/cards.js`, `airmode.js` `streamOf`, `watchLine`) | NEWS 24 HOURS A DAY · WATCH LIVE | NEWS 24 HOURS A DAY |
 | Old renderer's idle wall (`set.js`) | LIVE pill | 24/7 pill |
