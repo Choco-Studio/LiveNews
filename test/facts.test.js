@@ -261,3 +261,11 @@ describe('fact labels say what is counted (fix round 1)', () => {
     assert.equal(extractFigures('Streets with many trees were about 2 degrees cooler than streets without them, a study of 90 European cities found.')[0].fact, 'ABOUT 2 DEGREES COOLER');
   });
 });
+
+describe('isGrave: a labour strike on a day', () => {
+  test('a rail strike on Friday is not an attack; a military strike on a city stays grave', () => {
+    assert.equal(isGrave('Gdansk rail strike on Friday set to halt trains across the region'), false);
+    assert.equal(isGrave('Nurses strike on Tuesday over pay'), false);
+    assert.equal(isGrave('Missile strikes on Kharkiv leave city without power'), true);
+  });
+});
