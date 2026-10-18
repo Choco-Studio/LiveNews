@@ -54,6 +54,11 @@ anything grave by the channel's own measure (`server/facts.js` `severity`).
 **The owner's day:** about 15 minutes on the approval page (`setup.md` §6). He watches each clip, fixes a title if he
 wants, then approves or rejects it. Then he presses "Programar lo aprobado".
 
+**The beta, published by hand** (`beta.md`, `pipeline.md` §8). Until the networks audit the apps (unaudited API uploads
+stay private on YouTube and TikTok), Phase 1 runs with `PUBLISH_MODE=manual` and no live stream: the page offers the
+day's pick (the lower end of each network's range: 3 Shorts, 3 TikToks, 2 Reels), and for each approved clip the signed
+file, its cover, the texts and the network's switches; the owner uploads it himself and says so on the page.
+
 ## 3. The networks and how often (`platforms.js` `DAILY`, `PHASE_PLATFORMS`)
 
 Each network has its own hours (in the audience's time zone, London by default), its own spacing between posts and a

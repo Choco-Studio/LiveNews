@@ -245,6 +245,8 @@ test('clip texts: titles within limits, the disclosure, the outlet credited, no 
     if (platform === 'youtube') assert.ok(t.title.length <= 100);
     assert.match(`${t.text}\n${t.description || ''}`, /NPR/);
     assert.ok(t.disclosure, platform);
+    // the AI disclosure is the caption's first line, what a viewer reads before "more" (compliance.md §1, §3.5)
+    assert.match(t.text.split('\n')[0], platform === 'youtube' ? /^AI-produced/ : /^Presenters are AI-generated characters/, `${platform}: ${t.text.split('\n')[0]}`);
     const g = clipTexts({ ...m, grave: true, light: false }, ep, { platform, stories });
     assert.ok(!EMOJI.test(`${g.title} ${g.text}`), `${platform}: an emoji on a grave clip`);
   }

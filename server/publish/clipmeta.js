@@ -119,7 +119,8 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
   const hashtags = tags;
   let caption;
   if (platform === 'youtube') caption = description;
-  else caption = [`${emoji}${lead}`, sourceLines[0] || (outlet ? `Source: ${outlet}` : ''), disclosure].filter(Boolean).join('\n\n');
+  // the disclosure first: the caption's first line is what a viewer reads before "more" (compliance.md §1, §3.5)
+  else caption = [disclosure, `${emoji}${lead}`, sourceLines[0] || (outlet ? `Source: ${outlet}` : '')].filter(Boolean).join('\n\n');
   const disc = disclosureFor({ kind: 'clip', episode, platforms: [platform] }).platforms[platform] || {};
   return { title, text: caption, description, hashtags, links, disclosure: { [platform]: disc }, lead };
 }

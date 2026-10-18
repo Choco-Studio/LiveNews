@@ -552,6 +552,25 @@ describe('the vertical picture', () => {
       // the board's own words above the headline's plate (the plate rises at most 106 rows from the stage's foot)
       for (const im of g.images.filter((x) => x.h <= 48 && x.y < cm.box.y + cm.box.h - 106 && x.y > cm.box.y)) assert.ok(im.x >= L.SAFE.x - 1 && im.x + im.w <= L.SAFE.right + 1, `${item.storyId}: ${JSON.stringify(im)}`);
     }
+    // FULL TIME (no topic board in sport): a result without a picture or a place shows its sport's tag in the field,
+    // never an empty stage (round 6, the first real edition's montage), the tag inside the column above the plate
+    for (const [kicker, scale] of [['FOOTBALL', 2], ['RUGBY UNION', 2], ['WINTER OLYMPICS', 1]]) {
+      const c = fakeCanvas(216, 384);
+      const cm = new VerticalCompositor({ canvas: c, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
+      const item = { storyId: 'f1', headline: 'Coventry thump Newcastle for first home win', source: 'Sky Sports', category: 'sport', kicker, board: { kind: 'none' } };
+      const sc = { shot: 'montage', shotSince: 0, program: { id: 'full-time', title: 'FULL TIME', theme: 'sport' }, card: { index: 0 }, rundown: [item], images: new Map() };
+      cm.profile = profileOf(sc);
+      cm.box = cm.profile.box;
+      cm.drawStage(3, sc);
+      const g = c.getContext('2d');
+      assert.ok(wordsSafe(g, `sport tag ${kicker}`) >= 2);
+      const tab = g.fills.find((f) => f.c === PAL.ink && f.h === 7 * scale + 10);
+      assert.ok(tab, `${kicker}: the tag's tab at ${scale}x`);
+      assert.ok(tab.x >= L.SAFE.x && tab.x + tab.w <= L.SAFE.right, `${kicker}: the tab in the column ${JSON.stringify(tab)}`);
+      assert.ok(tab.y > cm.box.y && tab.y + tab.h < cm.box.y + cm.box.h - 106, `${kicker}: the tab above the tallest plate ${JSON.stringify(tab)}`);
+      const word = g.images.map(visible).filter(Boolean).find((v) => v.y >= tab.y && v.y + v.h <= tab.y + tab.h && v.x > tab.x && v.x + v.w < tab.x + tab.w);
+      assert.ok(word && word.h >= 6 * scale, `${kicker}: its word on the tab, at ${scale}x ${JSON.stringify(word)}`);
+    }
     for (const item of [{ storyId: 'p1', headline: 'Flooding closes roads across the north of the country', source: 'BBC', location: { lat: 37.2, lon: -119.5, place: 'CALIFORNIA, USA' } }]) {
       const c = fakeCanvas(216, 384);
       const cm = new VerticalCompositor({ canvas: c, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });

@@ -13,6 +13,11 @@
 //     with the extensions a preview needs; nothing else on the disk can be read through it
 //   - no credentials pass through it, and it cannot switch live publishing on (that is the environment's
 //     PUBLISH_LIVE and the settings file, by hand: setup.md §7)
+//
+// Hand publishing (PUBLISH_MODE=manual, the beta: mode.js, manual.js, docs/publishing/beta.md): the page offers the day's
+// pick (plan.md Phase 1), and for each approved item, after the compliance gate has passed it again, the signed file and
+// its cover to download, the texts to copy, the network's own switches to tick, and "Ya lo he publicado", which records
+// it in the queue, the ledger and the compliance register. Nothing is scheduled from the page in that mode.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +25,8 @@ import crypto from 'node:crypto';
 import { PLATFORMS } from './platforms.js';
 import { MODES, localParts } from './queue.js';
 import * as compliance from './compliance.js';
+import { isManual } from './mode.js';
+import { dailyPick, prepareManual, recordManual, isPrepared } from './manual.js';
 
 const MEDIA = { video: ['.mp4', '.m4v', '.webm'], thumb: ['.jpg', '.jpeg', '.png'], contact: ['.png', '.jpg'], captions: ['.srt', '.vtt'] };
 const TYPES = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.srt': 'text/plain; charset=utf-8', '.vtt': 'text/vtt; charset=utf-8' };
@@ -81,7 +88,7 @@ export const TIKTOK_PRIVACY = Object.freeze(['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLO
 /** A TikTok item's choices as the page shows them (nothing chosen until the owner chooses it). */
 const tiktokView = (t = {}) => ({ privacy: TIKTOK_PRIVACY.includes(t?.privacy) ? t.privacy : null, allowComment: t?.allowComment === true, allowDuet: t?.allowDuet === true, allowStitch: t?.allowStitch === true, consent: t?.consent === true });
 
-export function itemView(it, { tz = 'Europe/London' } = {}) {
+export function itemView(it, { tz = 'Europe/London', now = Date.now() } = {}) {
   const p = PLATFORMS[it.platform] || {};
   const at = it.schedule?.at || null;
   const lp = at ? localParts(at, it.schedule?.tz || tz) : null;
@@ -109,15 +116,22 @@ export function itemView(it, { tz = 'Europe/London' } = {}) {
     schedule: lp ? { at, day: lp.day, time: `${String(lp.h).padStart(2, '0')}:${String(lp.m).padStart(2, '0')}`, tz: it.schedule?.tz || tz } : null,
     history: (it.history || []).slice(-6).map((h) => ({ at: h.at, action: h.action, by: h.by })),
     tiktok: it.platform === 'tiktok' ? tiktokView(it.tiktok) : null,
+    grave: !!it.grave,
+    // hand publishing (manual.js): what the owner downloads, copies and ticks, once the gate has passed it again
+    manual: it.manual?.ok ? { fresh: isPrepared(it, now), preparedAt: it.manual.preparedAt, fields: it.manual.fields || [], checklist: it.manual.checklist || [], files: { video: !!it.manual.files?.video, cover: !!it.manual.files?.cover }, devCert: !!it.manual.devCert } : null,
+    result: it.result ? { manual: !!it.result.manual, url: /^https:\/\//.test(String(it.result.url || '')) ? it.result.url : null, at: it.result.at || null, dryRun: !!it.result.dryRun } : null,
   };
 }
 
-export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now(), env = process.env } = {}) {
+export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now(), env = process.env, manualOpts = {} } = {}) {
   if (!queue) throw new Error('the approval page needs the queue');
+  // hand publishing (the beta): the owner publishes every approved item himself (manual.js)
+  const manual = isManual(env);
   // TikTok's route (adapters/tiktok.js): the inbox (the owner finishes the post in the TikTok app, privacy there), or a
   // direct post, where the owner's privacy, interaction choices and consent are given here, item by item
   const tiktokMode = String(env.TIKTOK_MODE || 'inbox').toLowerCase() === 'direct' ? 'direct' : 'inbox';
-  const tiktokReady = (it) => it.platform !== 'tiktok' || tiktokMode !== 'direct' || (TIKTOK_PRIVACY.includes(it.tiktok?.privacy) && it.tiktok?.consent === true);
+  // (by hand, the owner sets TikTok's privacy and switches in the app itself: the checklist asks for them)
+  const tiktokReady = (it) => manual || it.platform !== 'tiktok' || tiktokMode !== 'direct' || (TIKTOK_PRIVACY.includes(it.tiktok?.privacy) && it.tiktok?.consent === true);
   const token = crypto.randomBytes(24).toString('hex');
   const roots = [queue.dir, ...mediaRoots].map((r) => path.resolve(r));
   let port = 0;
@@ -161,18 +175,21 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
 
   function state() {
     const s = queue.settings();
-    const items = queue.list().map((it) => itemView(it, { tz: queue.tzOf(it.platform) }));
+    const t = now();
+    const items = queue.list().map((it) => itemView(it, { tz: queue.tzOf(it.platform), now: t }));
     const counts = {};
     for (const it of items) counts[it.status] = (counts[it.status] || 0) + 1;
     return { tiktokMode,
+      manual,
+      pick: manual ? dailyPick(queue, { now: t }) : null,
       settings: { phase: s.phase, dryRun: s.dryRun !== false, timezone: s.timezone, modes: s.modes, live: s.live },
       platforms: Object.fromEntries(Object.entries(PLATFORMS).map(([k, p]) => [k, { label: p.name || k, kind: p.kind }])),
       modes: MODES,
       items,
       counts,
       usingStub: compliance.usingStub,
-      publishLive: process.env.PUBLISH_LIVE === '1',
-      at: now(),
+      publishLive: !manual && process.env.PUBLISH_LIVE === '1',
+      at: t,
     };
   }
 
@@ -196,6 +213,20 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
       return null;
     }
     res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    fs.createReadStream(file).pipe(res);
+    return null;
+  }
+
+  /** A signed file an item's hand publication needs (manual.js): only once the gate has passed it, as an attachment. */
+  function download(res, id, kind) {
+    const it = queue.get(id);
+    if (!manual || !it || !['approved', 'scheduled'].includes(it.status) || !isPrepared(it, now())) return send(res, 409, { error: 'not prepared', message: 'Prepáralo primero: se revisa otra vez antes de descargar.' });
+    const file = it.manual.files?.[kind];
+    const ext = file ? path.extname(file).toLowerCase() : '';
+    if (!file || !(kind === 'video' ? MEDIA.video : MEDIA.thumb).includes(ext) || !insideRoots(file, roots)) return send(res, 404, { error: 'no such file' });
+    const st = fs.statSync(file);
+    const name = `GLOBIT24-${it.platform}-${String(it.source?.programId || it.kind).replace(/[^a-z0-9-]+/gi, '')}-${it.id.slice(-12)}${kind === 'cover' ? '-portada' : ''}${ext}`;
+    res.writeHead(200, { 'content-type': TYPES[ext] || 'application/octet-stream', 'content-length': st.size, 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     fs.createReadStream(file).pipe(res);
     return null;
   }
@@ -229,6 +260,7 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
       return send(res, 200, state());
     }
     if (name === 'schedule') {
+      if (manual) return send(res, 409, { error: 'manual', message: 'Modo manual: nada se programa, cada publicación la haces tú.' });
       const done = queue.schedule(now());
       return send(res, 200, { scheduled: done.length, state: state() });
     }
@@ -257,11 +289,28 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
       if (['published', 'publishing'].includes(before.status)) return send(res, 409, { error: 'already out' });
       const t = { privacy: body.privacy || null, allowComment: body.allowComment === true, allowDuet: body.allowDuet === true, allowStitch: body.allowStitch === true, consent: body.consent === true };
       it = queue.save(queue.note({ ...before, tiktok: t }, 'tiktok choices', 'owner', { privacy: t.privacy }));
+    } else if (name === 'prepare') {
+      if (!manual) return send(res, 409, { error: 'not manual', message: 'Solo en el modo manual (PUBLISH_MODE=manual).' });
+      const r = await prepareManual(queue, id, { dataDir, now: now(), env, ...manualOpts });
+      log(`[approval] prepare ${id}: ${r.ok ? 'ready' : r.error}`);
+      if (!r.ok) return send(res, r.status || 409, { error: r.error, message: r.message, item: r.item ? itemView(r.item, { tz: queue.tzOf(before.platform), now: now() }) : null });
+      it = r.item;
+    } else if (name === 'published') {
+      if (!manual) return send(res, 409, { error: 'not manual', message: 'Solo en el modo manual (PUBLISH_MODE=manual).' });
+      const r = recordManual(queue, id, { url: typeof body.url === 'string' ? body.url.slice(0, 500) : '', checks: Array.isArray(body.checks) ? body.checks.slice(0, 20).map((c) => String(c).slice(0, 40)) : [], dataDir, now: now() });
+      log(`[approval] published by hand ${id}: ${r.ok ? (r.item.result.url || 'no address') : r.error}`);
+      if (!r.ok) return send(res, r.status || 409, { error: r.error, message: r.message });
+      it = r.item;
     } else if (name === 'edit') {
       it = queue.edit(id, { title: typeof body.title === 'string' ? body.title.slice(0, 500) : undefined, text: typeof body.text === 'string' ? body.text.slice(0, 5000) : undefined }, 'owner');
+      // (new words: what was prepared to paste is checked again before it is handed out)
+      if (it?.manual) {
+        it.manual = null;
+        it = queue.save(it);
+      }
     } else return send(res, 404, { error: 'no such action' });
     log(`[approval] ${name} ${id}`);
-    return send(res, 200, { item: itemView(queue.get(id) || it, { tz: queue.tzOf(before.platform) }) });
+    return send(res, 200, { item: itemView(queue.get(id) || it, { tz: queue.tzOf(before.platform), now: now() }) });
   }
 
   async function handle(req, res) {
@@ -277,7 +326,9 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, state());
     let m = /^\/media\/([a-z0-9-]{1,80})\/(video|thumb|contact|captions)$/i.exec(p);
     if (req.method === 'GET' && m) return media(res, req, m[1], m[2]);
-    m = /^\/api\/(approve|reject|edit|tiktok|settings|schedule)$/.exec(p);
+    m = /^\/download\/([a-z0-9-]{1,80})\/(video|cover)$/i.exec(p);
+    if (req.method === 'GET' && m) return download(res, m[1], m[2]);
+    m = /^\/api\/(approve|reject|edit|tiktok|settings|schedule|prepare|published)$/.exec(p);
     if (req.method === 'POST' && m) return action(req, res, m[1]);
     return send(res, 404, { error: 'not found' });
   }
@@ -321,6 +372,7 @@ function page(token, nonce) {
 <style>
   :root { --bg: #0e1018; --panel: #171a26; --ink: #e8e9f0; --dim: #9aa0b4; --line: #2a2f42; --ok: #3fbf7f; --bad: #e0565b; --warn: #f0b43c; --accent: #e83b46; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   header { position: sticky; top: 0; z-index: 2; background: #0b0d14; border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
   header h1 { font-size: 17px; margin: 0; }
@@ -357,6 +409,16 @@ function page(token, nonce) {
   .settings table { border-collapse: collapse; }
   .settings td { padding: 4px 10px 4px 0; }
   select { background: #0e1018; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px; font: inherit; }
+  .hand { border: 1px solid #2f5d46; border-radius: 8px; padding: 10px; display: grid; gap: 8px; background: #101d17; }
+  .hand h3 { margin: 0; font-size: 15px; }
+  .hand .field { display: grid; gap: 4px; }
+  .hand .field pre { margin: 0; max-height: 140px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: #0e1018; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  .hand .checks { display: grid; gap: 4px; font-size: 14px; }
+  .hand label.opt { display: flex; gap: 8px; align-items: flex-start; }
+  .hand a.btn { text-decoration: none; display: inline-block; }
+  .copy { background: #23406b; color: #fff; padding: 4px 10px; font-size: 13px; }
+  .done { background: var(--ok); color: #06210f; }
+  .caps { font-size: 14px; margin: 0 0 10px; }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #222838; border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; display: none; }
   @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } .vertical video { width: 100%; } }
 </style>
@@ -379,6 +441,7 @@ function page(token, nonce) {
     <button class="btn save" id="saveSettings">Guardar ajustes</button>
   </section>
   <div class="tabs" id="tabs"></div>
+  <p class="caps dim" id="caps" hidden></p>
   <div class="grid" id="grid"></div>
   <p class="dim" id="empty" hidden>No hay nada aquí.</p>
 </main>
@@ -388,8 +451,10 @@ const TOKEN = ${JSON.stringify(token)};
 const STATUS = { pending: 'Por aprobar', held: 'Retenido', approved: 'Aprobado', scheduled: 'Programado', publishing: 'Publicándose', published: 'Publicado', failed: 'Falló', rejected: 'Rechazado', duplicate: 'Duplicado' };
 const MODE = { manual: 'Manual', sample: 'Muestra (1 de cada 5)', auto: 'Automático', off: 'Apagada' };
 const ORDER = ['pending', 'held', 'approved', 'scheduled', 'published', 'failed', 'rejected', 'duplicate'];
+const NET = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', facebook: 'Facebook', x: 'X', threads: 'Threads', bluesky: 'Bluesky', telegram: 'Telegram' };
+const KIND = { video: 'clips', episode: 'programas', text: 'textos' };
 let S = null;
-let tab = 'pending';
+let tab = null;
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => {
   const e = document.createElement(tag);
@@ -420,13 +485,28 @@ async function load() {
   render();
 }
 function render() {
-  $('mode').textContent = S.settings.dryRun || !S.publishLive ? 'Modo de prueba: no se publica nada' : 'PUBLICACIÓN REAL ACTIVADA';
-  $('mode').className = 'badge ' + (S.settings.dryRun || !S.publishLive ? 'dry' : 'live');
+  if (S.manual) {
+    $('mode').textContent = 'Beta: publicas tú, a mano. El sistema no sube nada a ninguna red';
+    $('mode').className = 'badge dry';
+    $('schedule').hidden = true;
+  } else {
+    $('mode').textContent = S.settings.dryRun || !S.publishLive ? 'Modo de prueba: no se publica nada' : 'PUBLICACIÓN REAL ACTIVADA';
+    $('mode').className = 'badge ' + (S.settings.dryRun || !S.publishLive ? 'dry' : 'live');
+  }
   $('stub').hidden = !S.usingStub;
   $('summary').textContent = 'Fase ' + S.settings.phase + ' · ' + (S.counts.pending || 0) + ' por aprobar';
+  if (!tab) tab = S.manual ? 'today' : 'pending';
+  const pick = new Set(S.pick ? S.pick.ids : []);
   const tabs = $('tabs');
-  tabs.replaceChildren(...ORDER.filter((s) => S.counts[s] || s === 'pending').map((s) => el('button', { class: s === tab ? 'on' : '', text: STATUS[s] + ' (' + (S.counts[s] || 0) + ')', onclick: () => { tab = s; render(); } })));
-  const items = S.items.filter((i) => i.status === tab);
+  const today = S.manual ? [el('button', { class: tab === 'today' ? 'on' : '', text: 'Para hoy (' + pick.size + ')', onclick: () => { tab = 'today'; render(); } })] : [];
+  tabs.replaceChildren(...today, ...ORDER.filter((s) => S.counts[s] || s === 'pending').map((s) => el('button', { class: s === tab ? 'on' : '', text: STATUS[s] + ' (' + (S.counts[s] || 0) + ')', onclick: () => { tab = s; render(); } })));
+  const items = tab === 'today' ? S.items.filter((i) => pick.has(i.id)) : S.items.filter((i) => i.status === tab);
+  $('caps').hidden = tab !== 'today';
+  if (tab === 'today' && S.pick) {
+    const parts = [];
+    for (const [net, kinds] of Object.entries(S.pick.caps)) for (const [k, c] of Object.entries(kinds)) parts.push((NET[net] || net) + ' (' + KIND[k] + '): ' + c.done + ' de ' + c.cap + ' publicados');
+    $('caps').textContent = 'Hoy: ' + (parts.join(' · ') || 'nada esperando') + '. Lo demás sigue en «Por aprobar» para otro día.';
+  }
   $('empty').hidden = items.length > 0;
   $('grid').replaceChildren(...items.map(card));
   const modes = $('modes');
@@ -480,8 +560,11 @@ function card(i) {
   else comp.append(el('b', { text: i.compliance.recheck ? 'Retenido al revisarlo otra vez antes de publicar (algo cambió mientras esperaba):' : 'Retenido por cumplimiento:' }), ...i.compliance.violations.map((v) => el('div', {}, document.createTextNode('· ' + (v.es || v.message)), v.es ? el('div', { class: 'dim', text: v.message }) : null)));
   c.append(comp);
   if (i.schedule) c.append(el('div', { class: 'dim', text: 'Saldría el ' + i.schedule.day + ' a las ' + i.schedule.time + ' (' + i.schedule.tz + ')' }));
-  const tt = i.tiktok ? tiktokBox(i) : null;
+  const tt = i.tiktok && !S.manual ? tiktokBox(i) : null;
   if (tt) c.append(tt.box);
+  if (S.manual && ['approved', 'scheduled'].includes(i.status)) c.append(handBox(i));
+  if (i.result && i.result.manual) c.append(el('div', { class: 'comp' }, document.createTextNode('Publicado a mano' + (i.result.at ? ' el ' + new Date(i.result.at).toLocaleString('es-ES') : '') + (i.result.url ? ': ' : '.')), i.result.url ? el('a', { href: i.result.url, target: '_blank', rel: 'noopener noreferrer', text: i.result.url }) : null));
+  if (S.manual && i.grave && S.settings.phase <= 1 && ['pending', 'approved'].includes(i.status)) c.append(el('div', { class: 'comp bad', text: 'Noticia grave: en la fase 1 no se publica nada grave.' }));
   if (i.has.contact) {
     const d = el('details', {}, el('summary', { text: 'Hoja de contactos (fotogramas)' }));
     d.addEventListener('toggle', () => {
@@ -506,9 +589,83 @@ function card(i) {
   reject.disabled = done || i.status === 'rejected';
   const save = el('button', { class: 'btn save', text: 'Guardar cambios', onclick: () => act('edit', i, { title, text, tt }) });
   save.disabled = done;
-  if (sibs.length) c.append(el('div', { class: 'dim', text: 'El mismo clip espera también en: ' + sibs.map((x) => x.platformLabel).join(', ') }));
+  if (sibs.length) c.append(el('div', { class: 'dim', text: (i.kind === 'text' ? 'El mismo texto' : i.kind === 'episode' ? 'El mismo programa' : 'El mismo clip') + ' espera también en: ' + sibs.map((x) => x.platformLabel).join(', ') }));
   c.append(el('div', { class: 'row' }, approve, all, reject, save));
   return c;
+}
+function copyText(value) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
+  const t = el('textarea');
+  t.value = value;
+  document.body.append(t);
+  t.select();
+  document.execCommand('copy');
+  t.remove();
+  return Promise.resolve();
+}
+// hand publishing (the beta): prepare (the gate again, the signed files), download, copy, tick, "Ya lo he publicado"
+function handBox(i) {
+  const net = NET[i.platform] || i.platformLabel;
+  const box = el('div', { class: 'hand' }, el('h3', { text: 'Publicar a mano en ' + net }));
+  const m = i.manual;
+  if (!m || !m.fresh) {
+    box.append(el('div', { class: 'dim', text: 'Primero se revisa otra vez (cumplimiento, registro, fuentes) y se firma el archivo. Tarda unos segundos.' }));
+    const b = el('button', { class: 'btn approve', text: 'Preparar para publicar', onclick: async () => {
+      b.disabled = true;
+      b.textContent = 'Revisando…';
+      try {
+        await post('/api/prepare', { id: i.id });
+        toast('Listo para publicar');
+      } catch (err) {
+        toast('No se pudo: ' + err.message);
+      }
+      await load();
+    } });
+    box.append(el('div', { class: 'row' }, b));
+    return box;
+  }
+  box.append(el('div', { class: 'dim', text: 'Revisado y firmado: pasa el control. ' + (m.devCert ? 'Firma C2PA de desarrollo (vale para la beta; para el lanzamiento hace falta un certificado reconocido).' : '') }));
+  let step = 1;
+  if (m.files.video || m.files.cover) {
+    box.append(el('div', { class: 'row' },
+      m.files.video ? el('a', { class: 'btn approve', href: '/download/' + i.id + '/video', download: '', text: (step++) + '. Descargar ' + (i.format === 'vertical' ? 'el vídeo vertical' : 'el vídeo horizontal') }) : null,
+      m.files.cover ? el('a', { class: 'btn save', href: '/download/' + i.id + '/cover', download: '', text: 'Descargar la portada' }) : null));
+  }
+  box.append(el('div', { class: 'dim', text: (step++) + '. Copia y pega cada texto en ' + net + ':' }));
+  for (const f of m.fields) {
+    const n = [...f.value].length;
+    box.append(el('div', { class: 'field' }, el('div', { class: 'row' }, el('b', { text: f.label }), el('span', { class: 'count', text: n + (f.max ? ' / ' + f.max : '') + ' caracteres' }), el('button', { class: 'btn copy', text: 'Copiar', onclick: async (e) => {
+      try {
+        await copyText(f.value);
+        e.target.textContent = 'Copiado';
+        setTimeout(() => (e.target.textContent = 'Copiar'), 1600);
+      } catch {
+        toast('No se pudo copiar: selecciona el texto a mano');
+      }
+    } })), el('pre', { text: f.value })));
+  }
+  if (m.files.cover) box.append(el('div', { class: 'dim', text: 'Portada: si ' + net + ' te deja poner una imagen, usa la portada descargada; si no, elige el primer fotograma.' }));
+  box.append(el('div', { class: 'dim', text: (step++) + '. En ' + net + ', antes de publicar, marca cada cosa al hacerla:' }));
+  const checks = m.checklist.map((c) => {
+    const x = el('input', { type: 'checkbox', value: c.id });
+    return { x, label: el('label', { class: 'opt' }, x, el('span', { text: c.text })) };
+  });
+  box.append(el('div', { class: 'checks' }, ...checks.map((c) => c.label)));
+  const url = el('input', { class: 'title', placeholder: 'Dirección de la publicación (opcional), p. ej. https://…', 'aria-label': 'Dirección de la publicación' });
+  const done = el('button', { class: 'btn done', text: 'Ya lo he publicado', onclick: async () => {
+    try {
+      await post('/api/published', { id: i.id, url: url.value.trim(), checks: checks.filter((c) => c.x.checked).map((c) => c.x.value) });
+      toast('Apuntado: no se te ofrecerá otra vez');
+      await load();
+    } catch (err) {
+      toast('No se pudo: ' + err.message);
+    }
+  } });
+  const gate = () => { done.disabled = !checks.every((c) => c.x.checked); };
+  for (const c of checks) c.x.addEventListener('change', gate);
+  gate();
+  box.append(el('div', { class: 'dim', text: (step++) + '. Cuando esté publicado, pega aquí su dirección si la tienes, y pulsa:' }), url, el('div', { class: 'row' }, done));
+  return box;
 }
 function tiktokBox(i) {
   const t = i.tiktok;

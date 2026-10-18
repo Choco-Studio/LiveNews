@@ -186,8 +186,10 @@ own words or a credited citation, never an outlet's headline passed off as ours:
   it out ("WILDFIRE: / CALIFORNIA, USA"), else the programme's name. A burned-in title cannot carry a citation.
 
 Every link is cleaned of tracking parameters (`cleanLink`: `utm_*`, `at_*`, `fbclid`, `gclid` and the like; every other
-parameter and the fragment kept). A light clip's caption may open with one emoji naming its
-programme, on every network but YouTube. A grave clip never has one.
+parameter and the fragment kept). A caption's first line is the AI disclosure ("Presenters are AI-generated characters
+with synthetic voices; every fact is from the named source."), what a viewer reads before "more" (`compliance.md` §1,
+§3.5); YouTube's description opens with the compliance desk's own. A light clip's lead, after it, may open with one
+emoji naming its programme, on every network but YouTube. A grave clip never has one.
 
 **A quiz clip never gives its answer away** (`moments.js` `quizWords`). The question's headline is often the answer:
 WHERE's place, HOW MANY?'s figure, or the whole headline in LETTER BY LETTER. So a quiz clip's texts carry only what
