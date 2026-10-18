@@ -54,11 +54,13 @@ export class VoiceService {
       engine: config.engine === 'kokoro' ? 'kokoro' : 'browser',
       python: config.python || 'python3',
       kokoroDir: config.kokoroDir || '',
+      model: /^(fp32|fp16|int8)$/.test(String(config.model || '').toLowerCase()) ? String(config.model).toLowerCase() : '',
       threads: Number(config.threads) || 0,
       budgetMs: Math.max(0, Number(config.budgetSeconds ?? 90) * 1000),
       firstBudgetMs: Math.max(0, Number(config.firstBudgetSeconds ?? 480) * 1000),
       dir: config.dir || path.join(root || '.', 'data', 'voice'),
       maxBytes: Math.max(10, Number(config.cacheMb ?? 300)) * 1024 * 1024,
+      phraseCacheMb: Math.max(0, Number(config.phraseCacheMb ?? 64) || 0),
       workers: Math.max(1, Math.min(8, Math.floor(Number(config.workers) || 1))),
     };
     this.root = root || path.resolve(HERE, '..', '..');
@@ -112,6 +114,8 @@ export class VoiceService {
       error: this.lastError,
       queue: this.queue.length,
       voices: this.worker?.info?.voices?.length ?? null,
+      model: this.worker?.info?.model ?? null,
+      session: this.worker?.info?.session ?? null,
       stats: this.stats,
       ads: Object.fromEntries(Object.entries(this.ads).map(([id, lines]) => [id, Object.keys(lines).length])),
       adFit: this.adFit,
@@ -128,8 +132,13 @@ export class VoiceService {
         h.update(name).update(fs.readFileSync(path.join(this.root, 'tools', 'voice', name)));
       } catch { /* a missing file is part of the fingerprint too */ }
     }
-    this.fingerprint = h.digest('hex').slice(0, 12);
-    return this.fingerprint;
+    // The weights the worker loaded (VOICE_MODEL, or the default when the asked file is missing): the default's clips
+    // keep their names, another variant's are its own, so switching back and forth never mixes them in the cache.
+    const model = this.worker?.info?.model;
+    if (model && model !== 'fp32') h.update(`model:${model}`);
+    const fp = h.digest('hex').slice(0, 12);
+    if (this.worker?.info) this.fingerprint = fp; // settled once a worker has said which weights it runs
+    return fp;
   }
 
   async speechModule() {
@@ -168,7 +177,14 @@ export class VoiceService {
     L.starting = (async () => {
       const env = {};
       if (this.cfg.kokoroDir) env.KOKORO_DIR = this.cfg.kokoroDir;
+      if (this.cfg.model) env.VOICE_MODEL = this.cfg.model;
       if (this.cfg.threads > 0) env.KOKORO_THREADS = String(this.cfg.threads);
+      // short phrases said again inside new clips (greetings, hand-overs, sign-offs): Kokoro's raw output, kept
+      // next to the clips (tools/voice/engine.py PhraseCache); 0 MB turns it off
+      if (this.cfg.phraseCacheMb > 0) {
+        env.VOICE_PHRASE_DIR = path.join(this.cfg.dir, 'phrases');
+        env.VOICE_PHRASE_CACHE_MB = String(this.cfg.phraseCacheMb);
+      }
       const worker = this.createWorker({ python: this.cfg.python, script: this.script, env });
       try {
         const info = await worker.start();

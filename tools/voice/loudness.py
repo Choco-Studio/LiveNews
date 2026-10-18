@@ -67,9 +67,24 @@ def k_weighting(sr):
     return [shelf, hp]
 
 
+_K_RESPONSE = {}
+
+
+def _k_response(freqs, sr):
+    """The K-weighting response on an FFT grid, kept for the next measurement of a clip the same length: the voice
+    chain measures each clip's loudness four or five times (normalising, then the final stats), and building the
+    response on every bin cost as much as the filtering. Same numbers, computed once."""
+    key = (int(sr), len(freqs), float(freqs[-1]) if len(freqs) else 0.0)
+    h = _K_RESPONSE.get(key)
+    if h is None:
+        if len(_K_RESPONSE) >= 4:
+            _K_RESPONSE.clear()
+        h = _K_RESPONSE[key] = biquad_response(k_weighting(sr), freqs, sr)
+    return h
+
+
 def k_weighted(x, sr):
-    coeffs = k_weighting(sr)
-    return fft_filter(x, lambda f: biquad_response(coeffs, f, sr), sr, pad=0.2)
+    return fft_filter(x, lambda f: _k_response(f, sr), sr, pad=0.2)
 
 
 def block_powers(y, sr, block=0.4, overlap=0.75):

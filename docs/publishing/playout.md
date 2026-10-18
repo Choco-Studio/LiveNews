@@ -223,6 +223,7 @@ needs and delete the rest (server-setup.md §4b).
 | `PLAYOUT_WAIT_S` | 900 | How long `/api/next` waits for a programme before the station airs filler ads |
 | `PLAYOUT_CLOCK_CAP_S` | 60 | How far the air clock runs on between two words from the renderer |
 | `VOICE_BUDGET_S` | 1800 (in playout) | Every voice is made before the programme is queued |
+| `KOKORO_THREADS`, `VOICE_MODEL` | 1 thread, fp32 | The voices' CPU (`docs/roadmap/critique/voices-speed.md`): one thread is the cheapest beside the renderer; `fp16` waits for the owner |
 | `PLAYOUT_KEEP_AIRED_H`, `PLAYOUT_KEEP_HELD_H`, `PLAYOUT_KEEP_MASTER_H` | 2, 24, 48 | §8 |
 | `PLAYOUT_DIR` | data/playout | The queue, segments, masters, held, status and events |
 | `PUBLISH_LIVE=1` + `--rtmp` | off | Streaming (setup.md §8), with every live switch for the title updates |
@@ -293,6 +294,15 @@ these, so about 0.85x on two of them: the buffer would drain.** The owner's core
 voices are half the cost and are the lever that matters (a faster voice engine or a third core). The 24-hour test
 (server-setup.md §4b) measures it on the machine itself; if the buffer does not grow past the first hour there, the
 honest answer is 4 cores, not a lower picture.
+
+**After the voices' speed round (18 Oct, `docs/roadmap/critique/voices-speed.md`).** The 1.5 was onnxruntime's two
+spinning threads fighting the renderer for two cores. The voice engine now runs one thread (same samples), a cheaper
+broadcast chain (same samples) and a phrase cache: **about 1.04 CPU-s per second of speech beside a busy renderer
+(1.49 before), 0.78 per second of air**. A second of air now costs about **2.0 CPU-s on cores like these (1.01x on
+two cores: the buffer stops draining, with no margin), 1.8 with `--no-twin --preset superfast` (1.12x)**, about
+1.25–1.4x if the owner's cores are 25–30 % quicker. The release's smaller "fp16" weights would take the voices to 0.65
+per second of air (1.08x, 1.21x with the rendering switches), but they measurably read a little less naturally
+(predicted listening score −0.08), so they wait for the owner's ears (`VOICE_MODEL=fp16`).
 
 ## 11. Limits
 

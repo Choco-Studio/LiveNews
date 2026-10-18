@@ -314,19 +314,20 @@ def compress(x, sr, o):
     return x * gain, float(-gr.min()) if len(gr) else 0.0, mean_gr
 
 
-def limit(x, sr, ceiling_db, radius_s=0.012):
+def limit(x, sr, ceiling_db, radius_s=0.012, up=None):
     """Look-ahead true-peak limiter (offline, zero-phase gain curve).
 
     The gain is a sliding minimum of the required gain, then a box average no
     wider than that minimum, so it is never above what any sample in reach
     needs: no overs. The 12 ms radius keeps gain changes slower than a pitch
     period, so peaks are turned down instead of being clipped into buzz.
+    `up`: x already oversampled 4x (the caller measured its true peak with it).
     """
     ceiling = 10 ** (ceiling_db / 20)
     n = len(x)
     if n == 0:
         return x
-    peaks = np.abs(oversample(x, 4)).reshape(n, 4).max(axis=1)
+    peaks = np.abs(oversample(x, 4) if up is None else up).reshape(n, 4).max(axis=1)
     need = np.minimum(1.0, ceiling / np.maximum(peaks, 1e-9))
     if need.min() >= 1.0:
         return x
@@ -338,9 +339,14 @@ def limit(x, sr, ceiling_db, radius_s=0.012):
 def _limit_to(x, sr, ceiling_db):
     y = x
     for _ in range(3):
-        if true_peak(y) <= ceiling_db + 0.02:
+        if len(y) == 0:
             break
-        y = limit(y, sr, ceiling_db - 0.15)
+        # one oversampling serves the true-peak check and, when it is over, the limiter's peaks
+        up = oversample(y, 4)
+        peak = float(np.max(np.abs(up)))
+        if (20 * math.log10(peak) if peak > 0 else -math.inf) <= ceiling_db + 0.02:
+            break
+        y = limit(y, sr, ceiling_db - 0.15, up=up)
     return y
 
 
@@ -705,6 +711,31 @@ def _istft(spec, win, hop, length):
     return out[n_fft:n_fft + length]
 
 
+_BUZZ = {}
+
+
+def _buzz(n, sr, f0):
+    """The vocoder's carrier: every harmonic of f0 below sr/2 - 200 Hz, with Schroeder phases (the same harmonic
+    spectrum as a pulse train but a flat envelope, so the buzz does not add peaks the limiter has to fight).
+    Each sample depends only on its index, so one long copy per pitch is sliced for every clip: the same numbers as
+    building it again (about a hundred cosines over every sample, most of UNIT-8's processing time)."""
+    key = (int(sr), float(f0))
+    have = _BUZZ.get(key)
+    if have is None or len(have) < n:
+        m = max(n, int(30 * sr))
+        t = np.arange(m) / sr
+        harmonics = np.arange(1, int((sr / 2 - 200) / f0) + 1)
+        pulse = np.zeros(m)
+        count = len(harmonics)
+        for k in harmonics:
+            pulse += np.cos(2 * np.pi * k * f0 * t + np.pi * k * (k - 1) / count)
+        pulse /= math.sqrt(len(harmonics) / 2)
+        if len(_BUZZ) >= 2:
+            _BUZZ.clear()
+        have = _BUZZ[key] = pulse
+    return have[:n].copy()
+
+
 def vocode(x, sr, f0=104.0, n_fft=512, hop=128, lifter_ms=1.4, seed=8):
     """Monotone channel vocoder: the voice's formants on a fixed-pitch buzz.
 
@@ -713,15 +744,7 @@ def vocode(x, sr, f0=104.0, n_fft=512, hop=128, lifter_ms=1.4, seed=8):
     noise for fricatives, so consonants stay crisp.
     """
     n = len(x)
-    t = np.arange(n) / sr
-    harmonics = np.arange(1, int((sr / 2 - 200) / f0) + 1)
-    pulse = np.zeros(n)
-    # Schroeder phases: same harmonic spectrum as a pulse train but a flat
-    # envelope, so the buzz does not add peaks the limiter has to fight
-    count = len(harmonics)
-    for k in harmonics:
-        pulse += np.cos(2 * np.pi * k * f0 * t + np.pi * k * (k - 1) / count)
-    pulse /= math.sqrt(len(harmonics) / 2)
+    pulse = _buzz(n, sr, f0)
     noise = np.random.default_rng(seed).standard_normal(n)
     X, win = _stft(x, n_fft, hop)
     P, _ = _stft(pulse, n_fft, hop)

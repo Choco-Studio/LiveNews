@@ -55,6 +55,8 @@ const KEYS = [
   'VOICE_ENGINE',
   'KOKORO_DIR',
   'KOKORO_THREADS',
+  'VOICE_MODEL',
+  'VOICE_PHRASE_CACHE_MB',
   'VOICE_PYTHON',
   'VOICE_WORKERS',
   'VOICE_BUDGET_S',
@@ -191,18 +193,20 @@ describe('config from the environment', () => {
     assert.deepEqual(config.voice, {
       engine: 'browser',
       kokoroDir: '',
+      model: '',
       threads: 0,
       python: 'python3',
       workers: 1,
       budgetSeconds: 90,
       firstBudgetSeconds: 480,
       cacheMb: 300,
+      phraseCacheMb: 64,
       dir: path.join(REPO, 'data', 'voice'),
     });
     assert.equal((await loadConfig({ VOICE_ENGINE: ' Kokoro ' })).voice.engine, 'kokoro');
     for (const value of ['browser', 'tts', 'off', 'none']) assert.equal((await loadConfig({ VOICE_ENGINE: value })).voice.engine, 'browser', value);
-    const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots' })).voice;
-    assert.deepEqual([tuned.kokoroDir, tuned.threads, tuned.budgetSeconds, tuned.cacheMb], ['/models', 2, 30, 300]);
+    const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots', VOICE_MODEL: ' FP16 ', VOICE_PHRASE_CACHE_MB: '0' })).voice;
+    assert.deepEqual([tuned.kokoroDir, tuned.threads, tuned.budgetSeconds, tuned.cacheMb, tuned.model, tuned.phraseCacheMb], ['/models', 2, 30, 300, 'fp16', 0]);
   });
 
   test('image search: Wikimedia Commons by default; google / bing listed with their keys; off turns it off', async () => {
@@ -274,7 +278,7 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_MODEL', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB', 'VOICE_PHRASE_CACHE_MB'].map((k) => [k, example[k]]))
     );
     // A .env made from the example turns the neural voices on; everything else about them is the default.
     assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });
