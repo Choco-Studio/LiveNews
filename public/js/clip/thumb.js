@@ -96,7 +96,7 @@ export function drawThumb(ctx, { frame = null, programme = '', lines = [], accen
       }
     }
   }
-  // the bug and its AI mark, as on air
+  // the bug, clean as on air (the upload's description, YouTube's own label and the file's C2PA say it is AI-produced)
   drawBugOnly(ctx, 9, 0, TOP.x, TOP.y);
   // the programme's name on its accent (the on-air programme tag's design, at 2x); on the right the block sits flush
   // to the right margin, its lines ranged left within it

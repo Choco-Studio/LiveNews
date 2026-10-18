@@ -93,8 +93,9 @@ test('the texts to paste: YouTube title, description and hashtags; a caption wit
     const t = manualTexts(clip(net), { env: {} });
     assert.deepEqual(t.fields.map((f) => f.id), ['description', 'hashtags']);
     const c = t.fields[0].value;
-    assert.match(c.split('\n')[0], /^Presenters are AI-generated characters/, `${net}: the disclosure first`);
-    assert.equal(c.match(/Presenters are AI-generated/g).length, 1, 'once');
+    assert.match(c.split('\n')[0], /^AI-produced news: presenters are AI characters/, `${net}: the disclosure first`);
+    assert.equal(c.match(/AI-produced news: presenters/g).length, 1, 'once');
+    assert.ok(!/Presenters are AI-generated/.test(c), 'the older sentence gives way to it');
     assert.match(c, /Source: Guardian Business — https:\/\/www\.theguardian\.com\/a/);
     assert.match(c, /Credits: Voices: synthetic.* · Presenters, sets, graphics and music: original/);
     assert.ok([...c].length <= 2200);
@@ -329,7 +330,7 @@ test('an edit after preparing: the words are checked again before they are hande
   const again = await post('/api/prepare', { id: tt.id });
   assert.equal(again.status, 200);
   assert.deepEqual(again.json.item.manual.checklist.map((c) => c.id), ['file', 'texts', 'aigc', 'privacy', 'branded']);
-  assert.match(again.json.item.manual.fields[0].value, /^Presenters are AI-generated characters/);
+  assert.match(again.json.item.manual.fields[0].value, /^AI-produced news: presenters are AI characters/);
 });
 
 test('the real gate: a text post passes with who answers for the channel set, and is held without', async () => {

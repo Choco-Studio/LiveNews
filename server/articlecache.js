@@ -106,6 +106,10 @@ export class ArticleCache {
       } else {
         const doc = { link: story.link, text: got.text, via: got.via, source: story.source || null, at: new Date(this.now()).toISOString() };
         fs.writeFileSync(f, JSON.stringify(doc));
+        // the file's time is the cache's own clock, as a refresh's is: prune() reads it (a written file once kept the
+        // machine's time, so with a test's clock the expiry depended on the day the test ran)
+        const t = new Date(this.now());
+        fs.utimesSync(f, t, t);
       }
       if (this.now() - this.prunedAt >= HOUR) this.prune();
       return /^article/.test(got.via) ? 'article' : 'feed';

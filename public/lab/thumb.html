@@ -19,9 +19,6 @@
 import { P } from '/js/palette.js';
 import { THEME_ACCENT } from '/js/cast.js';
 import { drawThumb, thumbLines } from '/js/clip/thumb.js';
-import { markReady } from '/js/clip/mark.js';
-
-await markReady;
 const mk = () => Object.assign(document.createElement('canvas'), { width: 384, height: 216 });
 const load = (src) => new Promise((resolve, reject) => {
   const im = new Image();

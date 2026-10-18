@@ -7,7 +7,8 @@
 //   textPost(item, { max })      a text post with its disclosure first
 //   creditsFor(item)             the description's credit lines
 //   auditItem(item)              every asset with its rights record (missing ones listed)
-//   checkClip(clip, opts)        recreation rules, label and mark in frame, cuts, flags, elections, register, review
+//   checkClip(clip, opts)        recreation rules and label in frame, the AI notice (a clip's first seconds and end card, a
+//                                programme's opening, the stream's reminders), cuts, flags, elections, register, review
 //   markFile(path, manifest)     C2PA (and the audio watermark where installed), verified by reading it back
 //   buildManifest(item, opts)    the manifest for markFile
 //   readMark(path)               a file's C2PA manifest, read back
@@ -16,7 +17,7 @@
 //   launchReport(opts)           what must be in place before launch: { ready, blockers, warnings }
 export { CHANNEL, PLATFORMS, programmeWording, disclosureFor, describe, textPost, recreationsIn, writerOf, editorialContact } from './disclosure.js';
 export { creditsFor, auditItem, scanRepoAssets, rightsGate, loadRights } from './credits.js';
-export { checkClip, timelineFromRecording, frameGeometry, legibleCap, RECREATION_WINDOW } from './clips.js';
+export { checkClip, timelineFromRecording, frameGeometry, legibleCap, RECREATION_WINDOW, noticeRuns, clipCards, NOTICE_RULES } from './clips.js';
 export { markFile, readMark, buildManifest, c2paStatus, watermarkStatus, signingIdentity, SOURCE_TYPE } from './c2pa.js';
 export { ComplianceRegister, sharedRegister, CATEGORIES, DECISIONS } from './registry.js';
 export { lintEpisode, storyReport, verbatimRuns, archiveSample, archiveGetStory, MAX_RUN, MAX_SHARE, PHRASE } from './verbatim.js';
@@ -24,7 +25,8 @@ export { loadCalendar, electionHold, silenceHold, activeElections, ELECTION_RULE
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { disclosureFor, describe, editorialContact } from './disclosure.js';
+import { disclosureFor, describe, editorialContact, CHANNEL } from './disclosure.js';
+import { IDENT_LINE, noticeParts } from '../../public/js/graphics/disclosure.js';
 import { auditItem } from './credits.js';
 import { checkClip } from './clips.js';
 import { readMark, c2paStatus, watermarkStatus } from './c2pa.js';
@@ -60,6 +62,9 @@ export function preflight(item = {}, opts = {}) {
     warnings.push(...r.warnings);
     recreations = r.recreations;
     disclosure = r.disclosure;
+    // the stream's periodic ident: every break and every gap between programmes airs the ident, whose statement under
+    // the wordmark is the notice (scenes/opens/ident.js, graphics/disclosure.js IDENT_LINE)
+    if (kind === 'live' && !(IDENT_LINE === CHANNEL.ident && noticeParts('NEWS').every((p) => IDENT_LINE.includes(p)))) v('ident-missing', 'the break ident must say the AI notice under the wordmark (graphics/disclosure.js IDENT_LINE = CHANNEL.ident)');
   } else {
     disclosure = disclosureFor({ ...item, kind });
     if (kind === 'text' && !/^AI-generated:/.test(String(item.text || '').trim())) v('text-disclosure-missing', 'a text post starts with "AI-generated:" (disclosure.textPost builds it)');

@@ -40,12 +40,14 @@ const RATE = /(\d+(?:\.\d+)?)\s*KB\/s from the page/;
 
 /**
  * The live title for the programme on air (≤ 100 characters). `recorded` (pre-rendered playout, docs/publishing/
- * playout.md §5): the programmes were made ahead and air from files, so the title never says LIVE.
+ * playout.md §5): the programmes were made ahead and air from files, so the title never says LIVE. It says the news is
+ * AI-produced: the title is what a viewer reads before the stream plays, the first exposure of whoever joins it
+ * mid-programme, before the picture's next notice (compliance.md §3.1).
  */
 export function liveTitle(now, { channel = 'GLOBIT 24', recorded = false } = {}) {
   const prog = now?.title ? String(now.title).toUpperCase() : null;
-  const base = recorded ? `${channel}: pixel-art world news, 24 hours a day` : `${channel} LIVE: pixel-art world news, 24 hours a day`;
-  const t = prog ? (recorded ? `${channel} · Now: ${prog} · pixel-art news 24/7` : `${channel} LIVE · Now: ${prog} · pixel-art news 24/7`) : base;
+  const base = recorded ? `${channel}: AI-produced world news, 24 hours a day` : `${channel} LIVE: AI-produced world news, 24 hours a day`;
+  const t = prog ? (recorded ? `${channel} · Now: ${prog} · AI-produced news 24/7` : `${channel} LIVE · Now: ${prog} · AI-produced news 24/7`) : base;
   return t.length <= 100 ? t : base.slice(0, 100);
 }
 
@@ -57,7 +59,7 @@ export function liveDescription(schedule, { disclosure = [], links = [], recorde
   lines.push(now ? `On air now: ${now.title}${now.tagline ? ` (${String(now.tagline).toLowerCase()})` : ''}.` : 'On air: GLOBIT 24, world news around the clock.');
   if (next.length) lines.push(`Coming up: ${next.join(', ')}.`);
   lines.push('');
-  lines.push(...(disclosure.length ? disclosure : ['The presenters are AI-generated characters with synthetic voices. Every story is written from reporting by credited news outlets, named on screen and in each programme.']));
+  lines.push(...(disclosure.length ? disclosure : ['AI-produced news: the presenters are AI characters with synthetic voices. Every story is written from reporting by credited news outlets, named on screen and in each programme.']));
   // pre-rendered playout: say how it airs (each programme is made and checked about an hour before it goes out)
   if (recorded) lines.push('Each programme is produced and checked ahead of time and aired from a recording, about an hour after it is made.');
   if (links.length) lines.push('', ...links);

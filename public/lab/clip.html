@@ -20,10 +20,7 @@
 <script type="module">
 import { P } from '/js/palette.js';
 import { THEME_ACCENT } from '/js/cast.js';
-import { drawHook, drawEndCard, sizeOf, END_CARD_SECONDS } from '/js/clip/cards.js';
-import { markReady } from '/js/clip/mark.js';
-
-await markReady;
+import { drawHook, drawEndCard, drawNoticeCard, sizeOf, END_CARD_SECONDS, NOTICE_SECONDS } from '/js/clip/cards.js';
 
 const qs = new URLSearchParams(location.search);
 const mk = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
@@ -37,17 +34,27 @@ function hookCanvas(spec) {
   drawHook(g, { format: spec.format, lines: spec.lines, programme: spec.programme, accent: accentOf(spec), profile: spec.profile || 'normal' });
   return c;
 }
+function noticeCanvas(spec) {
+  const { w, h } = sizeOf(spec.format);
+  const c = mk(w, h);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  drawNoticeCard(g, { format: spec.format, noun: spec.noun || 'NEWS', accent: accentOf(spec), profile: spec.profile || 'normal' });
+  return c;
+}
 function endCanvas(spec, t) {
   const { w, h } = sizeOf(spec.format);
   const c = mk(w, h);
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live !== false });
+  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live !== false, noun: spec.noun || 'NEWS' });
   return c;
 }
 window.__clipLab = {
   seconds: END_CARD_SECONDS,
+  noticeSeconds: NOTICE_SECONDS,
   hook: (spec) => hookCanvas(spec).toDataURL('image/png'),
+  notice: (spec) => noticeCanvas(spec).toDataURL('image/png'),
   end: (spec, t) => endCanvas(spec, t).toDataURL('image/png'),
 };
 
@@ -55,7 +62,7 @@ const run = qs.get('run');
 if (run === 'end') {
   // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
   // (&live=0: the channel airs pre-rendered, docs/publishing/playout.md §5: the end card never says WATCH LIVE)
-  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', live: qs.get('live') !== '0' };
+  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', live: qs.get('live') !== '0', noun: qs.get('noun') || 'NEWS' };
   const { w, h } = sizeOf(spec.format);
   const screen = mk(w, h);
   screen.id = 'screen';
@@ -65,7 +72,7 @@ if (run === 'end') {
   const t0 = performance.now();
   const frame = () => {
     requestAnimationFrame(frame);
-    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live });
+    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live, noun: spec.noun });
   };
   frame();
   if (qs.get('sting') === '1') {
@@ -97,6 +104,7 @@ if (run === 'end') {
     { format: 'horizontal', lines: ['NEANDERTHAL REMAINS MAY BE', 'EARLIEST HUMAN ANCESTOR FIND', 'KILLED BY A SPEAR'], programme: 'COSMOS DESK', theme: 'space' },
   ];
   for (const c of cases) add(hookCanvas(c), `hook · ${c.format} · ${c.lines.join(' / ')}`);
+  for (const c of cases.slice(0, 4)) add(noticeCanvas(c), `AI notice (first ${NOTICE_SECONDS} s) · ${c.format}${c.profile ? ` · ${c.profile}` : ''}`);
   for (const c of cases.slice(0, 2)) for (const t of [0.3, 1.2, 2.4]) add(endCanvas(c, t), `end card · ${c.format} · ${t}s`);
 }
 </script>

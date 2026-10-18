@@ -80,13 +80,13 @@ function fetchOf(state) {
 
 test('the title and description: what is on, what comes next, how it is made', () => {
   const t = liveTitle({ title: 'Cosmos Desk' });
-  assert.equal(t, 'GLOBIT 24 LIVE · Now: COSMOS DESK · pixel-art news 24/7');
+  assert.equal(t, 'GLOBIT 24 LIVE · Now: COSMOS DESK · AI-produced news 24/7');
   assert.ok(t.length <= 100);
   assert.ok(liveTitle({ title: 'X'.repeat(120) }).length <= 100);
   const d = liveDescription(SCHED('COSMOS DESK'));
   assert.match(d, /On air now: COSMOS DESK/);
   assert.match(d, /Coming up: TECH BYTES, NEWS IN 60/);
-  assert.match(d, /AI-generated/);
+  assert.match(d, /AI-produced news/);
 });
 
 test('a run that ends is started again, after 2, then 5, then 15 seconds', async () => {

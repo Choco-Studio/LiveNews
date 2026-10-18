@@ -4,6 +4,7 @@
 // silent fallback to the stub.
 //
 //   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), auditItem(item), checkClip(clip, opts),
+//   clipCards(o) what a clip's cards say (the notice, the end card),
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
 //   recordPublication(publication, o) one publication in the register (the owner's own, by hand: manual.js)
@@ -34,6 +35,8 @@ export const creditsFor = (item) => mod.creditsFor(item);
 /** Every asset an item puts on screen with its rights record ({ assets, missing, credits }); the stub knows none. */
 export const auditItem = (item) => (mod.auditItem ? mod.auditItem(item) : { assets: [], missing: [], credits: [] });
 export const checkClip = (clip, opts = {}) => mod.checkClip(clip, opts);
+/** What a clip's own cards say (the AI notice over its first seconds, its end card): the gate's clip.cards. */
+export const clipCards = (o = {}) => (mod.clipCards ? mod.clipCards(o) : null);
 export const describe = (item, o = {}) => (mod.describe ? mod.describe(item, o) : [...mod.disclosureFor(item).description.lines, ...(o.credits?.length ? ['', 'Credits:', ...o.credits.map((c) => `· ${c}`)] : [])].join('\n'));
 export const textPost = (item, o = {}) => (mod.textPost ? mod.textPost(item, o) : `AI-generated: ${item.text}`);
 export const buildManifest = (item, o = {}) => (mod.buildManifest ? mod.buildManifest(item, o) : { title: o.title || null });

@@ -1,12 +1,12 @@
 // Top row of the graphics package: the channel bug (top-left, 13 px high,
-// 48 px wide: the doc's limit), the LIVE / REPLAY tag with its static red
+// 48 px wide: the doc's limit; clean, nothing docked to it: owner, 18 Oct), the LIVE / REPLAY tag with its static red
 // square (pre-rendered playout: the channel's 24/7 mark, never LIVE: airmode.js), the programme name for a few seconds after the open, and the London
 // clock (top-right, HH:MM, static colon). Everything wipes in when the
 // graphics come on and the bug's glint plays only then.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipStart, clipEnd } from './layout.js';
-import { FRAME, MARK_TIMING, markOpen, markWidth, drawMark } from './disclosure.js';
+import { FRAME } from './disclosure.js';
 import { onAirTag } from '../airmode.js';
 
 // The 11x11 brand globe (logo.js GLOBE_S) redrawn for 1x on air: at this size
@@ -127,9 +127,10 @@ const inkStyle = (color) => {
 
 /**
  * Draw the top row. `v` = { onAt, replay, recorded, program: {title, color} | null,
- * programIn, programOut, clock: 'HH:MM', mark?, markFrom?, noun? } where onAt is when the graphics came
- * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times; the AI mark
- * (graphics/disclosure.js) is on unless `mark === false`, first opening at `markFrom` with the programme's `noun`.
+ * programIn, programOut, clock: 'HH:MM' } where onAt is when the graphics came
+ * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times. The channel's AI
+ * notice is not part of the row: it comes under it at the programme's start, after breaks and at intervals
+ * (graphics/disclosure.js, drawn by graphics/index.js).
  */
 export function drawTopRow(ctx, t, v) {
   const y = TOP.y;
@@ -154,27 +155,8 @@ export function drawTopRow(ctx, t, v) {
     }
   }
 
-  // the AI mark docks to the bug's right edge and wipes in right behind it; it never leaves while the top row is
-  // up, and opens into the channel's words at the start, after every break and at intervals
   let x = x0 + BUG.w + 1;
-  if (v.mark !== false) {
-    // (in a clip's narrow window the words open only where they fit whole: a 9:16 window keeps the AI plate, the
-    // clip's caption and description say the words)
-    const fits = !FRAME.active || x + markWidth(1, v.noun) <= FRAME.x + FRAME.w - 4;
-    const open = fits ? markOpen(t, Number.isFinite(v.markFrom) ? v.markFrom : v.onAt + MARK_TIMING.delay, v.onAt) : 0;
-    const mw = markWidth(open, v.noun);
-    const mshown = Math.round(mw * easeOut((since - 0.05) / 0.3));
-    if (mshown > 0) {
-      clipStart(ctx, x, y, mshown, h);
-      try {
-        drawMark(ctx, x, y, open, v.noun);
-      } finally {
-        clipEnd(ctx);
-      }
-    }
-    x += mw + 1;
-  }
-  // a clip is not live and its clock means nothing: in a clip's frame the row is the bug and the mark
+  // a clip is not live and its clock means nothing: in a clip's frame the row is the bug
   if (FRAME.active) return;
 
   // LIVE (black plate, static red square) or REPLAY (black plate, yellow text and
