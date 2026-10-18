@@ -650,3 +650,21 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 - **the verbatim rule on what aired.** The report reads the last 300 real stories of `data/archive` and blocks while more than 5 % of them break the rule. On today's archive it is **80.3 %** (241 of 300) against the outlets' titles and summaries alone. That is a floor: with the articles, which the audit tool caches in `data/compliance/articles`, the same 300 stories give **99 %**. The live stream has no publish check of its own, so this is the check that holds it back. It clears when the writer team's composed sentences are on air, measured with the same code.
 
 The audio watermark is a warning.
+
+**A beta published by hand** (the publishing desk, 17 Oct; `docs/publishing/beta.md`, `pipeline.md` §8). No live
+stream; the owner uploads each approved piece himself, after the gate has passed it again on the signed files and the
+exact words he pastes. The launch report is unchanged; read against that beta:
+
+- **blocks the beta:** `EDITORIAL_CONTACT` (the gate refuses every item without it, `editorial-contact-missing`); and,
+  on the server that prepares the files, a working C2PA SDK (without it nothing can be signed, and an unsigned file is
+  `unmarked`). On 17 Oct the launch report on the development machine found the SDK (`C2PA signs with the development
+  certificate`); the owner's server has yet to install it (`server-setup.md` §2);
+- **blocks only the full launch:** the trusted C2PA certificate (§4: the development chain is expected before it;
+  validators show "signing certificate untrusted", so the networks may not label from the manifest, and the owner sets
+  each network's own AI label by hand); `RIGHTS_GATE` (on-air pictures: there is no air; exports are always strict);
+  the Open-Meteo plan (no weather clip is offered: offline the forecast is demo data, and the live weather is not
+  published); the verbatim rate of what aired (it holds the live stream; in the beta each clip and post is measured
+  one by one, and what copies is held). Note: `weather.js` calls the free `api.open-meteo.com` with no key, so setting
+  `OPEN_METEO_API_KEY` clears this blocker without changing what the code calls; the paid plan needs its endpoint and
+  key wired in before the blocker is honestly cleared;
+- the lawyer's list above stays open; a public beta is a publication.

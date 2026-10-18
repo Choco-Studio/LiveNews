@@ -438,6 +438,35 @@ export class VerticalCompositor {
     }
   }
 
+  /**
+   * A sport story's tag (FOOTBALL, RUGBY: its strap's kicker) as an ink tab with the programme's accent bar, at 2x when
+   * it fits the safe column, centred in the field above the tallest headline plate; it wipes in after the cut.
+   */
+  sportTag(kicker, acc, dt) {
+    const ctx = this.ctx;
+    const label = String(kicker).toUpperCase().slice(0, 18);
+    const scale = measureText(label, 2) <= SAFE.w - 24 ? 2 : 1;
+    const w = measureText(label, scale) + 12 + 2 * scale;
+    const h = 7 * scale + 10;
+    const x = Math.round(SAFE.cx - w / 2);
+    const y = this.box.y + Math.round((this.box.h - 116) / 2) + 8 - Math.round(h / 2);
+    const p = easeOutQuint(seg(dt, 0.1, 0.35));
+    if (p <= 0) return;
+    ctx.save();
+    try {
+      ctx.beginPath();
+      ctx.rect(x, y, Math.max(1, Math.round(w * p)), h);
+      ctx.clip();
+      ctx.fillStyle = P.ink;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = acc;
+      ctx.fillRect(x, y, 2 * scale, h);
+      drawText(ctx, label, x + 2 * scale + 6, y + 5, scale === 2 ? S.white2 : S.white);
+    } finally {
+      ctx.restore();
+    }
+  }
+
   /** The montage's headline frame (and STILL TO COME's) set again: the backdrop over the stage, the headline under it. */
   headlineFrame(t, scene, dt) {
     const ctx = this.ctx;
@@ -462,7 +491,12 @@ export class VerticalCompositor {
       // no picture and no place: the topic board (the story's own figure, quote, actor or topic: graphics/topicboard.js),
       // its box right-aligned in the safe column, above the tallest headline plate
       drawTopicBoard(ctx, item, { accent: acc, dt, frame: { x: 0, y: this.box.y, w: VW, h: this.box.h, right: SAFE.right - 4, top: 30, bottom: this.box.h - 116, maxW: SAFE.w - 8 } });
-    } else ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+    } else {
+      ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+      // FULL TIME (the sport theme draws no topic board): the story's sport, the horizontal frame's chip, set large in
+      // the field, so a result without a picture or a place never opens on an empty stage (publishing round 6)
+      if (scene.program?.theme === 'sport' && item.kicker) this.sportTag(item.kicker, acc, dt);
+    }
     // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
     const headline = String(item.headline || '').toUpperCase();
     let scale = 2;
@@ -486,7 +520,8 @@ export class VerticalCompositor {
       if (lp <= 0) continue;
       drawText(ctx, lines[i], 12, py + 8 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
     }
-    if (item.source) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
+    // (the source with the headline's first line, never on the bare field before the plate has wiped in)
+    if (item.source && seg(dt, 0.15, 0.3) > 0) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
     // the tag: TOP STORIES (with the pips of the run) or STILL TO COME (on the plate: the clip's hook covers the
     // title band all clip long)
     const tag = tease ? 'STILL TO COME' : 'TOP STORIES';

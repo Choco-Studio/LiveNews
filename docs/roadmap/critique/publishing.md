@@ -875,6 +875,214 @@ edition is made from it (`tools/sport/edition.mjs <snapshot> <air time> <out>`).
 vertical with every moment and the master kept (`--formats vertical --all --keep-masters --no-queue`), and is judged
 on a 4x sheet before any of its clips is approved.
 
+## Round 6: the outlets' robots.txt, and FULL TIME's first real edition
+
+Round 5 was merged at 9.8 (5c81261). Round 5 had reported plainly that the news desk's article reader did not consult
+robots.txt. Round 6's main job was to make it do so. Its second job was the first real FULL TIME edition, from the
+Saturday sport snapshot due at 18:40 UTC.
+
+### What was asked, and what was done
+
+1. **The news reader respects robots.txt** (`server/robots.js`, `compliance.md` §6.1).
+   - Every page the desk opens goes through one door, `NewsDesk.fetchText`: the article for the writer
+     (`readArticle`), the page and its AMP page for a picture (`pagePictures`, `resolveImage`, other outlets' pages of
+     the same event too), and every redirect hop of each (`guardedFetch`'s new `beforeHop`). The feeds go through it
+     with `robots: false`, as asked.
+   - RFC 9309: our token's groups combined, else `*`; exact tokens, never substrings; the longest match, an Allow
+     winning a tie, `*` and `$`, on the path and the query. A file is kept 24 hours in memory and in `data/robots/`
+     (only our rules, about 1 KB per origin). A 4xx allows everything; a 5xx, a 429, a network failure, a timeout or a
+     sixth redirect disallows everything until the next try (30 minutes). Crawl-delay spaces our requests per origin.
+   - A refused page is never requested. The story keeps its feed's text and pictures (`pageRefused: 'robots'`, in the
+     desk view and the pipeline log), and the article cache keeps only the feed's text for it, replacing or removing an
+     article text kept before.
+   - The user-agent is now `Mozilla/5.0 (compatible; GLOBIT24/1.0; +https://github.com/choco-studio/livenews)` in the
+     news desk, the picture downloads and the tools. `LiveNewsBot` is gone from the repository.
+   - The tools that open pages use the same door: the sport snapshot, the length tools, and the verbatim audit (which
+     fetched with its own user-agent and no robots.txt until now).
+   - The outlets' terms are item 12 of the lawyer's list.
+2. **FULL TIME's first real edition:** see the end of this round.
+
+### What ran
+
+- `tools/compliance/robots-report.mjs --sample 2` on today's 31 feeds through the proxy, twice (before and after the
+  fixes below), and every article link of the archive (1,430, 14 days) against the same files.
+- The feed pictures' hosts against their own files (for the record: the desk does not gate pictures).
+- The 13 Oct sport snapshot's saved pages against today's files: 28 pages, none refused.
+- `test/robots.test.js` (25 tests, six fixture files), and the desk's existing tests with the robots.txt read in
+  front of every page.
+
+### First pass: what the panel found
+
+**Standards editor.** The first live reading, on the first version of the door:
+
+1. **Al Jazeera lost every article.** Its feed tags each link `?traffic_source=rss`, and its robots.txt keeps the
+   tagged copies of its pages from every crawler (`Disallow: /*?traffic_source=`, and the same for `fbclid`, `gb`, `q`
+   and `playlist`). All 25 of today's stories were refused, and 238 of the archive's 1,430 links. The writer would
+   have had a 100-character summary for each, as the feed gives no full text. The file keeps the duplicates, not the
+   articles: the article addresses themselves are open.
+2. **A passing 4xx counted as "no file" for a day.** Euronews answered the first read with a 406 and the next with its
+   file (29 rules). The RFC allows everything on a 4xx; holding that for 24 hours would have let a bot shield's
+   refusal or a hiccup stand for a day.
+3. **Sky News's bot shield.** Its robots.txt and its pages answer our user-agent with a 403 (Akamai). The RFC reads the
+   403 as "allowed", so the desk would knock on every new story's page and be refused every time.
+4. **The verbatim audit** fetched pages with its own user-agent, followed redirects blindly and never read robots.txt.
+   Its cached article texts shared the article cache's folder.
+5. **The old user-agent** (`LiveNewsBot/0.1`) was still in the picture downloads, the play desk's snapshot and the
+   pictures desk's sheet tool.
+6. **Pictures.** A picture is downloaded without its host's robots.txt. As asked, a story keeps its feed's pictures,
+   and a picture is not a page; but the record should show whether any host minds.
+
+**Director (the snapshot tools).** The sport snapshots key each saved page by the feed's link. Dropping the tracking
+tags before the desk's replay hooks would have made every BBC page of the old snapshots "missing", and a replay would
+have gone to the network for them.
+
+### Fixes after the first pass
+
+1. Pages are opened at their own address, without the feed's tracking tags (`news.js` `pageUrl`: `utm_*`, `at_*`,
+   `traffic_source`, `maca`, click ids), and robots.txt is checked for that address. Al Jazeera: 25 of 25 open. The
+   story keeps the feed's link for its credit. The reading is the lawyer's to confirm (item 12).
+2. A 404 or 410 is kept for the day; any other 4xx for an hour, then the file is read again.
+3. An origin whose page answers 401, 403 or 429 is not asked for another page for six hours (30 minutes after a 429).
+   Sky News: one try per six hours instead of one per story. The desk never poses as a browser.
+4. The audit opens pages through the same rules and user-agent, on every hop, and drops a cached article text whose
+   page robots.txt now keeps from us.
+5. One user-agent everywhere, from `server/robots.js`.
+6. Read for the record: 15 picture hosts, none keeps a picture from us (`compliance.md` §6.1).
+7. The tags are dropped inside `fetchText`, behind the replay hooks: the old snapshots still find every page.
+
+### Second pass
+
+- 17 hosts; every file read; none names `GLOBIT24` or `GLOBIT`; 458 named tokens, none ours or near a word of our
+  user-agent; no host keeps an article address from us; no `*` group of theirs sets a Crawl-delay (ESA's does, 2 s, but
+  its feed gave no story today; CBC's file timed out from here, so its pages wait).
+- **What the writer loses: nothing today**, 0 of 393 stories. An article page gives the writer about 1,900 characters
+  where it is read (34 pages sampled).
+
+### FULL TIME's first real edition
+
+The 17 Oct 18:40 UTC sport snapshot landed during the round, and the edition was made from it and put through the
+factory in vertical. The session stopped before this part of the log was written; what follows is what its commits
+and its last, uncommitted edits establish (carried into round 7, below), not a judged sheet.
+
+1. **Copied words passed as "unverified".** The edition told stories the station's archive never kept (a replay from
+   a snapshot), and the compliance lint counts a story without sources as `unverified` and lets it pass unless asked
+   to be strict. The factory found nothing copied in an edition whose lead was an outlet's sentence word for word.
+   Fixed in the door (964885d): `sources-missing` for every story an item tells whose sources are not at hand, in the
+   factory, the upload, the publisher and the re-check; `--sources <dataDir>` reads another data folder's archive.
+   Until the station airs FULL TIME itself (its stories then reach the archive), a replayed edition's clips are held.
+2. **An empty stage in the montage.** The sport theme draws no topic board, so a result with neither a picture nor a
+   place opened the vertical headline frame on bare ground. The story's sport (its strap's kicker, the horizontal
+   frame's chip) is now set as an ink tab with the programme's accent bar in the field, at 2x when it fits the safe
+   column, above the tallest headline plate, wiping in after the cut (`vertical.js` `sportTag`); the test draws
+   FOOTBALL, RUGBY UNION (2x) and WINTER OLYMPICS (1x) and checks the tab and its word inside the column.
+3. **The source before its headline.** "SOURCE: …" stood on the bare field before the plate wiped in; it now waits for
+   the headline's first line.
+
+The edition's 4x sheet was not judged in round 6; FULL TIME's clips stay unapproved until it is (item 10 below).
+
+## Round 7: the beta, published by hand
+
+The owner wants a usable beta on Sunday 18 Oct. It has **no live stream** (the 24/7 live waits for the pre-rendered
+playout another desk is building) and is **published by hand**, because the networks' API audits take days or weeks:
+an unaudited YouTube API project's uploads are locked private, and TikTok's Content Posting API posts privately until
+the app is audited. Round 6's last, uncommitted edits (the FULL TIME tag in the vertical headline frame, the source line
+timed with the plate, and this log's round 6) were a finished fix with a passing test and are carried into this round.
+
+### What was asked, and what was done
+
+1. **Hand publishing on the approval page** (`server/publish/manual.js`, `approval.js`; `pipeline.md` §8). For each
+   approved item: **Preparar para publicar** signs the clip and its cover into copies beside them (C2PA,
+   `compliance.markFile`) and runs the gate again on what will go out: the signed files (read back), the exact words to
+   paste, the flags the owner will set, the register and the stories' sources as they are now. What fails is held by
+   `recheck`, with its reasons in Spanish. Then **Descargar** (the signed vertical clip, or a programme's horizontal
+   one, and the cover), **Copiar** per field (YouTube: the title, the description with the disclosure first, the
+   credits and who answers for the channel; TikTok and Instagram: the caption, its first line the AI disclosure, then
+   a line of credits; the hashtags; a text post's text and its article's link), **the network's own switches** ticked
+   one by one (YouTube "altered or synthetic content" yes and "made for kids" no; TikTok's "AI-generated content" label,
+   the privacy, no branded content; Instagram's "AI info"), and **Ya lo he publicado**, with the post's address on the
+   network's own host. That records the publication in the queue (`published`, `result.manual`), the real ledger
+   (nothing twice) and the compliance register (`recordPublication`: a takedown finds it). The networks' wording is
+   quoted only as `compliance.md` §2.5–2.7 read it; the apps' Spanish labels were not read, so each switch is
+   described by what it does.
+2. **The beta profile** (`PUBLISH_MODE=manual`, `mode.js`): `Adapter.request()`, the one door of every live call (the
+   live title's too), refuses, and `publish()` only describes; the publisher's round only re-checks (no schedule, no
+   dry run, which would have marked items published and taken them off the page); `live.mjs` refuses to stream; the
+   page offers **the day's pick** (`dailyPick`: Phase 1's lower ends, 3 Shorts, 3 TikToks, 2 Reels, a text network 2;
+   never held, grave or already published) and no "Programar". `tools/publish/beta.mjs` runs the day (`hacer`: the
+   Phase 1 programmes remade from the archive with their voices, their clips in vertical, the day's posts for the
+   networks set to Manual; `estado`; no argument: the page). The owner's one-page guide, in Spanish, is
+   `docs/publishing/beta.md`, with two screenshots of the page.
+3. **The launch check for the beta** (`tools/compliance/cli.mjs launch`; nothing weakened; `beta.md`, `compliance.md`
+   §9): it blocks on five things. **For the beta:** `EDITORIAL_CONTACT` (the gate refuses every item without it), and a
+   working C2PA SDK on the server that signs the files (present here; not yet in the owner's server's install steps:
+   added to `server-setup.md` §2). **Only for the full launch:** the trusted C2PA certificate (the development chain is
+   what `compliance.md` §4 expects before it; validators show "signing certificate untrusted", so the networks' own
+   labels are set by hand), `RIGHTS_GATE` (on-air pictures; there is no air), the Open-Meteo plan (no weather clip is
+   offered) and the verbatim rate of what aired (97 % of the last 300 stories; it holds the live stream, while each
+   beta item is measured on its own). Found on the way: `weather.js` calls the free API with no key, so setting
+   `OPEN_METEO_API_KEY` clears that blocker without changing what the code calls.
+4. **A beta day on today's material**: below.
+
+Also: a clip's caption now opens with its AI disclosure (`clipmeta.js`), where it was the last line; `compliance.md` §1
+asks for "the caption's first line".
+
+### What ran
+
+- `tools/publish/material.mjs` on today's archive (17 Oct, with the station's voices), the code as merged at the start
+  of the round: COSMOS DESK and TECH BYTES at 22:00 UTC; PAY ATTENTION from 13:00 UTC; FULL TIME (nothing made: no
+  sport story reached today's archive); WORLD WEATHER left out (offline it is the demo forecast, never published).
+- `tools/publish/beta.mjs hacer` into a scratch queue, with every text network set to Manual and a placeholder
+  `EDITORIAL_CONTACT` (without one, everything is held: that is today's state on the server).
+- The page in hand publishing, driven in a browser: approve, prepare (real C2PA signing with the development chain,
+  the real gate), download, the switches, "Ya lo he publicado".
+- `test/publish-manual.test.js` (13 tests) and the full suite.
+
+### The beta day, 17 Oct
+
+What `beta.mjs hacer` gives for a beta day on 17 Oct (cleared pictures only, the verbatim gate, the sources gate):
+
+| Programme | Moments | Offered | Why the rest is held |
+|---|---|---|---|
+| PAY ATTENTION (remade from 13:00 UTC; the quiz desk planned an edition from 14:00, 15:55 and 17:50 London, none from 19:45 or 21:30) | 13, all light | **5 clips** (four questions, 25–32 s; a whole round, 53 s), each for YouTube, TikTok and Instagram: 15 items, all passing the gate | the factory's own choice (at most four questions and one round an edition) |
+| TECH BYTES (22:00 UTC) | 17 | 0 (1 before the AI writer's merge: a 3.2-second story, a 6.5 s clip with its end card, under YouTube's and TikTok's 10 s, so for Instagram only) | 10 light moments copy their sources (`verbatim`); 6 are not light (crime, politics, conflict, harm); since the merge, the whole edition is the offline writer's (`offline-writer`) |
+| COSMOS DESK (22:00 UTC) | 19 | 0 | 13 light moments copy their sources; 6 are grave or not light; and `offline-writer` |
+| FULL TIME | — | 0 | no sport story reached today's archive (the station did not air FULL TIME); the 18:40 snapshot's edition would be `sources-missing` |
+| WORLD WEATHER | — | 0 | offline it is the demo forecast, never published |
+
+- **Text posts** (only when the owner switches a text network to Manual; Phase 1 has none): 12 stories, 41 posts, 36
+  queued for X, Threads, Bluesky and Telegram (Facebook off), all passing the gate; 22 are grave and stay out in Phase 1.
+  The 14 light ones are each the outlet's headline cited with its link: no aired line, since no article was cached for
+  them.
+- **The day's pick**, with `EDITORIAL_CONTACT` set: **8 clip uploads**, 3 YouTube Shorts, 3 TikToks and 2 Reels, all
+  PAY ATTENTION, plus 8 posts (2 a network) if the text networks are on. Re-checked after merging the AI writer
+  (0b6910c): the same 8; the TECH BYTES Reel, which ranked under them anyway, is held (`offline-writer`).
+  **Without `EDITORIAL_CONTACT`, as the server stands today: 0.** The re-check holds all 52 items
+  (`editorial-contact-missing`).
+- The writer is the limit, as expected: 23 of COSMOS DESK's and TECH BYTES' 25 light moments copy their sources. Since
+  the AI writer's merge the gate holds every item of an offline-written episode (`offline-writer`), and
+  `material.mjs`, which remakes the news programmes offline, writes them with the offline writer: the beta's news clips
+  need the remake to use the AI writer (its episodes, voiced, through the factory). `beta.mjs` no longer records an
+  offline-written edition.
+- One clip went through the page in a browser: prepared (C2PA signed with the development chain, the real gate),
+  downloaded (3.97 MB; its manifest reads back as AI-made, `signingCredential.untrusted` its only status), its title
+  copied, every switch ticked, "Ya lo he publicado" with a YouTube address: published in the queue, the ledger and the
+  register.
+
+### What remains for the beta
+
+- **The owner's:** `EDITORIAL_CONTACT` and `EDITORIAL_RESPONSIBLE`; the C2PA SDK on his server and `PUBLISH_MODE=manual`;
+  a daily timer for `beta.mjs hacer` (`server-setup.md` §6); his three accounts.
+- **The writer** (merged at the end of this round, 0b6910c): the station airs it with the owner's key, but the beta's
+  remake (`material.mjs`) still writes the news programmes with the offline writer, whose items are never published.
+  The remake with the AI writer (or the station keeping its own aired episodes for the factory) is this desk's next
+  step; until then only PAY ATTENTION gives clips.
+- **Very short clips.** A 3-second story passes every rule (sense 8 even with the −2 for "under 10 s"); a Reel of 6.5 s
+  is not worth the owner's minute. A floor for publication (10 s, YouTube's and TikTok's own) is this desk's next call.
+- **PAY ATTENTION's own gate** is not passed (9.6, `pay-attention-desk.md`): its clips are offered by the rules, but the
+  owner should know its desk is still reading editions by hand.
+- The PAY ATTENTION material is remade with a fresh week (`material.mjs`), so it can ask a story the station's own quiz
+  asked this week; on the beta, with no live stream, nothing else aired.
+
 ---
 
 ## Notes for the compliance desk (integration)
@@ -911,6 +1119,16 @@ the last two were added in round 5:
    record with `rightsRecord` under today's `LICENCES` and keeps the stricter verdict. A record that was not cleared is
    never cleared again. `credits.js` `pictureRecord` then reads the result as before. `auditItem` now also counts a
    PICTURE THIS question's picture (`seg.quiz.question`, with the `imageRights` the quiz desk copies from the archive).
+8. **A story without sources is not "unverified" but refused** (round 6, in the publishing door,
+   `server/publish/compliance.js` `preflight`). `lintEpisode` counts a story whose sources are not at hand as
+   `unverified` and lets it pass unless `strict` is set, and `preflight` never sets it. The door adds
+   `sources-missing` for the item's own stories (every story of a whole programme), so nothing published escapes the
+   verbatim rule by absence. The compliance desk may want its own `preflight` to be strict by default; the door's
+   check would then simply find nothing more.
+9. **The article cache and robots.txt** (round 6, `server/articlecache.js`). A story whose page the outlet's
+   robots.txt keeps from us (`story.pageRefused === 'robots'`) gives only its feed's text, and an article text kept for
+   that link before is replaced or removed. `tools/compliance/verbatim-audit.mjs` opens pages through the same rules
+   and drops such a cached text too. `archiveGetStory` reads the files as before.
 
 ## What remains before launch
 
@@ -936,19 +1154,28 @@ the last two were added in round 5:
    rule holds most news: on 17 Oct 10 of COSMOS DESK's 11 stories broke it (12 of WORLD NOW's 13, all 6 of NEWS IN
    60's, 10 of SEVEN DAYS' 15), so the factory made no COSMOS DESK clip and its upload is held. PAY ATTENTION, whose
    questions are quoted and credited, is unaffected.
-8. Whether the news desk's article reader should honour robots.txt and each outlet's terms, and whether the article
-   cache may keep its extracts (`compliance.md` §9, item 11). The cache keeps only what the reader read, and can be
-   switched off (`ARTICLE_CACHE=off`, a feed's `"cache": false`).
+8. The outlets' terms (`compliance.md` §9, item 12) and whether the article cache may keep its extracts (item 11).
+   Since round 6 the reader obeys each outlet's robots.txt (§6.1): on 17 Oct no host keeps an article address from
+   us. The cache keeps only what the reader read, and can be switched off (`ARTICLE_CACHE=off`, a feed's
+   `"cache": false`).
 9. The writer's kickers and map places: on 17 Oct the channel said VOLCANO for black-hole "eruptions" (fixed in
    `topics.js` since), JUSTICE · USA for a trial in Mexico and EDUCATION for a school shooting. This desk leaves out any
    label a story's own words do not bear out, but the channel aired them.
 
+**The beta's** (round 7, `docs/publishing/beta.md`): `EDITORIAL_CONTACT`, the C2PA SDK on the owner's server,
+`PUBLISH_MODE=manual` and the daily `beta.mjs hacer`. Nothing else in the launch report stops a beta published by hand.
+
 **This desk's, next:**
 
-10. FULL TIME's first real edition through the factory and judged in vertical before its clips are approved (see
-    round 5's last note).
+10. FULL TIME's first real edition judged in vertical on a 4x sheet before its clips are approved (round 6 made it
+    and fixed the empty stage; its stories' sources must be in the archive, or it stays held: `sources-missing`).
 11. The article cache's first days on air: measure how many aired stories it covers and how many posts then carry an
     aired line.
 12. A clip-scoped picture audit at the gate (today one uncleared picture anywhere in an episode holds all its clips; the
     factory already scopes its own refusal to what a moment shows).
 13. After two weeks of numbers (`plan.md` §7), the weights of the kinds of moment (`moments.js` `KIND_BASE`).
+14. A floor of 10 s for a published clip (round 7: a 3-second story passed every rule).
+15. Open-Meteo's paid plan wired into `weather.js` (its endpoint and key) before `OPEN_METEO_API_KEY` may clear the
+    launch blocker (the compliance desk's check reads only that the variable is set).
+16. The beta's news clips: `material.mjs` remakes with the offline writer (held: `offline-writer`); the remake with
+    the AI writer, or the station keeping its aired episodes for the factory.

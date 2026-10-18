@@ -17,7 +17,8 @@ which is never in git.
 | `tools/publish/factory.mjs` | One episode's clips, both formats, into the queue (`clips.md`) |
 | `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4) |
 | `tools/publish/upload.mjs` | A whole programme for YouTube: video, thumbnail, title, description, chapters (`plan.md` §5); `--video` queues one made earlier |
-| `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3) |
+| `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3); `--manual` for hand publishing (§8) |
+| `tools/publish/beta.mjs` | The beta, published by hand (§8, `beta.md`): `hacer` makes the day's pieces, `estado` says what the day offers, no argument opens the page |
 | `tools/publish/run.mjs` | The publisher's round: re-check what waits, schedule what is approved, publish what is due (§4) |
 | `tools/publish/recheck.mjs` | The re-check alone: the gate again on everything waiting; what no longer passes is held (§4.1) |
 | `tools/publish/live.mjs` | The 24/7 stream kept up, and its title (§6) |
@@ -212,3 +213,59 @@ unless `PUBLISH_LIVE=1`.
 | `live-status.json` | The supervisor's status |
 | `publisher.lock` | The running publisher's process id, while a round runs |
 | `posts/` | The day's posts (the `posts.mjs` default) |
+| `factory/<day>/` | The beta's pieces of the day (`beta.mjs hacer`): its episodes, clips, cards and posts, inside the page's media root |
+
+## 8. Hand publishing: the beta (`PUBLISH_MODE=manual`; `mode.js`, `manual.js`; the owner's guide: `beta.md`)
+
+The networks' API audits take days or weeks: an unaudited YouTube API project's uploads are locked private, and
+TikTok's Content Posting API posts privately until the app is audited (`platforms.md`). So the beta is published by
+hand, from the approval page, with every rule of the pipeline still in force.
+
+**What the mode changes.**
+
+- **No adapter reaches a network.** `Adapter.publish()` only describes the requests, whatever the switches and the
+  credentials, and `Adapter.request()`, the one door every live call goes through (the live title's `videos.update`
+  too), refuses. `liveBlockers` names the mode first.
+- **The publisher's round only re-checks** (`Publisher.run()`, `tools/publish/run.mjs`): nothing is scheduled, and
+  nothing is published or dry-run (a dry run would mark an item published and take it off the owner's page).
+- **The live supervisor never streams** (`tools/publish/live.mjs` refuses `--rtmp`; a test into files is allowed).
+- **The page offers the day's pick** (`dailyPick`): per network, its best waiting items, up to the lower end of the
+  phase's daily range less what was published there today (Phase 1: 3 YouTube Shorts, 3 TikToks, 2 Reels; a text post
+  network 2), never a compliance refusal, never anything grave in Phase 1, never what the ledger holds. About 15
+  minutes of review (`plan.md` §2), plus the uploads by hand. The rest waits in *Por aprobar*. "Programar lo aprobado"
+  is gone.
+
+**For each approved item** (`manual.js`):
+
+1. **Preparar para publicar** (`POST /api/prepare`). The item's files are signed into copies beside them
+   (`<name>.<item id>.c2pa.mp4`, and its cover `.c2pa.jpg`: `compliance.markFile`), and the gate runs again on what
+   will go out: the signed files (read back: `unmarked` otherwise), the words the owner will paste, the flags he will
+   set, the register and the stories' sources as they are now. What fails is **held**, by `recheck`, with its reasons
+   in Spanish, and goes back to *Por aprobar* if it passes again later; its copies are removed. What passes is handed
+   out for six hours (`PREPARED_TTL`); after that, or after an edit, it is prepared again.
+2. **Descargar**: the signed video (vertical for Shorts, TikTok and Reels; horizontal for a whole programme) and the
+   signed cover, as attachments (`GET /download/<id>/video|cover`), only while the package is fresh.
+3. **Copiar** (`manualTexts`), exactly the words the gate measured:
+   - YouTube: the title, the description (the disclosure first, the programme, the sources, the credits, the channel
+     statement and who answers for the channel as `EDITORIAL_CONTACT` says now) and the hashtags;
+   - TikTok, Instagram: the caption, its first line the AI disclosure, then the lead, the source and a line of credits;
+     and the hashtags;
+   - a text post: its text as the network shows it ("AI-generated:" first), and the article's link (Telegram's message
+     shows its links as labels, so by hand the address goes under the text).
+4. **The network's own switches** (`checklistFor`), ticked one by one: YouTube "altered or synthetic content" yes and
+   "made for kids" no; TikTok's "AI-generated content" label on, the privacy, no branded content; Instagram's "AI info"
+   label; Facebook's label by hand. The wording quoted is the networks' own as read for `compliance.md` §2.5–2.7; the
+   apps' Spanish labels were not read, so each switch is described by what it does.
+5. **Ya lo he publicado** (`POST /api/published`, `recordManual`), with the post's address if he has it (https, on the
+   network's own host), once every switch is ticked. The item becomes `published` (`result.manual`), the real ledger
+   records it (nothing twice: the same moment, the same video bytes or the same story there within a day is refused
+   from then on), and the compliance register records the publication (`recordPublication`: the network, the address,
+   the stories, the outlets, the switches ticked, the C2PA files), so a takedown finds it (`compliance.md` §7).
+
+**The beta's day** (`tools/publish/beta.mjs`): `hacer` remakes the Phase 1 programmes from the archive with the
+station's voices (`material.mjs`: PAY ATTENTION at a time it airs, COSMOS DESK, TECH BYTES, FULL TIME; WORLD WEATHER
+offline is demo data, never published), makes their clips in vertical into the queue (`factory.mjs`, under
+`factory/<day>/`; an edition the offline writer wrote is skipped, as the gate would hold all of it: `offline-writer`,
+`verbatim.md` §7; the remake has no AI writer, so today only PAY ATTENTION, the quiz desk's, gives clips), writes the day's text posts for the networks set to *Manual* (`posts.mjs`), and prints what the day
+offers and why the rest is held. `estado` prints only that. With no argument it re-checks everything waiting and opens
+the page in hand publishing.

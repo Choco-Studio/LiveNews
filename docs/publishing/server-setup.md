@@ -51,6 +51,10 @@ cd ~/globit/livenews
   ~/globit/venv/bin/pip install kokoro-onnx==0.6.1 onnxruntime==1.30.0 numpy soundfile
   ```
   Then the station runs with `VOICE_ENGINE=kokoro VOICE_PYTHON=$HOME/globit/venv/bin/python`.
+- **C2PA signing** (every file published, by hand too, is signed as AI-made: `compliance.md` §4):
+  `~/globit/venv/bin/pip install -r tools/c2pa/requirements.txt` and `C2PA_PYTHON=$HOME/globit/venv/bin/python` in
+  `/etc/globit24.env`. `node tools/compliance/cli.mjs launch` must not say "C2PA SDK missing". The beta, published by
+  hand (`docs/publishing/beta.md`), cannot prepare anything without it.
 - **Models** (into `data/models/`, git-ignored): `tools/voice/fetch-models.sh` (Kokoro, about 350 MB, from GitHub
   releases, checked by SHA-256); the face reader fetches its own two models on first run (`tools/pictures/faces.mjs`).
 - **Swap:** a 4 GB swap file (`fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`,
@@ -132,3 +136,21 @@ does, on this server, with the owner's key.
   answer the files in `data/ai-inbox/` (its README says how).
 - **A dry run of the tool itself:** `PROVIDERS=mock FEEDS_FILE=config/feeds.fixture.json node tools/writer/try.mjs --episodes 1`.
 - **Report it to the owner in Spanish** (section 5): the zero, the drops, and the month's tokens with the formula.
+
+## 7. The beta, published by hand (`docs/publishing/beta.md`)
+
+No live stream; the owner publishes every piece himself from the approval page. On this server:
+
+- In `/etc/globit24.env`: `PUBLISH_MODE=manual`, the owner's `EDITORIAL_CONTACT` and `EDITORIAL_RESPONSIBLE` (he types
+  them himself), `C2PA_PYTHON` (§2), and the voices' `VOICE_ENGINE`/`VOICE_PYTHON`. In this mode no adapter calls a
+  network, `tools/publish/run.mjs` only re-checks, and `tools/publish/live.mjs` refuses to stream.
+- The station keeps running (it reads the news and archives what it airs); the live supervisor does not.
+- Each evening, a systemd timer (`OnCalendar=*-*-* 21:30 Europe/London`, `EnvironmentFile=/etc/globit24.env`,
+  `WorkingDirectory=` the checkout) runs `node tools/publish/beta.mjs hacer`: the day's light programmes remade from
+  the archive with their voices, their clips in vertical, all into `data/publish`. It takes a while (each programme is
+  recorded once); its last lines say what the day offers and why the rest is held. The remake uses the offline writer,
+  so only PAY ATTENTION (written by the quiz desk) gives clips today: a news programme the offline writer remakes is
+  never published (`offline-writer`, §6), and `beta.mjs` does not record it.
+- The approval page as a service, `node tools/publish/beta.mjs` (127.0.0.1:8740), reached through the SSH tunnel.
+- `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the
+  launch check (for the beta only `EDITORIAL_CONTACT` and a working C2PA SDK must be in place: `beta.md`).

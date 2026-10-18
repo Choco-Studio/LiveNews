@@ -1,5 +1,8 @@
 # Guía para el dueño: publicar GLOBIT 24 en las redes
 
+> **La beta (sin directo, publicada a mano)** tiene su propia guía, más corta: `docs/publishing/beta.md`. Esta explica
+> la publicación automática por las API de las redes, para cuando estén auditadas.
+
 Esta guía explica, paso a paso y sin tecnicismos, qué hay que preparar para que el canal publique clips, el directo y
 textos en las redes. **Ahora mismo todo funciona en modo de prueba**: el canal prepara cada publicación, te la enseña y
 la guarda, pero no sube nada a ninguna red hasta que tú lo decidas (apartado 7).

@@ -6,6 +6,8 @@
 //   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), auditItem(item), checkClip(clip, opts),
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
+//   recordPublication(publication, o) one publication in the register (the owner's own, by hand: manual.js)
+//   editorialLine(env) who answers for the channel, as the descriptions name it (null while it is not set)
 //   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
 //   clipGetStory(storyIds, getStory) that, for the stories one clip tells only
 //   storiesWithoutSources(item, getStory) the stories the verbatim rule cannot measure (preflight refuses the item)
@@ -120,4 +122,26 @@ export function recordReview(itemId, review = {}, { dataDir = null } = {}) {
   } catch (err) {
     return { ok: false, stub: false, reason: String(err?.message || err) };
   }
+}
+
+/**
+ * One publication in the register (where everything was published: the takedown workflow finds it there, compliance.md
+ * §7). { itemId, parentId, kind, platform, remoteId, url, programId, storyIds, outlets, recreations, flags, manifest }
+ * -> { ok, stub, reason }
+ */
+export function recordPublication(publication = {}, { dataDir = null } = {}) {
+  const reg = register(dataDir);
+  if (!reg?.recordPublication) return { ok: false, stub: true, reason: 'no compliance register (the stub stands in)' };
+  try {
+    reg.recordPublication(publication);
+    return { ok: true, stub: false };
+  } catch (err) {
+    return { ok: false, stub: false, reason: String(err?.message || err) };
+  }
+}
+
+/** "Editorial responsibility and complaints: …", as describe() writes it, or null while EDITORIAL_CONTACT is not set. */
+export function editorialLine(env = process.env) {
+  const who = mod.editorialContact ? mod.editorialContact(env) : String(env.EDITORIAL_CONTACT || '').trim() ? { name: String(env.EDITORIAL_RESPONSIBLE || '').trim() || null, contact: String(env.EDITORIAL_CONTACT).trim() } : null;
+  return who ? `Editorial responsibility and complaints: ${who.name ? `${who.name}, ` : ''}${who.contact}` : null;
 }
