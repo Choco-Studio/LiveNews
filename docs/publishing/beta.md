@@ -21,18 +21,23 @@ por la suya solo lo ves tú.
    `~/globit/venv/bin/pip install -r tools/c2pa/requirements.txt` y, en el archivo de variables,
    `C2PA_PYTHON=/root/globit/venv/bin/python`. Para comprobarlo: `node tools/compliance/cli.mjs launch` no debe
    decir «C2PA SDK missing».
-3. **Tus cuentas**: tu canal de YouTube, una cuenta de TikTok y una de Instagram. No hace falta ninguna app de
+3. **La clave de IA, para las noticias** (la escribes tú en el archivo de variables, nunca en un chat):
+   `OPENAI_API_KEY=…` y `PROVIDERS=openai,mock`. Con ella, el canal escribe las noticias con sus propias palabras y
+   salen clips de ciencia, tecnología y deportes. Sin ella, solo sale el concurso, y el sistema te lo dice.
+4. **Tus cuentas**: tu canal de YouTube, una cuenta de TikTok y una de Instagram. No hace falta ninguna app de
    desarrollador ni ninguna clave: publicas tú, desde la web o el móvil, como siempre.
-4. **El canal sigue encendido** en el servidor (lee las noticias y guarda lo que cuenta), pero sin directo.
-5. **Opcional, textos**: si quieres publicar también textos en X, Bluesky, Threads, Telegram o Facebook, en la página,
+5. **El canal sigue encendido** en el servidor (lee las noticias y guarda lo que cuenta), pero sin directo.
+6. **Opcional, textos**: si quieres publicar también textos en X, Bluesky, Threads, Telegram o Facebook, en la página,
    **Ajustes**, pon esa red en «Manual».
 
 ## Cada día (unos 15–20 minutos)
 
-1. **Por la noche, el servidor prepara el día**: `node tools/publish/beta.mjs hacer` (tarda, porque graba los clips;
-   quien te ayuda puede dejarlo programado cada día hacia las 21:30). Rehace el concurso del día con sus voces, corta
-   sus mejores momentos en vertical y lo deja todo esperando. Al terminar dice cuántas publicaciones hay para hoy y por
-   qué se retiene lo demás.
+1. **Por la noche, el servidor prepara el día**: `node tools/publish/beta.mjs hacer` (quien te ayuda puede dejarlo
+   programado cada día hacia las 21:30). Con la clave de IA escribe las noticias del día con las del momento (ciencia,
+   tecnología y, si hay resultados, deportes), les pone voz, rehace el concurso, graba cada programa, corta sus mejores
+   momentos en vertical y lo deja todo esperando. Va despacio a propósito, para no quitarle fuerza al canal: cuenta
+   con una o dos horas en un servidor de dos núcleos (al terminar dice cuánto tardó cada paso). Luego dice cuántas
+   publicaciones hay para hoy y por qué se retiene lo demás. Ningún clip dura menos de 10 segundos.
 2. **Abre la página**: en el servidor, `node tools/publish/beta.mjs`. Desde tu ordenador, abre antes el túnel
    `ssh -L 8740:127.0.0.1:8740 root@<tu servidor>` y luego, en el navegador, **http://127.0.0.1:8740/**.
 3. **Pestaña «Para hoy»**: como mucho 3 clips para YouTube, 3 para TikTok y 2 para Instagram (lo demás espera a otro
@@ -57,10 +62,10 @@ por la suya solo lo ves tú.
 
 ![Una tarjeta preparada: descargar, copiar, los interruptores y «Ya lo he publicado»](img/beta-publicar.png)
 
-**Un día de ejemplo, el 17 de octubre**: con el contacto puesto, «Para hoy» traía 8 clips, todos del concurso
-(3 para YouTube, 3 para TikTok, 2 para Instagram). Ciencia y tecnología, todavía nada: fuera de antena se rehacen con el
-redactor de reserva, que repite frases de los medios, y eso no se publica nunca. Saldrán cuando se rehagan con el
-redactor de IA (otro equipo lo está terminando). Sin el contacto puesto, nada de nada.
+**Un día de ejemplo, el 17 de octubre** (todavía sin la clave de IA): con el contacto puesto, «Para hoy» traía 8 clips,
+todos del concurso (3 para YouTube, 3 para TikTok, 2 para Instagram). Ciencia y tecnología, nada: sin la clave las
+escribe el redactor de reserva, que repite frases de los medios, y eso no se publica nunca. Con la clave, las escribe
+la IA con sus propias palabras y entran en «Para hoy». Sin el contacto puesto, nada de nada.
 
 **Las reglas no cambian**: lo retenido no se puede aprobar; en la fase 1 no se publica nada grave; la etiqueta de IA
 va siempre; el mismo clip nunca sale dos veces en la misma red. Si cambias un título, se vuelve a revisar antes de
@@ -77,7 +82,7 @@ rebajado; esto es lo que significa cada uno para una beta publicada a mano:
 | La firma C2PA con el certificado de desarrollo | No, solo el lanzamiento | Cada vídeo y portada salen firmados como hechos con IA y se leen de vuelta. Los validadores dirán «certificado no reconocido» (`compliance.md` §4: es lo esperado hasta tener uno de una autoridad de la lista C2PA, que es el bloqueo del lanzamiento). Por eso las etiquetas de cada red se ponen a mano (paso 7). **Pero en tu servidor el programa de firma tiene que estar instalado** (paso 2): sin él no se puede preparar nada. |
 | `RIGHTS_GATE` no es estricto | No, solo el lanzamiento | Es para las fotos en el directo. Sin directo no se emite nada, y lo que se publica pasa siempre la regla estricta (un clip con una foto sin permiso no llega a la página). |
 | Open-Meteo, plan de pago | No, solo el lanzamiento | La beta no publica ningún clip del tiempo (fuera de antena el tiempo es de prueba y nunca se publica). Ojo: hoy el canal llama a la API gratuita y no usa ninguna clave; poner `OPEN_METEO_API_KEY` quita el aviso, pero no cambia la llamada. |
-| El redactor copia al medio (97 % de las últimas 300 noticias) | No la bloquea, la limita | Es el bloqueo del directo. En la beta, cada clip y cada texto pasa la regla uno a uno, y lo que copia (o lo que escribió el redactor de reserva) se retiene. Por eso hoy solo sale el concurso. |
+| El redactor copia al medio (97 % de las últimas 300 noticias) | No la bloquea, la limita | Es el bloqueo del directo. En la beta, cada clip y cada texto pasa la regla uno a uno, y lo que copia (o lo que escribió el redactor de reserva) se retiene. Sin la clave de IA, solo sale el concurso. |
 
 Además, para la beta: las preguntas al abogado (`compliance.md` §9) siguen abiertas, y una beta pública ya es
 publicar. Los avisos (sin marca de agua de audio; el directo de YouTube) no afectan a la beta.
@@ -86,6 +91,8 @@ publicar. Los avisos (sin marca de agua de audio; el directo de YouTube) no afec
 
 - **«Para hoy» está vacío**: `node tools/publish/beta.mjs estado` dice por qué (casi siempre «Copia palabras del
   medio», o que el concurso no tenía bastantes noticias ese día).
+- **`hacer` dice «Las noticias necesitan la clave de IA»**: falta la clave en el archivo de variables (paso 3 de arriba),
+  o la IA no contestó (sin saldo, caída). Ese día solo sale el concurso.
 - **«Preparar» dice que no pasa**: la tarjeta está en «Retenido» con el motivo. No la publiques.
 - **Has publicado y se te olvidó pulsar «Ya lo he publicado»**: vuelve a la tarjeta (sigue en «Aprobado»), prepárala
   y púlsalo, con la dirección.

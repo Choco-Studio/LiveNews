@@ -148,9 +148,11 @@ No live stream; the owner publishes every piece himself from the approval page. 
 - Each evening, a systemd timer (`OnCalendar=*-*-* 21:30 Europe/London`, `EnvironmentFile=/etc/globit24.env`,
   `WorkingDirectory=` the checkout) runs `node tools/publish/beta.mjs hacer`: the day's light programmes remade from
   the archive with their voices, their clips in vertical, all into `data/publish`. It takes a while (each programme is
-  recorded once); its last lines say what the day offers and why the rest is held. The remake uses the offline writer,
-  so only PAY ATTENTION (written by the quiz desk) gives clips today: a news programme the offline writer remakes is
-  never published (`offline-writer`, §6), and `beta.mjs` does not record it.
+  recorded once); its last lines say what the day offers, why the rest is held, and how long each step took. With the
+  owner's key (§6) it first writes the day's news programmes fresh from the live feeds with the AI writer, with their
+  voices (`BETA_NEWS`: COSMOS DESK, TECH BYTES and FULL TIME by default; `--noticias`, `--ediciones`); without it,
+  only PAY ATTENTION gives clips, and it says so. It runs at nice 10. If the pre-rendered playout has rendered a
+  programme (`RENDERED_MASTERS`, `docs/publishing/pipeline.md` §8), its master is cut instead of recorded.
 - The approval page as a service, `node tools/publish/beta.mjs` (127.0.0.1:8740), reached through the SSH tunnel.
 - `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the
   launch check (for the beta only `EDITORIAL_CONTACT` and a working C2PA SDK must be in place: `beta.md`).

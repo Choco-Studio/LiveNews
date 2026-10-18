@@ -3,7 +3,7 @@
 // own measures, and only the light ones publishable in Phase 1.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook } from '../server/publish/moments.js';
+import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook, CLIP_MIN_SECONDS } from '../server/publish/moments.js';
 import { estimateTimeline } from '../server/publish/timeline.js';
 import { dangling, backReference, endsClean, quotesBalanced } from '../server/publish/text.js';
 
@@ -203,4 +203,11 @@ test('a clip\'s burned-in title is never the outlet\'s headline passed off as th
   assert.deepEqual(ownHook(copied, story, []), copied.hook);
   // no label the story bears out: the programme's name
   assert.deepEqual(ownHook(copied, { kicker: 'VOLCANO' }, sources), ['COSMOS DESK']);
+});
+
+test('the 10-second floor: a moment shorter than YouTube\'s and TikTok\'s minimum is never published (round 7: a 3-second story)', () => {
+  const m = (id, duration) => ({ id, kind: 'story', storyIds: [id], light: true, grave: false, duration, scores: { sense: 8 } });
+  const all = [m('short', 3.22), m('edge', 10), m('long', 24.8), m('unknown', undefined)];
+  assert.equal(CLIP_MIN_SECONDS, 10);
+  for (const phase of [1, 2, 3]) assert.deepEqual(publishable(all, { phase }).map((x) => x.id), ['edge', 'long', 'unknown'], `phase ${phase}`);
 });

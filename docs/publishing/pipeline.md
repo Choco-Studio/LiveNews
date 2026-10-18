@@ -15,7 +15,7 @@ which is never in git.
 | Command | What it does |
 |---|---|
 | `tools/publish/factory.mjs` | One episode's clips, both formats, into the queue (`clips.md`) |
-| `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4) |
+| `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4); `--data` another data folder's archive and articles (the beta's news day) |
 | `tools/publish/upload.mjs` | A whole programme for YouTube: video, thumbnail, title, description, chapters (`plan.md` §5); `--video` queues one made earlier |
 | `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3); `--manual` for hand publishing (§8) |
 | `tools/publish/beta.mjs` | The beta, published by hand (§8, `beta.md`): `hacer` makes the day's pieces, `estado` says what the day offers, no argument opens the page |
@@ -262,10 +262,31 @@ hand, from the approval page, with every rule of the pipeline still in force.
    from then on), and the compliance register records the publication (`recordPublication`: the network, the address,
    the stories, the outlets, the switches ticked, the C2PA files), so a takedown finds it (`compliance.md` §7).
 
-**The beta's day** (`tools/publish/beta.mjs`): `hacer` remakes the Phase 1 programmes from the archive with the
-station's voices (`material.mjs`: PAY ATTENTION at a time it airs, COSMOS DESK, TECH BYTES, FULL TIME; WORLD WEATHER
-offline is demo data, never published), makes their clips in vertical into the queue (`factory.mjs`, under
-`factory/<day>/`; an edition the offline writer wrote is skipped, as the gate would hold all of it: `offline-writer`,
-`verbatim.md` §7; the remake has no AI writer, so today only PAY ATTENTION, the quiz desk's, gives clips), writes the day's text posts for the networks set to *Manual* (`posts.mjs`), and prints what the day
-offers and why the rest is held. `estado` prints only that. With no argument it re-checks everything waiting and opens
-the page in hand publishing.
+**The beta's day** (`tools/publish/beta.mjs hacer`, at low priority, each step timed):
+
+1. **The news, with the AI writer** (`server/publish/newsday.js`), when the provider chain has one (the owner's key:
+   `PROVIDERS=openai,mock` and `OPENAI_API_KEY`; the Codex CLI counts only when installed). The day's news programmes
+   are made fresh from the live feeds through the channel's own producer (the write, the own-words check and its
+   rewrites, the standards editor, the fit, the voices), as `tools/writer/try.mjs` makes them. Which and how many:
+   `--noticias` or `BETA_NEWS` (Phase 1's light news by default: COSMOS DESK, TECH BYTES, FULL TIME when the day has
+   results) and `--ediciones` (1 each). No pictures yet (maps and boards). Each told story is recorded, with the article
+   the desk read, in the day's own sources folder (`factory/<day>/sources/archive`, `…/compliance/articles`), never in
+   the station's archive. An edition the AI did not write (it fell back to the offline writer) is reported and not
+   recorded. Without an AI writer, `hacer` says plainly, in Spanish, that the news needs the key, and goes on with the
+   quiz.
+2. **PAY ATTENTION**, remade from the archive with its voices (`material.mjs`: at the day's hours it airs, latest first,
+   until the quiz desk plans an edition).
+3. **The clips** in vertical (`factory.mjs`, under `factory/<day>/`; the news with `--sources` that folder). A
+   programme the offline writer wrote is skipped (`offline-writer`, `verbatim.md` §7). **A rendered master** (the
+   pre-rendered playout another desk is building) is used when one exists (`server/publish/masters.js`:
+   `<root>/<episode id>/vertical.mkv` and `vertical.report.json`, the recorder's report at 30 fps, under
+   `RENDERED_MASTERS` or `--masters-from`): it is linked where the factory keeps a master, and cut instead of recorded.
+   An item made with `--sources` keeps that folder (`gate.sourcesDir`), and every later check measures it there too:
+   the re-check, the publisher and the page's "Preparar" (`compliance.sourcesForItem`).
+   **Nothing under 10 seconds** is published (`moments.js` `CLIP_MIN_SECONDS`, YouTube's and TikTok's minimum; the
+   day's pick leaves out a shorter clip queued before the floor).
+4. **The posts** for the networks set to *Manual* (`posts.mjs --data` the day's sources folder when the AI wrote the
+   news): a post carries an aired line only when the line passes the verbatim rule against the article.
+
+Then what the day offers and why the rest is held. `estado` prints only that. With no argument `beta.mjs` re-checks
+everything waiting and opens the page in hand publishing.

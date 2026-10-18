@@ -252,7 +252,11 @@ const settings = queue.settings();
 const storiesById = new Map();
 try {
   const { readArchive } = await import('../lengths/archive.mjs');
-  for (const [id, s] of readArchive(path.join(root, 'data', 'archive')).stories) storiesById.set(id, s);
+  // (the station's archive, and the --sources folder's: the beta's news day keeps its stories there, server/publish/newsday.js)
+  for (const dir of [...new Set([path.join(root, 'data'), path.resolve(opt('sources', path.join(root, 'data')))])]) {
+    if (!fs.existsSync(path.join(dir, 'archive'))) continue;
+    for (const [id, s] of readArchive(path.join(dir, 'archive')).stories) storiesById.set(id, s);
+  }
 } catch {
   /* no archive: no article links */
 }
@@ -322,7 +326,8 @@ for (const m of chosen) {
             compliance: meta.compliance[p],
             score: m.scores.total,
             priority: m.kind.startsWith('quiz') ? 2 : 1,
-            gate: { episodeFile: path.resolve(epFile), reportFile: masters[fmt].report, range: { start: window.start, end: window.end }, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null },
+            // (--sources: the item's stories are measured against that folder at every later check too: the re-check, the page)
+            gate: { episodeFile: path.resolve(epFile), reportFile: masters[fmt].report, range: { start: window.start, end: window.end }, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null, ...(opt('sources') ? { sourcesDir: path.resolve(opt('sources')) } : {}) },
             dryRun: true,
           });
           if (it) meta.queued.push({ platform: p, id: it.id, status: it.status });

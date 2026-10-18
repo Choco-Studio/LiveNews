@@ -10,6 +10,7 @@
 //   editorialLine(env) who answers for the channel, as the descriptions name it (null while it is not set)
 //   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
 //   clipGetStory(storyIds, getStory) that, for the stories one clip tells only
+//   sourcesForItem(item, fallback, cache) an item's own sources folder's getStory (gate.sourcesDir), else the fallback
 //   storiesWithoutSources(item, getStory) the stories the verbatim rule cannot measure (preflight refuses the item)
 //   usingStub   true while the stub stands in
 import fs from 'node:fs';
@@ -46,6 +47,20 @@ export const storyReport = (text, sources, o = {}) => mod.storyReport(text, sour
 export const archiveGetStory = (o = {}) => (mod.archiveGetStory ? mod.archiveGetStory(o) : () => null);
 /** The verbatim lint of an episode's stories (the stub has none: everything passes there, as before). */
 export const lintEpisode = (episode, o = {}) => (mod.lintEpisode ? mod.lintEpisode(episode, o) : { ok: true, stories: [], violations: [] });
+/**
+ * The stories' sources for one queued item: its own folder's when it has one (`item.gate.sourcesDir`: the beta's news
+ * day keeps the stories the AI writer told, with their articles, in a folder of its own, server/publish/newsday.js),
+ * else `fallback` (the station's archive). `cache` keeps one reader a folder for a round.
+ */
+export function sourcesForItem(item, fallback, cache = null) {
+  const dir = item?.gate?.sourcesDir;
+  if (!dir || typeof dir !== 'string') return fallback;
+  if (cache?.has(dir)) return cache.get(dir);
+  const getStory = archiveGetStory({ dataDir: dir });
+  cache?.set(dir, getStory);
+  return getStory;
+}
+
 /**
  * The gate's getStory for one clip or post: the sources of the stories it tells only (a clip's episode tells others it
  * does not carry). preflight's verbatim lint then measures the clip's own aired words against their sources.
