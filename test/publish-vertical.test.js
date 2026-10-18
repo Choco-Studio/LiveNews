@@ -2,7 +2,7 @@
 // 216x384 frame exactly, every PAY ATTENTION board and every news board set for it stays inside its box at every
 // moment, the hook and the end card stay inside the frame and the platforms' safe area, the captions page whole
 // words in two lines, nothing lit over grave news, a voice reading the board is not captioned twice, the bug stands
-// clean (the AI notice is the clip's own card over its first seconds), the thumbnail's lead fits.
+// clean, the thumbnail's lead fits.
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -588,22 +588,14 @@ describe('the vertical picture', () => {
     }
   });
 
-  test('the bug stands clean in every clip (owner, 18 Oct): no AI plate beside it; the notice is the clip\'s own first-seconds card', async () => {
+  test('the bug stands clean in every clip (owner, 18 Oct): no AI plate beside it, no notice over the clip', async () => {
     const ctx = fakeCanvas(216, 384).getContext('2d');
     const w = G.drawBugOnly(ctx, 5, 0, 8, 10);
     const { BUG_W } = await import('../public/js/graphics/bug.js');
     assert.equal(w, BUG_W, 'the bug, nothing docked to it');
     const { P } = await import('../public/js/palette.js');
     assert.ok(!ctx.fills.some((f) => f.c === P.yellow && f.x >= 8 + BUG_W), 'no yellow plate right of the bug');
-    // the notice: a super over the stage's foot, every word in the safe column, for the clip's first seconds
-    const n = fakeCanvas(216, 384).getContext('2d');
-    cards.drawNoticeCard(n, { format: 'vertical', accent: P.cyan });
-    inside(n, { x: 0, y: L.V.stage.y, w: 216, h: L.V.stage.h }, 'the notice over the stage');
-    wordsSafe(n, 'the notice');
-    assert.equal(cards.NOTICE_SECONDS, 4);
-    const h = fakeCanvas(384, 216).getContext('2d');
-    cards.drawNoticeCard(h, { format: 'horizontal' });
-    inside(h, { x: 0, y: 0, w: 384, h: 216 }, 'the horizontal notice');
+    assert.equal(cards.drawNoticeCard, undefined, 'the clip\'s disclosure: the platform\'s label, the caption, the end card');
   });
 
   test('captions: whole words, at most two lines a page within the width, a weak word never ends a line', () => {

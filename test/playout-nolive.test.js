@@ -124,9 +124,10 @@ test('the publishing desk under playout: clips, their end card and whole uploads
   assert.match(rec.description, /GLOBIT 24, 24 hours a day: https/);
   assert.match(uploadMeta(ep, { url }).description, /Watch GLOBIT 24 live/);
   assert.doesNotMatch(uploadMeta(ep, { url, recorded: true }).description.replaceAll(url, ''), /\blive\b/i);
-  // the clip's end card: the factory asks for it with &live=0 under playout
-  const lab = fs.readFileSync(new URL('../public/lab/clip.html', import.meta.url), 'utf8');
-  assert.match(lab, /live: qs\.get\('live'\) !== '0'/);
+  // the clip's end card: under playout it never says WATCH LIVE (airmode.js streamOf: 'recorded' with a stream address,
+  // 'none' without one; test/clip-endcard-stream.test.js)
+  const { streamOf, watchLine, falseLive } = await import('../public/js/airmode.js');
+  for (const u of [url, null]) for (const vertical of [true, false]) assert.equal(falseLive(watchLine(streamOf({ url: u, recorded: true }), { vertical }) || ''), null);
   const factory = fs.readFileSync(new URL('../tools/publish/factory.mjs', import.meta.url), 'utf8');
-  assert.match(factory, /\$\{recorded \? '&live=0' : ''\}/);
+  assert.match(factory, /&stream=\$\{stream\}/);
 });

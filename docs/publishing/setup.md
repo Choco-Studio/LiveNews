@@ -236,10 +236,12 @@ que reescriba lo que copia. Si aun así no lo consigue, la acorta o la quita del
 **Dónde va la clave.** La pones tú, y nunca en un chat (ni conmigo ni con nadie):
 
 1. En el servidor, abre el archivo de claves del canal: `nano /etc/globit24.env`.
-2. Añade estas dos líneas. La clave la copias tú de la web de tu proveedor de IA:
+2. Añade estas tres líneas. La clave la copias tú de la web de Anthropic (la consola de Claude); el nombre del modelo
+   te lo damos en el chat:
 
-       OPENAI_API_KEY=tu-clave
-       PROVIDERS=openai,mock
+       ANTHROPIC_API_KEY=tu-clave
+       ANTHROPIC_MODEL=el-modelo
+       PROVIDERS=anthropic,mock
 
 3. Guarda el archivo y protégelo para que solo lo lea el administrador: `chmod 600 /etc/globit24.env`.
 4. Reinicia el canal para que lea la clave. Quien te ayuda con el servidor sabe cómo.

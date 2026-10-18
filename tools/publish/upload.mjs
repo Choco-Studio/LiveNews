@@ -20,6 +20,7 @@ import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { renderedMaster } from '../../server/publish/masters.js';
+import { streamOf } from '../../public/js/airmode.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
 
 const { opt, flag } = argsOf();
@@ -72,6 +73,8 @@ try {
 // (pre-rendered playout: a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded: the description never says live)
 const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
 const meta = uploadMeta(episode, { timeline, stories, airedAt, url: process.env.CHANNEL_LIVE_URL || null, recorded });
+// the end card points to a stream only when there is one (airmode.js streamOf: WATCH LIVE only when it is live)
+const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
 say(`"${meta.title}" · ${meta.chapters.length} chapters · ${meta.sources.length} sources · ${meta.worthy ? 'worth a full upload' : `not for upload: ${meta.why.join('; ')}`}`);
 
 // ---------------------------------------------------------------- the thumbnail: the programme's own frame
@@ -132,7 +135,7 @@ if (video) {
   fs.writeFileSync(path.join(out, `${prog}.srt`), srtFor(timeline, { start: 0, end: D, duration: D }));
 } else if (!flag('no-video')) {
   const endcard = path.join(tmpDir, 'endcard.mkv');
-  await run('node', ['tools/record.mjs', '--url', `${base}/lab/clip.html?run=end&format=horizontal&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${THEME}&sting=1${recorded ? '&live=0' : ''}`, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', endcard], { env: { TMPDIR: tmpDir }, quiet: true });
+  await run('node', ['tools/record.mjs', '--url', `${base}/lab/clip.html?run=end&format=horizontal&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${THEME}&sting=1&stream=${stream}`, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', endcard], { env: { TMPDIR: tmpDir }, quiet: true });
   video = path.join(out, `${prog}.mp4`);
   say(`video: ${D.toFixed(1)} s + end card`);
   await run('ffmpeg', composeArgs({ master: master.file, hook: null, endcard, window: { start: 0, duration: D }, format: 'horizontal', out: video }), { quiet: true });

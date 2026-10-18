@@ -1,8 +1,8 @@
 // The beta's news programmes, written by the AI writer (docs/publishing/beta.md, pipeline.md §8).
 //
 // The beta's remake of the archive (tools/publish/material.mjs) writes with the offline writer, whose items the gate never
-// publishes (`offline-writer`, verbatim.md §7). When the provider chain has an AI writer (the owner's key: PROVIDERS and
-// OPENAI_API_KEY in /etc/globit24.env), the day's news programmes are made fresh instead, from the live feeds, through
+// publishes (`offline-writer`, verbatim.md §7). When the provider chain has an AI writer (the owner's key: PROVIDERS,
+// ANTHROPIC_API_KEY and ANTHROPIC_MODEL in /etc/globit24.env), the day's news programmes are made fresh instead, from the live feeds, through
 // the channel's own producer: the write, the own-words check and its rewrites, the standards editor, the fit, the
 // voices (as tools/writer/try.mjs makes them, plus the voices). Each story it tells is recorded, with the article the
 // desk read, in a data folder of the beta's own (`<sources>/archive`, `<sources>/compliance/articles`): the factory

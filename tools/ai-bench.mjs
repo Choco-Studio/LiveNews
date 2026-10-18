@@ -4,7 +4,7 @@
 // long it takes: per call, per programme, and projected per hour, day and month of 24/7 air. Voices, pictures and
 // footage are left out (they cost no AI); WORLD WEATHER is written from the forecast alone, so it is skipped.
 //
-//   PROVIDERS=openai,mock node tools/ai-bench.mjs [--runs 1] [--programmes world-now,tech-bytes] \
+//   PROVIDERS=anthropic,mock node tools/ai-bench.mjs [--runs 1] [--programmes world-now,tech-bytes] \
 //     [--price-in 0.10] [--price-out 0.50] [--price-cached 0.025] [--json report.json] [--episodes out.json]
 //
 // Prices are US dollars per million tokens (input, output, cached input). The defaults are README "Costes
@@ -12,8 +12,9 @@
 // validator rejects counts as a failure (its tokens are lost); an episode written by the offline mock after the
 // AI failed is flagged, never counted as the AI's.
 //
-// Needs the AI's credential in the environment (OPENAI_API_KEY for openai; `codex login` for codex). With no AI
-// configured every episode is the mock's and the tool says so instead of reporting a cost.
+// Needs the AI's credential in the environment (ANTHROPIC_API_KEY and ANTHROPIC_MODEL for anthropic; OPENAI_API_KEY for
+// openai; `codex login` for codex). With no AI configured every episode is the mock's and the tool says so instead of
+// reporting a cost.
 
 import fs from 'node:fs';
 

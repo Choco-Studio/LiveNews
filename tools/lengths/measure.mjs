@@ -1,8 +1,8 @@
 // What an edition measures for the length gate (docs/roadmap/critique/fallback-lengths.md): its length at the voices'
-// rate as the station counts it (server/station.js episodeAir: each segment's words at 2.75 a second, 0.6 s between
+// rate as the station counts it (server/station.js programmeAir: each segment's words at 2.75 a second, 0.6 s between
 // segments, 12 s for the open and the close), the time each kind of segment takes, the boards it carries, and the
 // sentences it says twice, within itself or after the programme's previous edition.
-import { episodeAir } from '../../server/station.js';
+import { programmeAir } from '../../server/station.js';
 
 const plain = (t) => String(t || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
 const words = (t) => plain(t).split(/\s+/).filter(Boolean).length;
@@ -39,7 +39,7 @@ function near(a, b) {
 /** The measures of an episode; `prev` is the programme's previous edition (for repeats across editions). */
 export function measure(ep, prev = null) {
   const segs = ep?.segments || [];
-  const air = episodeAir(ep);
+  const air = programmeAir(ep);
   const byKind = {};
   segs.forEach((s, i) => {
     const k = kindOf(s, i, segs);

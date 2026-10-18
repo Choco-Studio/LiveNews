@@ -209,18 +209,23 @@ Without an AI key the channel airs the offline writer, which copies its sources,
 published (`verbatim.md` §7). The AI writer tells the stories in the channel's own words. This trial shows whether it
 does, on this server, with the owner's key.
 
-- **The key: the owner puts it in, never in the chat.** They add these lines to `/etc/globit24.env` on their own screen:
+- **The key: the owner puts it in, never in the chat.** The writer is Claude, through the Anthropic API
+  (`server/providers/anthropic.js`). They add these lines to `/etc/globit24.env` on their own screen:
   ```
-  OPENAI_API_KEY=<typed by the owner>
-  PROVIDERS=openai,mock
+  ANTHROPIC_API_KEY=<typed by the owner>
+  ANTHROPIC_MODEL=<the model id, given to the owner in the chat>
+  PROVIDERS=anthropic,mock
   ```
-  The second line is there because the Codex CLI is not installed on this server. Then run
+  The last line leaves out the Codex CLI (not installed on this server) and the other paid APIs. Optional, on the same
+  file: `ANTHROPIC_EFFORT=low|medium|high` (how much the model thinks before it writes; unset, the model's default),
+  `ANTHROPIC_MAX_TOKENS` (32000), `ANTHROPIC_TIMEOUT_MS` (240000), `ANTHROPIC_MAX_RETRIES` (2). Then run
   `chown root:root /etc/globit24.env && chmod 600 /etc/globit24.env`. Never `cat`, print or commit the file. The
   station reads it through its systemd unit (`EnvironmentFile=/etc/globit24.env`), or when started by hand with
   `node --env-file=/etc/globit24.env server/index.js`.
-- **The trial.** It writes files only and takes about 10–20 minutes:
+- **The trial.** It writes files only and takes about 10–20 minutes. At low priority, so the 24 h test or the station
+  keeps the cores it needs:
   ```
-  node --env-file=/etc/globit24.env tools/writer/try.mjs --episodes 2
+  nice -n 10 node --env-file=/etc/globit24.env tools/writer/try.mjs --episodes 2
   ```
   - It makes 2 real episodes of each AI-written programme from the live feeds: NEWS IN 60, WORLD NOW, TECH BYTES,
     COSMOS and MONEY MINUTE (`--programmes full-time` adds the draft).
@@ -233,8 +238,10 @@ does, on this server, with the owner's key.
   - `own words` gives the stories rewritten, cut and dropped, and the rewrites refused. Many drops mean the prompt
     needs work: keep the `[own words]` lines of `log.txt`.
   - `editor (review faults)` is what the standards editor changed: sentences, fields, stories taken out.
-  - `by mock (OFFLINE…)` means the AI did not answer (the key, the quota, the network). `calls[].error` in
-    `report.json` says why.
+  - `by mock (OFFLINE…)` means the AI did not answer (the key, the model id, the credit, the network).
+    `calls[].error` in `report.json` says why: `anthropic HTTP 401` is the key, `HTTP 404` the model id, `HTTP 429` the
+    rate limit (the chain pauses it for 30 minutes), `declined the request` a story the model would not write (that
+    story only: no pause), `cut at max_tokens` a reply that ran out of room.
   - Tokens and time are given per stage (write, rewrite, review). `A MONTH OF 24/7 AIR` gives the month's tokens on the
     channel's clock and `cost a month = A × P_in + B × P_cached + C × P_out`. Put in the provider's prices per million
     tokens.

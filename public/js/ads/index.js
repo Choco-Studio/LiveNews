@@ -15,28 +15,33 @@ import { P } from '../palette.js';
 export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym, corners, serene];
 
 /**
- * The channel's continuity voice at the break bumper (owner, 3 Oct: "volvemos en 1 minuto"). Not an ad
- * (never in ADS, never picked): its script holds every line the bumper may say, voiced by the server
- * like an advert's lines (server/voice: loadAds adds it), so the director finds them by exact text.
- * Every line first says what the channel is (docs/publishing/compliance.md §3: the AI disclosure heard as well as
- * seen, at every break, as the EU Code of Practice asks after interruptions; the words the ident shows).
+ * The channel's continuity voice (owner, 3 Oct: "volvemos en 1 minuto"). Not an ad (never in ADS, never picked): its
+ * script holds every line it may say, voiced by the server like an advert's lines (server/voice: loadAds adds it), so
+ * the director finds them by exact text. At the break bumper it says the channel's name and when it is back; at the
+ * channel's ident before every programme it says what the channel is (IDENT_VOICE: the AI disclosure heard as well as
+ * seen, docs/publishing/compliance.md §3). Never the disclosure inside a break (owner, 18 Oct: "en los anuncios no lo
+ * pongas").
  */
 export const CONTINUITY = Object.freeze({
   id: 'continuity',
   voice: { gender: 'female', lang: 'en-GB' },
   duration: 6.0,
   script: Object.freeze([
-    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be right back." }),
-    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be back in a minute." }),
-    Object.freeze({ at: 0.6, text: "This is GLOBIT 24, AI-produced news. We'll be back in two minutes." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24. We'll be right back." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24. We'll be back in a minute." }),
+    Object.freeze({ at: 0.6, text: "This is GLOBIT 24. We'll be back in two minutes." }),
+    Object.freeze({ at: 0.6, text: 'This is GLOBIT 24, AI-produced news.' }),
   ]),
 });
 
-/** The continuity line for a break of `seconds` (one of CONTINUITY's lines). */
+/** The continuity line for a break of `seconds` (one of CONTINUITY's bumper lines). */
 export function continuityLine(seconds) {
   const s = Number(seconds) || 0;
   return s < 45 ? CONTINUITY.script[0].text : s < 90 ? CONTINUITY.script[1].text : CONTINUITY.script[2].text;
 }
+
+/** What the continuity voice says over the channel's ident before a programme. */
+export const IDENT_VOICE = CONTINUITY.script[3].text;
 
 /**
  * The 0.3 s of black and silence between break elements (channel-and-breaks

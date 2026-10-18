@@ -826,7 +826,7 @@ describe('round 5: name cards', () => {
 });
 
 describe('round 5: the clock with editions as long as the news allows', () => {
-  test('a run before a mark is planned halfway between a programme’s estimate and the longest of its recent editions: NEWS IN 60 is never more than 192 s off its mark', async () => {
+  test('a run before a mark is planned halfway between a programme’s estimate and the longest of its recent editions: NEWS IN 60 is never more than 300 s off its mark', async () => {
     const { Station, episodeAir, breakAir, localTime } = await import('../server/station.js');
     const channel = loadChannel();
     // (the lengths the final replay of round 4 made, in its order: a thin desk's TECH BYTES of 127 s next to full ones of 430 s)
@@ -864,7 +864,11 @@ describe('round 5: the clock with editions as long as the news allows', () => {
       for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
     }
     assert.ok(offs.length >= 46, `${offs.length} bulletins`);
-    assert.ok(Math.max(...offs.map(Math.abs)) <= 192, `worst ${Math.max(...offs.map(Math.abs))} s: ${offs.join(' ')}`);
+    // (192 s before 18 Oct. The channel's ident before every programme, 6 s each, moves this day's plans: its worst
+    // bulletin is now 288 s late, a 485 s COSMOS DESK planned as a shorter one before 08:30. Over 18 simulated days the
+    // bulletins more than 192 s off went from 0.8 % to 2.3 %, while those right on the mark went from 30 % to 35 %.)
+    assert.ok(Math.max(...offs.map(Math.abs)) <= 300, `worst ${Math.max(...offs.map(Math.abs))} s: ${offs.join(' ')}`);
+    assert.ok(offs.filter((x) => Math.abs(x) > 192).length <= 2, `at most two past 192 s: ${offs.join(' ')}`);
   });
 });
 

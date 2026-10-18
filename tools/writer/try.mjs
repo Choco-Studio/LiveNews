@@ -13,9 +13,10 @@
 // archived or put on the station's queue; no voice, footage or picture download.
 //
 //   node --env-file=/etc/globit24.env tools/writer/try.mjs [--episodes 2] [--programmes world-now,news-60]
-//        [--providers openai,mock] [--out data/writer-trial/<time>] [--json]
+//        [--providers anthropic,mock] [--out data/writer-trial/<time>] [--json]
 //
-// The key is read from the environment (OPENAI_API_KEY, or DEEPSEEK_API_KEY); the tool never prints it. With no AI
+// The key is read from the environment (ANTHROPIC_API_KEY with ANTHROPIC_MODEL; or OPENAI_API_KEY, DEEPSEEK_API_KEY); the
+// tool never prints it. With no AI
 // configured every episode is the offline writer's and the report says so. FEEDS_FILE=config/feeds.fixture.json runs on
 // the offline fixture feeds (a dry run of the tool itself).
 import fs from 'node:fs';
@@ -28,7 +29,7 @@ const arg = (k, d) => {
 };
 const flag = (k) => argv.includes(`--${k}`);
 if (flag('help')) {
-  console.log('node --env-file=/etc/globit24.env tools/writer/try.mjs [--episodes 2] [--programmes world-now,news-60] [--providers openai,mock] [--out <dir>] [--json]');
+  console.log('node --env-file=/etc/globit24.env tools/writer/try.mjs [--episodes 2] [--programmes world-now,news-60] [--providers anthropic,mock] [--out <dir>] [--json]');
   process.exit(0);
 }
 

@@ -260,8 +260,9 @@ export function drawIdentScene(ctx, dt, opts = null) {
   }
   drawLogo(ctx, W / 2, LOGO_Y, { variant: 'full', scale: LOGO_SCALE, slogan: true, align: 'center' });
   // the channel's statement under the wordmark, still with it (graphics/disclosure.js; compliance.md §3): AI-PRODUCED
-  // NEWS, then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES. The ident airs at every break and between
-  // programmes: the stream's periodic disclosure for whoever joined mid-programme
+  // NEWS, then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES. The ident airs before every programme, so on
+  // the return from every break, never inside one (director.js playIdent; owner, 18 Oct): the channel's only on-screen
+  // disclosure
   drawIdentLine(ctx, W / 2, IDENT_LINE_Y);
 }
 const IDENT_LINE_Y = 124; // under the wordmark (y 42-118); its two rows end at y 142, above the horizon (y ~146 mid-frame)

@@ -48,7 +48,7 @@ const quizView = /^(1|true|yes|on)$/i.test(env('QUIZ_VIEW', '0').trim());
 export const config = {
   host: env('HOST', '127.0.0.1'),
   port: num('PORT', 8080),
-  providers: env('PROVIDERS', 'codex,openai,deepseek,mock')
+  providers: env('PROVIDERS', 'anthropic,codex,openai,deepseek,mock')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
@@ -57,6 +57,22 @@ export const config = {
     model: env('CODEX_MODEL', 'gpt-6-luna'),
     extraArgs: env('CODEX_EXTRA_ARGS', '').split(/\s+/).filter(Boolean),
     timeoutMs: num('CODEX_TIMEOUT_MS', 240000),
+  },
+  // Claude through the Anthropic API (server/providers/anthropic.js): the key and the model id both set on the server
+  anthropic: {
+    apiKey: env('ANTHROPIC_API_KEY', ''),
+    model: env('ANTHROPIC_MODEL', ''),
+    // how much the model thinks before it writes; unset: none sent, the model's own default
+    effort: ((v) => {
+      if (!v) return null;
+      if (['low', 'medium', 'high', 'xhigh', 'max'].includes(v)) return v;
+      configWarnings.push(`ANTHROPIC_EFFORT=${process.env.ANTHROPIC_EFFORT} is not low, medium, high, xhigh or max; using the model's default`);
+      return null;
+    })(env('ANTHROPIC_EFFORT', '').trim().toLowerCase()),
+    // thinking counts toward it, so room for the thinking and the longest script
+    maxTokens: bounded('ANTHROPIC_MAX_TOKENS', 32000, 1024, 128000),
+    timeoutMs: bounded('ANTHROPIC_TIMEOUT_MS', 240000, 10000, 1800000),
+    maxRetries: bounded('ANTHROPIC_MAX_RETRIES', 2, 0, 10),
   },
   openai: {
     apiKey: env('OPENAI_API_KEY', ''),

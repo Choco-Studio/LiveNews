@@ -294,6 +294,7 @@ test('a break opens on the bumper ("BACK IN 1 MINUTE", the continuity voice) and
     spoken.length = 0;
     const director = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
     director.voices = { refreshAds() {}, prepareAd() {}, adLine: () => null };
+    director.identAt = performance.now() / 1000; // (the channel's ident has just aired: a filler break opens on its bumper)
     const s = director.scene;
     const seen = [];
     director.playAd = async (ad) => {
@@ -331,10 +332,11 @@ test('the bumper and the tag say the break\'s length plainly', () => {
   assert.equal(breakLabel(130), 'BACK IN 2 MINUTES');
   assert.equal(clockLeft(61.2), '1:02');
   assert.equal(clockLeft(-3), '0:00');
-  // (every line first says what the channel is: the AI disclosure heard at every break, compliance.md §3)
-  assert.equal(continuityLine(30), "This is GLOBIT 24, AI-produced news. We'll be right back.");
-  assert.equal(continuityLine(70), "This is GLOBIT 24, AI-produced news. We'll be back in a minute.");
-  assert.equal(continuityLine(120), "This is GLOBIT 24, AI-produced news. We'll be back in two minutes.");
+  // (the channel's name and when it is back: the AI disclosure is said over the channel's ident before the programme,
+  // never in the break, compliance.md §3; owner, 18 Oct)
+  assert.equal(continuityLine(30), "This is GLOBIT 24. We'll be right back.");
+  assert.equal(continuityLine(70), "This is GLOBIT 24. We'll be back in a minute.");
+  assert.equal(continuityLine(120), "This is GLOBIT 24. We'll be back in two minutes.");
 });
 
 // --- every spot draws cleanly ----------------------------------------------------------

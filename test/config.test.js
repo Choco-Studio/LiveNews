@@ -28,6 +28,12 @@ const KEYS = [
   'RECYCLE_GAP',
   'RECYCLE_STORIES',
   'PROVIDERS',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_EFFORT',
+  'ANTHROPIC_MAX_TOKENS',
+  'ANTHROPIC_TIMEOUT_MS',
+  'ANTHROPIC_MAX_RETRIES',
   'CODEX_BIN',
   'CODEX_MODEL',
   'CODEX_EXTRA_ARGS',
@@ -93,9 +99,9 @@ async function loadConfig(env = {}) {
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('config defaults', () => {
-  test('production line-up: codex, then the paid APIs, then the offline mock', async () => {
+  test('production line-up: Claude, codex, then the other paid APIs, then the offline mock', async () => {
     const config = await loadConfig();
-    assert.deepEqual(config.providers, ['codex', 'openai', 'deepseek', 'mock']);
+    assert.deepEqual(config.providers, ['anthropic', 'codex', 'openai', 'deepseek', 'mock']);
   });
 
   test('episode production defaults: 2 episodes ahead, 12 candidates, review pass on, 3 new stories, 36 h, 10 min', async () => {
@@ -123,6 +129,18 @@ describe('config defaults', () => {
     assert.equal(config.deepseek.apiKey, '');
     assert.match(config.openai.baseUrl, /^https:\/\//);
     assert.match(config.deepseek.baseUrl, /^https:\/\//);
+  });
+
+  test('Claude: no key and no model by default (not available), no effort sent, room for thinking, a time limit, SDK retries', async () => {
+    const { anthropic } = await loadConfig();
+    assert.deepEqual(anthropic, { apiKey: '', model: '', effort: null, maxTokens: 32000, timeoutMs: 240000, maxRetries: 2 });
+  });
+
+  test('Claude: the key, the model and the effort come from the environment; a wrong effort or number falls back to the default', async () => {
+    const set = await loadConfig({ ANTHROPIC_API_KEY: 'k', ANTHROPIC_MODEL: 'some-model', ANTHROPIC_EFFORT: ' High ', ANTHROPIC_MAX_TOKENS: '64000', ANTHROPIC_TIMEOUT_MS: '300000', ANTHROPIC_MAX_RETRIES: '0' });
+    assert.deepEqual(set.anthropic, { apiKey: 'k', model: 'some-model', effort: 'high', maxTokens: 64000, timeoutMs: 300000, maxRetries: 0 });
+    const wrong = await loadConfig({ ANTHROPIC_EFFORT: 'extreme', ANTHROPIC_MAX_TOKENS: '10', ANTHROPIC_TIMEOUT_MS: '5', ANTHROPIC_MAX_RETRIES: '-1' });
+    assert.deepEqual(wrong.anthropic, { apiKey: '', model: '', effort: null, maxTokens: 32000, timeoutMs: 240000, maxRetries: 2 });
   });
 
   test('ROOT is the repository root, and the feeds file and data directory live under it', async () => {
@@ -278,7 +296,7 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_MODEL', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB', 'VOICE_PHRASE_CACHE_MB'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'ANTHROPIC_EFFORT', 'ANTHROPIC_MAX_TOKENS', 'ANTHROPIC_TIMEOUT_MS', 'ANTHROPIC_MAX_RETRIES', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_MODEL', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB', 'VOICE_PHRASE_CACHE_MB'].map((k) => [k, example[k]]))
     );
     // A .env made from the example turns the neural voices on; everything else about them is the default.
     assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });
@@ -286,5 +304,6 @@ describe('.env.example', () => {
       assert.deepEqual(fromExample[key], defaults[key], key);
     }
     assert.equal(fromExample.codex.timeoutMs, defaults.codex.timeoutMs);
+    assert.deepEqual(fromExample.anthropic, defaults.anthropic);
   });
 });

@@ -22,7 +22,8 @@ por la suya solo lo ves tú.
    `C2PA_PYTHON=/root/globit/venv/bin/python`. Para comprobarlo: `node tools/compliance/cli.mjs launch` no debe
    decir «C2PA SDK missing».
 3. **La clave de IA, para las noticias** (la escribes tú en el archivo de variables, nunca en un chat):
-   `OPENAI_API_KEY=…` y `PROVIDERS=openai,mock`. Con ella, el canal escribe las noticias con sus propias palabras y
+   `ANTHROPIC_API_KEY=…`, `ANTHROPIC_MODEL=…` (el modelo que elegiste; te lo digo yo en el chat) y
+   `PROVIDERS=anthropic,mock`. Con ella, el canal escribe las noticias con sus propias palabras y
    salen clips de ciencia, tecnología y deportes. Sin ella, solo sale el concurso, y el sistema te lo dice.
 4. **Tus cuentas**: tu canal de YouTube, una cuenta de TikTok y una de Instagram. No hace falta ninguna app de
    desarrollador ni ninguna clave: publicas tú, desde la web o el móvil, como siempre.
@@ -50,12 +51,16 @@ por la suya solo lo ves tú.
 5. **Descargar el vídeo** (y la portada).
 6. Abre la red, sube **ese** vídeo y, con los botones **Copiar**, pega el título (solo YouTube), la descripción y los
    hashtags tal cual.
-7. Pon los interruptores de la red que dice la tarjeta, y márcalos uno a uno:
+7. Pon los interruptores de la red que dice la tarjeta, y márcalos uno a uno. **La etiqueta de IA de la red es
+   obligatoria** (la tarjeta la pone la primera, después del archivo, y dice «Obligatorio»): desde el 18 de octubre el
+   clip ya no lleva aviso en sus primeros segundos, así que esa etiqueta es lo primero que ve quien lo mira. Sin
+   marcarla, «Ya lo he publicado» no funciona.
    - **YouTube**: contenido alterado o sintético («altered or synthetic content»): **Sí**. Público («made for kids»):
      **no es para niños**.
    - **TikTok**: la etiqueta de contenido generado por IA («AI-generated content»): **activada**. La privacidad la
      eliges tú (para la beta, todo el mundo). Contenido de marca: no.
    - **Instagram**: la etiqueta de IA («AI info»): **activada**.
+   - **Facebook y Threads** (si algún día se usan): la etiqueta de IA («AI info») **a mano**, en cada vídeo.
 8. Publica. Copia la dirección de la publicación, pégala en la tarjeta y pulsa **Ya lo he publicado**. Queda apuntado
    (en la cola y en el registro de cumplimiento) y no se te ofrecerá nunca otra vez.
 

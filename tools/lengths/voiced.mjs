@@ -2,7 +2,8 @@
 // the fake clock of tools/pace/fakeplay.mjs, each line spoken at its voice's measured Kokoro rate (server/voice/
 // rates.json): the open, the headlines' beats, every pause of the pace profile, the boards' and links' timing, the
 // sign-off hold and the end card included. What a viewer with the real voices sits through, to a few seconds; the
-// station's own estimate (server/airtime.js voicedAir) is checked against it.
+// station's own estimate (server/airtime.js voicedAir) is checked against it. The channel's ident before the programme
+// (director.playIdent, pace.js IDENT_AIR) is the channel's, not the programme's: the timeline starts after it.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fakeClock } from '../pace/fakeplay.mjs';
@@ -18,7 +19,7 @@ export async function voicedLength(ep) {
   const clock = fakeClock();
   let speech = 0;
   let firstWord = null;
-  const t0 = clock.now();
+  let t0 = clock.now();
   try {
     const audio = {
       mode: 'mute',
@@ -30,13 +31,14 @@ export async function voicedLength(ep) {
         return new Promise((resolve) => {
           const lines = splitSentences(text);
           const wps = rateOf(ep, slot);
-          if (firstWord === null) firstWord = clock.now() - t0;
+          const ident = slot === 'ad'; // the continuity voice over the channel's ident
+          if (firstWord === null && !ident) firstWord = clock.now() - t0;
           let i = 0;
           const step = () => {
             if (i >= lines.length) return resolve();
             onSentence?.(lines[i], i);
             const d = words(lines[i]) / wps;
-            speech += d;
+            if (!ident) speech += d;
             i++;
             setTimeout(step, d * 1000);
           };
@@ -48,6 +50,11 @@ export async function voicedLength(ep) {
     d.voices = { episode() {}, audioFor: () => Promise.resolve(null), refreshAds() {}, prepareAd() {}, adLine: () => null };
     d.prepareImages = async () => {};
     for (const r of ep.rundown || []) if (r.hasImage) d.images.set(r.storyId, { small: {}, full: {}, card: {} });
+    const playIdent = d.playIdent.bind(d);
+    d.playIdent = async () => {
+      await playIdent();
+      t0 = clock.now();
+    };
     await clock.run(d.playEpisode(structuredClone(ep)));
     return { seconds: clock.now() - t0, speech, firstWord };
   } finally {
@@ -62,7 +69,7 @@ async function cli() {
     console.error('usage: node tools/lengths/voiced.mjs <replay dir> [programme]');
     process.exit(1);
   }
-  const { episodeAir } = await import('../../server/station.js');
+  const { programmeAir } = await import('../../server/station.js');
   const { voicedAir } = await import('../../server/airtime.js');
   const { loadChannel } = await import('../../server/channel.js');
   const channel = loadChannel();
@@ -72,7 +79,7 @@ async function cli() {
     const id = ep.program?.id;
     if (!id || (only && id !== only)) continue;
     const v = await voicedLength(ep);
-    (by[id] ||= []).push({ f, air: episodeAir(ep), voiced: v.seconds, est: voicedAir(ep) });
+    (by[id] ||= []).push({ f, air: programmeAir(ep), voiced: v.seconds, est: voicedAir(ep) });
   }
   for (const [id, rows] of Object.entries(by)) {
     const [lo, hi] = channel.programs[id]?.targetSeconds || [0, Infinity];

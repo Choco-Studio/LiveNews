@@ -36,7 +36,8 @@ test('disclosureFor: every platform gets its flag; a recreation makes it require
   const plain = disclosureFor({ kind: 'clip', episode: ep({ segments: ep().segments.slice(0, 1) }) });
   assert.equal(plain.platforms.youtube.containsSyntheticMedia, true);
   assert.equal(plain.platforms.youtube.required, false);
-  assert.equal(plain.platforms.facebook.manualLabel, false);
+  assert.equal(plain.platforms.facebook.manualLabel, true, 'every video: Meta\'s AI info by hand, recreation or not (18 Oct: the label is the clip\'s first disclosure)');
+  assert.equal(plain.platforms.threads.manualLabel, true);
   // only the platforms asked for
   assert.deepEqual(Object.keys(disclosureFor({ kind: 'short', episode: ep(), platforms: ['tiktok'] }).platforms), ['tiktok']);
 });

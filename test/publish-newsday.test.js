@@ -178,9 +178,9 @@ test('a rendered master (the playout\'s) is cut instead of recorded: both files,
 
 test('beta.mjs hacer without an AI writer: the news is not made, and it says so in Spanish', () => {
   const q = tmp('beta-nokey-');
-  const out = execFileSync(process.execPath, ['tools/publish/beta.mjs', 'hacer', '--queue', q, '--noticias', 'cosmos,tech-bytes', '--concurso', 'no'], { cwd: ROOT, env: { ...process.env, PROVIDERS: 'mock', OPENAI_API_KEY: '', DEEPSEEK_API_KEY: '', NODE_NO_WARNINGS: '1' }, encoding: 'utf8' });
+  const out = execFileSync(process.execPath, ['tools/publish/beta.mjs', 'hacer', '--queue', q, '--noticias', 'cosmos,tech-bytes', '--concurso', 'no'], { cwd: ROOT, env: { ...process.env, PROVIDERS: 'mock', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', DEEPSEEK_API_KEY: '', NODE_NO_WARNINGS: '1' }, encoding: 'utf8' });
   assert.match(out, /Las noticias necesitan la clave de IA/);
-  assert.match(out, /PROVIDERS=openai,mock/);
+  assert.match(out, /PROVIDERS=anthropic,mock/);
   assert.match(out, /Para hoy: 0 publicaciones/);
   assert.match(out, /Tiempo: /);
   assert.ok(!fs.existsSync(path.join(q, 'factory', localParts(Date.now(), 'Europe/London').day, 'news')), 'nothing made');

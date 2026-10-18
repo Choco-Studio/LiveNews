@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // WORLD WEATHER's length on real data: today's Open-Meteo forecast and GDACS warnings (through the proxy: run with
 // NODE_USE_ENV_PROXY=1), written by the station's own weather writer (server/weatherwriter.js) for `--editions` seeds, the
-// way the rotation varies it, and timed as it will air (server/airtime.js voicedAir, the station's episodeAir beside it).
+// way the rotation varies it, and timed as it will air (server/airtime.js voicedAir, the station's programmeAir beside it).
 // Each edition is saved as JSON and as a readable script.
 //
 //   NODE_USE_ENV_PROXY=1 node tools/lengths/weather.mjs --out <dir> [--editions 24] [--fixture]
@@ -14,7 +14,7 @@ import path from 'node:path';
 import { WeatherDesk } from '../../server/weather.js';
 import { writeWeather } from '../../server/weatherwriter.js';
 import { voicedAir } from '../../server/airtime.js';
-import { episodeAir } from '../../server/station.js';
+import { programmeAir } from '../../server/station.js';
 import { loadChannel, castOf } from '../../server/channel.js';
 
 const args = process.argv.slice(2);
@@ -53,7 +53,7 @@ for (let i = 0; i < n; i++) {
   const name = String(i + 1).padStart(3, '0');
   fs.writeFileSync(path.join(out, `${name}-world-weather.json`), JSON.stringify(ep, null, 1));
   fs.writeFileSync(path.join(out, `${name}-world-weather.txt`), `# WORLD WEATHER, seed ${i}, forecast of ${report.at || '?'}${report.demo ? ' (demo data)' : ''}\n\n${ep.segments.map((s, k) => `[${k}] ${s.kind}${s.board ? ` (${s.board.kind || 'board'})` : ''}\n    ${String(s.text).replace(/\[[^\]]*\]\s*/g, '')}`).join('\n')}\n`);
-  rows.push({ name: `${name}-world-weather`, programId: 'world-weather', air: Math.round(episodeAir(ep)), voiced: Math.round(voicedAir(ep)), words: ep.segments.reduce((s, x) => s + words(x.text), 0), segments: ep.segments.length, kinds: ep.segments.map((s) => s.kind).join(' ') });
+  rows.push({ name: `${name}-world-weather`, programId: 'world-weather', air: Math.round(programmeAir(ep)), voiced: Math.round(voicedAir(ep)), words: ep.segments.reduce((s, x) => s + words(x.text), 0), segments: ep.segments.length, kinds: ep.segments.map((s) => s.kind).join(' ') });
 }
 fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(rows, null, 1));
 const v = rows.map((r) => r.voiced).sort((a, b) => a - b);

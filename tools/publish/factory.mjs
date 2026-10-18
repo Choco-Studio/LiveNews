@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The clip factory (docs/publishing/clips.md): one aired episode in, its best moments out as finished clips, each in
 // the vertical picture (Shorts, Reels, TikTok) and the horizontal one (X, Facebook, YouTube), with burned-in captions
-// in the channel's own type, a hook title, the AI notice over its first seconds, an end card, a caption file, a contact sheet, the texts for every network
+// in the channel's own type, a hook title, an end card (with the channel ident's AI notice), a caption file, a contact sheet, the texts for every network
 // and the compliance desk's verdict; the publishable ones go to the publishing queue (dry run: nothing is uploaded).
 //
 //   node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6]
@@ -31,14 +31,14 @@ import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
 import { detectMoments, publishable, markCopied, markUncleared, ownHook } from '../../server/publish/moments.js';
-import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, NOTICE_SECONDS, NOTICE_OUT } from '../../server/publish/render.js';
-import { nounOf, clipNoticeLayout } from '../../public/js/graphics/disclosure.js';
+import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/platforms.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { masterRoots, renderedMaster, useRenderedMaster } from '../../server/publish/masters.js';
+import { streamOf } from '../../public/js/airmode.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -50,6 +50,9 @@ const flag = (name) => args.includes(`--${name}`);
 const fromPlayout = opt('from-playout') ? path.resolve(opt('from-playout')) : null;
 // the channel airs pre-rendered (a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded): no "watch live" anywhere
 const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
+// what the end card may point to (airmode.js streamOf): a stream only when its address is set (CHANNEL_LIVE_URL, the
+// one the descriptions link), WATCH LIVE only when that stream is live; the manual beta has none, so no promise
+const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
 const epFile = fromPlayout ? path.join(fromPlayout, 'episode.json') : opt('episode');
 const out = path.resolve(opt('out', ''));
 if (!epFile || !opt('out')) {
@@ -232,26 +235,12 @@ async function hookPng(m, fmt) {
   fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
   return f;
 }
-// the AI notice over the clip's first seconds (graphics/disclosure.js drawClipNotice): one card per format and profile
-const noticeCards = {};
-const noun = nounOf(prog);
-const tallOf = () => prog === 'pay-attention' || !!(episode.cast?.H && episode.cast?.A && episode.cast?.B);
-async function noticePng(fmt) {
-  const profile = fmt === 'horizontal' && tallOf() ? 'tall' : 'normal';
-  const key = `${fmt}-${profile}`;
-  if (noticeCards[key]) return noticeCards[key];
-  const f = path.join(cardsDir, `notice-${prog}-${key}.png`);
-  const url = await page.evaluate((spec) => window.__clipLab.notice(spec), { format: fmt, noun, theme, profile });
-  fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
-  noticeCards[key] = { file: f, profile };
-  return noticeCards[key];
-}
 const endcards = {};
 async function endCard(fmt) {
   if (endcards[fmt]) return endcards[fmt];
-  const f = path.join(cardsDir, `endcard-${prog}-${fmt}.mkv`);
+  const f = path.join(cardsDir, `endcard-${prog}-${fmt}-${stream}.mkv`);
   if (!fs.existsSync(f)) {
-    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1${recorded ? '&live=0' : ''}`;
+    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1&stream=${stream}`;
     await run('node', ['tools/record.mjs', '--url', url, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', f], { env: { TMPDIR: tmpDir }, quiet: true });
   }
   endcards[fmt] = f;
@@ -293,42 +282,6 @@ async function labelEvidence(clip, fmt, window, tl) {
   return { total, labelled };
 }
 
-/**
- * The AI notice read back from the finished clip: every frame of its first seconds (before it slides out) shows the
- * notice's plate where its layout puts it (the vertical super's ink, the horizontal line's black, at the channel's
- * own pixels). -> { total, shown } for the gate (clip.cards.notice.frames)
- */
-async function noticeEvidence(clip, fmt, profile) {
-  const W = fmt === 'vertical' ? 216 : 384;
-  const H = fmt === 'vertical' ? 384 : 216;
-  const L = clipNoticeLayout(fmt, { noun, profile });
-  const ink = fmt === 'vertical' ? [38, 43, 68] : [24, 20, 37]; // P.ink, P.black
-  const seconds = NOTICE_SECONDS - NOTICE_OUT;
-  const raw = await new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-v', 'error', '-t', seconds.toFixed(3), '-i', clip, '-vf', 'scale=iw/5:ih/5:flags=neighbor', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1']);
-    const chunks = [];
-    p.stdout.on('data', (d) => chunks.push(d));
-    p.on('close', (code) => (code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error('ffmpeg frames'))));
-  });
-  const fsize = W * H * 3;
-  let total = 0;
-  let shown = 0;
-  for (let off = 0; off + fsize <= raw.length; off += fsize) {
-    total++;
-    // the plate's last column of pixels, a pixel in from its right edge, down its height: plate colour where no text is
-    let hit = 0;
-    let n = 0;
-    const x = L.x + L.w - 2;
-    for (let y = L.y + 1; y < L.y + L.h - 1; y++) {
-      const i = off + (y * W + x) * 3;
-      n++;
-      if (Math.abs(raw[i] - ink[0]) < 14 && Math.abs(raw[i + 1] - ink[1]) < 14 && Math.abs(raw[i + 2] - ink[2]) < 14) hit++;
-    }
-    if (n && hit >= n * 0.8) shown++;
-  }
-  return { total, shown };
-}
-
 const clipsDir = path.join(out, 'clips');
 fs.mkdirSync(clipsDir, { recursive: true });
 const queue = new PublishQueue({ dir: queueDir });
@@ -365,14 +318,13 @@ for (const m of chosen) {
       const name = `${prog}-${m.kind}-${m.from}-${m.to}-${fmt}`;
       const file = path.join(clipsDir, `${name}.mp4`);
       const hook = await hookPng(m, fmt);
-      const notice = await noticePng(fmt);
       const end = await endCard(fmt);
       say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''})`);
-      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, notice: notice.file, endcard: end, window, format: fmt, out: file }), { quiet: true });
+      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, endcard: end, window, format: fmt, out: file }), { quiet: true });
       const duration = await probeDuration(file);
       const endSeconds = duration - window.duration;
-      // what the clip's own cards say, the notice read back from the file (the gate holds a clip without them)
-      const cards = compliance.clipCards({ noun, profile: notice.profile, notice: Math.min(NOTICE_SECONDS, window.duration), endCard: +endSeconds.toFixed(2), frames: await noticeEvidence(file, fmt, notice.profile) });
+      // what the clip's end card says and how long it holds (the gate holds a clip without it)
+      const cards = compliance.clipCards({ endCard: +endSeconds.toFixed(2) });
       fs.writeFileSync(path.join(clipsDir, `${name}.srt`), srtFor(tl, window));
       fs.writeFileSync(path.join(clipsDir, `${name}.vtt`), vttFor(tl, window));
       const contact = path.join(clipsDir, `${name}.contact.png`);
@@ -382,7 +334,7 @@ for (const m of chosen) {
       const labelFrames = await labelEvidence(file, fmt, window, tl);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook, notice: notice.file }, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded });
         meta.texts[p] = t;

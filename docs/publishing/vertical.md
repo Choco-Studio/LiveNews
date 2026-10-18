@@ -19,9 +19,10 @@ draws the vertical stage of the weather's map shots beside its frame.
   to a window on the horizontal frame.
 - **Readable on a phone with the sound off.** Captions at 2x (14 px caps at 1x, 70 px on a 1080-wide screen), the hook
   at 2x, every word inside the platforms' safe area.
-- **Disclosed.** The AI notice stands over the stage's foot for the clip's first four seconds (a super, in the body
-  face, inside the safe column: `compliance.md` §3.2), the RECREATION label is set for the tall frame when a recreation
-  is on screen (§3.8), and the end card says it again. The bug stands clean (owner, 18 Oct: no AI plate beside it).
+- **Disclosed.** The end card says it in the channel ident's words, the caption opens with it, and the platform's own
+  AI label is required on every clip (`compliance.md` §3.2). The RECREATION label is set for the tall frame when a
+  recreation is on screen (§3.8). Nothing stands over the clip's first seconds, and the bug stands clean (owner, 18 Oct:
+  no AI plate beside it, the ident's words only).
 
 ## 2. The grid and the zones (`layout.js`)
 
@@ -250,8 +251,8 @@ crisp, but it is a crop, and §8 lists what remains.
 
 - No clock and no LIVE tag, because a clip is not live.
 - No ticker: its headlines belong to the hour it aired.
-- The bug stays, with the programme's tag beside it for the whole clip. The AI notice comes and goes under it as on
-  air (a whole programme is uploaded from this recording).
+- The bug stays, with the programme's tag beside it for the whole clip. Nothing is drawn under it (a whole programme
+  is uploaded from this recording, and opens on the channel's ident as on air).
 - NEWS IN 60 keeps its progress rule, as on air: a 2 px track along the stage's top edge, filled in yellow as its
   minute runs (the title band is the hook's in a clip).
 - The story's source is never in the foot (the feeds cover it) nor in the title band (the hook covers it): it is on a
@@ -279,21 +280,24 @@ The hook is drawn by the channel's own code (`/lab/clip.html`) and laid over the
 
 **The end card** (2.6 s, with the channel's ident sting) shows:
 
-- the logo landing and glinting (vertical: the emblem at 4x over the bug at 2x);
+- the logo landing and glinting (vertical: the emblem at 4x over the wordmark's plate at 2x, the bug without its own
+  small globe, so the card shows one globe);
 - THE WORLD, PIXEL BY PIXEL;
-- the programme's accent rule, FROM <PROGRAMME>, NEWS 24 HOURS A DAY · WATCH LIVE;
-- the AI notice: AI-PRODUCED NEWS, PRESENTERS ARE AI CHARACTERS, FACTS FROM CREDITED SOURCES (vertical: three rows in
-  the body face, inside the safe column; horizontal: one row in the micro face).
+- the programme's accent rule, FROM <PROGRAMME>, and where to watch only when there is a stream (`airmode.js`
+  `streamOf`, from `CHANNEL_LIVE_URL`): NEWS 24 HOURS A DAY · WATCH LIVE (vertical: NEWS 24/7 · WATCH LIVE) for a live
+  stream, NEWS 24 HOURS A DAY for the pre-rendered one, nothing without a stream (the manual beta). A clip never points
+  to a stream that does not exist;
+- the AI disclosure in the channel ident's design: AI-PRODUCED NEWS in white, then PRESENTERS ARE AI CHARACTERS and
+  FACTS FROM CREDITED SOURCES in silver (vertical: three rows in the body face, inside the safe column; horizontal: the
+  ident's two rows).
 
 No URL is drawn, so a card never goes stale: the post carries the links.
 
-**The AI notice** (`cards.js` `drawNoticeCard`, the compliance desk's `graphics/disclosure.js` `drawClipNotice`) holds
-the clip's first four seconds, from the first frame, then slides out to the left over a quarter second (`render.js`
-`composeArgs`). Vertical: a super over the stage's foot, the programme's accent bar, three rows in the body face.
-Horizontal: the on-air notice's line under the bug (the hook plate starts under it; for the quiz, whose hook holds the
-top row's right end, 5 px lower). The factory reads the clip back and counts the frames that show it; the gate holds a
-clip without it (`clip-notice-missing`) or without its end card (`end-card-missing`). The AI plate that stood beside the
-bug (`mark.js`) is gone.
+**The AI disclosure** (owner, 18 Oct: the channel's ident alone, nothing over a programme or a clip's first seconds)
+is the end card, the caption's first line ("AI-produced news: …") and the platform's own AI label. The factory declares
+the end card (`clipCards({ endCard })`); the gate holds a clip without it or its words (`end-card-missing`), without its
+caption (`text-disclosure-missing`) or without the platform's label (`flag-missing`, `flag-unavailable`). The notice
+super that held a clip's first four seconds (`drawNoticeCard`) and the AI plate beside the bug (`mark.js`) are gone.
 
 ## 6. Thumbnails for whole programmes (`thumb.js`)
 

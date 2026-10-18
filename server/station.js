@@ -2,6 +2,7 @@ import { loadChannel, publicChannel } from './channel.js';
 import { isBreaking, notNews } from './news.js';
 import { publicError } from './usage.js';
 import { quizRefuses } from './quiz/desk.js';
+import { IDENT_AIR } from '../public/js/pace.js';
 
 /** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
 function publicFeedStatus(feeds) {
@@ -18,10 +19,10 @@ function publicFeedStatus(feeds) {
 }
 
 /**
- * Expected air time of an episode in seconds: each segment's recorded voice, or its words at 2.75 a second (pace.js
- * estimateAir), a short pause between segments and the open and close. Rough, but it only decides whether a programme ran long enough to earn a full break.
+ * Expected length of a programme in seconds: each segment's recorded voice, or its words at 2.75 a second (pace.js
+ * estimateAir), a short pause between segments and the open and close. What its targetSeconds is measured against.
  */
-export function episodeAir(ep) {
+export function programmeAir(ep) {
   const segs = Array.isArray(ep?.segments) ? ep.segments : [];
   let t = 12; // open, sign-off and end card
   for (const seg of segs) {
@@ -30,6 +31,13 @@ export function episodeAir(ep) {
   }
   return t + 0.6 * Math.max(0, segs.length - 1);
 }
+
+/**
+ * Expected air time of an episode in seconds: the channel's ident before it (pace.js CHANNEL.ident, to the second: the
+ * director airs it before every programme) and the programme. Rough, but it only decides whether a programme ran long
+ * enough to earn a full break, and where the clock's marks fall.
+ */
+export const episodeAir = (ep) => Math.ceil(IDENT_AIR) + programmeAir(ep);
 
 /** Expected length of a break in seconds (its bumper, spots and promo, and the countdown clock's hold). */
 export const breakAir = (b) => 20 + 30 * (Number(b?.ads) || 2) + (Number(b?.hold) || 0);
@@ -132,11 +140,11 @@ export class Station {
     return needBreak ? t + brk() : t;
   }
 
-  /** Expected air of `programId` in seconds: its recent episodes (as made), else the middle of its targetSeconds. */
+  /** Expected air of `programId` in seconds: its recent episodes (as made), else the middle of its targetSeconds (and the ident before it). */
   airEstimate(channel, programId) {
     if (this.airMade[programId]) return this.airMade[programId];
     const t = channel.programs[programId]?.targetSeconds;
-    return Array.isArray(t) ? (t[0] + t[1]) / 2 : 300;
+    return Math.ceil(IDENT_AIR) + (Array.isArray(t) ? (t[0] + t[1]) / 2 : 300);
   }
 
   /**
@@ -144,7 +152,8 @@ export class Station {
    * last four episodes. An edition as long as the news allows is short one day and long the next: TECH BYTES ran 127 s
    * and 470 s on 12-16 Oct, and a run planned on the average of short ones put a 400 s edition three minutes before the
    * half hour, NEWS IN 60 271 s late. Planned on the longest alone, the bulletin went 210 s early instead; halfway, the
-   * replays of rounds 3-4 keep it within 192 s of its mark both ways (tools/lengths/clock.mjs).
+   * replays of rounds 3-4 keep it within 192 s of its mark both ways (tools/lengths/clock.mjs). Since the channel's
+   * ident airs before every programme (18 Oct, 6 s each), test/fallback-lengths.test.js's day has one bulletin 288 s late.
    */
   airBefore(channel, programId) {
     const est = this.airEstimate(channel, programId);

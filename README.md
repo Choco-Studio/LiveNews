@@ -20,6 +20,7 @@ Un informativo en directo 24/7 generado por IA, hecho entero en pixel art. Un se
 - Conexión a internet para descargar los feeds, las fotos de las noticias y los datos de WORLD WEATHER (`api.open-meteo.com` y `www.gdacs.org`).
   - Detrás de un proxy HTTPS (variable `HTTPS_PROXY`), arranca Node con `NODE_USE_ENV_PROXY=1` (Node 22.21 o superior). Sin esa variable, `fetch` no usa el proxy y las peticiones fallan.
 - Opcional, para que el guion lo escriba una IA (sin ello funciona en modo demo):
+  - una clave de la API de Anthropic (Claude), **o**
   - [Codex CLI](https://github.com/openai/codex) con sesión iniciada con un plan de ChatGPT, **o**
   - una clave de API de OpenAI y/o de DeepSeek.
 
@@ -89,14 +90,15 @@ Se pueden combinar: `http://127.0.0.1:8080/?autostart=1&voice=blips&subs=0`.
 
 ## Proveedores de IA
 
-Se configuran en `PROVIDERS`, una lista separada por comas con los nombres `codex`, `openai`, `deepseek` y `mock` (los nombres desconocidos se ignoran):
+Se configuran en `PROVIDERS`, una lista separada por comas con los nombres `anthropic`, `codex`, `openai`, `deepseek`, `inbox` y `mock` (los nombres desconocidos se ignoran):
 
 ```env
-PROVIDERS=codex,openai,deepseek,mock
+PROVIDERS=anthropic,codex,openai,deepseek,mock
 ```
 
 | Proveedor | Qué usa | Cuándo está activo |
 | --- | --- | --- |
+| `anthropic` | Claude, con la API de Anthropic (SDK oficial) | Solo si hay `ANTHROPIC_API_KEY` y `ANTHROPIC_MODEL`. |
 | `codex` | `codex exec` de Codex CLI, con tu plan de ChatGPT | Siempre se intenta; si falta el ejecutable, falla y se pasa al siguiente. |
 | `openai` | API de OpenAI (Chat Completions) | Solo si hay `OPENAI_API_KEY`. |
 | `deepseek` | API de DeepSeek (Chat Completions) | Solo si hay `DEEPSEEK_API_KEY`. |
@@ -109,9 +111,26 @@ PROVIDERS=codex,openai,deepseek,mock
 3. El proveedor que falla entra en **pausa** (cooldown):
    - **30 minutos** si el error parece de cuota o límite de uso: código HTTP 429 o un mensaje que contenga `quota`, `limit`, `cuota` o `rate`.
    - Si no, una pausa **creciente**: 30 s, 1 min, 2 min... hasta un máximo de 15 min. Un éxito reinicia el contador.
+   - **Sin pausa** cuando el fallo es de esa petición y no del proveedor: Claude rechaza escribir esa noticia o su respuesta se queda sin espacio (`max_tokens`). Esa petición pasa al siguiente proveedor y la próxima vuelve a Claude.
 4. Si fallan todos, no se genera boletín nuevo y la emisión repite uno reciente (o muestra la carta de ajuste si aún no había ninguno).
 
 Deja `mock` al final de la cadena si quieres que la emisión nunca se quede sin boletines.
+
+### Claude (API de Anthropic)
+
+Usa el SDK oficial (`@anthropic-ai/sdk`): una petición por boletín, con la respuesta en *streaming* y leída entera al final, un tiempo máximo por petición y los reintentos del propio SDK ante límites de uso, sobrecarga o cortes de red. Se activa al poner la clave y el modelo (en el servidor, en `/etc/globit24.env`; nunca en el repositorio):
+
+```env
+ANTHROPIC_API_KEY=tu-clave
+ANTHROPIC_MODEL=el-modelo
+# Opcional: cuánto piensa antes de escribir (low, medium, high, xhigh, max). Vacío: lo que el modelo use por defecto.
+ANTHROPIC_EFFORT=
+ANTHROPIC_MAX_TOKENS=32000
+ANTHROPIC_TIMEOUT_MS=240000
+ANTHROPIC_MAX_RETRIES=2
+```
+
+No usa caché de prompts: cada prompt empieza con la hora a la que se escribe, así que dos prompts nunca comparten un principio que valga la pena guardar.
 
 ### Codex (suscripción de ChatGPT)
 
@@ -154,6 +173,7 @@ Cambiando `*_BASE_URL` y `*_MODEL` puedes apuntar a otro servicio compatible con
 Algunos ejemplos de cadena:
 
 ```env
+PROVIDERS=anthropic,mock        # Claude, y la demo como último recurso
 PROVIDERS=codex,openai,mock     # plan de ChatGPT, API de pago de respaldo y demo como último recurso
 PROVIDERS=deepseek,mock         # solo DeepSeek
 PROVIDERS=mock                  # sin IA
@@ -167,7 +187,13 @@ Las variables se leen de `.env` al arrancar (reinicia el servidor tras cambiarla
 | --- | --- | --- |
 | `HOST` | `127.0.0.1` | Interfaz en la que escucha el servidor. |
 | `PORT` | `8080` | Puerto del servidor. |
-| `PROVIDERS` | `codex,openai,deepseek,mock` | Orden de la cadena de proveedores de IA. |
+| `PROVIDERS` | `anthropic,codex,openai,deepseek,mock` | Orden de la cadena de proveedores de IA. |
+| `ANTHROPIC_API_KEY` | *(vacío)* | Clave de la API de Anthropic. Sin ella, `anthropic` se omite. |
+| `ANTHROPIC_MODEL` | *(vacío)* | Modelo de Claude. Sin él, `anthropic` se omite. |
+| `ANTHROPIC_EFFORT` | *(vacío)* | Cuánto piensa antes de escribir: `low`, `medium`, `high`, `xhigh` o `max`. Vacío: el valor por defecto del modelo. |
+| `ANTHROPIC_MAX_TOKENS` | `32000` | Espacio para lo que piensa más el guion más largo. |
+| `ANTHROPIC_TIMEOUT_MS` | `240000` | Tiempo máximo por petición (4 minutos). |
+| `ANTHROPIC_MAX_RETRIES` | `2` | Reintentos del SDK ante límites de uso, sobrecarga o cortes. |
 | `CODEX_BIN` | `codex` | Ejecutable de Codex CLI (ruta completa si no está en el `PATH`). |
 | `CODEX_MODEL` | `gpt-6-luna` | Modelo que se pasa a `codex exec -m`. |
 | `CODEX_EXTRA_ARGS` | *(vacío)* | Argumentos extra para `codex exec`, separados por espacios. |
@@ -275,11 +301,12 @@ La página se recupera sola si el servidor se reinicia: reconecta los eventos en
 Las cifras son **estimaciones**, no mediciones.
 
 - **Con el plan de Codex/ChatGPT**: ~0 € extra, dentro de los límites del plan (ver el aviso de arriba).
+- **Con la API de Claude**: lo que cobre Anthropic por millón de tokens de entrada y de salida para el modelo elegido (lo que el modelo piensa cuenta como salida). Mídelo con `tools/ai-bench.mjs` o con la prueba del redactor (`tools/writer/try.mjs`), que dan los tokens de un mes de emisión.
 - **Con la API de pago de GPT-6 Luna**: 0,10 $ por millón de tokens de entrada y 0,50 $ por millón de salida (precios a septiembre de 2026; **verifica los precios vigentes**).
   - Un boletín de 5 noticias ronda unos 2.500 tokens de entrada y 1.500 de salida (más si el modelo razona), es decir, del orden de **0,001 $ por boletín**.
   - Con noticias frescas se genera un boletín cada pocos minutos (lo que dura en antena el anterior). Como techo, con boletines continuos las 24 horas, saldrían unos 0,4 $ al día, del orden de **10 $ al mes**. Si hay menos noticias nuevas y se repiten boletines, baja.
 
-Para medirlo antes de emitir, `PROVIDERS=openai,mock node tools/ai-bench.mjs` escribe un programa de cada tipo con la IA (con la revisión incluida) y dice lo que tarda cada uno y lo que costaría por hora, día y mes; pasa los precios vigentes con `--price-in`, `--price-out` y `--price-cached` (dólares por millón de tokens).
+Para medirlo antes de emitir, `PROVIDERS=anthropic,mock node tools/ai-bench.mjs` escribe un programa de cada tipo con la IA (con la revisión incluida) y dice lo que tarda cada uno y lo que costaría por hora, día y mes; pasa los precios vigentes con `--price-in`, `--price-out` y `--price-cached` (dólares por millón de tokens).
 
 Para ver el gasto real, abre el panel `D` («Uso este mes») o consulta `data/usage.json`, que guarda por proveedor y día las llamadas, errores y tokens (de entrada, de salida y en caché) de los últimos ~60 días.
 
@@ -300,6 +327,7 @@ LiveNews/
 │   └── providers/
 │       ├── index.js          createProviders y ProviderChain (orden, pausas)
 │       ├── codexExec.js      Proveedor Codex CLI (`codex exec`)
+│       ├── anthropic.js      Proveedor Claude (API de Anthropic, SDK oficial)
 │       ├── openaiCompat.js   Proveedor OpenAI y DeepSeek (Chat Completions)
 │       └── mock.js           Proveedor sin IA
 ├── public/
@@ -329,7 +357,7 @@ Flujo de datos:
   Station (cola) ...... buildPrompt(noticias)
         |
         v
-  ProviderChain ....... codex -> openai -> deepseek -> mock
+  ProviderChain ....... anthropic -> codex -> openai -> deepseek -> mock
         |   texto de la respuesta
         v
   writer.extractJson + writer.normalizeBulletin   (valida y recorta)

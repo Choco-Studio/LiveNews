@@ -44,8 +44,7 @@ if (typeof window.__playoutHold === 'string' && window.__playoutHold) {
 if (params.get('twin') === '1' && !clipOpts.on) {
   const g = await import('./clip/graphics.js');
   const tw = Object.assign(document.createElement('canvas'), { width: canvas.width, height: canvas.height, id: 'twin' });
-  // (the twin draws the notice as the clip master does, and leaves the reporting to the on-air package)
-  renderer.twin = { canvas: tw, ctx: tw.getContext('2d'), graphics: new g.ClipGraphics({ audio, report: false }) };
+  renderer.twin = { canvas: tw, ctx: tw.getContext('2d'), graphics: new g.ClipGraphics({ audio }) };
   renderer.twin.ctx.imageSmoothingEnabled = false;
   window.__twin = tw;
 }
