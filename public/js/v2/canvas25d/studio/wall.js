@@ -2865,10 +2865,27 @@ function quizWall(out) {
   const o = m === 'picture' || m === 'idle' || m === 'rest' ? out : { mode: 'idle' };
   return { ...o, story: m === 'picture' ? o.story : false, soloSeat: true };
 }
-/** FULL TIME's side screen: a picture, THE NUMBER's figure on its own segment, else the emblem (never a map or plate). */
+/**
+ * FULL TIME's side screen: a picture, THE NUMBER's figure on its own segment, a result story's result, else the emblem
+ * (never a map, a plate or a story's other numbers).
+ */
 function fullTimeWall(out, seg) {
   const m = out.mode;
-  if (m === 'picture' || m === 'idle' || m === 'rest' || (m === 'figure' && seg?.feature === 'number')) return out;
+  if (m === 'picture' || m === 'rest' || (m === 'figure' && seg?.feature === 'number')) return out;
+  // the visual-variety round (owner, 18 Oct): a result story with no picture of its own puts its result on the screen
+  // behind the presenter, not the idle emblem story after story: the score with the result in words (the shape's
+  // scoreline, full-time.md §3.5: the winner first and the verb, so no home or away is claimed)
+  if (out.story && seg?.type === 'story' && !seg.feature) {
+    const sc = seg.score;
+    if (sc && typeof sc.a === 'string' && typeof sc.b === 'string' && Number.isFinite(Number(sc.sa)) && Number.isFinite(Number(sc.sb))) {
+      const won = !sc.draw && sc.winner;
+      const a = won ? sc.winner : sc.a;
+      const b = won ? (sc.winner === sc.a ? sc.b : sc.a) : sc.b;
+      const sa = won && sc.winner === sc.b ? sc.sb : sc.sa;
+      const sb = won && sc.winner === sc.b ? sc.sa : sc.sb;
+      return { mode: 'figure', figure: { value: `${sa}-${sb}`, label: `${a} ${won ? 'BEAT' : 'DREW WITH'} ${b}`.toUpperCase(), pre: '' }, story: true };
+    }
+  }
   return { mode: 'idle' };
 }
 // the writer's feature kickers (server/writer.js FEATURE_KICKERS): segue labels, never wall content

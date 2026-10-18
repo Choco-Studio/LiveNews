@@ -52,7 +52,7 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
-import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax, plainFact, scoreBoard } from '../../../pace.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, storyBoards, numbersBoard, shotMax, plainFact, scoreBoard } from '../../../pace.js';
 
 // PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
 // the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
@@ -145,6 +145,12 @@ export function planShots(ctx) {
     out.sort((a, b) => a.at - b.at);
     if (SHOT_STYLES[id].singleSoft) splitLongSingles(ctx, tl, out, SHOT_STYLES[id].singleSoft);
   }
+  // FULL TIME (the visual-variety round): no studio shot planned past the profile's maximum, whatever made it (a single
+  // capMax handed back to after a card, a slate's single): a sentence start, else a phrase word (rank 2, as capMax cuts)
+  if (ctx.type === 'story' && !boardSeg && id === 'full-time') capStudioHard(ctx, tl, out, SHOT_STYLES[id].studioMax);
+  // FULL TIME: a story whose screen shows nothing of its own (no picture, no result: the emblem) takes the two-shot where
+  // the plan had the over-the-shoulder (the runtime drops an over-the-shoulder of an empty screen: a run of one single)
+  if (ctx.type === 'story' && !boardSeg && id === 'full-time' && ctx.duo && !ftScreenShows(ctx)) ftTwoForOts(ctx, out);
   // a programme whose cut cooldown is longer than the channel's minimum shot (COSMOS: 4.5 s) never plans two cuts
   // closer than it: the runtime would hold the later one back into the middle of its sentence
   const cool = PACE[id]?.shots?.cooldown ?? MIN_SHOT;
@@ -291,9 +297,39 @@ function chatRunAfter(ctx, gap) {
   let t = 0;
   let j = ctx.index + 1;
   if (segs[j]?.type !== 'chat' || ownCard(ctx, j)) return 0;
-  for (; j < segs.length && segs[j].type === 'chat' && !ownCard(ctx, j); j++) t += segLength(ctx, j) + gap;
+  // (FULL TIME's two-way answer has its own two-shot: the run on the wide ends before it)
+  for (; j < segs.length && segs[j].type === 'chat' && !ownCard(ctx, j) && ftTwoWay(ctx, j) !== 'whole'; j++) t += segLength(ctx, j) + gap;
   // the sign-off shares the chats' two-shot unless the closing run splits (closingRun)
   if (segs[j]?.type === 'outro' && ctx.duo && !closingRun(ctx)?.two) t += segLength(ctx, j) + gap;
+  return t;
+}
+
+/**
+ * FULL TIME's two-way (the visual-variety round, owner 18 Oct): chat j is an answer in a chat run (every other chat
+ * after the first), long enough for a shot of its own, outside the closing run: it plays on the two-shot, the question
+ * on the wide before it, so no chat run holds one wide. 'whole': the questions before it hold the wide its minimum, the
+ * answer is all on the two-shot; 'split': a short question, the answer opens on the same wide and turns to the two-shot
+ * once the wide has held its minimum (worldNow's chat); false: no two-way.
+ */
+function ftTwoWay(ctx, j) {
+  if (ctx.programId !== 'full-time' || !ctx.duo) return false;
+  const segs = ctx.episode?.segments || [];
+  if (segs[j]?.type !== 'chat' || chatFraming(ctx, j) !== 'wide' || segLength(ctx, j) < MIN_SHOT + 1) return false;
+  let n = 0;
+  let before = 0;
+  for (let i = j - 1; i >= 0 && segs[i]?.type === 'chat'; i--) {
+    n++;
+    before += segLength(ctx, i) + gapOfSeg(ctx, i, DEFAULT_GAP);
+  }
+  if (n % 2 !== 1) return false;
+  return before >= MIN_SHOT ? 'whole' : 'split';
+}
+
+/** The chats straight before chat j in its run, with their pauses (s). */
+function chatsBefore(ctx, j) {
+  const segs = ctx.episode?.segments || [];
+  let t = 0;
+  for (let i = j - 1; i >= 0 && segs[i]?.type === 'chat'; i--) t += segLength(ctx, i) + gapOfSeg(ctx, i, DEFAULT_GAP);
   return t;
 }
 
@@ -533,6 +569,71 @@ function capStudio(ctx, tl, out, max, altOf) {
   return out;
 }
 
+/**
+ * FULL TIME's last cap (the visual-variety round, owner 18 Oct): a single still planned past `max` after the caps and
+ * splits gives way to the presenter's other single at the sentence start nearest its middle (both parts at least
+ * MIN_SHOT), else at a phrase word (after a comma, an accent or a content word: wordCut rank 2), as capMax cuts a card.
+ * Seen: a tennis story's single of 14.6 s after its slate, a Championship story's 13.6 s after its scoreline card.
+ * Repeats until every part fits. Mutates `out`.
+ */
+function capStudioHard(ctx, tl, out, max) {
+  for (let guard = 0; guard < 8; guard++) {
+    let changed = false;
+    for (let k = 0; k < out.length; k++) {
+      const e = out[k];
+      if (e.shot !== 'close' || !e.framing) continue;
+      const t1 = k + 1 < out.length ? out[k + 1].at : tl.end;
+      if (t1 - e.at <= max) continue;
+      const alt = altSingle(ctx, e);
+      if (!alt) continue;
+      const mid = (e.at + t1) / 2;
+      let best = null;
+      for (const b of tl.bounds) {
+        if (b.blocked || b.t - e.at < MIN_SHOT - 1e-6 || t1 - b.t < MIN_SHOT - 1e-6) continue;
+        if (!best || Math.abs(b.t - mid) < Math.abs(best.t - mid)) best = b;
+      }
+      if (!best) best = wordCut(ctx, e.at + MIN_SHOT, t1 - MIN_SHOT, 2, mid);
+      if (!best) continue;
+      out.splice(k + 1, 0, ev(ctx, best.t, best.char, alt.shot, alt.framing, alt.focus || e.focus, 'alt', best.word ? { place: 'phrase' } : null));
+      keepAlternating(ctx, out, k + 1);
+      if (e.move) {
+        const end = best.t - e.at - 0.5;
+        if (e.move.delay + e.move.dur > end) e.move = moveIn(e.move.type, e.move.amount, e.move.delay, end);
+      }
+      changed = true;
+      break;
+    }
+    if (!changed) return out;
+  }
+  return out;
+}
+
+/** FULL TIME's screen has the story's own content (studio/wall.js fullTimeWall): its picture, or its result. */
+function ftScreenShows(ctx) {
+  if (ctx.hasImage) return true;
+  const sc = ctx.seg?.score;
+  return !ctx.seg?.feature && !!sc && typeof sc.a === 'string' && typeof sc.b === 'string' && Number.isFinite(Number(sc.sa)) && Number.isFinite(Number(sc.sb));
+}
+
+/**
+ * FULL TIME's over-the-shoulders of an empty screen → the two-shot (an opening one → the reader's single; the last one
+ * → the wide when the chats after the story play on the two-shot, so the cut into them is one). Mutates `out`.
+ */
+function ftTwoForOts(ctx, out) {
+  const nextTwo = ctx.episode?.segments?.[ctx.index + 1]?.type === 'chat' && chatFraming(ctx, ctx.index + 1) === 'two';
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (e.shot !== 'close' || e.framing !== 'ots') continue;
+    if (k === 0) e.framing = singleFraming(ctx, e.focus);
+    else {
+      e.shot = 'wide';
+      e.framing = nextTwo && k === out.length - 1 ? 'wide' : 'two';
+    }
+  }
+  // (two cues in a row of the same shot are one: the later goes)
+  for (let k = out.length - 1; k > 0; k--) if (out[k].shot === out[k - 1].shot && out[k].framing === out[k - 1].framing && out[k].focus === out[k - 1].focus && !out[k].move) out.splice(k, 1);
+}
+
 /** The other single of the same presenter: the over-the-shoulder wall framing ⇄ the programme's single. */
 function altSingle(ctx, e) {
   if (!e.framing || e.framing === 'wide' || e.framing === 'two') return null;
@@ -752,7 +853,19 @@ function worldNow(ctx, tl) {
     if (ctx.duo && !ctx.grave) w.move = moveIn('push', Math.min(WIDE_MOVE, 0.008 * (tl.end - w.at - 1)), 0.5, tl.end - w.at - 0.8);
     return out;
   }
-  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : singleFraming(ctx), me, 'chat')];
+  if (ctx.type === 'chat') {
+    // FULL TIME's two-way (the visual-variety round, owner 18 Oct): an answer in a chat run, long enough for a shot of
+    // its own, plays on the two-shot after the question's wide (a run alternates them), so no chat run holds one wide
+    const two = ftTwoWay(ctx, ctx.index);
+    if (two === 'whole') return [ev(ctx, 0, 0, 'wide', 'two', me, 'chat')];
+    if (two === 'split') {
+      // (the question's wide runs on into the answer to its minimum, then the two-shot: a sentence start, else a phrase)
+      const from = MIN_SHOT - chatsBefore(ctx, ctx.index);
+      const b = tl.bounds.find((x) => !x.blocked && x.t >= from - 1e-6 && tl.end - x.t >= MIN_SHOT - 1e-6) || wordCut(ctx, from, tl.end - MIN_SHOT, 2, from);
+      if (b) return [ev(ctx, 0, 0, 'wide', chatFraming(ctx), me, 'chat'), ev(ctx, b.t, b.char, 'wide', 'two', me, 'chat-two', b.word ? { place: 'phrase' } : null)];
+    }
+    return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : singleFraming(ctx), me, 'chat')];
+  }
   if (ctx.type === 'outro') {
     const e = ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff');
     // pull-out ≤ 4 %: from 0.5 s after the sign-off's first word (a cut from the closing
@@ -781,6 +894,7 @@ function worldNow(ctx, tl) {
     finally: isFinally(ctx),
   });
   shortResultCard(ctx, tl, out);
+  if (ctx.programId === 'full-time') fullTimeBoards(ctx, tl, out);
   noMapEnd(ctx, tl, out);
   capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
   splitLongSingles(ctx, tl, out, S.singleSoft);
@@ -808,6 +922,68 @@ function shortResultCard(ctx, tl, out) {
   const room = (paceFor(ctx.programId).shots.factMin ?? MIN_SHOT) - gap;
   const b = [...tl.bounds].reverse().find((x) => !x.blocked && x.t >= MIN_SHOT - 1e-6 && tl.end - x.t >= room - 1e-6);
   if (b) out.push(ev(ctx, b.t, b.char, 'fact', null, ctx.speaker, 'fact'));
+}
+
+/**
+ * FULL TIME's own boards (the visual-variety round, owner 18 Oct): a story that turns the running order to another sport
+ * opens on that sport's slate (seg.slate), MOMENT OF THE DAY on its title board, each for its first sentences (at least
+ * MIN_SHOT, the presenter's single after them); a long story with a second board of its own (WHERE THEY STAND, THE RUN,
+ * after its scoreline) shows it too, in the latter part where a single would otherwise hold. Each card names its board
+ * (`board`), so the director shows that one (director.js cardFor). Mutates `out`.
+ */
+const FT_OPEN_MAX = 7.5; // s at most on an opening slate before the story's own pictures
+function fullTimeBoards(ctx, tl, out) {
+  const seg = ctx.seg || {};
+  const S = paceFor(ctx.programId).shots;
+  const me = ctx.speaker;
+  const open = seg.slate && S.slate ? 'sport' : seg.feature === 'lighter' && S.moment ? 'moment' : null;
+  if (open && out.length && tl.end >= MIN_SHOT * 2) {
+    // the card holds to the first sentence start past MIN_SHOT (never past FT_OPEN_MAX when another start allows it)
+    const b = tl.bounds.find((x) => !x.blocked && x.t >= MIN_SHOT - 1e-6 && x.t <= FT_OPEN_MAX && tl.end - x.t >= MIN_SHOT - 1e-6) || boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+    if (b) {
+      const single = out[0].shot === 'close' ? out[0].framing : singleFraming(ctx);
+      const rest = out.filter((e) => e.at >= b.t - 1e-6);
+      out.length = 0;
+      out.push(ev(ctx, 0, 0, 'fact', null, me, `fact-${open}`, { board: open }));
+      // (the story's own next picture takes over at that start, else the presenter's single)
+      if (!rest.length || rest[0].at > b.t + 1e-6) out.push(ev(ctx, b.t, b.char, 'close', single, me, 'single'));
+      out.push(...rest);
+    }
+  }
+  // a story the plan shows on its presenter alone (no picture, no board, no slate: the recording's run of three such
+  // stories aired as 60 s of singles) turns on the wide, both presenters, for its first sentence (at least MIN_SHOT,
+  // at most FT_OPEN_MAX when a sentence start allows it), then the reader's single
+  if (!open && ctx.duo && !ctx.grave && out.length && out[0].shot === 'close' && out.every((e) => e.shot === 'close') && tl.end >= MIN_SHOT * 2.5) {
+    const b = tl.bounds.find((x) => !x.blocked && x.t >= MIN_SHOT - 1e-6 && x.t <= FT_OPEN_MAX && tl.end - x.t >= MIN_SHOT - 1e-6) || wordCut(ctx, MIN_SHOT, Math.min(FT_OPEN_MAX, tl.end - MIN_SHOT), 2, MIN_SHOT + 1);
+    if (b) {
+      const first = out[0];
+      const rest = out.filter((e) => e.at >= b.t - 1e-6);
+      out.length = 0;
+      out.push(ev(ctx, 0, 0, 'wide', 'wide', me, 'story-turn'));
+      if (!rest.length || rest[0].at > b.t + 1e-6) out.push(ev(ctx, b.t, b.char, 'close', first.framing, me, 'single', b.word ? { place: 'phrase' } : null));
+      out.push(...rest);
+    }
+  }
+  // the second board: a long story whose plan shows one board, with another of its own, where a single holds long
+  const boards = storyBoards(seg, ctx.programId).map((x) => x.kind).filter((k) => k !== 'chalk');
+  const shown = out.filter((e) => e.shot === 'fact').map((e) => e.board || boards[0]);
+  const second = boards.find((k) => !shown.includes(k) && (k === 'standing' || k === 'form'));
+  if (second && tl.end >= 15) {
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i];
+      if (e.shot !== 'close') continue;
+      const end = i + 1 < out.length ? out[i + 1].at : tl.end;
+      if (end - e.at < MIN_SHOT * 2 + 0.5) continue;
+      const b = boundaryAfter(tl, e.at + MIN_SHOT, MIN_SHOT);
+      if (!b || b.t > end - MIN_SHOT) continue;
+      const cut = ev(ctx, b.t, b.char, 'fact', null, me, `fact-${second}`, { board: second });
+      const back = end - (b.t + Math.max(MIN_SHOT, 5)) >= MIN_SHOT ? boundaryAfter(tl, b.t + Math.max(MIN_SHOT, 5), MIN_SHOT) : null;
+      const ins = [cut];
+      if (back && back.t < end - MIN_SHOT + 1e-6) ins.push(ev(ctx, back.t, back.char, 'close', e.framing, me, 'single'));
+      out.splice(i + 1, 0, ...ins);
+      break;
+    }
+  }
 }
 
 /**

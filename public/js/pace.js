@@ -301,7 +301,11 @@ const PROGRAMMES = {
     // BY THE NUMBERS (THE NUMBER is its own segment), no timeline or FROM → TO (the bible's boards are these), and no
     // plain KEY FACT card (factCard false: a story without one of its boards stands on its picture; THE NUMBER keeps
     // its card)
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 8], cutsPerMinMax: 9, scoresMax: 40, factCard: false, quoteCard: true, score: true, chalk: true, fixtures: true, proportion: true, next: true, who: true, known: true },
+    // the visual-variety round (owner, 18 Oct): WHERE THEY STAND and THE RUN from a story's own words, the sport's slate
+    // and MOMENT OF THE DAY's board (slate, moment), SCORE CENTRE in two pictures (the stadium's board, then the wall,
+    // so no picture holds past 12 s: scoresMax), up to 10 cuts a minute; studio shots planned to 11 s, a single split past
+    // 9 (the voice runs a little past its plan and a cut lands on a word: planned at 12, singles aired 12.4-13.5 s)
+    shots: { median: [4.5, 6.5], studioMax: 11, singleSoft: 9, picture: [4, 8], map: [4, 8], cutsPerMinMax: 10, scoresMax: 12, factCard: false, quoteCard: true, score: true, chalk: true, fixtures: true, proportion: true, next: true, who: true, known: true, standing: true, form: true, slate: true, moment: true },
     moves: { max: 2, minGap: 60 },
     gestures: { perMin: 5.5, minGap: 5, beatsPerMin: 8, rest: 0.58, grave: 2, floor: 2.5 },
     listener: { reactionGap: 7, nodsPerMin: [1.2, 6] },
@@ -332,7 +336,7 @@ const PROGRAMMES = {
     // answers, the verdicts, the reactions) and the boards back for the reveals hold the network's 4 s, the reading
     // boards 9-23 s
     shots: { median: [4, 6.5], studioMax: 12, singleSoft: 10, cutsPerMinMax: 10, quiz: true, quizMax: 40 },
-    moves: { max: 0, minGap: Infinity }, // the quiz's framings are locked off (studio/quiz.js quizCamera)
+    moves: { max: 2, minGap: 60 }, // the visual-variety round: a push in on the welcome's wide, a pull out on the sign-off's (quizplay.js); the rest locked off
     gestures: { perMin: 5, minGap: 4.5, beatsPerMin: 7, rest: 0.6, grave: 2, floor: 2.5 },
     listener: { reactionGap: 7, nodsPerMin: [1, 6] },
     music: { minBed: 20, maxChangesPerMin: 2 },
@@ -560,10 +564,26 @@ export function whoBoard(seg, programId) {
   return people.length >= 2 ? people : null;
 }
 
-// a story's boards, strongest first (full-time.md §5: the scoreline, then WHO'S WHO / IN PROPORTION / WHAT HAPPENS NEXT /
-// WHAT WE KNOW; FROM → TO before them, HOW WE GOT HERE last, as before)
+/** WHERE THEY STAND (pace shots.standing): seg.standing { team, text }, the story's own words on a side's place. */
+export function standingBoard(seg, programId) {
+  const c = seg?.standing;
+  if (!paceFor(programId).shots.standing || !c) return null;
+  return str(c.team) && str(c.text) ? c : null;
+}
+
+/** THE RUN (pace shots.form): seg.form { team, count, label, cells }, the story's own words on a side's run. */
+export function formBoard(seg, programId) {
+  const c = seg?.form;
+  if (!paceFor(programId).shots.form || !c) return null;
+  return str(c.team) && str(c.label) && Number(c.count) >= 2 ? c : null;
+}
+
+// a story's boards, strongest first (full-time.md §5: the scoreline, then WHERE THEY STAND / THE RUN (the visual-variety
+// round), WHO'S WHO / IN PROPORTION / WHAT HAPPENS NEXT / WHAT WE KNOW; FROM → TO before them, HOW WE GOT HERE last)
 const BOARD_ORDER = [
   ['score', scoreBoard],
+  ['standing', standingBoard],
+  ['form', formBoard],
   ['chalk', chalkBoard],
   ['change', changeBoard],
   ['who', whoBoard],
@@ -606,6 +626,10 @@ function boardText(b) {
       return `${v.a} ${v.sa} ${v.b} ${v.sb} FT`;
     case 'chalk':
       return v.label || `${v.yards ?? v.metres} ${v.yards !== undefined ? 'YARDS' : 'METRES'}`;
+    case 'standing':
+      return `${v.team} ${v.text}`;
+    case 'form':
+      return `${v.team} ${v.count} ${v.label} ${v.cells || ''}`;
     case 'change':
       return `${v.label} ${v.from} ${v.to}`;
     case 'who':

@@ -8,7 +8,8 @@
 // board's black panel reads against it, the captions below sit on black, and nothing moves behind the text.
 import { P } from '../palette.js';
 import { lazyBackdrop } from './opens/kit.js';
-import { drawQuestionBoard, drawLettersBoard, drawWhereBoard, drawHowManyBoard, drawTodayBoard, drawRoundCard, drawDoubleCard, drawScoresStrip, drawTableBoard } from './cards-quiz.js';
+import { drawQuestionBoard, drawLettersBoard, drawWhereBoard, drawHowManyBoard, drawTodayBoard, drawDoubleCard, drawScoresStrip, drawTableBoard } from './cards-quiz.js';
+import { drawRoundTransition, drawHalftimeBoard, drawRevealView, hasRevealView, drawPictureOpen } from './cards-quiz-more.js';
 
 const GROUND = lazyBackdrop({ key: 'quiz-ground', colors: [P.black, P.ink], cx: 192, cy: 81, reach: 250 });
 
@@ -18,7 +19,9 @@ const BOARDS = {
   where: drawWhereBoard,
   howmany: drawHowManyBoard,
   today: drawTodayBoard,
-  round: drawRoundCard,
+  round: drawRoundTransition, // (the round's card as a transition: its emblem, the bulbs, the score so far: cards-quiz-more.js)
+  halftime: drawHalftimeBoard,
+  'picture-open': drawPictureOpen,
   double: drawDoubleCard,
   final: drawScoresStrip,
   table: drawTableBoard,
@@ -30,8 +33,11 @@ const BOARDS = {
  */
 export function drawQuizShot(ctx, t, dt, card) {
   ctx.drawImage(GROUND(), 0, 0);
+  const d = Number.isFinite(card?.epoch) ? Math.max(0, t - card.epoch) : dt;
+  // a question back from the players' faces for its reveal: its reveal view (cards-quiz-more.js), from the view's cut
+  if (card?.o?.view === 'reveal' && Number.isFinite(card.o.viewAt) && hasRevealView(card.board)) return drawRevealView(ctx, d, card);
   const draw = BOARDS[card?.board];
-  if (draw) draw(ctx, Number.isFinite(card?.epoch) ? Math.max(0, t - card.epoch) : dt, card.o || {});
+  if (draw) draw(ctx, d, card.o || {});
 }
 
 /**

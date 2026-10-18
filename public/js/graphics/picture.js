@@ -24,7 +24,8 @@ export function picturesOnScreen(scene) {
   // a correspondent's B-roll shows the story's picture only when the place's footage is not there (its FILE credit is
   // the link graphics')
   if (shot === 'broll') return !card.footage && !scene.fileCredit && has(scene.storyId, 'full') ? [scene.storyId] : [];
-  if (shot === 'fact') return has(scene.storyId, 'card') ? [scene.storyId] : [];
+  // (a board on its own ground shows no picture, so no credit: the sport's slate, the chalkboard, COMING UP)
+  if (shot === 'fact') return has(scene.storyId, 'card') && !card.sport?.name && !card.chalk && !(Array.isArray(card.fixtures) && card.fixtures.length >= 2) ? [scene.storyId] : [];
   if (shot === 'montage') {
     const id = scene.rundown?.[card.index]?.storyId;
     return card.pic && id ? [id] : [];

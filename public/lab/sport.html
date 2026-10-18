@@ -106,6 +106,29 @@ add('THE MOMENT ON THE BOARD · from 30 yards', (ctx) => drawChalkboard(ctx, dt,
 add('THE MOMENT ON THE BOARD · a 45-yard field goal', (ctx) => drawChalkboard(ctx, dt, { chalk: { yards: 45, sport: 'american-football' } }));
 add('THE MOMENT ON THE BOARD · a penalty from 45 metres (rugby)', (ctx) => drawChalkboard(ctx, dt, { chalk: { metres: 45, sport: 'rugby' } }));
 add('THE MOMENT ON THE BOARD · from the spot', (ctx) => drawChalkboard(ctx, dt, { chalk: { yards: 12, label: 'THE PENALTY SPOT', sport: 'football' } }));
+// the visual-variety round (owner, 18 Oct): the sport's slate, MOMENT OF THE DAY, WHERE THEY STAND, THE RUN, SCORE
+// CENTRE's wall, a picture-less headline frame with its sport (scenes/cards-sport-more.js)
+const M = await import('/js/scenes/cards-sport-more.js');
+const C = await import('/js/scenes/cards.js');
+add('SLATE · tennis, one story', (ctx) => C.drawFactCard(ctx, dt, dt, { sport: { sport: 'tennis', name: 'TENNIS', count: 1 }, programId: 'full-time' }));
+add('SLATE · racing, two stories (the horseshoe)', (ctx) => C.drawFactCard(ctx, dt, dt, { sport: { sport: 'racing', name: 'RACING', count: 2 }, programId: 'full-time' }));
+add('SLATE · rugby league, a long name', (ctx) => C.drawFactCard(ctx, dt, dt, { sport: { sport: 'rugby', name: 'RUGBY LEAGUE', count: 1 }, programId: 'full-time' }));
+add('MOMENT OF THE DAY', (ctx) => C.drawFactCard(ctx, dt, dt, { moment: { headline: 'Henderson, 36, talks referee into changing his mind', sport: 'football', label: 'MOMENT OF THE DAY' }, source: 'BBC Sport', programId: 'full-time' }));
+add('WHERE THEY STAND', (ctx) => C.drawFactCard(ctx, dt, dt, { standing: { team: 'KILMARNOCK', text: 'OFF THE BOTTOM OF THE SCOTTISH PREMIERSHIP' }, sport: 'football', source: 'Sky Sports', programId: 'full-time' }));
+add('THE RUN · five defeats', (ctx) => C.drawFactCard(ctx, dt, dt, { form: { team: 'NORWICH', count: 5, label: 'SUCCESSIVE LEAGUE DEFEATS', cells: 'LLLLL' }, sport: 'football', source: 'Sky Sports', programId: 'full-time' }));
+add('THE RUN · unbeaten, no cells', (ctx) => C.drawFactCard(ctx, dt, dt, { form: { team: 'PORTSMOUTH', count: 9, label: 'LEAGUE GAMES UNBEATEN', cells: '' }, sport: 'football', source: 'Sky Sports', programId: 'full-time' }));
+const WALL = [
+  { a: 'Dundee United', b: 'St Johnstone', sa: 1, sb: 1, draw: true, sport: 'football' },
+  { a: 'Falkirk', b: 'Hibs', sa: 2, sb: 1, winner: 'Falkirk', sport: 'football' },
+  { a: 'Aberdeen', b: 'St Mirren', sa: 3, sb: 1, winner: 'Aberdeen', sport: 'football' },
+  { a: 'Sheffield United', b: 'Bristol City', sa: 1, sb: 0, winner: 'Sheffield United', sport: 'football' },
+  { a: 'Southampton', b: 'Bolton', sa: 0, sb: 0, draw: true, sport: 'football' },
+  { a: 'Ulster', b: 'Zebre', sa: 40, sb: 21, winner: 'Ulster', sport: 'rugby' },
+];
+add('SCORE CENTRE · the wall, six results', (ctx) => C.drawFactCard(ctx, dt, dt, { wall: { scores: WALL, rowTimes: WALL.map((_, i) => i * 0.12), title: "SATURDAY'S RESULTS", source: 'BBC Sport' }, programId: 'full-time' }));
+add('SCORE CENTRE · the wall, the longest names', (ctx) => C.drawFactCard(ctx, dt, dt, { wall: { scores: [{ a: 'Wolverhampton Wanderers', b: 'Brighton & Hove Albion', sa: 1, sb: 3, winner: 'Brighton & Hove Albion', sport: 'football' }, ...WALL.slice(0, 3)], rowTimes: [0, 0, 0, 0], title: 'THE LATEST RESULTS', source: 'Sky Sports' }, programId: 'full-time' }));
+add('HEADLINE FRAME · no picture, its sport (tennis)', (ctx) => C.drawHeadlineFrame(ctx, dt, dt, { index: 1, total: 3, headline: 'Kartal reaches Wuhan final', source: 'BBC Sport', kicker: 'TENNIS', sport: 'tennis', programId: 'full-time', accent: P.orange }));
+add('HEADLINE FRAME · no picture, its sport (racing)', (ctx) => C.drawHeadlineFrame(ctx, dt, dt, { index: 2, total: 3, headline: 'Loughnane, 20, becomes youngest champion jockey in a century', source: 'BBC Sport', kicker: 'RACING', sport: 'racing', programId: 'full-time', accent: P.orange }));
 </script>
 </body>
 </html>

@@ -13,7 +13,9 @@ import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard, plainFact, identBefore } from './pace.js';
+import { VARIETY, shotLayout } from './variety.js';
+import { sportOfKicker, iconOf } from './scenes/cards-sport.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, storyBoards, pickBoard, plainFact, identBefore } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 import { recreationOf } from './graphics/recreation.js';
@@ -69,6 +71,74 @@ const VOICE_QUIET = 0.2;
 function stopCut(h) {
   if (h && typeof h === 'object') h.cancel();
   else clearTimeout(h);
+}
+
+/**
+ * FULL TIME's named boards (visual-variety round, owner 18 Oct; full-time.md §5): the card for a board the v2 plan
+ * names, or null when the story does not carry it (the plan's beat then falls back to the story's own board).
+ */
+function namedBoard(seg, kind, programId) {
+  const P = paceFor(programId).shots;
+  if (kind === 'sport') return P.slate && seg.slate?.name ? { sport: { ...seg.slate }, source: seg.source } : null;
+  if (kind === 'moment') {
+    if (!P.moment || !seg.headline) return null;
+    return { moment: { headline: seg.headline, sport: seg.sport || seg.score?.sport || null, label: seg.kicker || 'MOMENT OF THE DAY' }, source: seg.source };
+  }
+  const b = storyBoards(seg, programId).find((x) => x.kind === kind);
+  return b ? { [b.kind]: b.value, sport: seg.sport || null, source: seg.source } : null;
+}
+
+/**
+ * SCORE CENTRE's turn from the stadium's board to the wall (the visual-variety round): the index of the row whose line
+ * is nearest the middle of the voice and its pause, both pictures at least `minShot` s, or -1. A row's time is its first
+ * word's in the recorded voice (seg.audio.words), else its place in the text at the voice's pace.
+ */
+export function turnRow(seg, rows, voiceLen, gap, minShot) {
+  const total = voiceLen + (Number.isFinite(gap) ? gap : 0);
+  const timeOf = (c) => rowTime(seg, c, voiceLen);
+  let best = -1;
+  let score = Infinity;
+  rows.forEach((r, i) => {
+    if (i < 1 || !Number.isFinite(r.char)) return;
+    const t = timeOf(r.char);
+    if (t < minShot || total - t < minShot) return;
+    const m = Math.max(t, total - t);
+    if (m < score) {
+      score = m;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/** The variety trace of the shot now on air (variety.js shotLayout; a headline frame by what fills it). */
+function traceShot(s) {
+  try {
+    const card = s.shot === 'montage' && s.card ? { ...s.card, look: montageLook(s) } : s.card;
+    const L = shotLayout({ shot: s.shot, framing: s.framing ?? null, focus: s.focus ?? null, card });
+    paceTrace({ k: 'shot', shot: s.shot, framing: s.framing ?? null, focus: s.focus ?? null, group: L.group, kind: L.kind, layout: L.layout });
+  } catch {
+    /* tracing never breaks playout */
+  }
+}
+
+/** What fills a headline frame (studio.js 'montage'): its picture, its footage, its place, FULL TIME's sport, else text. */
+function montageLook(s) {
+  const item = s.rundown?.[s.card?.index];
+  if (!item) return 'text';
+  if (s.images?.get?.(item.storyId)?.card) return 'picture';
+  if (item.footage?.id) return 'footage';
+  if (Number.isFinite(item.location?.lat) && Number.isFinite(item.location?.lon)) return 'map';
+  const key = s.program?.theme === 'sport' ? sportOfKicker(item.kicker) : null;
+  return key && iconOf(key) ? `sport:${key}` : 'text';
+}
+
+/** When the voice reaches character `c` of a segment (s): its word's time in the recorded voice, else its place in the text. */
+export function rowTime(seg, c, voiceLen) {
+  const words = Array.isArray(seg?.audio?.words) ? seg.audio.words : [];
+  const w = words.find((x) => Number.isFinite(x.char) && x.char >= c - 1);
+  if (w && Number.isFinite(w.t)) return w.t;
+  return (c / (String(seg?.text || '').length || 1)) * voiceLen;
 }
 
 /** What a full-screen card shows (two cards with the same content are one shot; a different one is a cut). */
@@ -151,7 +221,7 @@ export class Director {
     // a full-screen card that gives way to another card (BY THE NUMBERS → the quote card IN THEIR WORDS) is a cut the
     // viewer sees: its clock restarts, so the cooldown and the maxima count from it (a 13 s "card" aired once, WORLD NOW)
     // (PAY ATTENTION: each board is a card of its own, a new question a new card: quizdirector.js)
-    const newCard = s.shot === shot && 'card' in extra && (shot === 'quiz' ? extra.card !== s.card : shot === 'fact' && cardKey(extra.card) !== cardKey(s.card));
+    const newCard = s.shot === shot && 'card' in extra && (shot === 'quiz' ? extra.card !== s.card : (shot === 'fact' || shot === 'scores') && cardKey(extra.card) !== cardKey(s.card));
     const reframed = !!this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null); // v2: a new framing (single → ots) is a cut
     const changed = restart || newCard || reframed || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
     Object.assign(s, extra);
@@ -161,8 +231,12 @@ export class Director {
     if (changed) {
       this.mapRun = shot === 'map' ? (this.mapRun || 0) + 1 : 0; // PACE: map cuts in a row (shots.mapRun)
       // PACE: a focus re-set of the wide is no visible cut (v2: a new framing of it, the two-shot ⇄ the wide, is one)
-      if (!(shot === 'wide' && s.shot === 'wide') || reframed) this.seenSince = now();
+      const visible = !(shot === 'wide' && s.shot === 'wide') || reframed;
+      if (visible) this.seenSince = now();
       s.shot = shot;
+      // the variety trace (variety.js): every visible cut with what it shows (tools/pace/variety-report.mjs reads it
+      // from a recording); only while a recorder traces (paceTrace is a no-op on air)
+      if (visible && globalThis.__sc) traceShot(s);
       s.shotSince = now();
       if (shot === 'full') s.panDir = Math.random() < 0.5 ? 1 : -1;
       if (this.v2 && !('framing' in extra)) s.framing = s.cameraMove = null; // v2: a framing belongs to the cue that set it
@@ -765,6 +839,39 @@ export class Director {
     const wait = cutWait(s.program?.id, s.shotSince, now());
     const pending = wait > 0.05 ? this.cutWhenClear(wait, go) : (go(), null);
     const at = () => (since === null ? 0 : Math.max(0, now() - since));
+    // SCORE CENTRE's second picture (the visual-variety round, owner 18 Oct; variety.js VARIETY): a results segment
+    // longer than the programme's longest shot turns from the stadium's board to the wall of results on a row's mark
+    // past its middle, the board having held its minimum and the wall left at least as long: the rows read so far build
+    // the wall, the rest come up on it as they are read
+    const V = VARIETY[s.program?.id];
+    const startedAt = now();
+    const voiceLen = Number.isFinite(seg.audio?.duration) ? seg.audio.duration : String(seg.text || '').length / 15;
+    const split = !!(scores && V && scores.length >= 4 && voiceLen > V.maxShot);
+    const minShot = Math.max(4, paceFor(s.program?.id).shots.cooldown || 0);
+    // the row whose line turns the board: the one nearest the middle of the voice and its pause (its word's time in
+    // the recorded voice, else its place in the text), both pictures at least the cut minimum
+    const splitRow = split ? turnRow(seg, scores, voiceLen, 0.85, minShot) : -1;
+    let wallCard = null;
+    let wallSince = null;
+    const toWall = (i) => {
+      const left = voiceLen - (now() - startedAt);
+      if (splitRow < 0 || wallCard || since === null || i < splitRow || at() < minShot || left < minShot - 1) return false;
+      let n = 0;
+      const rowTimes = times.map((x) => (Number.isFinite(x) ? Math.min(0.12 * n++, 0.6) : Infinity));
+      wallCard = { view: 'wall', scores, title: card.title, source: seg.source, rowTimes };
+      this.setShot('scores', { focus: seg.anchor, storyId: null, card: wallCard, wall: { mode: 'logo' }, framing: null, cameraMove: null });
+      wallSince = s.shotSince;
+      return true;
+    };
+    // (and should the voice's marks not come, the wall comes in a beat after its row's planned time all the same)
+    const turnTimer = splitRow >= 0 ? setTimeout(() => toWall(splitRow), (rowTime(seg, scores[splitRow].char, voiceLen) + 0.8) * 1000) : 0;
+    const land = (i) => {
+      if (scores) this.noteResult(scores[i]);
+      const lead = since !== null ? tick() : 0;
+      times[i] = at() + lead;
+      if (toWall(i)) return;
+      if (wallCard) wallCard.rowTimes[i] = Math.max(0, now() - wallSince) + lead;
+    };
     const marked = items.map((x, i) => ({ c: x.char, i })).filter((m) => Number.isFinite(m.c));
     if (marked.length === items.length) {
       // (an item whose line starts the segment is on the board from the first frame)
@@ -777,7 +884,7 @@ export class Director {
         onMark: (k) => {
           if (!later[k]) return;
           // (the row flips in with its tick)
-          times[later[k].i] = at() + (since !== null ? tick() : 0);
+          land(later[k].i);
         },
       });
     } else {
@@ -799,10 +906,29 @@ export class Director {
       pending?.cancel?.();
       go();
     }
+    clearTimeout(turnTimer);
     // every item on the board by the end, whatever the voice did
     if (times.some((x) => !Number.isFinite(x))) tick();
     for (let i = 0; i < times.length; i++) if (!Number.isFinite(times[i])) times[i] = at();
+    if (wallCard) for (let i = 0; i < times.length; i++) if (!Number.isFinite(wallCard.rowTimes[i])) wallCard.rowTimes[i] = Math.max(0, now() - wallSince);
+    if (scores) for (const r of scores) this.noteResult(r);
+    // (COMING UP read: its fixtures join the results in FULL TIME's ticker, as the board named them)
+    if (fixtures && s.program?.id === 'full-time') s.tickerFixtures = fixtures.filter((f) => f && f.event).map((f) => ({ event: String(f.event), when: String(f.when || '') }));
     return true;
+  }
+
+  /**
+   * FULL TIME's results ticker (the visual-variety round, owner 18 Oct; graphics/index.js ticker 'results'): a result
+   * the programme has read, once, in air order (SCORE CENTRE's rows as each is read, a story's scoreline after it).
+   * Only results the stories state (full-time.md §3.6). Other programmes keep their ticker.
+   */
+  noteResult(r) {
+    const s = this.scene;
+    if (s.program?.id !== 'full-time' || !r || typeof r.a !== 'string' || typeof r.b !== 'string' || !Number.isFinite(Number(r.sa)) || !Number.isFinite(Number(r.sb))) return;
+    const key = [r.a, r.b].sort().join('|');
+    const list = Array.isArray(s.tickerResults) ? s.tickerResults : [];
+    if (list.some((x) => [x.a, x.b].sort().join('|') === key)) return;
+    s.tickerResults = [...list, { a: r.a, b: r.b, sa: Number(r.sa), sb: Number(r.sb), winner: r.winner ?? null, draw: !!r.draw }];
   }
 
   /**
@@ -979,6 +1105,8 @@ export class Director {
       s.program = episode.program;
       s.replay = !!episode.replay;
       s.rundown = episode.rundown || [];
+      s.tickerResults = null; // FULL TIME's results ticker: the results aired so far (noteResult)
+      s.tickerFixtures = null; // and COMING UP's fixtures once read
       // the credit of each picture the rights desk cleared (graphics/picture.js draws it while the picture is on screen)
       s.pictureCredits = pictureCreditsOf(episode);
       s.progressPlan = null;
@@ -1016,6 +1144,8 @@ export class Director {
           // FULL TIME's board segments: SCORE CENTRE, COMING UP (else told as any story)
           if ((seg.feature === 'scores' || seg.feature === 'fixtures') && (await this.playBoardSegment(seg, index))) break;
           await this.playStory(seg);
+          // FULL TIME's results ticker: a story's scoreline once it has been read (never before its turn)
+          if (seg.score) this.noteResult(seg.score);
           break;
         case 'cross':
           await this.playCross(seg, episode.segments.slice(index + 1, index + 3));
@@ -1342,9 +1472,15 @@ export class Director {
     const picked = pickBoard(seg, s.program?.id, this.lastBoard);
     let stung = false; // (FULL TIME's scoreline sting, once a story)
     const board = picked && ['change', 'score', 'chalk'].includes(picked.kind) ? null : numbersBoard(seg, s.program?.id);
-    const cardFor = (beat) => {
+    const cardFor = (beat, cue = null) => {
       if (beat === 'map') return { ...seg.location };
       if (beat !== 'fact') return null;
+      // v2 FULL TIME: the plan's named board (the sport's slate, the moment of the day, the table, the run)
+      const named = cue?.board ? namedBoard(seg, cue.board, s.program?.id) : null;
+      if (named) {
+        this.lastBoard = cue.board;
+        return named;
+      }
       // (the type on air is remembered when the card is cut to, not when it is planned)
       this.lastBoard = board ? 'numbers' : picked ? picked.kind : 'fact';
       // full-time.md §6: the lead's scoreline card lands on the scoreline sting, once (the cue sheet holds it back on or
@@ -1419,7 +1555,7 @@ export class Director {
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
       if (i === 0 && cue.keep && STUDIO.has(s.shot)) return 0; // v2: a short pickup ("Thanks, Ada.") stays on the studio shot on air; the card comes with its line
       const beat = cue.shot;
-      const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat), framing: cue.framing, cameraMove: cue.move });
+      const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat, cue), framing: cue.framing, cameraMove: cue.move });
       // Hold every shot for at least the profile's minimum before cutting away (cut cooldown); the opening cut too when
       // a studio shot is on air (NEWS IN 60's 2.5 s intro wide: the story's voice starts over it, no dead pause).
       // The shot on air counts from its last visible cut: a chat's re-set of the same two-shot (a new focus, the same

@@ -26,7 +26,9 @@
 <pre id="fits"></pre>
 <script type="module">
 import { P } from '/js/palette.js';
-import * as Q from '/js/scenes/cards-quiz.js';
+import * as Q0 from '/js/scenes/cards-quiz.js';
+import * as QM from '/js/scenes/cards-quiz-more.js';
+const Q = { ...Q0, ...QM };
 import { warmMapData } from '/js/scenes/worldmap.js';
 import { drawTopRow } from '/js/graphics/bug.js';
 import { CaptionState, drawCaptions } from '/js/graphics/captions.js';

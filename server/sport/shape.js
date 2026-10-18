@@ -8,6 +8,7 @@ import { embedCues, parseCues } from '../../public/js/cues.js';
 import { dayIn, withoutJudgement } from './words.js';
 import { FOLLOWS_ON_START, leansOnCount, sameEvent } from './prepare.js';
 import { resultLine, chalkOf } from './scores.js';
+import { standingOf, formOf } from './stats.js';
 import { sportLeans } from './leans.js';
 import { hasFiniteVerb, shortHeadline } from '../writer.js';
 
@@ -669,6 +670,15 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       }
     }
     if (seg.feature === 'number') seg.kicker = 'THE NUMBER';
+    // the visual-variety round: the table and form boards, from the story's own words (stats.js: the side named in the
+    // sentence, never a run that ended or is still to come); never on a grave story
+    if (!seg.roundup && seg.feature !== 'number' && !seg.heavy && !isGrave(`${story.title}. ${story.summary || ''}`)) {
+      const sc = seg.score || (Array.isArray(story.scorelines) ? story.scorelines[0] : null) || null;
+      const standing = standingOf(seg.text, sc);
+      if (standing) seg.standing = { ...standing, source: seg.source || story.source || '' };
+      const form = formOf(seg.text, sc);
+      if (form) seg.form = { ...form, source: seg.source || story.source || '' };
+    }
     // (rugby league is named on air: by its transition or hand-over, else in the story's first words, "In rugby league, …")
     if (keyOf(story) === 'rugby-league' && !/\b(?:rugby league|super league|nrl)\b/i.test(`${seg.text} ${segs[segs.indexOf(seg) - 1]?.text || ''}`.replace(/\[[^\]]*\]/g, ' '))) {
       edit(seg, (t) => {
@@ -697,6 +707,24 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
     }
     prevSport = keyOf(story) || prevSport;
   });
+
+  // ---- the sport slates (the visual-variety round): a story that changes the sport opens on its sport's slate, the
+  // name its strap carries and how many stories of it follow together (the running order's own count)
+  {
+    const list = stories.filter((x) => byId.get(x.storyId));
+    let prevKey = null;
+    list.forEach((seg, k) => {
+      const story = byId.get(seg.storyId);
+      const key = keyOf(story);
+      const changes = k > 0 && key && key !== prevKey && seg.feature !== 'lighter' && seg.feature !== 'number' && !seg.roundup && !seg.heavy;
+      if (changes && seg.kicker && story.sport) {
+        let n = 1;
+        for (let j = k + 1; j < list.length && keyOf(byId.get(list[j].storyId)) === key && !list[j].feature; j++) n++;
+        seg.slate = { sport: story.sport, name: String(seg.kicker).toUpperCase(), count: n };
+      }
+      prevKey = key || prevKey;
+    });
+  }
 
   // ---- SCORE CENTRE and COMING UP
   const results = freshResults(candidates, { now, tz }).filter((r) => !told.has([r.a, r.b].sort().join('|'))).slice(0, 6);

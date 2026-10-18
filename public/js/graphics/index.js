@@ -63,15 +63,44 @@ export const PROGRAM_TAG = CHANNEL.programTag; // programme name beside the bug 
  * Per-programme graphics (docs/programmes/*.md). `tagHold`: seconds the
  * programme tag stays up (Infinity = the whole episode); `progressRule`: the
  * strap's top line shows `scene.progress` (0..1); `ticker`: 'flip' (headlines),
- * 'figures' (aired figures, headlines while fewer than two) or 'next' (one
- * static UP NEXT plate).
+ * 'figures' (aired figures, headlines while fewer than two), 'results' (FULL TIME's results read so far, headlines
+ * while fewer than two) or 'next' (one static UP NEXT plate).
  */
 export const PROGRAM_GRAPHICS = {
   'news-60': { tagHold: Infinity, progressRule: true, ticker: 'next' }, // news-60.md "Graphics"
   'money-minute': { ticker: 'figures' }, // money-minute.md 3.6 "bottom line"
   'world-weather': { ticker: 'next' }, // the forecast is the programme: one calm UP NEXT plate, no headlines
+  // FULL TIME (the visual-variety round, owner 18 Oct): the results the programme has read, flipping in the band, the
+  // headlines while fewer than two (full-time.md §3.6: only results the stories state, never before their turn)
+  'full-time': { ticker: 'results' },
 };
 const THEME_PROGRAM = { flash: 'news-60', money: 'money-minute' };
+
+/**
+ * A result read on FULL TIME as a ticker entry: the winner first ('FALKIRK BEAT HIBS 2-1', 'DUNDEE UNITED DREW WITH ST
+ * JOHNSTONE 1-1'), the sides alone when the sentence is too long for the band; null when even that is.
+ */
+export function resultEntry(r) {
+  if (!r || !r.a || !r.b) return null;
+  const won = !r.draw && (r.winner === r.a || r.winner === r.b) ? r.winner : null;
+  const first = won || r.a;
+  const second = won ? (won === r.a ? r.b : r.a) : r.b;
+  const s1 = won === r.b ? r.sb : r.sa;
+  const s2 = won === r.b ? r.sa : r.sb;
+  const value = `${s1}-${s2}`;
+  const o = { plateLabel: 'RESULTS' };
+  return makeFigureEntry({ value, label: `${first} ${won ? 'BEAT' : 'DREW WITH'} ${second}` }, o) || makeFigureEntry({ value, label: `${first} · ${second}` }, o);
+}
+
+/**
+ * A fixture COMING UP named on FULL TIME as ticker entries: the event and its day ('STARFIELD CITY V GLIMMERFORD
+ * WEDNESDAY'), or the line in pages when it is too long for one.
+ */
+export function fixtureEntries(f) {
+  if (!f || !f.event) return [];
+  const one = makeFigureEntry({ value: f.when || '', label: f.event }, { plateLabel: 'COMING UP' });
+  return one ? [one] : makeEntries({ label: 'COMING UP', text: f.when ? `${f.event} · ${f.when}` : f.event });
+}
 const DEFAULT_GRAPHICS = Object.freeze({ tagHold: PROGRAM_TAG.hold, progressRule: false, ticker: 'flip' });
 const pgCache = new Map();
 /** The graphics config for a programme ({ id, theme }), defaults filled in (cached). */
@@ -430,10 +459,14 @@ export class Graphics {
     const tmode = this.pg.ticker;
     const ref = tmode === 'next' ? null : this.onAirHeadline(scene);
     const figures = tmode === 'figures' ? this.airedFigures(scene) : null;
+    const results = tmode === 'results' && Array.isArray(scene.tickerResults) ? scene.tickerResults : null;
+    const fixtures = tmode === 'results' && Array.isArray(scene.tickerFixtures) ? scene.tickerFixtures : null;
     const k = this.tickerIn;
     // (PAY ATTENTION on air: never a story its edition uses, which could show the viewer an answer)
     const avoid = scene.quizAvoid || null;
-    if (items === k.items && b === k.b && next === k.next && tmode === k.mode && ref === k.ref && figures === k.figures && avoid === k.avoid) return;
+    if (items === k.items && b === k.b && next === k.next && tmode === k.mode && ref === k.ref && figures === k.figures && results === k.results && fixtures === k.fixtures && avoid === k.avoid) return;
+    k.results = results;
+    k.fixtures = fixtures;
     k.avoid = avoid;
     k.items = items;
     k.b = b;
@@ -450,7 +483,10 @@ export class Graphics {
     } else {
       if (b && !quizAvoided(b, avoid)) list.push(...makeEntries({ label: 'BREAKING', plate: P.red, source: b.source, text: b.text, breaking: true }));
       const figs = figures && figures.length >= 2 ? figures.map((n) => makeFigureEntry(n, n)).filter(Boolean) : null;
+      const res = results && results.length >= 2 ? results.map(resultEntry).filter(Boolean) : null;
+      const fix = fixtures ? fixtures.flatMap(fixtureEntries) : [];
       if (figs && figs.length >= 2) list.push(...figs);
+      else if (res && res.length >= 2) list.push(...res, ...fix);
       else if (items) {
         for (const it of items) {
           if (!it || !it.text || (ref && sameStory(it.text, ref))) continue; // never the story on air

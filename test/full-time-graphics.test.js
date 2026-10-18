@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // FULL TIME's graphics (public/js/scenes/cards-sport.js, docs/programmes/full-time.md §6): the boards keep the safe area
 // (x 40..344, y 28..134: clear of the top row and of the captions), the scoreline says FT or DRAW and puts the winner in
-// the accent, SCORE CENTRE flips a row in when its line is read, the eleven sport icons are 11 x 11 and each its own.
+// the accent, SCORE CENTRE flips a row in when its line is read, the twelve sport icons are 11 x 11 and each its own.
 
 /** A canvas whose context records fills and images (font.js draws text into its own offscreen canvases). */
 function fakeCanvas(width = 384, height = 216) {
@@ -47,9 +47,9 @@ describe('FULL TIME graphics', () => {
     for (const im of ctx.images) assert.ok(im.x >= 40 && im.x <= 344 && im.y >= 24 && im.y <= 134, `text at ${im.x},${im.y}`);
   };
 
-  test('eleven sport icons, 11 x 11, two tones, each its own silhouette', () => {
+  test('twelve sport icons (racing: a horseshoe, the visual-variety round), 11 x 11, two tones, each its own silhouette', () => {
     const names = Object.keys(G.ICONS);
-    assert.deepEqual(names.sort(), ['american-football', 'athletics', 'basketball', 'boxing', 'cricket', 'cycling', 'f1', 'football', 'golf', 'rugby', 'tennis']);
+    assert.deepEqual(names.sort(), ['american-football', 'athletics', 'basketball', 'boxing', 'cricket', 'cycling', 'f1', 'football', 'golf', 'racing', 'rugby', 'tennis']);
     const lit = (rows) => rows.join('').replace(/\./g, '').length;
     for (const n of names) {
       const rows = G.ICONS[n];

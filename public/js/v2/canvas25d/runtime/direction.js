@@ -62,7 +62,7 @@ const GAP_AFTER = 0.3; // s: the plan's pause when no episode profile is known
 // (PAY ATTENTION's boards: 'quiz', a full-frame graphic like SCORE CENTRE; its wide is the quiz's own, 'quiz-wide')
 export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores', 'quiz']);
 const STUDIO = new Set(['wide', 'close']);
-const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide', 'quiz-wide']);
+const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide', 'quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b']);
 
 /** The legacy shot name for a planned shot (framing names never reach graphics). */
 export function legacyShot(shot, framing) {
@@ -100,14 +100,20 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
     // the director's card needs seg.fact or a board: BY THE NUMBERS's figures (SEVEN DAYS's THE WEEK IN NUMBERS carries
     // no lone fact), FROM → TO, WHAT WE KNOW's points, HOW WE GOT HERE's steps
-    if (shot === 'fact' && !plainFact(seg, ctx.programId) && !numbersBoard(seg, ctx.programId) && !storyBoard(seg, ctx.programId)) continue;
+    // (FULL TIME's named boards, the sport's slate, the moment, the table and the run, are the plan's own: e.board)
+    if (shot === 'fact' && !e.board && !plainFact(seg, ctx.programId) && !numbersBoard(seg, ctx.programId) && !storyBoard(seg, ctx.programId)) continue;
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
     let framing = shot === 'montage' ? null : standIn ? 'wide' : (e.framing ?? null);
     // over-the-shoulder exists to show the wall: without a picture, a map or a figure it would frame
     // an empty wall with a small plate; a later one is dropped (no near jump-cut), an opening one plays as a single
     if (framing === 'ots' && !wallContent(seg, hasImg, ctx.programId)) {
-      if (out.length) continue;
-      framing = null;
+      // (FULL TIME, the visual-variety round: the two-shot instead, both presenters, the reader speaking: an emblem
+      // screen story after story was a run of the same single)
+      if (ctx.programId === 'full-time' && ctx.duo && out.length) {
+        shot = 'wide';
+        framing = 'two';
+      } else if (out.length) continue;
+      else framing = null;
     }
     const char = Number.isFinite(e.char) ? Math.max(0, e.char) : 0;
     const ss = ctx.sentences || [];
@@ -115,9 +121,9 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
     while (si + 1 < ss.length && ss[si + 1].start <= char + 2) si++;
     const card = shot === 'montage' ? montageCard(e, seg, si, rundown, out) : null;
     const prev = out[out.length - 1];
-    if (prev && prev.shot === shot && prev.framing === framing && prev.focus === focus && prev.card === card && !e.move) continue;
+    if (prev && prev.shot === shot && prev.framing === framing && prev.focus === focus && prev.card === card && (prev.board ?? null) === (e.board ?? null) && !e.move) continue;
     const mid = out.length > 0 && Math.abs(char - (ss[si]?.start ?? 0)) > 2;
-    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null, card, minLen: Number.isFinite(e.minLen) ? e.minLen : null, beat: e.beat ?? null });
+    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null, card, minLen: Number.isFinite(e.minLen) ? e.minLen : null, beat: e.beat ?? null, board: e.board ?? null });
   }
   return out.length ? out : null;
 }
