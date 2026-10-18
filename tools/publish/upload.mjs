@@ -164,7 +164,7 @@ if (video && meta.worthy && !unclearedPictures && queue.settings().phase >= 2) {
     tags: meta.tags,
     links: meta.sources.filter((s) => s.link).map((s) => ({ label: s.outlet, url: s.link })),
     media: { video, thumb, captions: path.join(out, `${prog}.srt`), duration: D + 2.6, sha256: crypto.createHash('sha256').update(fs.readFileSync(video)).digest('hex') },
-    source: { episodeId: episode.id, programId: prog, storyIds: [...new Set(episode.segments.map((s) => s.storyId).filter(Boolean))], airedAt },
+    source: { episodeId: episode.id, programId: prog, programTitle: episode.program?.title || null, storyIds: [...new Set(episode.segments.map((s) => s.storyId).filter(Boolean))], airedAt },
     disclosure: { youtube: { containsSyntheticMedia: true } },
     compliance: record.compliance,
     score: 5,

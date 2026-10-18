@@ -4,7 +4,7 @@
 // reads it; the writers' greetings, the station's clock marks and the page's on-screen clock follow it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAirClock, installAirClock, RealDate } from '../server/playout/clock.js';
+import { createAirClock, installAirClock, RealDate, realDue } from '../server/playout/clock.js';
 import { createMockProvider } from '../server/providers/mock.js';
 import { loadChannel } from '../server/channel.js';
 import { Station, localTime } from '../server/station.js';
@@ -99,4 +99,25 @@ test('the page reads its on-screen clock from Date: the recorder fake clock set 
   assert.equal(zoneTime('Europe/London', at).label, '20:30');
   assert.equal(zoneTime('Europe/London', at + 59_000).label, '20:30');
   assert.equal(zoneTime('Europe/London', at + 60_000).label, '20:31');
+});
+
+test('a periodic job (the news refresh) comes due on the real clock while the air clock stands still', () => {
+  // (owner's server, 18 Oct: the renderer held the air clock while it waited for a programme, the refresh timed on
+  // Date never came due, and the station waited for news that never came: 7 hours of filler)
+  let real = Date.parse('2026-10-18T11:44:00Z');
+  const clock = createAirClock({ realNow: () => real, cap: 60_000, start: Date.parse('2026-10-18T12:30:00Z') });
+  const un = installAirClock(clock);
+  try {
+    const every = 10 * 60_000;
+    assert.equal(realDue(0, every, real), true, 'never run: due');
+    const ranAt = real;
+    const airAt = Date.now();
+    real += 30 * 60_000;
+    clock.set(airAt); // the renderer's word again: the same moment on air
+    assert.ok(Date.now() - airAt <= 60_000, 'the air clock has not moved on');
+    assert.equal(realDue(ranAt, every, real), true, 'thirty real minutes on: due');
+    assert.equal(realDue(ranAt, every, ranAt + 5 * 60_000), false, 'five: not yet');
+  } finally {
+    un();
+  }
 });

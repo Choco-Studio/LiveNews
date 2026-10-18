@@ -114,6 +114,8 @@ export const config = {
   minNewStories: num('MIN_NEW_STORIES', 3),
   maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
+  // a paid AI provider's tokens a day (in + out; 0: no limit): spent, it rests until tomorrow (server/providers/index.js)
+  aiDailyTokens: num('AI_DAILY_TOKENS', 0),
   // Picture desk: time per episode to look for pictures on article pages (and other outlets' pages),
   // and to download each picture once before air (one that fails is dropped or replaced)
   pictureBudgetMs: bounded('PICTURE_BUDGET_MS', 6000, 0, 120000),

@@ -37,6 +37,17 @@ test('liveBlockers names every switch that is off', () => {
   assert.ok(why.some((w) => /PUBLISH_LIVE/.test(w)) && why.some((w) => /stub/.test(w)) && why.some((w) => /approved/.test(w)) && why.some((w) => /YOUTUBE_CLIENT_ID/.test(w)));
 });
 
+test('an item the automatic mode approved (Phase 3) passes the approval switch, as one the owner approved by hand', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pub-'));
+  const q = new PublishQueue({ dir, now: () => T0 });
+  q.saveSettings({ phase: 3, dryRun: false, modes: { youtube: 'auto' }, live: { youtube: true } });
+  const it = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Owls', media: { video: '/x.mp4', sha256: 'a1' }, source: { episodeId: 'e', momentId: 'e:story:1-1' }, compliance: { ok: true } });
+  assert.equal(it.status, 'approved');
+  assert.ok(it.history.some((h) => h.action === 'approved' && h.by === 'auto'), 'recorded as approved by the mode');
+  const why = liveBlockers(q, it, { env: { PUBLISH_LIVE: '1' }, usingStub: false, adapter: { configured: () => true, missing: () => [] } });
+  assert.deepEqual(why, []);
+});
+
 test('a dry run: gated, marked on a copy, described, recorded in the dry ledger, nothing sent', async () => {
   const { q, p, it, marks, video, dir } = setup();
   q.approve(it.id);

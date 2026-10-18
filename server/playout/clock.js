@@ -69,4 +69,12 @@ export function installAirClock(clock) {
 
 /** The real time, whatever the process's Date reads (the playout's own logs and the buffer's measure). */
 export const realNow = () => RealDate.now();
+
+/**
+ * Whether a periodic job is due, on the real clock: `lastReal` (the real time it last ran, 0 never) more than `everyMs`
+ * ago. Under playout the air clock stands still while the renderer waits for a programme, so a job timed on Date (the
+ * news refresh) never comes due there, and the station waits for news that never comes (owner's server, 18 Oct: 7 hours
+ * of filler from 12:45).
+ */
+export const realDue = (lastReal, everyMs, now = realNow()) => !(lastReal > 0) || now - lastReal > everyMs;
 export { RealDate };

@@ -1298,3 +1298,23 @@ describe('UsageTracker', () => {
     assert.equal(Object.values(tracker.data.days)[0].a.calls, 1);
   });
 });
+
+test('the daily token limit (AI_DAILY_TOKENS): a paid provider that has spent it rests until tomorrow, the chain goes on', async () => {
+  const usage = new UsageTracker(null);
+  const paid = { name: 'anthropic', available: () => true, generate: async () => ({ text: '{"ok":1}', usage: { input: 600, output: 500 } }) };
+  const warns = [];
+  const chain = new ProviderChain([paid, createMockProvider()], usage, { log: { warn: (m) => warns.push(m) }, dailyTokens: 1000 });
+  const first = await chain.generate({ stage: 'write' }, (t) => t);
+  assert.equal(first.provider, 'anthropic', 'under the limit: the paid writer');
+  assert.equal(usage.tokensToday('anthropic'), 1100);
+  const calls = [];
+  paid.generate = async () => {
+    calls.push(1);
+    return { text: '{}' };
+  };
+  await assert.rejects(chain.generate({ stage: 'review' }, (t) => t), /daily limit of 1000 tokens is spent/, 'the editor has no one else: said why');
+  assert.equal(calls.length, 0, 'the spent provider is not called');
+  assert.equal(warns.filter((w) => /rests until tomorrow/.test(w)).length, 1, 'said once');
+  const none = new ProviderChain([paid], usage, { log: { warn() {} } });
+  assert.equal((await none.generate({ stage: 'write' }, (t) => t)).provider, 'anthropic', 'no limit by default');
+});

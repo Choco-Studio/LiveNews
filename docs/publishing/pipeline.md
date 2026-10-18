@@ -20,6 +20,7 @@ which is never in git.
 | `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3); `--manual` for hand publishing (§8) |
 | `tools/publish/beta.mjs` | The beta, published by hand (§8, `beta.md`): `hacer` makes the day's pieces, `estado` says what the day offers, no argument opens the page |
 | `tools/publish/run.mjs` | The publisher's round: re-check what waits, schedule what is approved, publish what is due (§4) |
+| `tools/publish/auto.mjs` | The autonomous round (a timer, every 30 minutes): each programme the playout rendered becomes its clips (`factory.mjs --from-playout`) and its whole-programme upload (`upload.mjs --from-playout`), then `run.mjs`. What goes out is still the settings and the five switches (§4) |
 | `tools/publish/recheck.mjs` | The re-check alone: the gate again on everything waiting; what no longer passes is held (§4.1) |
 | `tools/publish/live.mjs` | The 24/7 stream kept up, and its title (§6) |
 | `tools/publish/material.mjs` | Episodes from the archive, offline, with recorded voices (for rehearsal and measurement) |

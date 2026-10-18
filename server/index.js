@@ -28,6 +28,7 @@ import { FaceReader } from './facereader.js';
 import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
 import { PictureAhead } from './pictureahead.js';
 import { LoopWatch } from './loopwatch.js';
+import { realDue, realNow } from './playout/clock.js';
 import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
 
@@ -63,7 +64,7 @@ const pictureDesk = new PictureDesk({ dir: config.pictures.dir, wikimedia, searc
 if (config.pictures.rights === 'preview') console.warn('[pictures] PRIVATE PREVIEW (PICTURE_RIGHTS=preview): outlet photos may air marked NOT CLEARED; never publish this output');
 // Pictures of local (offline fixture) feeds are served from their own folders only.
 const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots, contact: config.pictures.contact });
-const chain = new ProviderChain(createProviders(config), usage);
+const chain = new ProviderChain(createProviders(config), usage, { dailyTokens: config.aiDailyTokens });
 // Neural presenter voices (VOICE_ENGINE=kokoro), synthesised ahead of air; browser voices otherwise.
 const voice = createVoiceService(config, { root: ROOT });
 // The ImageCache is shared: the producer verifies (and warms) each picture before air, the client reads it.
@@ -333,9 +334,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// the news refresh on the real clock (server/playout/clock.js realDue): the air clock stands still under playout
+let lastRealRefresh = 0;
 async function loop() {
-  const due = Date.now() - newsDesk.lastRefresh > config.feedRefreshMinutes * 60_000;
-  if (due) await station.refreshNews();
+  if (realDue(lastRealRefresh, config.feedRefreshMinutes * 60_000)) {
+    lastRealRefresh = realNow();
+    await station.refreshNews();
+  }
   await station.fill();
 }
 

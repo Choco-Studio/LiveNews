@@ -207,6 +207,9 @@ export class PublishQueue {
       if (item.status === 'pending') item.sample = true;
     } else item.status = 'pending';
     this.note(item, 'queued', 'desk', { mode });
+    // the network's mode is the owner's standing approval (set on the page, Phase 3 only): it is recorded as his, by
+    // that mode, so the publisher's last switch (an approval in the item's history) sees it like a hand approval
+    if (item.status === 'approved') this.note(item, 'approved', mode);
     return this.save(item);
   }
 
