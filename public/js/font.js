@@ -276,11 +276,18 @@ export function measureText(text, scale = 1, font = 'body') {
 }
 
 // Rendered strings, nested font -> scale -> colour -> text so a lookup never
-// builds a key string (drawText runs dozens of times per frame). Each leaf
-// table is bounded on its own; there are only a handful of font/scale/colour
-// combinations on air.
+// builds a key string (drawText runs dozens of times per frame), bounded as a
+// whole: past RENDER_LIMIT strings the one drawn least recently goes. Every
+// cached string is a canvas, and a canvas costs the renderer about 20 kB however
+// small it is (measured 18 Oct: 5,000 canvases of 40x9 took 101 MB), so the old
+// bound of 400 strings for each font, scale and colour let a day of tickers,
+// clocks and captions in their colours keep thousands of them.
 const renderCache = new Map();
-const RENDER_LIMIT = 400;
+export const RENDER_LIMIT = 512;
+const recent = new Map(); // canvas -> [leaf, text], least recently drawn first
+
+/** How many rendered strings are kept (tests). */
+export const renderCacheSize = () => recent.size;
 
 function leafFor(f, scale, color) {
   let byScale = renderCache.get(f.id);
@@ -296,7 +303,12 @@ function leafFor(f, scale, color) {
 function renderText(f, text, color, scale) {
   const leaf = leafFor(f, scale, color);
   let c = leaf.get(text);
-  if (c) return c;
+  if (c) {
+    const e = recent.get(c);
+    recent.delete(c);
+    recent.set(c, e);
+    return c;
+  }
   const norm = normalizeText(text);
   const w = Math.max(1, rawWidth(f, norm) * scale + scale);
   const h = (f.lineHeight + 1) * scale;
@@ -319,8 +331,13 @@ function renderText(f, text, color, scale) {
     for (const [px, py] of g.pixels) ctx.fillRect((x + px) * scale, (py + f.ascent) * scale, scale, scale);
     x += g.width + 1;
   }
-  if (leaf.size >= RENDER_LIMIT) leaf.delete(leaf.keys().next().value);
   leaf.set(text, c);
+  recent.set(c, [leaf, text]);
+  if (recent.size > RENDER_LIMIT) {
+    const [old, [l, t]] = recent.entries().next().value;
+    recent.delete(old);
+    if (l.get(t) === old) l.delete(t);
+  }
   return c;
 }
 

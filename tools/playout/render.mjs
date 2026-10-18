@@ -8,8 +8,8 @@
 // aired and the next unit is rendered for its air time instead (the hole is filled by programming, and no clock on
 // screen is wrong). It keeps a target buffer (60 minutes) and waits when the buffer is full.
 //
-//   node tools/playout/render.mjs --station http://127.0.0.1:8790 [--dir data/playout] [--buffer 60] [--size 1280x720]
-//        [--bitrate 3000k] [--start-lead 900] [--no-twin] [--capture png|raw] [--for <s>]
+//   node tools/playout/render.mjs --station http://127.0.0.1:8790 [--dir data/playout] [--buffer 60] [--size 1920x1080]
+//        [--bitrate 5500k] [--crf 20|off] [--start-lead 900] [--no-twin] [--capture png|raw] [--for <s>]
 //
 // Every programme's twin picture is drawn from the same frames: the publishing desk's clip-mode master (384x216,
 // lossless, the factory's own format) with its report and the episode, in <dir>/masters/<episode id>/ as the rendered-
@@ -23,7 +23,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pageInit } from '../recorder/page.mjs';
 import { PlayoutStore, renderPlan, SpeedMeter, PLAYOUT_DEFAULTS, endOf } from '../../server/playout/queue.js';
-import { airVideoArgs, scaleFilter, AIR_DEFAULTS, parseSize } from '../../server/playout/encode.js';
+import { airVideoArgs, scaleFilter, AIR_DEFAULTS, airSize, parseCrf } from '../../server/playout/encode.js';
 import { airGate, gateOptionsFromEnv } from '../../server/playout/gate.js';
 import { diskPlan, diskPolicyFromEnv } from '../../server/playout/disk.js';
 import { voicedAir } from '../../server/airtime.js';
@@ -39,7 +39,8 @@ const flag = (name) => args.includes(`--${name}`);
 const STATION = String(opt('station', process.env.PLAYOUT_STATION || 'http://127.0.0.1:8790')).replace(/\/$/, '');
 const DIR = path.resolve(opt('dir', process.env.PLAYOUT_DIR || path.join(root, 'data', 'playout')));
 const TARGET = Number(opt('buffer', process.env.PLAYOUT_BUFFER_MIN || 60)) * 60;
-const SIZE = opt('size', process.env.PLAYOUT_SIZE || AIR_DEFAULTS.size);
+// (a whole multiple of the 384x216 canvas: 1280x720 would be x3.33, uneven pixels; it is aired as 1152x648, with a warning)
+const SIZE = airSize(opt('size', process.env.PLAYOUT_SIZE || AIR_DEFAULTS.size), (m) => console.log(`[render] WARNING: ${m}`));
 const BITRATE = opt('bitrate', process.env.PLAYOUT_BITRATE || AIR_DEFAULTS.bitrate);
 const PRESET = opt('preset', process.env.PLAYOUT_PRESET || AIR_DEFAULTS.preset);
 const FPS = AIR_DEFAULTS.fps;
@@ -51,8 +52,8 @@ const FOR = Number(opt('for', 0));
 const SEED = Number(opt('seed', 1)) || 1;
 const gateOpts = { ...gateOptionsFromEnv(), ...(opt('verbatim') ? { verbatim: opt('verbatim') === 'warn' ? 'warn' : 'block' } : {}) };
 const diskPolicy = diskPolicyFromEnv();
-parseSize(SIZE);
-airVideoArgs({ size: SIZE, bitrate: BITRATE, fps: FPS, preset: PRESET }); // (throws on a bad size, bitrate or preset before anything starts)
+const CRF = parseCrf(opt('crf', process.env.PLAYOUT_CRF));
+airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }); // (throws on a bad size, bitrate, crf or preset before anything starts)
 
 const store = new PlayoutStore(DIR);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'playout-render-'));
@@ -338,7 +339,7 @@ async function renderItem(item, airAt, hold, slot) {
     const inW = TWIN ? w * 2 : w;
     const input = CAPTURE === 'raw' ? ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${inW}x${h}`, '-framerate', String(FPS), '-i', 'pipe:0'] : ['-f', 'image2pipe', '-c:v', 'png', '-framerate', String(FPS), '-i', 'pipe:0'];
     const graph = TWIN ? `[0:v]split=2[a][b];[a]crop=${w}:${h}:0:0,${scaleFilter({ size: SIZE })}[air];[b]crop=${w}:${h}:${w}:0,format=rgb24[m]` : `[0:v]${scaleFilter({ size: SIZE })}[air]`;
-    ff = runFfmpeg(['-v', 'error', '-y', ...input, '-filter_complex', graph, '-map', '[air]', ...airVideoArgs({ size: SIZE, bitrate: BITRATE, fps: FPS, preset: PRESET }), '-an', airVideo, ...(TWIN ? ['-map', '[m]', '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-an', masterVideo] : [])], { input: true });
+    ff = runFfmpeg(['-v', 'error', '-y', ...input, '-filter_complex', graph, '-map', '[air]', ...airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', airVideo, ...(TWIN ? ['-map', '[m]', '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-an', masterVideo] : [])], { input: true });
 
     let stepped = 0;
     let frames = 0;
@@ -483,7 +484,7 @@ process.on('SIGTERM', () => (stopping = true));
 
 function status(extra = {}) {
   const ahead = frontier ? (frontier - real()) / 1000 : 0;
-  store.status('render', { pid: process.pid, frontier: frontier ? new Date(frontier).toISOString() : null, bufferMinutes: +(ahead / 60).toFixed(1), targetMinutes: TARGET / 60, speed: +speed.speed.toFixed(3), units, held: heldUnits, late: lateUnits, size: SIZE, bitrate: BITRATE, twin: TWIN, gate: gateOpts, ...extra });
+  store.status('render', { pid: process.pid, frontier: frontier ? new Date(frontier).toISOString() : null, bufferMinutes: +(ahead / 60).toFixed(1), targetMinutes: TARGET / 60, speed: +speed.speed.toFixed(3), units, held: heldUnits, late: lateUnits, size: SIZE, bitrate: BITRATE, crf: CRF, twin: TWIN, gate: gateOpts, ...extra });
 }
 
 function cleanDisk() {
@@ -524,7 +525,7 @@ async function renderUnit(airAt) {
     const slot = `${stamp(t)}-${item.kind === 'break' ? 'break' : item.program?.id || 'episode'}-${item.id}`;
     say(`rendering ${item.kind === 'break' ? `break (${item.ads} ads${item.hold ? `, ${item.hold} s countdown` : ''}${item.next ? `, then ${item.next.title}` : ''})` : `${item.program?.title} ${item.id}${item.replay ? ' (replay)' : ''}`} for ${new Date(t).toISOString()}`);
     const r = await renderItem(item, t, hold, slot);
-    const seg = { id: slot, kind: item.kind, unit: unit.id, itemId: item.id, programId: item.program?.id || null, title: item.kind === 'break' ? 'Break' : item.program?.title || item.id, airAt: Math.round(t), frames: r.frames, fps: FPS, file: r.file, size: SIZE, bitrate: BITRATE, preset: PRESET, render: { realSeconds: +r.realSeconds.toFixed(1), speed: +(r.seconds / r.realSeconds).toFixed(3), cpuSeconds: r.cpuSeconds === null ? null : +r.cpuSeconds.toFixed(1), cpuPerAirSecond: r.cpuSeconds === null ? null : +(r.cpuSeconds / r.seconds).toFixed(3), estimate: Math.round(r.estimate), overrun: r.overrun, pageErrors: r.errors.length } };
+    const seg = { id: slot, kind: item.kind, unit: unit.id, itemId: item.id, programId: item.program?.id || null, title: item.kind === 'break' ? 'Break' : item.program?.title || item.id, airAt: Math.round(t), frames: r.frames, fps: FPS, file: r.file, size: SIZE, bitrate: BITRATE, crf: CRF, preset: PRESET, render: { realSeconds: +r.realSeconds.toFixed(1), speed: +(r.seconds / r.realSeconds).toFixed(3), cpuSeconds: r.cpuSeconds === null ? null : +r.cpuSeconds.toFixed(1), cpuPerAirSecond: r.cpuSeconds === null ? null : +(r.cpuSeconds / r.seconds).toFixed(3), estimate: Math.round(r.estimate), overrun: r.overrun, pageErrors: r.errors.length } };
     say(`  ${seg.title}: ${r.seconds.toFixed(1)} s on air in ${r.realSeconds.toFixed(1)} s (${seg.render.speed}x, ${seg.render.cpuPerAirSecond ?? '?'} CPU-s per air second)${r.overrun ? ' OVERRUN' : ''}`);
     store.event('rendered', { id: slot, kind: item.kind, programme: seg.title, airAt: new Date(t).toISOString(), seconds: +r.seconds.toFixed(2), realSeconds: seg.render.realSeconds, speed: seg.render.speed, cpuSeconds: seg.render.cpuSeconds, cpuPerAirSecond: seg.render.cpuPerAirSecond, load1: +os.loadavg()[0].toFixed(2) });
     speed.add(r.seconds, r.realSeconds);
@@ -587,7 +588,7 @@ function holdUnit(unit, gate) {
   say(`  HELD ${unit.segments.at(-1)?.title}: ${violations.map((v) => `${v.rule}: ${v.message}`).join(' | ').slice(0, 400)}`);
 }
 
-say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${BITRATE} · twin ${TWIN ? 'on' : 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
+say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${CRF === null ? BITRATE : `crf ${CRF} up to ${BITRATE}`} · twin ${TWIN ? 'on' : 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
 while (!stopping) {
   if (FOR > 0 && real() - started > FOR * 1000) break;
   cleanDisk();

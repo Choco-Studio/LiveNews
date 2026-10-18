@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // 24/7 soak: the channel page in headless Chromium in REAL time for hours (no fake clock), sampled every
-// --every seconds: the page's JS heap and DOM nodes (CDP Performance.getMetrics), frames drawn per second
-// (a requestAnimationFrame counter), long tasks, console errors and page crashes, plus the server's
-// /api/status (queue depth, what is on air). Writes <out>.jsonl (one sample per line) and <out>-summary.json.
+// --every seconds: the page's JS heap and DOM nodes (CDP Performance.getMetrics), its process's memory (RSS + swap:
+// what the heap never shows), frames drawn per second (a requestAnimationFrame counter), long tasks, console errors
+// and page crashes, plus the server's /api/status (queue depth, what is on air). Writes <out>.jsonl (one sample per
+// line) and <out>-summary.json. What the page holds, by the code that made it: tools/leak/watch.mjs.
 //
 //   node tools/soak.mjs --port 8709 --hours 6 --every 30 --out data/soak/run1
 //
@@ -11,6 +12,7 @@
 // never empty while the channel airs a programme (it produces ahead of air).
 import fs from 'node:fs';
 import path from 'node:path';
+import { procTree, summariseTree } from './leak/proc.mjs';
 
 const opts = { port: 8709, hours: 6, every: 30, 'min-fps': 24, out: 'data/soak/soak' };
 const argv = process.argv.slice(2);
@@ -103,6 +105,12 @@ while (Date.now() < end && !crashed) {
     fps: fps == null ? null : Math.round(fps * 10) / 10,
     heapMB: metrics.JSHeapUsedSize ? Math.round((metrics.JSHeapUsedSize / 1048576) * 10) / 10 : null,
     nodes: metrics.Nodes ?? null,
+    // the page's process (renderer) and the whole browser, RSS + swap in MB: memory the JS heap never shows
+    ...(() => {
+      const t = summariseTree(procTree(process.pid));
+      const mb = (k) => Math.round(((t[k]?.rss || 0) + (t[k]?.swap || 0)) / 1024);
+      return { rendererMB: mb('renderer'), browserMB: ['browser', 'renderer', 'gpu', 'utility', 'zygote'].reduce((a, k) => a + mb(k), 0) };
+    })(),
     long: soak ? soak.long - lastLong : null,
     queue: Array.isArray(st?.queue) ? st.queue.length : null,
     producing: st?.producing ?? null,
@@ -117,7 +125,7 @@ while (Date.now() < end && !crashed) {
   lastAt = now;
   samples.push(s);
   file.write(`${JSON.stringify(s)}\n`);
-  if (samples.length % 20 === 1) say(`t ${(s.t / 60).toFixed(0)} min · ${s.fps} fps · heap ${s.heapMB} MB · nodes ${s.nodes} · queue ${s.queue} · aired ${s.aired} · errors ${s.errors}`);
+  if (samples.length % 20 === 1) say(`t ${(s.t / 60).toFixed(0)} min · ${s.fps} fps · heap ${s.heapMB} MB · nodes ${s.nodes} · renderer ${s.rendererMB} MB · queue ${s.queue} · aired ${s.aired} · errors ${s.errors}`);
 }
 file.end();
 
@@ -135,6 +143,7 @@ const summary = {
   fps: { median: median(samples.map((s) => s.fps).filter((x) => x != null)), share_at_min: Math.round(fpsOk * 1000) / 1000, min: Math.min(...samples.map((s) => s.fps ?? Infinity)) },
   heapMB: { first: samples.find((s) => s.heapMB != null)?.heapMB ?? null, second_hour_median: heap2, last_hour_median: heapLast, max: Math.max(...samples.map((s) => s.heapMB ?? 0)) },
   nodes: { first: samples[0]?.nodes ?? null, last: samples.at(-1)?.nodes ?? null },
+  rendererMB: { first: samples[0]?.rendererMB ?? null, last: samples.at(-1)?.rendererMB ?? null, max: Math.max(...samples.map((s) => s.rendererMB || 0)) },
   longTasks: samples.reduce((a, s) => a + (s.long || 0), 0),
   emptyQueueSamples: emptyQueue,
   aired: samples.at(-1)?.aired ?? null,

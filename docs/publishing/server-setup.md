@@ -26,7 +26,8 @@ that measures whether this machine can carry the channel, and at which quality. 
 Linux; check with `head -2 /etc/os-release`. The steps below are for Ubuntu or Debian; adapt them for anything else.
 
 What to watch: the **memory** (4 GB for a headless browser, the video encoder and the voice engine at once) and the
-**traffic** (a 24/7 stream at 1080p and 4.5 Mbit/s is about 1,500 GB a month; at 720p and 3 Mbit/s about 1,000 GB).
+**traffic** (a 24/7 stream at a constant 4.5 Mbit/s is about 1,500 GB a month; since 18 Oct the stream is constant
+quality under a 5.5 Mbit/s cap: about 750 GB a month, 1,860 GB at the very most: playout.md §12.2).
 
 ## 1. Get the project
 
@@ -106,14 +107,40 @@ PORT=8080 VOICE_ENGINE=kokoro VOICE_PYTHON=$HOME/globit/venv/bin/python node ser
 node tools/publish/live.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=tts" --out data/test24/live-{n}.flv --for 86400
 ```
 
-- **Two runs if time allows:** first at 1280×720, 3000k video (the likely choice for this traffic allowance), then
-  1920×1080, 4500k. `tools/stream.mjs` takes `--size` and `--bitrate`; if `live.mjs` does not pass them through, add
-  that with a test.
-- **Disk:** a day of 720p at 3 Mbit/s is about 33 GB. Keep the first and last hour and a sample every 3 hours; delete
-  the rest as you go.
+What that runs since 18 Oct (`docs/publishing/playout.md` §12; the defaults, nothing to add):
+
+- **1920×1080, whole-number scaling (x5).** Never 1280×720 any more: it is x3.33 of the 384×216 canvas (uneven
+  pixels), and `--size 1280x720` is now rounded to 1152×648 with a warning. 1152×648 (`--size 1152x648`) is x3 and
+  cheaper to encode, but YouTube files an in-between size under the rung below: 480p, its own 854×480 downscale of
+  our picture. For YouTube, 1080p.
+- **Constant quality under a cap** (`--crf 20 --bitrate 5500k`): close to lossless, 1 to 2 Mbit/s for the news, about
+  2.5 for the adverts, the weather map at the cap; about 750 GB a month for the day's mix, never more than 1,860 GB
+  (the cap every second) of the 2,000 allowed. `--rc cbr --bitrate 5000k`
+  is the constant rate YouTube's manual settings ask for at 1080p (about 1,700 GB a month): only if the owner wants
+  Live Control Room's bitrate note gone.
+- **One encode:** the page's own pixels (PNG frames from a worker) and its sound (PCM) go straight to the one x264 +
+  AAC encoder (`--capture png`). The old capture (MediaRecorder VP8, decoded and encoded again) stays a switch,
+  `--capture vp8`, for comparison only.
+- **The page draws 30 pictures a second**, the ones the stream takes (it drew 60): `--page-fps 0` gives back the old
+  rate.
+- **The page's memory grows less:** the pictures, the rendered strings and the locator boards no longer pile up
+  (§12.1); the footage deck's video frames and a slow rise of about 100 MB per round of programmes are still open there. The stream prints every 10 s what the page sent, the CPU of the browser, the encoder and node, the
+  renderer's memory, the page's frame rate and how many frames had to be repeated.
+
+- **Disk:** a day at 1080p crf 20 is about 25 GB (the cap every second would be 60). Keep the first and last hour and a sample every 3 hours; delete the
+  rest as you go.
 - **Measure every minute** into `data/test24/` (CSV): CPU per process (browser, ffmpeg, node, the voice worker), RAM
-  and swap in use, load average; and from the logs: the encoder's speed (must stay ≥ 1.0x), dropped or duplicated
-  frames, stalls and restarts by the supervisor, and whether the voices stay ahead of what airs.
+  and swap in use, load average; and from the logs: the stream's 10-second lines (cores per part, the renderer's MB,
+  the page's fps and the repeated frames: a steady 10 % or more means the machine is short of CPU), stalls and
+  restarts by the supervisor, and whether the voices stay ahead of what airs.
+- **The memory over the day:** note the renderer's MB from the stream's lines every hour. It rises for the first hour
+  (the adverts' and title sequences' art, baked once), jumps by up to 200 MB during WORLD NOW's file footage and gives
+  it back, and still creeps (playout.md §12.1). For a closer look, `node tools/leak/watch.mjs --port 8080 --minutes 60
+  --allocators` on a second page names what the page holds by the code that made it and Chromium's own breakdown (it
+  takes programmes from the station: run it on a test station, not beside the real stream).
+- **CPU:** a `SKIPPED: the encoder is behind` in the stream's lines means two cores cannot encode 1080p beside the page
+  and the voices (playout.md §12.4): restart with `--preset superfast`, then `--preset ultrafast`, and only then
+  `--size 1152x648` (YouTube's 480p).
 - **Watch by eye:** pull three short pieces (start, middle, end) and check picture, sound and lip timing.
 
 ### 4b. The 24-hour test of pre-rendered playout (files only)
@@ -128,8 +155,11 @@ This test measures whether the server keeps the buffer full. Stop the live test 
    ```
    PORT=8080 VOICE_ENGINE=kokoro VOICE_PYTHON=$HOME/globit/venv/bin/python \
    PLAYOUT_VERBATIM=warn PLAYOUT_REVIEW=0 PLAYOUT_KEEP_AIRED_H=2 \
-     node tools/playout/run.mjs --out data/test24/air/air-%03d.ts --segment 3600 --buffer 60 --size 1280x720 --bitrate 3000k
+     node tools/playout/run.mjs --out data/test24/air/air-%03d.ts --segment 3600 --buffer 60
    ```
+   - The air files are 1920×1080 (x5) at constant quality crf 20 under a 5500k cap, BT.709, since 18 Oct (playout.md
+     §12): no `--size` or `--bitrate` needed. Files rendered before that (720p) cannot join the new ones: start with
+     an empty `data/playout/queue`. If the renderer cannot keep up on two cores (§12.4), `--preset superfast` first.
    - `PLAYOUT_VERBATIM=warn` and `PLAYOUT_REVIEW=0` only for this test: with the strict rules almost every news
      programme is held today (without the AI key the offline writer's news is never aired, `offline-writer`, and it
      copies its sources: playout.md §3), and the test would measure filler. Every verdict
@@ -165,7 +195,8 @@ This test measures whether the server keeps the buffer full. Stop the live test 
 ## 5. Report to the owner (in Spanish, plainly)
 
 - Did it hold for 24 hours? CPU, memory and swap at their peaks; any restart or stall, and why.
-- 720p or 1080p on this machine, and what that means for the monthly traffic.
+- 1080p on this machine (CPU per air second, playout.md §12.4), and what the month's traffic came to (the stream's average
+  bitrate: constant quality uses what the programmes need, under the 5.5 Mbit/s cap).
 - If it does not hold: the cheapest real fix (voices generated further ahead, a lower encoder preset, or a bigger
   plan: 4 cores and 8 GB). No workaround that lowers what viewers see without saying so.
 - For the pre-rendered playout test (§4b): did the buffer reach an hour and stay there; how much filler aired and

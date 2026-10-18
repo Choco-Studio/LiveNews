@@ -3,7 +3,7 @@
 // live video's title kept saying what is on (a dry run unless every live switch is on).
 //
 // Test (a file per run, nothing leaves the machine):
-//   node tools/publish/live.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=tts" --out /tmp/live-{n}.flv \
+//   node tools/publish/live.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=tts" --out /tmp/live-{n}.flv [--size 1920x1080] \
 //        [--seconds 120] [--for 300] [--channel http://127.0.0.1:8080] [--status data/publish/live-status.json]
 // On air (the owner's guide, docs/publishing/setup.md §8; refused unless PUBLISH_LIVE=1):
 //   PUBLISH_LIVE=1 node tools/publish/live.mjs --url ... --rtmp rtmp://a.rtmp.youtube.com/live2 --key-env YOUTUBE_STREAM_KEY
@@ -11,7 +11,7 @@
 // --seconds: each streamer run's length (a test); --for: the supervisor's own length (a test), then it stops.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LiveSupervisor } from '../../server/publish/live.js';
+import { LiveSupervisor, liveStreamOptions } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import { usingStub } from '../../server/publish/compliance.js';
@@ -47,6 +47,9 @@ const streamArgs = [path.join(root, 'tools', 'stream.mjs'), '--url', url];
 if (out) streamArgs.push('--out', path.resolve(out));
 else streamArgs.push('--rtmp', rtmp, '--key-env', opt('key-env', 'YOUTUBE_STREAM_KEY'));
 if (opt('seconds')) streamArgs.push('--seconds', opt('seconds'));
+// the picture and its capture, handed to the streamer as given (tools/stream.mjs: --size 1920x1080 or 1152x648, a
+// whole multiple of the canvas; --capture png; --rc capped with --crf and the --bitrate cap)
+for (const k of liveStreamOptions) if (opt(k) !== null) streamArgs.push(`--${k}`, opt(k));
 const channelUrl = opt('channel', new URL(url).origin);
 const sup = new LiveSupervisor({
   streamArgs,

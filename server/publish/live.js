@@ -22,6 +22,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn as nodeSpawn } from 'node:child_process';
 
+/** The streamer's picture and capture switches the supervisor passes through (tools/stream.mjs). */
+export const liveStreamOptions = Object.freeze(['size', 'bitrate', 'crf', 'rc', 'capture', 'preset', 'fps', 'page-fps', 'audio-bitrate']);
+
 export const LIVE_POLICY = Object.freeze({
   backoff: [2, 5, 15, 30, 60], // s between restarts after quick failures
   healthyAfter: 300, // s of health that resets the backoff

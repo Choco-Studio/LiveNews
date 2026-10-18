@@ -138,10 +138,11 @@ test('one set of encoder settings: every file and the filler join byte to byte (
   assert.equal(val('-preset'), AIR_DEFAULTS.preset);
   assert.match(val('-x264-params'), /open-gop=0/);
   assert.match(val('-x264-params'), /repeat-headers=1/);
-  assert.equal(val('-level:v'), '3.1', '720p30 fits level 3.1');
-  assert.equal(levelFor(parseSize('1920x1080'), 30), '4.1');
+  assert.equal(val('-level:v'), '4.1', '1080p30 (x5, the default) fits level 4.1');
+  assert.equal(levelFor(parseSize('1152x648'), 30), '3.1');
   assert.deepEqual(airVideoArgs({}), airVideoArgs({}), 'the same every time');
-  assert.equal(scaleFilter({ size: '1280x720' }), 'scale=1280:720:flags=neighbor,format=yuv420p');
+  assert.equal(scaleFilter({ size: '1920x1080' }), 'scale=w=1920:h=1080:flags=neighbor:out_color_matrix=bt709:out_range=tv,format=yuv420p');
+  assert.throws(() => scaleFilter({ size: '1280x720' }), /whole multiple/, 'x3.33 never reaches the encoder');
   assert.throws(() => parseSize('1281x720'), /even/);
   assert.throws(() => airVideoArgs({ bitrate: 'lots' }), /bitrate/);
   assert.throws(() => airVideoArgs({ preset: 'placebo' }), /preset/);

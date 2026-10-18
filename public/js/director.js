@@ -1,7 +1,7 @@
 // The gallery director: plays what master control sends (programme episodes
 // and commercial breaks), calls the camera shots, graphics and subtitles,
 // and keeps the channel running forever.
-import { pixelate, loadImage } from './pixelate.js';
+import { pixelate, loadPicture, releasePicture } from './pixelate.js';
 import { pictureCreditsOf } from './graphics/picture.js';
 import { prepareLocator } from './graphics/locator.js';
 import { presenterName, setPresenters } from './cast.js';
@@ -28,6 +28,9 @@ const frame = () => new Promise((r) => setTimeout(r, 0));
 
 const SMALL = { w: 104, h: 62 }; // studio video wall / over-the-shoulder box
 const FULL = { w: 416, h: 234 }; // full screen with room for a slow pan
+// Pictures and locator boards kept between programmes (the current rundown's always stay): a WORLD NOW has up to 18
+// stories; a story's picture is ~0.9 MB of canvases, its locator board 0.33 MB (the caps were 40 and 60 until 18 Oct)
+const KEEP_PICTURES = 24;
 // Every on-air timing (shot holds, pauses between segments, card holds) comes from the
 // programme's pace profile (pace.js: one table for the whole channel, owner 23:10).
 const pace = (scene) => paceFor(scene.program?.id);
@@ -806,8 +809,9 @@ export class Director {
       if (x?.storyId && x.imageFit === 'portrait') fits.set(x.storyId, 'portrait');
     }
     for (const id of ids) {
+      let img = null;
       try {
-        const img = await loadImage(`/api/img/${id}`);
+        img = await loadPicture(`/api/img/${id}`);
         await frame();
         const focusY = focus.get(id);
         const fit = fits.get(id) || 'cover';
@@ -823,10 +827,14 @@ export class Director {
         this.images.set(id, { small, full, card, tile });
       } catch (err) {
         console.warn('[director] image', id, err.message);
+      } finally {
+        // (the decoded picture goes at once: only its pixelated canvases stay; pixelate.js loadPicture)
+        releasePicture(img);
       }
     }
     const keep = new Set((episode.rundown || []).map((r) => r.storyId));
-    if (this.images.size > 40) for (const id of this.images.keys()) if (!keep.has(id)) this.images.delete(id);
+    // (the current rundown's pictures always stay)
+    if (this.images.size > KEEP_PICTURES) for (const id of this.images.keys()) if (!keep.has(id)) this.images.delete(id);
     // a story with no picture gets its locator board (graphics/locator.js): its country lit on the channel's map, its
     // dot and its name; prepared here, a frame at a time, so the montage only draws it
     const unpictured = (episode.rundown || []).filter((r) => !r.hasImage && Number.isFinite(r.location?.lat) && Number.isFinite(r.location?.lon) && !this.locators.has(r.storyId));
@@ -840,7 +848,7 @@ export class Director {
         console.warn('[director] locator', r.storyId, err.message);
       }
     }
-    if (this.locators.size > 60) for (const id of this.locators.keys()) if (!keep.has(id)) this.locators.delete(id);
+    if (this.locators.size > KEEP_PICTURES) for (const id of this.locators.keys()) if (!keep.has(id)) this.locators.delete(id);
   }
 
   setCast(episode) {

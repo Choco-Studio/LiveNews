@@ -20,7 +20,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PlayoutStore, planAir, PLAYOUT_DEFAULTS, samplesOf, endOf } from '../../server/playout/queue.js';
-import { airVideoArgs, scaleFilter, AIR_DEFAULTS } from '../../server/playout/encode.js';
+import { airVideoArgs, scaleFilter, AIR_DEFAULTS, airSize, parseCrf } from '../../server/playout/encode.js';
 import { LiveSupervisor } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
@@ -78,7 +78,7 @@ const titles = new LiveSupervisor({ youtube: new YouTubeAdapter({ env: process.e
 /** The air settings of what is queued (the filler matches them), else the defaults. */
 function airSettings() {
   const q = store.queued()[0] || store.airedList().at(-1);
-  return { size: q?.size || opt('size', AIR_DEFAULTS.size), bitrate: q?.bitrate || opt('bitrate', AIR_DEFAULTS.bitrate), preset: q?.preset || opt('preset', AIR_DEFAULTS.preset) };
+  return { size: airSize(q?.size || opt('size', AIR_DEFAULTS.size), () => {}), bitrate: q?.bitrate || opt('bitrate', AIR_DEFAULTS.bitrate), crf: q && 'crf' in q ? q.crf : parseCrf(opt('crf', process.env.PLAYOUT_CRF)), preset: q?.preset || opt('preset', AIR_DEFAULTS.preset) };
 }
 const fillerPng = () => {
   const f = path.join(DIR, 'filler.png');
@@ -93,9 +93,9 @@ const granuleCache = new Map();
 function fillerVideo(frames) {
   const st = airSettings();
   const png = fillerPng();
-  const key = `${frames}|${st.size}|${st.bitrate}|${st.preset}|${png}|${fs.statSync(png).mtimeMs}`;
+  const key = `${frames}|${st.size}|${st.bitrate}|${st.crf}|${st.preset}|${png}|${fs.statSync(png).mtimeMs}`;
   if (granuleCache.has(key)) return granuleCache.get(key);
-  const r = spawnSync('ffmpeg', ['-v', 'error', '-loop', '1', '-framerate', String(FPS), '-i', png, '-frames:v', String(frames), '-vf', scaleFilter({ size: st.size }), ...airVideoArgs({ size: st.size, bitrate: st.bitrate, fps: FPS, preset: st.preset }), '-an', '-f', 'h264', 'pipe:1'], { maxBuffer: 1 << 30 });
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-loop', '1', '-framerate', String(FPS), '-i', png, '-frames:v', String(frames), '-vf', scaleFilter({ size: st.size }), ...airVideoArgs({ size: st.size, bitrate: st.bitrate, crf: st.crf, fps: FPS, preset: st.preset }), '-an', '-f', 'h264', 'pipe:1'], { maxBuffer: 1 << 30 });
   if (r.status !== 0) throw new Error(`filler: ${String(r.stderr).slice(-400)}`);
   if (frames === FPS * PLAYOUT_DEFAULTS.granuleSeconds) granuleCache.set(key, r.stdout);
   return r.stdout;

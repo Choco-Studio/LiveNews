@@ -78,6 +78,13 @@ export function pageInit(CFG) {
       srcDesc.set.call(this, v);
     },
   });
+  // (the channel decodes its pictures into ImageBitmaps: the clock holds for those decodes too)
+  if (typeof window.createImageBitmap === 'function') {
+    const cib = window.createImageBitmap;
+    window.createImageBitmap = function (...a) {
+      return track(cib.apply(this, a));
+    };
+  }
 
   if (!CFG.audio) return;
 
