@@ -269,11 +269,22 @@ hand, from the approval page, with every rule of the pipeline still in force.
    are made fresh from the live feeds through the channel's own producer (the write, the own-words check and its
    rewrites, the standards editor, the fit, the voices), as `tools/writer/try.mjs` makes them. Which and how many:
    `--noticias` or `BETA_NEWS` (Phase 1's light news by default: COSMOS DESK, TECH BYTES, FULL TIME when the day has
-   results) and `--ediciones` (1 each). No pictures yet (maps and boards). Each told story is recorded, with the article
-   the desk read, in the day's own sources folder (`factory/<day>/sources/archive`, `…/compliance/articles`), never in
-   the station's archive. An edition the AI did not write (it fell back to the offline writer) is reported and not
-   recorded. Without an AI writer, `hacer` says plainly, in Spanish, that the news needs the key, and goes on with the
-   quiz.
+   results) and `--ediciones` (1 each). Each told story is recorded, with the article the desk read, in the day's own
+   sources folder (`factory/<day>/sources/archive`, `…/compliance/articles`), never in the station's archive. An
+   edition the AI did not write (it fell back to the offline writer) is reported and not recorded. Without an AI
+   writer, `hacer` says plainly, in Spanish, that the news needs the key, and goes on with the quiz.
+   **Pictures, as on air** (`docs/pictures/RIGHTS.md`). The rights desk (`server/picturedesk.js`) decides each
+   candidate's cleared picture within `--fotos-segundos` (120 a programme), from what it keeps and from Wikimedia,
+   paced. Its store is the beta's own (`data/publish/pictures/answers.json`, kept across days), seeded at each run from
+   the station's decisions ahead of air (`data/pictures/answers.json`, only read: two processes never write one file),
+   so most decisions are ready at once. The producer verifies each picture through the image cache and puts its rights
+   record and credit on the episode, exactly as on air. The files go to `factory/<day>/pictures/<storyId>.<ext>` for the
+   recorder (`factory.mjs --pictures`). The factory refuses a moment that shows a picture without a cleared record
+   (`markUncleared`), "Preparar" and the re-check refuse it too (`rights-missing`), the description credits it, and the
+   vertical clip draws its credit (`drawVerticalCredit`). An outlet's own photo is never shown: only
+   `PICTURE_RIGHTS=preview` would, and nothing of a preview is ever queued. `--fotos no`: maps and boards.
+   `beta.mjs fotos` decides the day's candidates' pictures from the live feeds without the writer or the key, and
+   says how many got one (a dry run: nothing made).
 2. **PAY ATTENTION**, remade from the archive with its voices (`material.mjs`: at the day's hours it airs, latest first,
    until the quiz desk plans an edition).
 3. **The clips** in vertical (`factory.mjs`, under `factory/<day>/`; the news with `--sources` that folder). A

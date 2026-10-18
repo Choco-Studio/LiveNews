@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ProviderChain } from '../server/providers/index.js';
 import { createMockProvider } from '../server/providers/mock.js';
-import { makeNewsDay, aiWriters, newsProgrammes, BETA_NEWS } from '../server/publish/newsday.js';
+import { makeNewsDay, aiWriters, newsProgrammes, BETA_NEWS, seedPictureAnswers } from '../server/publish/newsday.js';
 import { renderedMaster, useRenderedMaster, masterRoots } from '../server/publish/masters.js';
 import { detectMoments, publishable, markCopied } from '../server/publish/moments.js';
 import { estimateTimeline } from '../server/publish/timeline.js';
@@ -182,4 +182,72 @@ test('beta.mjs hacer without an AI writer: the news is not made, and it says so 
   assert.match(out, /Para hoy: 0 publicaciones/);
   assert.match(out, /Tiempo: /);
   assert.ok(!fs.existsSync(path.join(q, 'factory', localParts(Date.now(), 'Europe/London').day, 'news')), 'nothing made');
+});
+
+// ------------------------------------------------------------------------------------------------- pictures
+
+const keyOf = (s) => {
+  let h = 0;
+  for (const ch of String(s.title || s.headline || '')) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return `${s.id}:${(h >>> 0).toString(36)}`;
+};
+const OSLO_PIC = 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Oslo_public_library.jpg';
+const cleared = (url) => ({ v: 1, source: 'wikimedia-commons', via: 'wikidata:P18', subject: { kind: 'thing:structure', label: 'Deichman Bjørvika' }, licence: { id: 'CC-BY-SA-4.0', name: 'Creative Commons Attribution-ShareAlike 4.0', url: 'https://creativecommons.org/licenses/by-sa/4.0/' }, author: 'A. Photographer', title: 'File:Oslo public library.jpg', page: 'https://commons.wikimedia.org/wiki/File:Oslo_public_library.jpg', url, uses: { editorial: true, commercial: true, derivative: true, pixelation: true }, restrictions: [], label: 'FILE', checkedAt: new Date().toISOString(), cleared: true, credit: 'FILE · A. PHOTOGRAPHER · CC BY-SA 4.0 · PIXELATED' });
+
+test('pictures, as on air: the cleared picture the desk keeps, its record and credit on the episode, its file for the recorder; never the outlet\'s photo', async () => {
+  const { PictureDesk } = await import('../server/picturedesk.js');
+  const { pictureCreditOf } = await import('../public/js/graphics/picture.js');
+  const { markUncleared } = await import('../server/publish/moments.js');
+  const dir = tmp('newsday-pics-');
+  // the station's store, with a decision for Oslo's story (the beta's store is seeded from it, never the other way)
+  const station = path.join(dir, 'station');
+  fs.mkdirSync(station);
+  const osl = STORIES.find((s) => s.id === 'osl');
+  const answers = { [`d:${keyOf(osl)}`]: [Date.now() + 3600_000, { picks: [{ url: OSLO_PIC, width: 1280, height: 853, kind: 'subject', subject: { kind: 'thing:structure', label: 'Deichman Bjørvika' }, focus: 0.4, rights: cleared(OSLO_PIC) }], complete: true, at: Date.now() }] };
+  fs.writeFileSync(path.join(station, 'answers.json'), JSON.stringify({ v: 1, answers }));
+  const mine = path.join(dir, 'beta-desk');
+  assert.equal(seedPictureAnswers(station, mine), 1);
+  const before = fs.readFileSync(path.join(station, 'answers.json'), 'utf8');
+  // no network: Wikimedia and NASA answer nothing; the image cache gives the picture's bytes
+  const offline = { json: async () => { throw new Error('offline'); } };
+  const pictureDesk = new PictureDesk({ dir: mine, wikimedia: offline, nasa: offline, mode: 'cleared', log: { warn() {}, info() {} } });
+  const asked = [];
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  const images = { get: async (id, urls) => (asked.push([id, ...urls]), { type: 'image/jpeg', body: JPEG }), forget() {} };
+  const desk = deskOf();
+  // the feed's own photo on Seville's story (an outlet's): never shown
+  desk.get('sev').image = 'https://pixelwire.example/photos/solar.jpg';
+  const chain = new ProviderChain([createFakeModel({ write: aiScript() }), createMockProvider()], { record() {} }, { log: { warn() {} } });
+  const r = await makeNewsDay({ desk, chain, channel, programmes: ['cosmos'], sourcesDir: path.join(dir, 'sources'), outDir: path.join(dir, 'news'), config: { candidatePool: 12, minNewStories: 3, reviewPass: true }, pictures: { desk: pictureDesk, images, dir: path.join(dir, 'pictures'), budgetMs: 2000 } });
+  const [e] = r.episodes;
+  assert.equal(e.pictured, 1, JSON.stringify(e));
+  const ep = JSON.parse(fs.readFileSync(e.file, 'utf8'));
+  const seg = (id) => ep.segments.find((g) => g.type === 'story' && g.storyId === id);
+  assert.equal(seg('osl').hasImage, true);
+  assert.equal(!!seg('sev').hasImage, false, 'the outlet\'s photo never airs in cleared mode');
+  assert.ok(!asked.some(([, ...urls]) => urls.some((u) => /pixelwire/.test(u))), 'the outlet\'s photo is never even fetched');
+  // the rights record and the credit, where the factory, the gate and the vertical credit read them
+  const item = (ep.rundown || []).find((x) => x.storyId === 'osl') || seg('osl');
+  assert.equal(item.imageRights?.cleared, true, JSON.stringify(item));
+  assert.match(item.imageCredit || '', /^FILE · A\. PHOTOGRAPHER · CC BY-SA 4\.0/);
+  if (ep.rundown?.length) assert.match(pictureCreditOf({ rundown: ep.rundown }, 'osl')?.credit || '', /^FILE · /, 'drawVerticalCredit\'s credit');
+  assert.deepEqual(fs.readdirSync(path.join(dir, 'pictures')), ['osl.jpg']);
+  assert.deepEqual(compliance.auditItem({ kind: 'short', episode: ep }).missing, [], 'every picture has its cleared record');
+  const all = detectMoments(ep, { timeline: estimateTimeline(ep) });
+  markUncleared(all, ep, { audit: compliance.auditItem });
+  assert.ok(!all.some((m) => m.uncleared), JSON.stringify(all.filter((m) => m.uncleared).map((m) => m.refused)));
+  assert.equal(fs.readFileSync(path.join(station, 'answers.json'), 'utf8'), before, 'the station\'s store is never written');
+  // the same picture without its cleared record: the factory refuses the moments that show it (as on air)
+  const bad = structuredClone(ep);
+  for (const x of [...bad.segments, ...(bad.rundown || [])]) if (x.storyId === 'osl' && x.imageRights) x.imageRights = { ...x.imageRights, cleared: false };
+  const again = detectMoments(bad, { timeline: estimateTimeline(bad) });
+  markUncleared(again, bad, { audit: compliance.auditItem });
+  assert.ok(again.some((m) => m.uncleared));
+  // and the gate ("Preparar", the re-check) refuses it: the picture's rights record is checked as on air
+  const env = { EDITORIAL_CONTACT: 'editor@example.org' };
+  const view = (episode) => ({ kind: 'short', episode, range: { start: 0, end: 30 }, storyIds: ['osl'], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-produced news.' });
+  const sources = compliance.archiveGetStory({ dataDir: r.sourcesDir });
+  assert.ok(compliance.preflight(view(ep), { getStory: compliance.clipGetStory(['osl'], sources), register: null, env }).ok);
+  const refused = compliance.preflight(view(bad), { getStory: compliance.clipGetStory(['osl'], sources), register: null, env });
+  assert.ok(refused.violations.some((v) => v.rule === 'rights-missing'), JSON.stringify(refused.violations));
 });

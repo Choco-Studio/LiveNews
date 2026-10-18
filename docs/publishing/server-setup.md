@@ -151,7 +151,10 @@ No live stream; the owner publishes every piece himself from the approval page. 
   recorded once); its last lines say what the day offers, why the rest is held, and how long each step took. With the
   owner's key (§6) it first writes the day's news programmes fresh from the live feeds with the AI writer, with their
   voices (`BETA_NEWS`: COSMOS DESK, TECH BYTES and FULL TIME by default; `--noticias`, `--ediciones`); without it,
-  only PAY ATTENTION gives clips, and it says so. It runs at nice 10. If the pre-rendered playout has rendered a
+  only PAY ATTENTION gives clips, and it says so. The news gets its cleared pictures from the rights desk, as on air,
+  reading the station's decisions ahead of air first (`data/pictures/answers.json`, never written by the beta: its own
+  store is `data/publish/pictures/`); `node tools/publish/beta.mjs fotos` shows, without the key, how many of the day's
+  candidates have one. It runs at nice 10. If the pre-rendered playout has rendered a
   programme (`RENDERED_MASTERS`, `docs/publishing/pipeline.md` §8), its master is cut instead of recorded.
 - The approval page as a service, `node tools/publish/beta.mjs` (127.0.0.1:8740), reached through the SSH tunnel.
 - `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the

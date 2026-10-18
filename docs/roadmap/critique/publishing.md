@@ -1166,7 +1166,67 @@ Also: a clip whose hook fell back to the programme's name no longer gets a title
   - PAY ATTENTION's seven minutes recorded in about 45 (round 7).
   A real day of three news programmes and the quiz is one to two hours. Fewer programmes (`--noticias`) or a rendered
   master shortens it.
-- **Pictures** in the beta's news clips (the cleared pictures' desk, and the recorder serving their files).
+- ~~Pictures in the beta's news clips~~ (round 9).
+
+## Round 9: the beta's news gets its pictures, as on air
+
+Round 8 was merged (8c9ff8f). Round 8's news day showed maps and boards only. The picture desk now decides cleared
+pictures ahead of air (3eb1895: `server/pictureahead.js`, `server/picturedesk.js`, `data/pictures/answers.json`).
+
+### What was done
+
+- **The rights desk in the news day** (`newsday.js` `pictures`; `beta.mjs` `pictureKit`). The producer gets the rights
+  desk and the image cache, as the station has them. In a one-off run there is no ahead queue: the producer waits for
+  decisions within a budget, 120 s a programme by default (`--fotos-segundos`), at nice 10. It decides the candidates'
+  pictures, verifies each through the image cache, and puts each picture's rights record and credit on the episode,
+  exactly as on air.
+- **The store.** The beta keeps its own store (`data/publish/pictures/answers.json`, kept across days). Each run seeds
+  it from the station's decisions ahead of air (`seedPictureAnswers`: the later lifetime wins). The station's file is
+  only read, so two processes never write one file. Most decisions are therefore ready at once, and the beta asks
+  Wikimedia little beside the station's own paced queue.
+- **The files.** The pictures go to `factory/<day>/pictures/<storyId>.<ext>`, and `beta.mjs` passes the folder to the
+  factory (`--pictures`). The checks are the ones already in place:
+  - the factory refuses a moment showing a picture without a cleared record (`markUncleared`);
+  - "Preparar" and the re-check refuse it (`rights-missing`);
+  - the description credits it;
+  - the vertical clip draws the credit (`drawVerticalCredit`).
+- **Never an outlet's photo.** In cleared mode the desk never clears one, and the producer never even fetches it. Only
+  `PICTURE_RIGHTS=preview` would show one, and nothing of a preview is ever queued. `--fotos no` keeps the maps and
+  boards.
+- **`beta.mjs fotos`.** It decides the pictures of the day's news candidates from the live feeds, without the writer or
+  the key, and makes nothing.
+
+### What ran
+
+- **`test/publish-newsday.test.js`**, with the fake model and a fixture answers store (no network):
+  - the station's decision seeds the beta's store, and the station's file is left untouched;
+  - Oslo's story gets its cleared picture: its record and its `FILE · A. PHOTOGRAPHER · CC BY-SA 4.0` credit are on the
+    episode and its rundown (what `drawVerticalCredit` reads), and its file is written for the recorder;
+  - the feed's own photo on Seville's story is never shown, nor fetched;
+  - the audit finds nothing missing, the factory chooses the moments, and the gate passes;
+  - the same picture without its cleared record is refused by the factory and by the gate (`rights-missing`).
+- **End to end, by hand** (fake model, fixture answers store, the real COSMOS DESK with its voices):
+  - produced in 74 s, one story pictured;
+  - recorded and cut in 2 min 11 s;
+  - the vertical clip shows the picture full frame with "FILE | DEMO PHOTOGRAPHER · CC BY-SA 4.0 · PIXELATED" under
+    the source plate, inside the safe column;
+  - queued on three networks, kept by the re-check;
+  - "Preparar" passed the real gate and C2PA signing. The description's credits read "Pictures: FILE · DEMO
+    PHOTOGRAPHER · CC BY-SA 4.0 · PIXELATED".
+- **A real-feed dry run without the AI** (`beta.mjs fotos`, 18 Oct, about 01:20 UTC): 374 stories in the feeds. The
+  station's 8,817 kept answers seeded the beta's store. Decisions took 1 s: Wikimedia answered a rate limit at once
+  (the station and other desks share this machine's address), so they came from the kept answers.
+
+  | Programme | Candidates with a cleared picture |
+  |---|---|
+  | COSMOS DESK | 6 of 14 (NASA's own and Commons FILE photos) |
+  | TECH BYTES | 9 of 23 |
+  | FULL TIME | 7 of 20 |
+  | **All** | **22 of 57** |
+
+  A candidate is one of the stories the producer would choose from (1.5 times the programme's length). The stories
+  without a picture keep their map or board. Several of them are grave or not light (a wildfire, a hack, an injury),
+  where the desk is strictest, and they are not in a Phase 1 day anyway.
 
 ---
 
@@ -1262,5 +1322,5 @@ the last two were added in round 5:
 14. ~~A floor of 10 s for a published clip~~ (round 8: `CLIP_MIN_SECONDS`).
 15. Open-Meteo's paid plan wired into `weather.js` (its endpoint and key) before `OPEN_METEO_API_KEY` may clear the
     launch blocker (the compliance desk's check reads only that the variable is set).
-16. ~~The beta's news clips~~ (round 8: the AI writer's news day, `newsday.js`); a real day on the owner's server with
-    his key, and pictures in its clips.
+16. ~~The beta's news clips~~ (round 8: the AI writer's news day, `newsday.js`; round 9: its pictures); a real day on
+    the owner's server with his key.
