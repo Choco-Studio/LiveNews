@@ -1472,3 +1472,9 @@ export function drawRoundCard(ctx, dt, o = {}) {
     ctx.restore();
   }
 }
+
+/**
+ * The board package's own pieces, for the quiz's further boards (scenes/cards-quiz-more.js: the reveal views, the
+ * half-time race, the round's transition): the panel, the accent box, rising text, the laid-out lines, the marks.
+ */
+export const quizKit = Object.freeze({ panel, purpleBox, rise, drawLines, drawCredit, place, styleOf, S, TILE_COLORS, nameOf, markName, markWidth, ease, up, PIC, ROUND_TITLES, RULES, ORDINALS, DESKS });

@@ -59,11 +59,11 @@ describe('FULL TIME: the boards in pace', () => {
     assert.ok(d.storyBeats({ type: 'story', anchor: 'A', storyId: 's', text: 'Coventry won. They beat Newcastle.', fact: '4-1', score: SCORE }, true).includes('fact'));
   });
 
-  test('a board\'s hold reads its own words; SCORE CENTRE may hold its whole segment', () => {
+  test('a board\'s hold reads its own words; SCORE CENTRE in two pictures (the stadium board, then the wall), each to 12 s', () => {
     assert.match(factText({ score: SCORE }, 'full-time'), /Coventry 4 Newcastle 1/);
     assert.match(factText({ who: WHO }, 'world-now'), /Frank Lampard Coventry manager/);
     assert.match(factText({ score: SCORE, who: WHO }, 'full-time', 'score'), /Frank Lampard/, 'the rotation\'s board');
-    assert.equal(shotMax('full-time', 'scores'), 40);
+    assert.equal(shotMax('full-time', 'scores'), 12);
   });
 });
 

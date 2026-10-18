@@ -207,9 +207,20 @@ export function quizCamera(name, metrics = null) {
   if (name === 'host') return compose(QUIZ.seats.host.X, 3.2, 192, 70, 420, -36);
   if (name === 'player-a') return compose(QUIZ.seats.A.X, 3.2, 120, 70, 520, -36);
   if (name === 'player-b') return compose(QUIZ.seats.B.X, 3.2, 264, 70, 520, -36);
+  // the visual-variety round (owner, 18 Oct: "que no lo hagan muy repetitivo"): the tight wide, the three people closer
+  // (heads 30 px, the players' outer shoulders at the frame's edges, the board's marquee above the host), and the two
+  // two-shots, the host with one player (the player turned to him, the other desk off the frame's edge): the game's
+  // exchanges between the host and one player on one picture, never the same wide every time
+  if (name === 'wide-tight') return cam({ x: 0, y: -36, z: 208, zoom: 0.95, hy: 92, soft: 0 });
+  if (name === 'two-a' || name === 'two-b') {
+    // (the lens a little higher than the singles' so the player's ring of bulbs stands above the frame, never cut by it)
+    const X = (name === 'two-a' ? QUIZ.seats.A.X : QUIZ.seats.B.X) / 2;
+    const k = 1.75, cz = 300, cy = -76;
+    return cam({ x: X, y: cy, z: cz, zoom: (k * (SET.presenterZ - cz)) / F, hy: 95 - (SET.neckY - cy) * k, soft: 1 });
+  }
   return quizCamera('wide');
 }
-export const QUIZ_FRAMINGS = Object.freeze(['wide', 'host', 'player-a', 'player-b']);
+export const QUIZ_FRAMINGS = Object.freeze(['wide', 'host', 'player-a', 'player-b', 'wide-tight', 'two-a', 'two-b']);
 
 // --------------------------------------------------------------------------------------------- helpers (world → px)
 

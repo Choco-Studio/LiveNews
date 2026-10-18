@@ -750,7 +750,7 @@ function boundaryOk(ctx, prevSeg) {
 // that cannot fit there is not made (it would have been spent off screen); with no such cut it
 // stays (the cue clock holds a hidden turn glance for a real cut).
 const SHOW_LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores', 'quiz']);
-const SHOW_WIDE = new Set(['wide', 'two', 'solo-wide', 'quiz-wide']);
+const SHOW_WIDE = new Set(['wide', 'two', 'solo-wide', 'quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b']);
 const MOVE = { window: 15, afterCut: 0.25, min: 0.8 };
 
 function shows(s, slot) {

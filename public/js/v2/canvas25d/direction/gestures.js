@@ -301,6 +301,8 @@ export const familyOf = (e) => {
 const keyOf = familyOf;
 /** Legacy shots in which the presenter is not in vision: a gesture's apex never lands there. */
 const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines', 'scores', 'quiz']);
+// PAY ATTENTION's framings that show the whole exchange (the wide, the tight wide, the two-shots of the host with a player)
+const QUIZ_WIDES = new Set(['quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b']);
 const GRAVE_AMP = [0.6, 0.7];
 const RAISE_CAP = 1; // the full palm-out raise_hand: per presenter per episode
 const REPEAT_GAP = 45; // s: one marked family never twice within this on air, whoever performs it
@@ -1515,7 +1517,7 @@ function handsVisible(ctx, ev, d) {
   if (!name) return false;
   const solo = !ctx.duo;
   // a single on the other presenter does not show the speaker's hands
-  if (!solo && cut.focus && cut.focus !== ctx.speaker && name !== 'wide' && name !== 'two' && name !== 'quiz-wide') return false;
+  if (!solo && cut.focus && cut.focus !== ctx.speaker && name !== 'wide' && name !== 'two' && !QUIZ_WIDES.has(name)) return false;
   const L = lookFor(ctx.speakerId);
   if (!L) return true;
   let cam;

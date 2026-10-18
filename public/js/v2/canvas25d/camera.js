@@ -29,6 +29,8 @@
 //                the whole video wall beside the head (replaces the inset box)
 //   'solo-wide' / 'solo-mcu'   the solo-desk versions (SET.seatX.solo)
 //   'quiz-wide' / 'quiz-host' / 'quiz-a' / 'quiz-b'   PAY ATTENTION's three seats (studio/quiz.js quizCamera: the
+//                quiz's tight wide 'quiz-wide-tight' and the host's two-shots with a player 'quiz-two-a' / 'quiz-two-b'
+//                besides:
 //                quiz's wide, the host's single at the centre seat, each player's single on their side; a single is
 //                composed on the seated person's own look; the cast's H, A or B by the name, whatever the focus)
 // Every studio framing keeps the head inside the frame, below the bug and the
@@ -415,11 +417,11 @@ function build(name, { cast, solo, focus, programId, side }) {
 }
 
 /** The framing names this module composes. */
-export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu', 'quiz-wide', 'quiz-host', 'quiz-a', 'quiz-b'];
+export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu', 'quiz-wide', 'quiz-host', 'quiz-a', 'quiz-b', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b'];
 
 // PAY ATTENTION's framings: studio/quiz.js quizCamera's names, and the cast slot each single is composed on
-const QUIZ_SLOT = Object.freeze({ 'quiz-wide': null, 'quiz-host': 'H', 'quiz-a': 'A', 'quiz-b': 'B' });
-const QUIZ_NAME = Object.freeze({ 'quiz-wide': 'wide', 'quiz-host': 'host', 'quiz-a': 'player-a', 'quiz-b': 'player-b' });
+const QUIZ_SLOT = Object.freeze({ 'quiz-wide': null, 'quiz-host': 'H', 'quiz-a': 'A', 'quiz-b': 'B', 'quiz-wide-tight': null, 'quiz-two-a': null, 'quiz-two-b': null });
+const QUIZ_NAME = Object.freeze({ 'quiz-wide': 'wide', 'quiz-host': 'host', 'quiz-a': 'player-a', 'quiz-b': 'player-b', 'quiz-wide-tight': 'wide-tight', 'quiz-two-a': 'two-a', 'quiz-two-b': 'two-b' });
 const QUIZ_CACHE = new Map();
 /** A quiz framing as a camera (cached per name and the look it is composed on; read-only). */
 function quizFraming(name, cast) {

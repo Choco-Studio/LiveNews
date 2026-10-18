@@ -12,7 +12,7 @@ import { drawWorldMap } from './scenes/worldmap.js';
 import { drawLocator } from './graphics/locator.js';
 import { drawTopicBoard } from './graphics/topicboard.js';
 import * as cards from './scenes/cards.js';
-import { drawScoreboard } from './scenes/cards-sport.js';
+import { drawScoreboard, sportOfKicker } from './scenes/cards-sport.js';
 import { drawOpen, warmStudioOpens } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
@@ -218,7 +218,7 @@ export class Renderer {
         const topic = !card.pic && !f && !map && program?.theme !== 'sport';
         if (topic) drawTopicBoard(ctx, item, { accent: THEME_ACCENT[program?.theme] || P.red, dt });
         // (FULL TIME, the sport theme: the chip is the story's sport tag, as on its strap)
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, kicker: program?.theme === 'sport' ? item.kicker : null, image: card.pic || null, backdrop: map || f || topic ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, kicker: program?.theme === 'sport' ? item.kicker : null, sport: program?.theme === 'sport' ? sportOfKicker(item.kicker) : null, image: card.pic || null, backdrop: map || f || topic ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'tease': {
         // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
@@ -242,9 +242,11 @@ export class Renderer {
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
-        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, known: card.known, timeline: card.timeline, change: card.change, term: card.term, quote: card.quote, score: card.score, chalk: card.chalk, fixtures: card.fixtures, leafTimes: card.leafTimes, title: card.title, share: card.share, next: card.next, who: card.who, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, known: card.known, timeline: card.timeline, change: card.change, term: card.term, quote: card.quote, score: card.score, chalk: card.chalk, fixtures: card.fixtures, leafTimes: card.leafTimes, title: card.title, share: card.share, next: card.next, who: card.who, sport: card.sport, moment: card.moment, standing: card.standing, form: card.form, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       case 'scores':
-        // FULL TIME's SCORE CENTRE (director.js playBoardSegment): the stadium's board filling the frame, a row as it is read
+        // FULL TIME's SCORE CENTRE (director.js playBoardSegment): the stadium's board filling the frame, a row as it is read;
+        // its second picture, the wall of results (card.view 'wall', cards-sport-more.js drawScoresWall)
+        if (card.view === 'wall') return cards.drawFactCard(ctx, t, dt, { wall: card, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
         return drawScoreboard(ctx, dt, card, THEME_ACCENT[program?.theme] || P.orange);
       case 'quiz':
         // PAY ATTENTION's boards (quizdirector.js): a question from its frame to its reveal, a round's card, DOUBLE OR

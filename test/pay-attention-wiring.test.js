@@ -138,7 +138,10 @@ function saysOf(log, ep) {
 }
 const speechOfLine = (say) => say.off - say.on;
 /** Each board's first cut (a question's board the director cuts back to after the players' faces keeps that clock). */
-const firstCuts = (log) => log.shots.filter((x, k) => !x.card || log.shots.findIndex((y) => y.card === x.card) === k);
+// (a question's reveal view, the visual-variety round, is the same board in its second picture: never a first cut)
+const firstCuts = (log) => log.shots.filter((x, k) => !x.card || (!x.card.view && log.shots.findIndex((y) => y.card === x.card) === k));
+/** The same question's board, in either of its pictures (the reading board, the reveal view: one `o`). */
+const sameBoard = (a, b) => !!a && !!b && (a === b || (!!a.o && a.o === b.o));
 /** The cut on air at time t. */
 const shotAt = (log, t) => {
   let s = null;
@@ -147,7 +150,7 @@ const shotAt = (log, t) => {
 };
 
 describe('PAY ATTENTION: the pace profile', () => {
-  test('290-360 s, the network\'s 4 s minimum shot, a studio shot at most 12 s, a board for its whole question, a locked-off camera', () => {
+  test('290-360 s, the network\'s 4 s minimum shot, a studio shot at most 12 s, a board for its whole question, the camera locked off but for the welcome and the sign-off', () => {
     const P = paceFor('pay-attention');
     assert.deepEqual(P.length.target, [290, 360]);
     assert.equal(P.length.target[0], channel.programs['pay-attention'].targetSeconds[0]);
@@ -155,7 +158,8 @@ describe('PAY ATTENTION: the pace profile', () => {
     assert.equal(P.shots.studioMax, 12);
     assert.equal(P.shots.quiz, true);
     assert.equal(shotMax('pay-attention', 'quiz'), 40);
-    assert.equal(P.moves.max, 0);
+    // (the visual-variety round: a push in on the welcome's wide, a pull out on the sign-off's, at most)
+    assert.ok(P.moves.max <= 2);
   });
 
   test('the quiz\'s own pauses: a reply quickly, a breath before the next question, a block before a round', () => {
@@ -206,7 +210,8 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
         // LETTER BY LETTER's buzz on the buzzer's single (the wide while B's would stand under the tag), HOW MANY?'s
         // guesses on the wide: the answers said in the players' own words (the lock-ins stay on the board: the reading rule)
         if (s.part === 'buzz' || s.part === 'pick') return assert.ok([s.anchor === 'A' ? 'quiz-a' : 'quiz-b', 'quiz-wide'].includes(p.framing), `${seed} ${i} ${s.part} on ${p.framing}`);
-        if (s.part === 'guess') return assert.equal(p.framing, 'quiz-wide', `${seed} ${i} guess on ${p.framing}`);
+        // (on a wide of both desks: the quiz's wide or its tighter framing, the visual-variety round)
+        if (s.part === 'guess') return assert.ok(['quiz-wide', 'quiz-wide-tight'].includes(p.framing), `${seed} ${i} guess on ${p.framing}`);
         // the last lock-in of PICTURE THIS and WHERE on the wide (the reading rule kept the options on screen to it)
         const u = units.find((x) => x.kind === 'question' && i >= x.from && i <= x.to);
         if (s.part === 'lock' && (u.type === 'picture' || u.type === 'where')) {
@@ -222,14 +227,22 @@ describe('PAY ATTENTION: the running order and the plan of the shots', () => {
         if (s.part === 'reveal' && u.type === 'today') {
           const reveals = u.items.map((it) => it.reveal).filter((x) => x !== null);
           const lastBeforeTally = (u.parts.tally || []).length && i === reveals.at(-1);
-          return assert.equal(p.shot, lastBeforeTally ? 'quiz' : 'wide', `${seed} ${i} TODAY verdict`);
+          // (the visual-variety round: a verdict on a wide, the scorer's two-shot with the host, or the host's single)
+          if (lastBeforeTally) return assert.equal(p.shot, 'quiz', `${seed} ${i} TODAY verdict`);
+          return assert.ok(p.shot === 'wide' || (p.shot === 'close' && p.framing === 'quiz-host'), `${seed} ${i} TODAY verdict on ${p.shot}/${p.framing}`);
         }
         if (BOARD_PARTS.has(s.part)) return assert.equal(p.shot, 'quiz', `${seed} ${i} ${s.part} on its board`);
         // (the sign-off on the host's single when the wide before it would run past the studio maximum)
         if (s.part === 'signoff') return assert.ok(['quiz-wide', 'quiz-host'].includes(p.framing), `${seed} signoff on ${p.framing}`);
-        if (['welcome', 'scores', 'tally'].includes(s.part)) return assert.equal(p.framing, 'quiz-wide', `${seed} ${s.part} on the wide`);
-        if (s.anchor === 'H') assert.ok(['quiz-host', 'quiz-wide'].includes(p.framing), `${seed} ${i} ${s.part}: ${p.framing}`);
-        else assert.ok([s.anchor === 'A' ? 'quiz-a' : 'quiz-b', 'quiz-wide'].includes(p.framing), `${seed} ${i} ${s.part} ${s.anchor}: ${p.framing}`);
+        // (the visual-variety round: the half-time race on its board, with the players' quick replies; the other runs on
+        // the wide or its tighter framing, a player's line on their single, their two-shot with the host or a wide)
+        const units0 = units.find((x) => x.kind === 'card' && x.board === 'halftime' && i >= x.from && i <= x.to);
+        if (s.part === 'scores' || units0) return assert.equal(p.shot, 'quiz', `${seed} ${i} ${s.part} on the half-time board`);
+        if (s.part === 'welcome') return assert.equal(p.framing, 'quiz-wide', `${seed} welcome on the wide`);
+        if (s.part === 'tally') return assert.ok(['quiz-wide', 'quiz-wide-tight'].includes(p.framing), `${seed} tally on ${p.framing}`);
+        const wides = ['quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b'];
+        if (s.anchor === 'H') assert.ok(['quiz-host', ...wides].includes(p.framing), `${seed} ${i} ${s.part}: ${p.framing}`);
+        else assert.ok([s.anchor === 'A' ? 'quiz-a' : 'quiz-b', 'quiz-wide', 'quiz-wide-tight', s.anchor === 'A' ? 'quiz-two-a' : 'quiz-two-b'].includes(p.framing), `${seed} ${i} ${s.part} ${s.anchor}: ${p.framing}`);
       });
     }
   });
@@ -300,7 +313,8 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         } else assert.equal(reach.length, 0, `${seed}: a phrase start within reach of the cut at ${c.t.toFixed(2)}`);
       }
     }
-    assert.ok(cuts >= 10 && onPhrase >= cuts / 2, `${onPhrase} of ${cuts} reveal cuts on a phrase's first word`);
+    // (the visual-variety round's reveal views keep more reveals on the board's own second picture: fewer cuts away)
+    assert.ok(cuts >= 5 && onPhrase >= cuts / 2, `${onPhrase} of ${cuts} reveal cuts on a phrase's first word`);
   });
 
   test('a round\'s card never stands silent past its rule by more than 1.5 s (on air: an owed wide pushed it into the rule, then it held 2.2 s mute)', async () => {
@@ -509,6 +523,8 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
           assert.ok(board && board.t <= markAt + 0.02 && board.t >= first.on, `${seed}: the board by the headline's first word (${(board.t - markAt).toFixed(2)})`);
           continue;
         }
+        // (the half-time scores in a minute already at the owner's 10 cuts: on the wide on air with the strip)
+        if (u.board === 'halftime' && log.trace.some((x) => x.k === 'halftimeStrip' && x.i === u.from)) continue;
         const on = shotAt(log, first.on + 0.01);
         assert.equal(on.shot, 'quiz', `${seed}: ${u.type || u.board} at ${first.on.toFixed(2)} on ${on.shot}`);
         assert.ok(first.on - on.t >= -0.01 && first.on - on.t < 0.05, `${seed}: the board lands on the first word (${(first.on - on.t).toFixed(2)})`);
@@ -523,7 +539,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       const said = saysOf(log, episode);
       for (const u of quizUnits(episode.segments).filter((x) => x.kind === 'question' && x.type !== 'today')) {
         const q0 = episode.segments[u.from].quiz.question;
-        const cut = log.shots.find((x) => x.shot === 'quiz' && x.card?.o?.question?.key === q0.key && x.card.o.question.words === q0.words);
+        const cut = log.shots.find((x) => x.shot === 'quiz' && !x.card?.view && x.card?.o?.question?.key === q0.key && x.card.o.question.words === q0.words);
         assert.ok(cut, `${seed}: ${u.type} board`);
         const o = cut.card.o;
         const rel = (i) => said.get(i).on - cut.t;
@@ -556,8 +572,9 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         if (u.type === 'where') {
           // WHERE's move onto the right pin plays out on the board (2.2 s) before any cut away from it (the board the
           // reveal is on: the one the director cut back to after the last lock-in on the wide, else its first)
-          const onIt = [...log.shots].reverse().find((x) => x.card === cut.card && x.t <= cut.t + o.revealAt + 1e-6);
-          const next = log.shots[log.shots.indexOf(onIt) + 1];
+          // (its reveal view is the same board: the move plays out there)
+          const onIt = [...log.shots].reverse().find((x) => sameBoard(x.card, cut.card) && x.t <= cut.t + o.revealAt + 1e-6);
+          const next = log.shots.slice(log.shots.indexOf(onIt) + 1).find((x) => !sameBoard(x.card, cut.card));
           assert.ok(next.t - cut.t >= o.revealAt + 2.2, `${seed}: WHERE left at ${(next.t - cut.t - o.revealAt).toFixed(2)} s after its reveal`);
         }
       }
@@ -640,7 +657,7 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       assert.ok(card, `${seed}: the DOUBLE OR NOTHING card`);
       const behind = episode.cast.A === game.don.trailing ? 'A' : 'B';
       assert.equal(card.card.o.player, behind);
-      const board = log.shots.find((x) => x.shot === 'quiz' && x.card?.o?.question?.key === game.don.played.q.key && x.card.o.question.words === game.don.played.q.words);
+      const board = log.shots.find((x) => x.shot === 'quiz' && !x.card?.view && x.card?.o?.question?.key === game.don.played.q.key && x.card.o.question.words === game.don.played.q.words);
       assert.ok(board, seed);
       assert.equal(board.card.o.double, behind, `${seed}: the stake is the player behind's`);
       assert.match(board.card.o.kicker, /^DOUBLE OR NOTHING/);
@@ -734,12 +751,18 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       });
       const scores = episode.segments.findIndex((s) => s.part === 'scores');
       const on = shotAt(log, said.get(scores).on + 0.01);
-      assert.equal(on.framing, 'quiz-wide');
-      // the strip up with the host's scores line (even on a wide a player's line opened), the scores it says
-      const strip = said.get(scores).strip;
       const game = episode.segments[scores].quiz?.scores;
-      assert.ok(strip, `${seed}: the half-time strip with the scores line`);
-      if (game) assert.deepEqual({ A: strip.A, B: strip.B }, { A: game[episode.cast.A], B: game[episode.cast.B] }, `${seed}: the strip's scores are the ones said`);
+      // the visual-variety round: the half-time race board with the host's scores line, its scores the ones said; in a
+      // minute already at the owner's 10 cuts, the wide on air with the strip, as before
+      if (on.shot === 'quiz') {
+        assert.equal(on.card?.board, 'halftime', `${seed}: the scores line on ${on.card?.board}`);
+        if (game) assert.deepEqual({ A: on.card.o.scores.A, B: on.card.o.scores.B }, { A: game[episode.cast.A], B: game[episode.cast.B] }, `${seed}: the race's scores are the ones said`);
+      } else {
+        assert.ok(['quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b'].includes(on.framing), `${seed}: the scores line on ${on.framing}`);
+        const strip = said.get(scores).strip;
+        assert.ok(strip, `${seed}: the half-time strip with the scores line`);
+        if (game) assert.deepEqual({ A: strip.A, B: strip.B }, { A: game[episode.cast.A], B: game[episode.cast.B] }, `${seed}: the strip's scores are the ones said`);
+      }
     }
     assert.ok(tails >= 3, `reaction shots in the reveal's tail: ${tails}`);
   });
@@ -784,8 +807,9 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
         assert.ok(cut.t - prev.t >= min - 0.01, `${seed}: the board held its minimum`);
         if (seg.part === 'reveal') {
           // TODAY OR NOT TODAY: the silent lock-ins on the board, then the verdict on the wide, the wide never standing
-          // silent past 2 s before it (on air, 14 Oct: 2.1-3.1 s on the lamps and the clock, nothing said)
-          assert.equal(cut.framing, 'quiz-wide');
+          // silent past 2 s before it (on air, 14 Oct: 2.1-3.1 s on the lamps and the clock, nothing said); the visual-variety
+          // round: the wide, its tighter framing, the scorer's two-shot with the host or the host's single, in turn
+          assert.ok(['quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b', 'quiz-host'].includes(cut.framing), `${seed}: TODAY's verdict on ${cut.framing}`);
           assert.equal(shotAt(log, said.get(w.i).on + 0.01), cut, `${seed}: TODAY's verdict on the wide`);
           assert.ok(said.get(w.i).on - w.t <= 2.0, `${seed}: TODAY's wide ${(said.get(w.i).on - w.t).toFixed(2)} s silent before its verdict`);
           assert.ok(!log.says.some((x) => x.on > w.t && x.on < said.get(w.i).on - 1e-6), `${seed}: nothing else said on TODAY's wide before its verdict`);
@@ -807,17 +831,17 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
           }
         }
         if (seg.part === 'buzz') assert.ok(cut.framing === (seg.anchor === 'A' ? 'quiz-a' : 'quiz-b') || (seg.anchor === 'B' && cut.framing === 'quiz-wide'), `${seed}: the buzzer's single (${cut.framing})`);
-        else assert.equal(cut.framing, 'quiz-wide');
+        else assert.ok(['quiz-wide', 'quiz-wide-tight'].includes(cut.framing), `${seed}: the answers on a wide of both desks (${cut.framing})`);
         // back to the same board, its clock from its first cut, the reveal on it 0.4 s later
         const back = log.trace.find((x) => x.k === 'back' && x.t > w.t);
         const board = shotAt(log, back.t + 1e-3);
-        assert.equal(board.card, prev.card);
+        assert.ok(sameBoard(board.card, prev.card), `${seed}: back to the same board`);
         assert.ok(board.t - cut.t >= min - 0.01, `${seed}: the face held its minimum`);
         // never more than 1.8 s of ticks on the faces with nothing said, once they have held the minimum (on air, 14 Oct,
         // round 15: PICTURE THIS's wide 2.1-2.2 s silent after the recap, waiting for the reveal's beat)
         const lastOff = Math.max(...log.says.filter((x) => x.off !== null && x.off <= back.t + 1e-6).map((x) => x.off));
         assert.ok(back.t - lastOff <= 1.8 + 0.01 || board.t - cut.t <= min + 0.05, `${seed}: the faces ${(back.t - lastOff).toFixed(2)} s silent before the board is back`);
-        const first = log.shots.find((x) => x.card === board.card);
+        const first = log.shots.find((x) => sameBoard(x.card, board.card));
         assert.equal(board.card.epoch, first.t, `${seed}: the board's clock runs from its first cut`);
         const r = log.trace.find((x) => x.k === 'reveal' && x.t > back.t - 1e-6);
         assert.ok(r.t - back.t >= 0.4 - 1e-3 && shotAt(log, r.t + 1e-3) === board, `${seed}: the reveal on the board, ${(r.t - back.t).toFixed(2)} s after it is back`);
@@ -860,7 +884,9 @@ describe('PAY ATTENTION on air (the director, the fake clock)', () => {
       // (the reviewer's bound, under 65 %, is measured on the real editions the station writes from the archive: 58-64 %
       // in docs/roadmap/critique/pay-attention-director.md; the fixture week's lean copy leaves its fixed reading boards a
       // larger share, up to 66.5 % on its shortest edition)
-      assert.ok(boards / air < 0.67, `${seed}: boards ${((100 * boards) / air).toFixed(1)} % of the air`);
+      // (the visual-variety round, owner 18 Oct: "necesitan algunas diapositivas más": the half-time race, the round
+      // transitions, the reveal views and PICTURE THIS's picture are boards too; the faces keep 30 % and more)
+      assert.ok(boards / air < 0.72, `${seed}: boards ${((100 * boards) / air).toFixed(1)} % of the air`);
     }
   });
 

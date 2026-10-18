@@ -304,6 +304,31 @@ are different programmes. A shape fixes the order; a segment without material is
   the story has another (a story whose only board repeats the last one's type still shows it: a result is worth a
   repeat, a story without its board is not). No plain KEY FACT card: a story without one of these boards stands on its
   picture; THE NUMBER keeps its card. No maps: a world map under a result says nothing a sport bulletin needs.
+- **Visual variety (owner, 18 Oct: "necesitan algunas diapositivas más o cosas que no lo hagan muy repetitivo";
+  docs/roadmap/critique/visual-variety.md).** The 17 Oct edition, twelve stories without a picture, aired 79 % on the
+  presenters, SCORE CENTRE 20 s on one board, a minute of singles and the wide, and its three headline frames as one
+  text template. Since then, from what the desk has and nothing else (§3.6):
+  - **the sport's slate** when the running order turns to another sport (its icon, its name as the strap says it, how
+    many of its stories follow), for the story's first sentence (at most 7.5 s when a sentence start allows it);
+    MOMENT OF THE DAY opens on its title board;
+  - **WHERE THEY STAND and THE RUN** (`server/sport/stats.js`): a side's place or run of results in the story's own
+    words, only the scoreline's side the same sentence names ("lift Kilmarnock off the bottom of the Scottish
+    Premiership"; "a fifth successive league defeat for Norwich"), never a run that ended, is chased or is still to come,
+    never someone's quoted words, never on grave news. A long story shows it as its second board;
+  - **SCORE CENTRE in two pictures**: the stadium's board, then the wall of results (`drawScoresWall`: the winner first,
+    the sport's icon) on the row nearest the middle of its voice, each picture 4–12 s;
+  - **the results ticker**: the results the programme has read so far, the winner first ("FALKIRK BEAT HIBS 2-1"), in the
+    band in place of the headlines once there are two; never a result before its turn;
+  - **the side screen** shows a result story's result (the winner first, in words) when it has no picture (§6);
+  - **the studio**: a presenter-only story turns on the wide for its first sentence; an answer in a chat run plays on
+    the two-shot after the question's wide (the two-way); a story whose screen shows nothing takes the two-shot where
+    the over-the-shoulder would frame the emblem;
+  - **the headline frames of a picture-less story** carry its sport's emblem large (a racing horseshoe added to the
+    icons), at the frame's right edge under the captions.
+  
+  **The standard** (`public/js/variety.js` VARIETY, enforced by `test/visual-variety.test.js` on the 17 Oct edition with
+  its recorded voices' timing): no picture past 12 s, none under 4 s, never the same layout twice in a row, at least three
+  kinds of picture in every minute, at most ten cuts a minute; studio shots planned to 11 s (pace.js) so they air inside 12.
 - **IN THEIR WORDS at the press conference.** A manager's, coach's, captain's or official's quote (38 % of sport items carry
   one) is re-staged by the channel's existing system in the **press-conference room**: the press room re-dressed with a
   backdrop of plain orange-and-slate panels, no sponsor or club logo, the bank of microphones in blank foam covers (no
@@ -320,7 +345,8 @@ are different programmes. A shape fixes the order; a segment without material is
   dark tiers with a few lit exits and an empty-seat pattern; four floodlight towers with soft static halos; the striped
   pitch in front of the stand; the advertising boards round the pitch carry no brand, only the channel's orange band and
   FULL TIME. The desk is curved black with an orange edge light. The platform's screen is the network's main screen
-  above the desk: it shows the story's picture, or the idle FULL TIME emblem (the integrator's decision, step 5: a
+  above the desk: it shows the story's picture, a result story's result in words (the visual-variety round), or the
+  idle FULL TIME emblem (the integrator's decision, step 5: a
   screen at the platform's side would break every framing and the channel's camera grammar, which are built on the
   centred main screen). It reads as nothing else on the channel: WORLD NOW and SEVEN DAYS are glass rooms over a city,
   the others are rooms.

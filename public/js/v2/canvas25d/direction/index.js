@@ -116,7 +116,7 @@ export function arbitrate(events, ctx) {
 // the listener's glance where the viewer can see it
 
 const LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage', 'scores', 'quiz']);
-const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide', 'quiz-wide']);
+const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide', 'quiz-wide', 'quiz-wide-tight', 'quiz-two-a', 'quiz-two-b']);
 export const GLANCE_WINDOW = 15; // s after the turn start a hidden turn glance may move to (intros, chats)
 export const STORY_GLANCE_WINDOW = 4.5; // ... in a story turn (owner: "only at the start"; runtime/cueclock.js STORY_WINDOW)
 const TURN_GLANCE = /^turn(?!-notes)/; // FACES' 'turn-notes' is a look at the notes, not at the partner

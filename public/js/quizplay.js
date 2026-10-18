@@ -27,7 +27,11 @@ export const HALF_NOTE = 120 / 112;
 /** The writer's question parts (a question runs from its frame to its reveal). */
 export const QUESTION_PARTS = new Set(['frame', 'options', 'countdown', 'lock', 'recap', 'buzz', 'stall', 'guess', 'pins', 'reveal', 'tally']);
 /** The quiz's framings (camera.js composes them from studio/quiz.js quizCamera; the seats are QUIZ_SEATS). */
-export const QUIZ_FRAMING = Object.freeze({ wide: 'quiz-wide', H: 'quiz-host', A: 'quiz-a', B: 'quiz-b' });
+export const QUIZ_FRAMING = Object.freeze({ wide: 'quiz-wide', H: 'quiz-host', A: 'quiz-a', B: 'quiz-b', tight: 'quiz-wide-tight', twoA: 'quiz-two-a', twoB: 'quiz-two-b' });
+/** The framings that show both desks (an answer, a verdict, the game's state): the wide and the tight wide, in turn. */
+export const BOTH_DESKS = Object.freeze(['quiz-wide', 'quiz-wide-tight']);
+/** The two-shot of the host with a player ('A' | 'B'). */
+export const twoShotOf = (seat) => (seat === 'A' ? 'quiz-two-a' : seat === 'B' ? 'quiz-two-b' : null);
 export const QUIZ_FRAMINGS = Object.freeze(Object.values(QUIZ_FRAMING));
 /** The writer's countdowns (BEATS: seconds) as whole half notes: 7.5 s is seven, 10 s nine (9.33), 6.4 s six, 4.3 s four, 3.2 s three. */
 export const COUNTDOWN_HALVES = Object.freeze({ picture: 7, letters: 9, where: 6, howmany: 4, today: 3 });
@@ -90,6 +94,19 @@ export function quizUnits(segments = []) {
       sudden = false;
       const u = { kind: 'card', board: 'double', from: i, to: i };
       if (segs[i + 1]?.part === 'pick') u.to = ++i;
+      units.push(u);
+      continue;
+    }
+    // the half-time scores: the race board (cards-quiz-more.js drawHalftimeBoard) for the host's line and the players'
+    // quick replies over it, up to about 4 s of them (the visual-variety round: no longer a strip over the same wide; a
+    // wide of its own for two quips was one cut too many for the owner's 10 a minute)
+    if (part === 'scores') {
+      round = null;
+      don = sudden = false;
+      const u = { kind: 'card', board: 'halftime', from: i, to: i };
+      let chars = 0;
+      while (segs[u.to + 1]?.part === 'react' && chars + String(segs[u.to + 1].text || '').length <= 80) chars += String(segs[++u.to].text || '').length;
+      i = u.to;
       units.push(u);
       continue;
     }
@@ -268,7 +285,8 @@ export function revealPlan(unit, segments, cast, { item = null, double = null } 
 
 const BOARD = 'quiz';
 const ANSWER_PARTS = new Set(['lock', 'recap', 'buzz', 'stall', 'guess']);
-const WIDE_PARTS = new Set(['welcome', 'scores', 'signoff', 'tally']);
+// (the welcome, the players' introduction and their standing, the tally and the sign-off: both desks seen)
+const WIDE_PARTS = new Set(['welcome', 'introduce', 'standing', 'scores', 'signoff', 'tally']);
 const MIN = 4.0; // the network's minimum shot (pace.js shots.min), planned with a margin
 const MARGIN = 0.4;
 /** s a board's first line may wait for the board's cut (quizdirector.js BOARD_WAIT): a run before a board may end short. */
@@ -295,8 +313,9 @@ export function quizAvoidOf(episode) {
 
 /** A board shot for a unit. */
 const boardShot = (unit, k, anchor) => ({ shot: BOARD, framing: null, focus: anchor || 'H', board: unit.kind === 'question' ? unit.type : unit.board, unit: k });
-/** A studio shot: the quiz's wide (focus H: one camera whoever speaks) or a single. */
-const studioShot = (framing) => (framing === QUIZ_FRAMING.wide ? { shot: 'wide', framing, focus: 'H' } : { shot: 'close', framing, focus: framing === QUIZ_FRAMING.A ? 'A' : framing === QUIZ_FRAMING.B ? 'B' : 'H' });
+/** A studio shot: the quiz's wide, its tight wide or a two-shot (shot 'wide', focus H: one camera whoever speaks) or a single. */
+const WIDES = new Set([QUIZ_FRAMING.wide, QUIZ_FRAMING.tight, QUIZ_FRAMING.twoA, QUIZ_FRAMING.twoB]);
+const studioShot = (framing) => (WIDES.has(framing) ? { shot: 'wide', framing, focus: 'H' } : { shot: 'close', framing, focus: framing === QUIZ_FRAMING.A ? 'A' : framing === QUIZ_FRAMING.B ? 'B' : 'H' });
 
 /**
  * The shot of every segment, on the timeline the plan estimates (speech at its recorded length or CPS, the profile's
@@ -408,7 +427,13 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
   // tally and the sign-off on the wide (the host's single when the wide would run past the maximum), and every cut
   // costs a little (no choppy cutting for its own sake)
   function options(g) {
-    if (g.speakers.size > 1) return [[QUIZ_FRAMING.wide, 0]];
+    if (g.speakers.size > 1) {
+      // the host and one player (a question put to them, their reply): the two-shot of those two, the player turned to
+      // him (never player B's while the programme's tag shows); both players: the wide
+      const players = [...g.speakers].filter((x) => x === 'A' || x === 'B');
+      if (!g.forced && players.length === 1 && g.speakers.has('H') && !(players[0] === 'B' && start[g.segs[0]] < tagUntil)) return [[twoShotOf(players[0]), 0], [QUIZ_FRAMING.wide, 0.8]];
+      return [[QUIZ_FRAMING.wide, 0]];
+    }
     const one = [...g.speakers][0];
     const single = one === 'B' && start[g.segs[0]] < tagUntil ? null : QUIZ_FRAMING[one] || QUIZ_FRAMING.H; // B never under the tag
     if (g.forced) return single ? [[QUIZ_FRAMING.wide, 0], [single, 1.5]] : [[QUIZ_FRAMING.wide, 0]];
@@ -447,7 +472,7 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
         const len = (last ? x.len + allow : x.len) + carried;
         if (len < min + MARGIN) cost += 100 * (min + MARGIN - len);
         if (last && allow && x.len < min) cost += 2 * (min - x.len); // (the silence the board's wait costs)
-        const cap = x.segs.some((j) => segs[j]?.part === 'signoff') ? studioMax - MARGIN : studioMax; // (the stinger's transition after the hold)
+        const cap = x.segs.some((j) => segs[j]?.part === 'signoff') ? studioMax - 0.5 : studioMax; // (the stinger's transition after the hold, and the voices' own pace: a closing wide ran 12.1 s on its 11.6, so 11.5)
         if (x.len + carried > cap) cost += 50 * (x.len + carried - cap);
         cost += 0.5;
       });
@@ -455,6 +480,10 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     }
     for (const x of best.groups) for (const j of x.segs) shots[j] = { ...studioShot(x.framing), strip: (x.framing === QUIZ_FRAMING.wide && x.segs.some((y) => segs[y]?.part === 'scores' && y <= j)) || undefined };
   }
+  // the visual-variety round (owner, 18 Oct): a picture that shows both desks is the wide and the tight wide in turn (an
+  // answer, a verdict, the tally, the half-time banter: never the same wide every time; the welcome and the sign-off keep
+  // the wide); a verdict that one player alone scored on goes on the two-shot of the host with that player
+  varyWides(segs, U, shots, start, tagUntil, episode.cast);
   // two neighbouring studio shots on the same camera after the B rule are one shot
   for (let j = 0; j < segs.length; j++) {
     const s = shots[j];
@@ -463,7 +492,87 @@ export function planQuizShots(episode, { gapAfter = () => 0.5, studioMax = 12, m
     s.len = Math.round(dur(j) * 1000) / 1000;
     if (!s.strip) delete s.strip;
   }
+  // the camera's two moves (the visual-variety round): a slow push in on the welcome's wide, a pull out on the
+  // sign-off's, each eased from rest and settled before its cut (camera.js caps a wide's move at its heads' pixel)
+  for (const part of ['welcome', 'signoff']) {
+    const j = segs.findIndex((x) => x?.part === part);
+    const s = j >= 0 ? shots[j] : null;
+    if (!s || s.shot !== 'wide' || s.framing !== QUIZ_FRAMING.wide) continue;
+    let len = 0;
+    for (let k = j; k < segs.length && shots[k] && sameShot(shots[k], s); k++) len += shots[k].len;
+    if (len < 4) continue;
+    s.move = { type: part === 'welcome' ? 'push' : 'pull', amount: 0.02, delay: 0.4, dur: Math.max(2.5, len - 1.0) };
+  }
   return shots;
+}
+
+/**
+ * The wides of a plan in turn (mutates `shots`): each run of segments on one 'quiz-wide' shot that is not the welcome's
+ * or the sign-off's takes the wide and the tight wide alternately, never the framing of the studio shot before it; a
+ * TODAY OR NOT TODAY verdict that one player alone scored on is that player's two-shot with the host (never player B's
+ * under the programme's tag).
+ */
+function varyWides(segs, U, shots, start, tagUntil, cast) {
+  const today = new Map();
+  for (const u of U) {
+    if (u.kind !== 'question' || u.type !== 'today') continue;
+    for (const it of u.items || []) if (it.reveal !== null && it.reveal !== undefined) today.set(it.reveal, it);
+  }
+  let turn = 0;
+  let todayTurn = 0;
+  let prevStudio = null;
+  let prevEnd = -2; // the last studio segment's index (a run straight after it on a wide stays on that wide: no extra cut)
+  const face = { A: null, B: null }; // each player's last reaction picture: their single or their two-shot with the host
+  for (let j = 0; j < segs.length; j++) {
+    const s = shots[j];
+    if (!s) continue;
+    // a player's reaction on their single: the single and the two-shot with the host in turn (the host has just spoken to
+    // them), never player B's two-shot under the programme's tag; an answer (a buzz, a pick) keeps its single
+    if (s.shot === 'close' && (s.framing === QUIZ_FRAMING.A || s.framing === QUIZ_FRAMING.B) && !s.answer) {
+      const seat = s.framing === QUIZ_FRAMING.A ? 'A' : 'B';
+      let k = j;
+      while (k + 1 < segs.length && shots[k + 1] && shots[k + 1].framing === s.framing && !shots[k + 1].answer) k++;
+      const reacts = segs.slice(j, k + 1).every((x) => x?.part === 'react');
+      const two = twoShotOf(seat);
+      const use = reacts && face[seat] === 'single' && two !== prevStudio && !(seat === 'B' && start[j] < tagUntil);
+      if (use) for (let x = j; x <= k; x++) shots[x] = { ...shots[x], ...studioShot(two) };
+      face[seat] = use ? 'two' : 'single';
+      prevStudio = use ? two : s.framing;
+      prevEnd = k;
+      j = k;
+      continue;
+    }
+    if (s.shot !== 'wide' || s.framing !== QUIZ_FRAMING.wide) {
+      if (s.shot === 'wide' || s.shot === 'close') {
+        prevStudio = s.framing;
+        prevEnd = j;
+      }
+      continue;
+    }
+    // the run of segments on this one shot
+    let k = j;
+    while (k + 1 < segs.length && shots[k + 1] && shots[k + 1].shot === 'wide' && shots[k + 1].framing === QUIZ_FRAMING.wide && !!shots[k + 1].answer === !!s.answer) k++;
+    const parts = new Set(segs.slice(j, k + 1).map((x) => x?.part));
+    let framing = QUIZ_FRAMING.wide;
+    if (!parts.has('welcome') && !parts.has('signoff')) {
+      const pts = today.has(j) ? segs[j]?.quiz?.points || null : null;
+      const scorers = pts ? Object.entries(pts).filter(([, p]) => Number(p) > 0).map(([id]) => id) : [];
+      const seat = scorers.length === 1 ? seatOf(cast, scorers[0]) : null;
+      // (TODAY OR NOT TODAY's six verdicts: the scorer's two-shot when one alone scored, else the wide, the host's
+      // single and the tight wide in turn: never a minute of board and wide alone)
+      const n = today.has(j) ? todayTurn++ : -1;
+      if (seat && !(seat === 'B' && start[j] < tagUntil)) framing = twoShotOf(seat);
+      else if (n % 3 === 1 && prevStudio !== QUIZ_FRAMING.H) framing = QUIZ_FRAMING.H;
+      else framing = BOTH_DESKS[turn++ % 2];
+      if (framing === prevStudio && BOTH_DESKS.includes(framing)) framing = framing === QUIZ_FRAMING.tight ? QUIZ_FRAMING.wide : QUIZ_FRAMING.tight;
+      // (straight after a wide, a wide stays the same wide: a change of wide there is a cut the plan never counted)
+      if (prevEnd === j - 1 && BOTH_DESKS.includes(prevStudio) && BOTH_DESKS.includes(framing)) framing = prevStudio;
+    }
+    for (let x = j; x <= k; x++) shots[x] = { ...shots[x], ...studioShot(framing), ...(shots[x].answer ? { answer: true } : {}) };
+    prevStudio = framing;
+    prevEnd = k;
+    j = k;
+  }
 }
 
 /** Are two planned shots the same picture (no cut between them)? */

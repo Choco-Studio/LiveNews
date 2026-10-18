@@ -28,6 +28,7 @@ import { drawProgrammeLockup } from './opens.js';
 import { drawIdentScene, IDENT_WARM } from './opens/ident.js';
 import { drawShare, drawNext, drawWho } from './cards-more.js';
 import { drawScoreline, drawComingUp, drawChalkboard } from './cards-sport.js';
+import { drawSportSlate, drawMomentBoard, drawStandingBoard, drawFormBoard, drawScoresWall, drawSportBackdrop } from './cards-sport-more.js';
 
 export const STINGER_DURATION = 0.8; // seconds
 
@@ -200,13 +201,17 @@ const tagWidth = (tag) => TAG_W.get(tag) ?? (TAG_W.set(tag, measureText(tag, 1, 
  * One headline frame. The montage's (tag TOP STORIES with its pips; the first frame comes out of the open), or
  * STILL TO COME's single story (tag 'STILL TO COME', pips: false, tagIn: the tag wipes in after the cut).
  */
-export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', kicker = null, image = null, backdrop = null, accent = null, programId = '', tag = 'TOP STORIES', pips = true, tagIn = index === 0 } = {}) {
+export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', kicker = null, image = null, backdrop = null, accent = null, programId = '', tag = 'TOP STORIES', pips = true, tagIn = index === 0, sport = null } = {}) {
   const acc = accentFor(programId, accent);
   if (image) {
     ctx.drawImage(image, 0, 0);
     ctx.drawImage(shade(96, 200, 0.85), 0, 0); // photos get a stepped shade; the field is already dark there
   } else if (backdrop === 'map') ctx.drawImage(shade(96, 200, 0.85), 0, 0); // the caller drew the story's place
-  else ctx.drawImage(MONTAGE_FIELD(), 0, 0);
+  else {
+    ctx.drawImage(MONTAGE_FIELD(), 0, 0);
+    // FULL TIME without a picture (the visual-variety round): the story's sport large on the field, under the shade
+    if (sport && drawSportBackdrop(ctx, dt, { sport, index })) ctx.drawImage(shade(96, 200, 0.85), 0, 0);
+  }
 
   // TOP STORIES tag and pips under the bug, micro white on ink (brand red stays with the bug, LIVE
   // and BREAKING): it wipes in on the first frame only and stays put across the cuts
@@ -1289,6 +1294,27 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   const style = typeof opts.programId === 'string' && Object.hasOwn(FACT_STYLES, opts.programId) ? FACT_STYLES[opts.programId] : RULE_STYLE;
   const acc = accentFor(opts.programId, opts.accent);
   // FULL TIME's boards (cards-sport.js) and the story boards of cards-more.js: each on the card's own ground
+  // (the visual-variety round's: the sport's slate, MOMENT OF THE DAY, WHERE THEY STAND, THE RUN: cards-sport-more.js)
+  if (Array.isArray(opts.wall?.scores) && opts.wall.scores.length) {
+    cardGround(ctx, dt, null, factField);
+    return drawScoresWall(ctx, dt, opts.wall);
+  }
+  if (opts.sport?.name) {
+    cardGround(ctx, dt, null, factField);
+    return drawSportSlate(ctx, dt, opts.sport);
+  }
+  if (opts.moment?.headline) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawMomentBoard(ctx, dt, opts.moment);
+  }
+  if (opts.standing?.team && opts.standing?.text) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawStandingBoard(ctx, dt, opts);
+  }
+  if (opts.form?.team && opts.form?.count) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawFormBoard(ctx, dt, opts);
+  }
   if (opts.score?.a && opts.score?.b) {
     cardGround(ctx, dt, opts.image, factField);
     return drawScoreline(ctx, dt, opts, acc);

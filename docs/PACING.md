@@ -598,6 +598,17 @@ the story now cuts straight from the montage's last frame (owner 20:40, item 2).
   (correlation 0.83-1.0, was -0.9 to 0.7), sentences move 0.7-1.2 st apart (was 0.2-0.9, random), duration, word times and
   loudness unchanged, timbre within 0.8 dB, no new clicks, ~1 s of extra work per segment. `MELODY = false` in
   server/voice/plan.js turns it off (`melody: false` in a worker request does the same for one clip).
+- **The visual-variety standard (18 Oct, owner on PAY ATTENTION and FULL TIME: "necesitan algunas diapositivas más o
+  cosas que no lo hagan muy repetitivo").** `public/js/variety.js` names every shot as a viewer sees it (`shotLayout`:
+  group, kind, layout: a board by its name, a question board's reveal view a picture of its own, the over-the-shoulder
+  apart from the single, a headline frame by what fills it) and measures a timeline (`varietyReport`: longest shot and
+  studio shot, each kind's share, back-to-back layouts, the fewest kinds in a 60 s window, cuts a minute). `VARIETY` is
+  each programme's standard: PAY ATTENTION's boards to 15 s (PICTURE THIS's reading board 22), FULL TIME's every
+  picture to 12 s; studio shots to 12 s; never under 4 s; never the same layout twice in a row; at least three kinds a
+  minute; at most ten cuts a minute. `tools/pace/variety.mjs` plays an episode on the fake clock with the v2 director
+  (`--timeline`), `tools/pace/variety-report.mjs` measures a recording (`record.mjs --trace`: the director's own `shot`
+  trace since this round). `test/visual-variety.test.js` holds ten PAY ATTENTION fixture editions and the 17 Oct FULL
+  TIME edition to it. Before and after: docs/roadmap/critique/visual-variety.md.
 
 ## 6. Programmes up to ~10 minutes
 

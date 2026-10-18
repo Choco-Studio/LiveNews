@@ -238,11 +238,29 @@ export const ICONS = {
     '.#.........',
     '...........',
   ],
+  // racing: a horseshoe, open side up, its nail holes in the shade (the visual-variety round: RACING's slate and frames)
+  racing: [
+    '.##.....##.',
+    '###.....###',
+    '#+#.....#+#',
+    '###.....###',
+    '#+#.....#+#',
+    '###.....###',
+    '.###...###.',
+    '.#+##.##+#.',
+    '..#######..',
+    '...#####...',
+    '...........',
+  ],
 };
 // the sports the desk names, to an icon (a league's own name never: NFL is the helmet, NBA the basketball; baseball, ice
 // hockey and the rest have none: no icon is better than a wrong one)
-const ICON_OF = { football: 'football', tennis: 'tennis', f1: 'f1', cricket: 'cricket', rugby: 'rugby', 'american-football': 'american-football', basketball: 'basketball', boxing: 'boxing', cycling: 'cycling', golf: 'golf', athletics: 'athletics' };
+const ICON_OF = { racing: 'racing', football: 'football', tennis: 'tennis', f1: 'f1', cricket: 'cricket', rugby: 'rugby', 'american-football': 'american-football', basketball: 'basketball', boxing: 'boxing', cycling: 'cycling', golf: 'golf', athletics: 'athletics' };
 export const iconOf = (sport) => ICON_OF[sport] || null;
+// a strap's sport tag (server/sport/desk.js TAGS: 'RUGBY', 'AMERICAN FOOTBALL'; a kicker may say 'RUGBY LEAGUE') to its key
+const KICKER_SPORT = { FOOTBALL: 'football', CRICKET: 'cricket', RUGBY: 'rugby', 'RUGBY LEAGUE': 'rugby', 'RUGBY UNION': 'rugby', F1: 'f1', 'FORMULA 1': 'f1', TENNIS: 'tennis', GOLF: 'golf', BOXING: 'boxing', CYCLING: 'cycling', ATHLETICS: 'athletics', 'AMERICAN FOOTBALL': 'american-football', NFL: 'american-football', BASKETBALL: 'basketball', NBA: 'basketball', RACING: 'racing' };
+/** The sport key of a strap's tag ('RUGBY LEAGUE' → 'rugby'), or null. */
+export const sportOfKicker = (k) => KICKER_SPORT[String(k || '').trim().toUpperCase()] || null;
 
 /** One icon at (x, y), in `color` with its shade a step darker (the shade is the ink on a pale icon). */
 export function drawIcon(ctx, name, x, y, color = P.white, shade = null) {
@@ -945,3 +963,9 @@ export function drawChalkboard(ctx, dt, o, box = null) {
     ctx.restore();
   }
 }
+
+/**
+ * The board package's own pieces, for FULL TIME's further boards (scenes/cards-sport-more.js: the sport's slate, the
+ * moment of the day, the table and form boards, the scores wall).
+ */
+export const sportKit = Object.freeze({ panel, rise, S, place, srcText, landScore, PX, PW, INNER, SAFE_TOP, SAFE_BOTTOM });

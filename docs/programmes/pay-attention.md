@@ -205,7 +205,9 @@ The host never calls the game live and never suggests a real contest.
   played that offers two desks, LETTER BY LETTER or WHERE, and only then to PICTURE THIS (pictures: 30 of 30 usable
   stories on 12 Oct, when the outlets' photos still aired; with cleared pictures only, none on 16–17 Oct). A second
   PICTURE THIS keeps the boards up longest: on air, the fallback edition of 12 Oct ran 65–69 % of its air on the
-  boards with it (step 7), against the 65 % bound every edition keeps (§9, step 4).
+  boards with it (step 7), against the 65 % bound every edition keeps (§9, step 4). (Since the visual-variety round the
+  bound is 72 %: the owner asked for more slides, and the round transitions, the reveal views, the half-time race and
+  the opening picture are boards; the faces keep at least 28 % of the air.)
 - **Ties** are broken by a sudden-death LETTER BY LETTER headline, never a coin toss. If neither player names it, the
   game is drawn, and counts half a win to each in the table (1.6 % of simulated editions).
 
@@ -314,6 +316,30 @@ The host never calls the game live and never suggests a real contest.
   
   Every board keeps clear of the top row and the captions (y 28..134). A headline that does not fit a tile's three lines
   is not used as an option.
+- **Visual variety (owner, 18 Oct: "necesitan algunas diapositivas más o cosas que no lo hagan muy repetitivo";
+  docs/roadmap/critique/visual-variety.md).** The 16 Oct edition held its PICTURE THIS board 32 s, played TODAY OR NOT
+  TODAY as board and the same wide for 87 s, and showed eight kinds of picture in all. Since then:
+  - **each round opens on its transition card** (`scenes/cards-quiz-more.js` drawRoundTransition): the round's emblem,
+    its name at 2x, its rule, and from round two the scores so far;
+  - **a question's reveal is its board's second picture**, the reveal view: PICTURE THIS's picture full width with the
+    right headline in gold; WHERE IN THE WORLD?'s map zoomed onto the right pin; LETTER BY LETTER's answer "as it aired"
+    (the programme, the day and the time, the source); HOW MANY?'s figure at 3x on a number line with both guesses. The
+    reading rule holds: the view comes after the last lock-in, cut back to from the players' faces or BACK_BEAT before
+    the reveal;
+  - **PICTURE THIS opens on its picture alone across the frame** (a cleared picture only), its frame said over it, the
+    board from the options' first word: the edition's first, and a later one when the minute has room for the cut;
+  - **the half-time race**: the scores line on its own board (the two players' bars, each round's points, who leads by
+    how many), the players' quick replies over it;
+  - **the studio has five more pictures**: a tighter wide of both desks, and the host with each player in a two-shot
+    (the reply to a verdict the host has just spoken to them, a player's reaction in turn with their single);
+    TODAY OR NOT TODAY's verdicts on the scorer's two-shot, the host's single, the wide and the tighter wide in turn;
+  - **two camera moves, never more**: a slow push on the welcome's wide and a pull on the sign-off's.
+  
+  **The standard** (`public/js/variety.js` VARIETY, enforced on every fixture edition by `test/visual-variety.test.js`):
+  no board held past 15 s (PICTURE THIS's reading board past 22 s, its picture sharpening on each step), no studio
+  shot past 12 s, none under the network's 4 s, never the same layout twice in a row, at least three kinds of picture
+  in every minute, and at most ten cuts a minute (the owner's floor for the channel). Host B, Theo Tally (owner, 18 Oct),
+  in every framing.
 - **The open (≈8 s, 112 BPM)**: a dark stage; the buzzer lamps of both desks light in turn on the beat; the question board
   flips to PAY ATTENTION; the plate.
 - **Music**:

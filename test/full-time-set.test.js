@@ -653,6 +653,17 @@ describe('FULL TIME: the side screen (full-time.md §6: pictures and the idle em
     assert.equal(wallFromScene({ ...base, wall: { mode: 'source', source: 'ESPN' }, storyId: 's3', ...seg({ storyId: 's3', kicker: 'NBA', fact: 'Three titles in four years' }) }).mode, 'idle');
     assert.equal(wallFromScene({ ...base, wall: { mode: 'figure', figure: { value: '22' } }, storyId: 's6', ...seg({ storyId: 's6' }) }).mode, 'idle', 'a passed-through figure too');
   });
+  test('a result story without a picture shows its result: the winner first, in words (the visual-variety round)', () => {
+    const res = wallFromScene({ ...base, wall: { mode: 'source', source: 'BBC Sport' }, storyId: 's8', ...seg({ storyId: 's8', kicker: 'FOOTBALL', score: { a: 'Hibs', b: 'Falkirk', sa: 1, sb: 2, winner: 'Falkirk', draw: false } }) });
+    assert.equal(res.mode, 'figure');
+    assert.equal(res.figure.value, '2-1');
+    assert.equal(res.figure.label, 'FALKIRK BEAT HIBS');
+    const draw = wallFromScene({ ...base, wall: { mode: 'source', source: 'BBC Sport' }, storyId: 's9', ...seg({ storyId: 's9', kicker: 'FOOTBALL', score: { a: 'Dundee United', b: 'St Johnstone', sa: 1, sb: 1, winner: null, draw: true } }) });
+    assert.equal(draw.figure.label, 'DUNDEE UNITED DREW WITH ST JOHNSTONE');
+    // (a picture still comes first; a story without a result keeps the emblem, never its kicker on a plate)
+    assert.equal(wallFromScene({ ...base, wall: { mode: 'image', storyId: 's1' }, storyId: 's1', ...seg({ storyId: 's1', score: { a: 'A', b: 'B', sa: 1, sb: 0, winner: 'A' } }) }).mode, 'picture');
+    assert.equal(wallFromScene({ ...base, wall: { mode: 'source', source: 'ESPN' }, storyId: 's10', ...seg({ storyId: 's10', kicker: 'TENNIS' }) }).mode, 'idle');
+  });
   test('THE NUMBER\'s own segment may show its figure (the number of the day), unless its card shows it', () => {
     const n = wallFromScene({ ...base, wall: { mode: 'source', source: 'Sky Sports' }, storyId: 's4', ...seg({ storyId: 's4', feature: 'number', kicker: 'THE NUMBER', numbers: [{ value: '25', label: 'YEARS' }] }) });
     assert.equal(n.mode, 'figure');

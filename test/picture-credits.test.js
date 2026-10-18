@@ -64,6 +64,10 @@ describe('which pictures are on screen', () => {
   test('full frame, behind a board, the close-up box, the studio wall', () => {
     assert.deepEqual(picturesOnScreen({ shot: 'full', storyId: 's1', images }), ['s1']);
     assert.deepEqual(picturesOnScreen({ shot: 'fact', storyId: 's1', images }), ['s1']);
+    // (FULL TIME's boards on their own ground show no picture: the sport's slate, the chalkboard, COMING UP)
+    assert.deepEqual(picturesOnScreen({ shot: 'fact', storyId: 's1', images, card: { sport: { name: 'TENNIS', sport: 'tennis' } } }), []);
+    assert.deepEqual(picturesOnScreen({ shot: 'fact', storyId: 's1', images, card: { chalk: { yards: 30 } } }), []);
+    assert.deepEqual(picturesOnScreen({ shot: 'fact', storyId: 's1', images, card: { score: { a: 'A', b: 'B', sa: 1, sb: 0 } } }), ['s1']);
     assert.deepEqual(picturesOnScreen({ shot: 'close', storyId: 's1', images }), ['s1']);
     assert.deepEqual(picturesOnScreen({ shot: 'wide', storyId: 's1', images, wall: { mode: 'image', storyId: 's2' } }), ['s2']);
     assert.deepEqual(picturesOnScreen({ shot: 'wide', storyId: 's1', images, wall: { mode: 'source' } }), []);
