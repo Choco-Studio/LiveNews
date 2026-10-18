@@ -34,7 +34,7 @@ function recorder() {
 const tmpdir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'voice-test-'));
 
 /** A fake Kokoro worker: writes a few bytes to `out` and replies with plausible timings. */
-function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die = null } = {}) {
+function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die = null, model = undefined } = {}) {
   const made = [];
   const factory = (opts) => {
     const w = {
@@ -42,7 +42,7 @@ function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die
       alive: false,
       requests: [],
       closed: false,
-      info: { ready: true, voices: ['bm_george', 'af_heart'] },
+      info: { ready: true, voices: ['bm_george', 'af_heart'], ...(model ? { model } : {}) },
       async start() {
         if (failStart) throw new Error(failStart);
         w.alive = true;
@@ -76,9 +76,9 @@ function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die
   return factory;
 }
 
-function makeService({ dir = tmpdir(), engine = 'kokoro', budgetSeconds = 5, firstBudgetSeconds = 0, factory = fakeWorkerFactory(), log = silent, root = REPO, ads = [] } = {}) {
+function makeService({ dir = tmpdir(), engine = 'kokoro', budgetSeconds = 5, firstBudgetSeconds = 0, factory = fakeWorkerFactory(), log = silent, root = REPO, ads = [], model = '' } = {}) {
   const service = new VoiceService({
-    config: { engine, dir, budgetSeconds, firstBudgetSeconds, cacheMb: 50 },
+    config: { engine, dir, budgetSeconds, firstBudgetSeconds, cacheMb: 50, model },
     root,
     log,
     createWorker: factory,
@@ -246,6 +246,20 @@ describe('voice plan: what the worker is asked', () => {
 
 // ---------------------------------------------------------------- cache
 
+describe('voice weights', () => {
+  test('fetch-models.sh knows every weight file the engine can load, each with its size and SHA-256', () => {
+    const script = fs.readFileSync(path.join(REPO, 'tools', 'voice', 'fetch-models.sh'), 'utf8');
+    const listed = Object.fromEntries([...script.matchAll(/^\s+"(\w+) (\S+) (\d+) ([0-9a-f]{64})"$/gm)].map((m) => [m[1], m[2]]));
+    const engine = fs.readFileSync(path.join(REPO, 'tools', 'voice', 'engine.py'), 'utf8');
+    const files = Object.fromEntries([...engine.match(/^MODEL_FILES = \{([^}]*)\}/m)[1].matchAll(/'(\w+)': '([^']+)'/g)].map((m) => [m[1], m[2]]));
+    assert.deepEqual(Object.keys(files).sort(), ['fp16', 'fp32', 'int8']);
+    for (const [variant, file] of Object.entries(files)) assert.equal(listed[variant], file, variant);
+    assert.equal(listed.voices, engine.match(/^VOICES_FILE = '([^']+)'/m)[1]);
+    // the service passes exactly those variants on (anything else: the engine's default)
+    for (const v of Object.keys(files)) assert.equal(makeService({ model: v.toUpperCase() }).service.cfg.model, v);
+  });
+});
+
 describe('voice cache', () => {
   test('get needs both files; put writes atomically; prune removes the least recently used', () => {
     const dir = tmpdir();
@@ -315,6 +329,38 @@ describe('voice service', () => {
     const note = await second.service.voiceEpisode(ctx);
     assert.deepEqual(note, { voice: 'kokoro', clips: 4, cached: 4, ready: 4 });
     assert.equal(second.factory.made[0].requests.length, 0);
+  });
+
+  test('VOICE_MODEL reaches the worker; clips of other weights are named apart, the default keeps its names', async () => {
+    const ids = {};
+    for (const [label, model, reported] of [['none', '', undefined], ['fp32', 'fp32', 'fp32'], ['fp16', 'fp16', 'fp16'], ['missing', 'fp16', 'fp32']]) {
+      // 'missing': fp16 asked, its file not installed, so the worker fell back to the default weights and says so
+      const { service, factory } = makeService({ model, factory: fakeWorkerFactory({ model: reported }) });
+      const ctx = episodeCtx(SEGMENTS());
+      await service.voiceEpisode(ctx);
+      assert.equal(factory.made[0].opts.env.VOICE_MODEL, model || undefined, label);
+      ids[label] = ctx.episode.segments[0].voiceId;
+      assert.equal(service.status().model, reported ?? null);
+      service.close();
+    }
+    assert.equal(ids.fp32, ids.none);
+    assert.equal(ids.missing, ids.none);
+    assert.notEqual(ids.fp16, ids.none);
+    // anything else is ignored (the engine's default)
+    assert.equal(makeService({ model: 'fp8' }).service.cfg.model, '');
+  });
+
+  test('the worker keeps short phrases in data/voice/phrases (VOICE_PHRASE_CACHE_MB, 0 = off)', async () => {
+    const on = makeService();
+    await on.service.voiceEpisode(episodeCtx(SEGMENTS()));
+    assert.equal(on.factory.made[0].opts.env.VOICE_PHRASE_DIR, path.join(on.dir, 'phrases'));
+    assert.equal(on.factory.made[0].opts.env.VOICE_PHRASE_CACHE_MB, '64');
+    on.service.close();
+    const factory = fakeWorkerFactory();
+    const off = new VoiceService({ config: { engine: 'kokoro', dir: tmpdir(), phraseCacheMb: 0 }, root: REPO, log: silent, createWorker: factory, loadSpeech: async () => speech, loadAds: async () => [] });
+    await off.ensureWorker();
+    assert.equal(factory.made[0].opts.env.VOICE_PHRASE_DIR, undefined);
+    off.close();
   });
 
   test('the same line twice in one episode is synthesised once', async () => {

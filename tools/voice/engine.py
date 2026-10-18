@@ -17,8 +17,14 @@ weight and pinned to the silences the model leaves at commas.
 Voices: a Kokoro name ("bm_george"), a blend ("bm_george:0.7+bm_lewis:0.3",
 weighted average of the style embeddings), or a presenter preset from
 presets.json ("paco").
+
+CPU (docs/roadmap/critique/voices-speed.md): the model is ~92 % of a clip's
+cost. It runs on one onnxruntime thread by default (session_settings), on the
+weights VOICE_MODEL names (fp32 by default; fp16 waits for the owner's ears),
+and short phrases said again come from PhraseCache instead of a new pass.
 """
 
+import hashlib
 import json
 import math
 import os
@@ -56,8 +62,22 @@ def log(*args):
     print('[voice]', *args, file=sys.stderr, flush=True)
 
 
-def find_models():
+MODEL_FILES = {'fp32': 'kokoro-v1.0.onnx', 'fp16': 'kokoro-v1.0.fp16.onnx', 'int8': 'kokoro-v1.0.int8.onnx'}
+VOICES_FILE = 'voices-v1.0.bin'
+DEFAULT_MODEL = 'fp32'
+
+
+def model_variant(env=None):
+    """The weights asked for (VOICE_MODEL: fp32, fp16 or int8; empty = DEFAULT_MODEL)."""
+    v = str((env if env is not None else os.environ).get('VOICE_MODEL') or '').strip().lower() or DEFAULT_MODEL
+    if v not in MODEL_FILES:
+        raise ValueError(f'VOICE_MODEL must be one of {", ".join(MODEL_FILES)} (got {v!r})')
+    return v
+
+
+def find_models(variant=None):
     """(model, voices) paths: env overrides, then data/models, then ~/.cache/kokoro."""
+    name = MODEL_FILES[variant or model_variant()]
     model = os.environ.get('KOKORO_MODEL')
     voices = os.environ.get('KOKORO_VOICES')
     dirs = [os.environ.get('KOKORO_DIR'), os.path.join(REPO, 'data', 'models'),
@@ -65,14 +85,181 @@ def find_models():
     for d in dirs:
         if not d:
             continue
-        if not model and os.path.exists(os.path.join(d, 'kokoro-v1.0.onnx')):
-            model = os.path.join(d, 'kokoro-v1.0.onnx')
-        if not voices and os.path.exists(os.path.join(d, 'voices-v1.0.bin')):
-            voices = os.path.join(d, 'voices-v1.0.bin')
+        if not model and os.path.exists(os.path.join(d, name)):
+            model = os.path.join(d, name)
+        if not voices and os.path.exists(os.path.join(d, VOICES_FILE)):
+            voices = os.path.join(d, VOICES_FILE)
     if not model or not voices:
-        raise FileNotFoundError('Kokoro model files not found; run tools/voice/fetch-models.sh '
+        raise FileNotFoundError(f'Kokoro model files not found ({name}, {VOICES_FILE}); run tools/voice/fetch-models.sh '
                                 'or set KOKORO_MODEL / KOKORO_VOICES')
     return model, voices
+
+
+_OPT_LEVELS = {'off': 'ORT_DISABLE_ALL', 'basic': 'ORT_ENABLE_BASIC', 'extended': 'ORT_ENABLE_EXTENDED',
+               'all': 'ORT_ENABLE_ALL'}
+
+# The session when the environment says nothing (see session_settings). Measured 18 Oct on two cores with one busy
+# loop beside the voices (the renderer), the station's own lines (docs/roadmap/critique/voices-speed.md): one thread
+# 1.07 CPU-s per second of speech at ~0.9x real time; two spinning threads (onnxruntime's own choice on a 2-core
+# machine, the default until then) 1.49 at 0.8x, two without spinning 1.22 at 0.8x. The samples are the same (within
+# one 16-bit step). A second thread only pays where a core is idle (1.3-1.5x real time quiet, for ~7 % more CPU
+# without spinning, 14 % with); spinning wastes CPU whenever the threads wait, so it is off for KOKORO_THREADS=2.
+SESSION_DEFAULTS = {'threads': 1, 'spin': False, 'opt': 'all', 'arena': True}
+
+
+def session_settings(env=None):
+    """onnxruntime settings for the voice model, from the environment:
+    KOKORO_THREADS (intra-op threads; 'auto' = onnxruntime's own choice, one per core), KOKORO_SPIN (1: idle pool threads
+    spin waiting for work), KOKORO_OPT (graph optimisation: all, extended, basic, off), KOKORO_ARENA (CPU memory
+    arena). Anything unset keeps SESSION_DEFAULTS."""
+    env = env if env is not None else os.environ
+
+    def flag(name, default):
+        v = str(env.get(name) or '').strip().lower()
+        return default if not v else v not in ('0', 'false', 'no', 'off')
+
+    opt = str(env.get('KOKORO_OPT') or '').strip().lower() or SESSION_DEFAULTS['opt']
+    if opt not in _OPT_LEVELS:
+        raise ValueError(f'KOKORO_OPT must be one of {", ".join(_OPT_LEVELS)} (got {opt!r})')
+    # 0 or empty: the default ('KOKORO_THREADS=0' has long stood in .env.example for "the engine decides");
+    # 'auto': onnxruntime's own choice
+    t = str(env.get('KOKORO_THREADS') or '').strip().lower()
+    threads = 0 if t == 'auto' else int(t) if t.isdigit() and int(t) > 0 else SESSION_DEFAULTS['threads']
+    return {'threads': threads,
+            'spin': flag('KOKORO_SPIN', SESSION_DEFAULTS['spin']), 'opt': opt,
+            'arena': flag('KOKORO_ARENA', SESSION_DEFAULTS['arena'])}
+
+
+def make_session(model, settings):
+    """An onnxruntime CPU session for `model` with `settings` (session_settings): one inference at a time, so one
+    inter-op thread and sequential execution."""
+    import onnxruntime as rt
+    opts = rt.SessionOptions()
+    opts.intra_op_num_threads = settings['threads']
+    opts.inter_op_num_threads = 1
+    opts.execution_mode = rt.ExecutionMode.ORT_SEQUENTIAL
+    opts.graph_optimization_level = getattr(rt.GraphOptimizationLevel, _OPT_LEVELS[settings['opt']])
+    opts.enable_cpu_mem_arena = bool(settings['arena'])
+    if not settings['spin']:
+        opts.add_session_config_entry('session.intra_op.allow_spinning', '0')
+    for entry in filter(None, str(os.environ.get('KOKORO_ORT_CONFIG') or '').split(';')):
+        key, _, value = entry.partition('=')
+        opts.add_session_config_entry(key.strip(), value.strip())
+    return rt.InferenceSession(model, sess_options=opts, providers=['CPUExecutionProvider'])
+
+
+class PhraseCache:
+    """Kokoro's raw output of short phrases, kept on disk between clips and restarts.
+
+    The voice service caches whole clips; this catches what a clip cache cannot: a short phrase said again inside a
+    clip that is new as a whole ("Thanks, Paco." before a new story, "And finally:", a sign-off in a new melody).
+    Each phrase is one deterministic Kokoro pass, so the stored samples are exactly what the model would give again:
+    the key holds the phonemes, the voice's style, the speed, the weights, the session and the library versions.
+    Only phrases of up to MAX_PHONEMES are kept (about 80 characters: the formulae; a story sentence rarely
+    returns word for word), the least recently used go first past the size limit.
+    Env: VOICE_PHRASE_DIR (the folder; unset = off), VOICE_PHRASE_CACHE_MB (default 64).
+    """
+    MAX_PHONEMES = 110
+    VERSION = 1
+
+    def __init__(self, folder, max_bytes, identity):
+        self.dir = folder
+        self.max_bytes = max_bytes
+        self.identity = identity.encode('utf-8')
+        self.stats = {'hits': 0, 'stored': 0}
+        os.makedirs(folder, exist_ok=True)
+        self.prune()
+
+    @classmethod
+    def from_env(cls, engine):
+        folder = os.environ.get('VOICE_PHRASE_DIR')
+        if not folder:
+            return None
+        try:
+            import importlib.metadata as md
+            versions = '/'.join(md.version(p) for p in ('kokoro-onnx', 'onnxruntime'))
+        except Exception:  # noqa: BLE001 - a missing distribution record only widens the key
+            versions = '?'
+        size = os.path.getsize(engine.model_path) if os.path.exists(engine.model_path) else 0
+        identity = json.dumps([cls.VERSION, engine.model_variant, size, versions, engine.session_settings],
+                              sort_keys=True)
+        mb = float(os.environ.get('VOICE_PHRASE_CACHE_MB') or 64)
+        try:
+            return cls(folder, int(max(1.0, mb) * 1048576), identity)
+        except OSError as error:
+            log(f'phrase cache off ({error})')
+            return None
+
+    def path(self, phonemes, style, speed):
+        h = hashlib.sha256(self.identity)
+        h.update(phonemes.encode('utf-8'))
+        h.update(np.ascontiguousarray(style, dtype=np.float32).tobytes())
+        h.update(f'{float(speed):.4f}'.encode())
+        return os.path.join(self.dir, h.hexdigest()[:32] + '.npy')
+
+    def get(self, phonemes, style, speed):
+        if len(phonemes) > self.MAX_PHONEMES:
+            return None
+        p = self.path(phonemes, style, speed)
+        try:
+            audio = np.load(p, allow_pickle=False)
+            os.utime(p)
+        except (OSError, ValueError):
+            return None
+        self.stats['hits'] += 1
+        return np.asarray(audio, dtype=np.float64)
+
+    def put(self, phonemes, style, speed, audio):
+        if len(phonemes) > self.MAX_PHONEMES:
+            return
+        p = self.path(phonemes, style, speed)
+        tmp = f'{p}.{os.getpid()}.tmp'
+        try:
+            with open(tmp, 'wb') as f:
+                np.save(f, np.asarray(audio, dtype=np.float32), allow_pickle=False)
+            os.replace(tmp, p)
+        except OSError:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            return
+        self.stats['stored'] += 1
+        if self.stats['stored'] % 50 == 0:
+            self.prune()
+
+    def prune(self):
+        """Keep the folder under max_bytes (least recently used first); clear temp files of interrupted writes."""
+        now = time.time()
+        files, total = [], 0
+        try:
+            names = os.listdir(self.dir)
+        except OSError:
+            return
+        for name in names:
+            full = os.path.join(self.dir, name)
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            if name.endswith('.tmp'):
+                if now - st.st_mtime > 3600:
+                    try:
+                        os.unlink(full)
+                    except OSError:
+                        pass
+                continue
+            if name.endswith('.npy'):
+                files.append((st.st_mtime, st.st_size, full))
+                total += st.st_size
+        for _, size, full in sorted(files):
+            if total <= self.max_bytes:
+                break
+            try:
+                os.unlink(full)
+                total -= size
+            except OSError:
+                pass
 
 
 def _default_vocab():
@@ -131,29 +318,38 @@ class VoiceEngine:
         t0 = time.time()
         from kokoro_onnx import Kokoro  # heavy import, only when an engine is made
         if not model or not voices:
-            fm, fv = find_models()
+            variant = model_variant()
+            try:
+                fm, fv = find_models(variant)
+            except FileNotFoundError:
+                if variant == DEFAULT_MODEL:
+                    raise
+                # the asked weights are not installed: the channel keeps its voices on the default ones
+                log(f'VOICE_MODEL={variant}: {MODEL_FILES[variant]} not found (tools/voice/fetch-models.sh --model '
+                    f'{variant}); using {DEFAULT_MODEL}')
+                fm, fv = find_models(DEFAULT_MODEL)
             model, voices = model or fm, voices or fv
         self.model_path, self.voices_path = model, voices
-        threads = int(os.environ.get('KOKORO_THREADS') or 0)
-        if threads > 0 and hasattr(Kokoro, 'from_session'):
-            # Cap CPU use so a live channel (browser/OBS) keeps its cores
-            import onnxruntime as rt
-            opts = rt.SessionOptions()
-            opts.intra_op_num_threads = threads
-            opts.inter_op_num_threads = 1
-            sess = rt.InferenceSession(model, sess_options=opts, providers=['CPUExecutionProvider'])
-            self.kokoro = Kokoro.from_session(sess, voices)
-        else:
+        # which weights these are (the voice service keys its clip cache on it): a release variant, or a custom file
+        known = {f: v for v, f in MODEL_FILES.items()}
+        self.model_variant = known.get(os.path.basename(model), 'custom:' + os.path.basename(model))
+        self.session_settings = session_settings()
+        if hasattr(Kokoro, 'from_session'):
+            self.kokoro = Kokoro.from_session(make_session(model, self.session_settings), voices)
+        else:  # older kokoro-onnx: its own session
             self.kokoro = Kokoro(model, voices)
         self.vocab = getattr(self.kokoro.tokenizer, 'vocab', None) or _default_vocab()
         self._backends = {}
         self._styles = {}
         self._cache = {}
+        self.phrases = PhraseCache.from_env(self)
         self.presets = self._load_json('presets.json').get('presets', {})
         tone = self._load_json('tone.json')
         self.tone_bands = tone.get('bands', [])
         self.tone_voices = tone.get('voices', {})
-        log(f'kokoro ready in {time.time() - t0:.1f}s ({len(self.kokoro.voices)} voices)')
+        s = self.session_settings
+        log(f'kokoro ready in {time.time() - t0:.1f}s ({len(self.kokoro.voices)} voices, {self.model_variant}, '
+            f'{s["threads"] or "auto"} thread(s), spin {"on" if s["spin"] else "off"})')
 
     @staticmethod
     def _load_json(name):
@@ -272,11 +468,17 @@ class VoiceEngine:
 
     def _infer(self, phonemes, style, speed):
         # Kokoro is deterministic: identical passes (retries, the raw/processed
-        # pair in measure.py, a re-requested segment) come from a small cache
+        # pair in measure.py, a re-requested segment) come from a small cache,
+        # and short phrases said again in another clip (greetings, hand-overs,
+        # sign-offs) from the phrase cache on disk (PhraseCache)
         key = (phonemes, style.tobytes().__hash__(), round(float(speed), 4))
         hit = self._cache.pop(key, None)
+        if hit is None and self.phrases is not None:
+            hit = self.phrases.get(phonemes, style, speed)
         if hit is None:
             audio, _ = self.kokoro.create(phonemes, voice=style, speed=speed, is_phonemes=True, trim=False)
+            if self.phrases is not None:
+                self.phrases.put(phonemes, style, speed, audio)
             hit = np.asarray(audio, dtype=np.float64)
         self._cache[key] = hit
         while len(self._cache) > 48:

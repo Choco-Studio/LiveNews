@@ -22,11 +22,15 @@ or {"id", "ok": false, "error": "..."}. Times are seconds from the start of the
 file; `char` is an offset into the request's `text`.
 
 Other commands: {"cmd": "ping"}, {"cmd": "voices"} (voices + presets),
-{"cmd": "quit"}. On start the worker prints {"ready": true, ...} (or
-{"ready": false, "error"} if the model cannot load) before reading requests.
+{"cmd": "quit"}. On start the worker prints {"ready": true, ..., "model",
+"session"} (the weights it loaded and its onnxruntime settings) or
+{"ready": false, "error"} if the model cannot load, before reading requests.
 A bad request only fails that request; the worker keeps serving.
 Everything else (library chatter, tracebacks) goes to stderr.
-Env: KOKORO_MODEL, KOKORO_VOICES, KOKORO_DIR (model location), FFMPEG.
+Env: KOKORO_MODEL, KOKORO_VOICES, KOKORO_DIR (model location), VOICE_MODEL
+(fp32, fp16, int8), KOKORO_THREADS, KOKORO_SPIN, KOKORO_OPT, KOKORO_ARENA
+(engine.session_settings), VOICE_PHRASE_DIR, VOICE_PHRASE_CACHE_MB
+(engine.PhraseCache), FFMPEG.
 """
 
 import json
@@ -60,7 +64,7 @@ def main():
 
     send({'ready': True, 'pid': os.getpid(), 'sampleRate': SAMPLE_RATE,
           'voices': engine.voice_names(), 'presets': sorted(engine.presets),
-          'formats': list(FORMATS)})
+          'formats': list(FORMATS), 'model': engine.model_variant, 'session': engine.session_settings})
 
     for line in sys.stdin:
         line = line.strip()

@@ -123,7 +123,10 @@ export const config = {
     engine: env('VOICE_ENGINE', 'browser').trim().toLowerCase() === 'kokoro' ? 'kokoro' : 'browser',
     // Where kokoro-v1.0.onnx and voices-v1.0.bin live (empty: data/models, then ~/.cache/kokoro)
     kokoroDir: env('KOKORO_DIR', ''),
-    // CPU threads for the voice model (0 = all), so OBS and the browser keep theirs
+    // The voice model's weights (tools/voice/fetch-models.sh --model): '' or fp32 (the default), fp16, int8
+    model: env('VOICE_MODEL', '').trim().toLowerCase(),
+    // CPU threads for the voice model (0 = the engine's default, one: the least CPU beside a busy renderer,
+    // tools/voice/engine.py SESSION_DEFAULTS); 2 only helps where a core is idle
     threads: num('KOKORO_THREADS', 0),
     python: env('VOICE_PYTHON', 'python3'),
     // Voice processes working in parallel (~0.6 GB each); 1 is plenty where Kokoro runs faster than real time
@@ -134,6 +137,9 @@ export const config = {
     // yet, and a cold start must not air its first programme with half its clips missing (owner 07:45)
     firstBudgetSeconds: num('VOICE_FIRST_BUDGET_S', 480),
     cacheMb: num('VOICE_CACHE_MB', 300),
+    // Short phrases said again inside new clips (greetings, hand-overs, sign-offs), kept as Kokoro made them in
+    // data/voice/phrases (MB; 0 = off): the same samples, without the model pass
+    phraseCacheMb: num('VOICE_PHRASE_CACHE_MB', 64),
     dir: path.join(ROOT, 'data', 'voice'),
   },
   // WORLD WEATHER's data (server/weather.js): 'auto' = Open-Meteo live, or the offline demo data (DEMO DATA on

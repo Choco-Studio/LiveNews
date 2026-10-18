@@ -57,6 +57,9 @@ cd ~/globit/livenews
   hand (`docs/publishing/beta.md`), cannot prepare anything without it.
 - **Models** (into `data/models/`, git-ignored): `tools/voice/fetch-models.sh` (Kokoro, about 350 MB, from GitHub
   releases, checked by SHA-256); the face reader fetches its own two models on first run (`tools/pictures/faces.mjs`).
+  Also fetch the half-precision voice weights, so the owner can try them without another download:
+  `tools/voice/fetch-models.sh --model fp16` (169 MB more, same release, checked the same way). They are used only
+  with `VOICE_MODEL=fp16` (§3b); the default stays the full-precision weights the cast was chosen on.
 - **Swap:** a 4 GB swap file (`fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`,
   plus the `/etc/fstab` line) so a memory peak slows the machine instead of killing a process.
 - **Firewall:** `apt install -y ufw && ufw allow OpenSSH && ufw enable` (check that SSH still works before closing the
@@ -68,6 +71,31 @@ cd ~/globit/livenews
 - `tools/voice/fetch-models.sh --check` and one voice line through `tools/voice/say.py` (then delete the file).
 - Start the station once (`PORT=8080 VOICE_ENGINE=kokoro VOICE_PYTHON=... node server/index.js`), open
   `http://127.0.0.1:8080/api/status` with curl, and stop it.
+
+### 3b. What the voices cost on this machine
+
+The voices are about half the CPU of the channel (`playout.md` §10), so measure them here before the 24-hour test
+(about 5 minutes):
+
+```
+node tools/voice/audit-requests.mjs --out /tmp/vb/reqs.jsonl --only paco,lola,max,nova,penny,sam
+~/globit/venv/bin/python tools/voice/bench.py --reqs /tmp/vb/reqs.jsonl --per-label 3 --hog 1 --json /tmp/vb/fp32.json
+VOICE_MODEL=fp16 ~/globit/venv/bin/python tools/voice/bench.py --reqs /tmp/vb/reqs.jsonl --per-label 3 --hog 1 --json /tmp/vb/fp16.json
+```
+
+`--hog 1` keeps one core busy, as the renderer will. The last line of each run is the number that matters: CPU-seconds
+per second of speech, and how fast that is against real time. On the cloud machine (18 Oct, 2 cores of a 2.8 GHz Xeon
+with one busy): **about 1.07 with the defaults** (one thread), 1.49 with the settings before 18 Oct, about 0.89 with
+`VOICE_MODEL=fp16` (`docs/roadmap/critique/voices-speed.md`). Then `rm -r /tmp/vb`.
+
+The voice settings, all in `/etc/globit24.env` (or `.env`):
+- `KOKORO_THREADS`: empty, the default (one thread: the least CPU beside a busy renderer). `2` only pays while a
+  core is idle; an old `KOKORO_THREADS=0` line means the default too.
+- `VOICE_MODEL`: empty (the full-precision weights). **`fp16` waits for the owner**: about 15 % less voice CPU, but
+  measured a little less natural (predicted listening score −0.08) and 2 % slower to read; he decides by ear (the
+  A/B pairs, `voices-speed.md`). If he approves it: `VOICE_MODEL=fp16`, restart; the clips are voiced again as they
+  come up (the cache keeps the two apart), and taking the line out goes back.
+- `VOICE_PHRASE_CACHE_MB` (64): short phrases said again inside new clips, kept in `data/voice/phrases`.
 
 ## 4. The 24-hour test (files only)
 

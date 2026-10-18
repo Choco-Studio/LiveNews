@@ -166,6 +166,28 @@ class ChainTest(unittest.TestCase):
             self.assertLess(abs(y[-1]), 1e-3)
             self.assertEqual(stats['lufs'], round(loudness.integrated_loudness(y, SR), 2))
 
+    def test_cached_buzz_and_k_weighting_are_the_same_numbers(self):
+        # the vocoder's carrier is sliced from one long copy and the K-weighting response is reused: both must give
+        # exactly what building them again gives, for any clip length
+        def direct(n, sr, f0):
+            t = np.arange(n) / sr
+            h = np.arange(1, int((sr / 2 - 200) / f0) + 1)
+            p = np.zeros(n)
+            for k in h:
+                p += np.cos(2 * np.pi * k * f0 * t + np.pi * k * (k - 1) / len(h))
+            return p / math.sqrt(len(h) / 2)
+        dsp._BUZZ.clear()
+        for n in (1, 15, 17, 33, 4801, 99_999, 24_001, 333_333):
+            for f0 in (100.0, 110.0):
+                self.assertTrue(np.array_equal(dsp._buzz(n, SR, f0), direct(n, SR, f0)), (n, f0))
+        x = speechlike(2.0)
+        loudness._K_RESPONSE.clear()
+        first = loudness.k_weighted(x, SR)
+        again = loudness.k_weighted(x, SR)
+        coeffs = loudness.k_weighting(SR)
+        plain = loudness.fft_filter(x, lambda f: loudness.biquad_response(coeffs, f, SR), SR, pad=0.2)
+        self.assertTrue(np.array_equal(first, plain) and np.array_equal(again, plain))
+
     def test_robot_keeps_length_and_targets(self):
         x = speechlike(3.0)
         y, _ = dsp.broadcast(x, SR, effect='robot')
@@ -422,6 +444,22 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(len(metrics.mel_cepstrum(padded, SR)), len(metrics.mel_cepstrum(x, SR)) + 4)
         self.assertLess(metrics.timbre_distance(a, metrics.timbre_signature([(padded, SR)])), 10)
 
+    def test_audit_compare_clip(self):
+        # the same clip two ways: identical, a little louder, a little longer
+        import audit
+        x = speechlike(2.0)
+        same = audit.compare_clip(x, x.copy(), SR)
+        self.assertTrue(same['identical'])
+        self.assertEqual(same['snr'], 200.0)
+        self.assertAlmostEqual(same['drift'], 0.0)
+        louder = audit.compare_clip(x, x * 10 ** (1 / 20), SR)
+        self.assertFalse(louder['identical'])
+        self.assertAlmostEqual(louder['levelDb'], 1.0, delta=0.05)
+        self.assertLess(abs(louder['f0St']), 0.01)
+        longer = audit.compare_clip(x, np.concatenate([x, np.zeros(SR // 10)]), SR)
+        self.assertAlmostEqual(longer['drift'], 5.0, delta=0.01)
+        self.assertNotIn('snr', longer)
+
     def test_audit_voicing_measures(self):
         # tools/voice/audit.py: a clean periodic voice has little aperiodicity and a high harmonics-to-noise ratio
         import audit
@@ -433,12 +471,138 @@ class MetricsTest(unittest.TestCase):
         self.assertGreater(audit.hnr(clean, SR), 20)
 
 
+class SettingsTest(unittest.TestCase):
+    """The model variant and the onnxruntime session the engine builds (no model needed)."""
+
+    def test_model_variant(self):
+        import engine
+        self.assertEqual(engine.model_variant({}), engine.DEFAULT_MODEL)
+        self.assertEqual(engine.model_variant({'VOICE_MODEL': ' FP16 '}), 'fp16')
+        self.assertEqual(engine.model_variant({'VOICE_MODEL': 'int8'}), 'int8')
+        with self.assertRaises(ValueError):
+            engine.model_variant({'VOICE_MODEL': 'fp8'})
+
+    def test_session_settings(self):
+        import engine
+        self.assertEqual(engine.session_settings({}), engine.SESSION_DEFAULTS)
+        # 'KOKORO_THREADS=0' (the old .env.example line) keeps the default; 'auto' leaves it to onnxruntime
+        self.assertEqual(engine.session_settings({'KOKORO_THREADS': '0'}), engine.SESSION_DEFAULTS)
+        self.assertEqual(engine.session_settings({'KOKORO_THREADS': 'auto'})['threads'], 0)
+        self.assertEqual(engine.session_settings({'KOKORO_THREADS': 'two'}), engine.SESSION_DEFAULTS)  # a typo: default
+        s = engine.session_settings({'KOKORO_THREADS': '2', 'KOKORO_SPIN': '1', 'KOKORO_OPT': 'Extended',
+                                     'KOKORO_ARENA': 'off'})
+        self.assertEqual(s, {'threads': 2, 'spin': True, 'opt': 'extended', 'arena': False})
+        self.assertFalse(engine.session_settings({'KOKORO_SPIN': 'no'})['spin'])
+        with self.assertRaises(ValueError):
+            engine.session_settings({'KOKORO_OPT': 'max'})
+
+    def test_find_models_by_variant(self):
+        import engine
+        keep = {k: os.environ.pop(k) for k in ('KOKORO_MODEL', 'KOKORO_VOICES', 'KOKORO_DIR') if k in os.environ}
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                for name in ('kokoro-v1.0.fp16.onnx', 'voices-v1.0.bin'):
+                    open(os.path.join(d, name), 'w').close()
+                os.environ['KOKORO_DIR'] = d
+                model, voices = engine.find_models('fp16')
+                self.assertEqual(model, os.path.join(d, 'kokoro-v1.0.fp16.onnx'))
+                self.assertEqual(voices, os.path.join(d, 'voices-v1.0.bin'))
+                # the int8 file is not in that folder: whatever is found elsewhere is never the fp16 one
+                try:
+                    other, _ = engine.find_models('int8')
+                    self.assertTrue(other.endswith('kokoro-v1.0.int8.onnx'))
+                except FileNotFoundError:
+                    pass
+        finally:
+            os.environ.pop('KOKORO_DIR', None)
+            os.environ.update(keep)
+
+
+class PhraseCacheTest(unittest.TestCase):
+    def test_store_read_back_key_and_prune(self):
+        from engine import PhraseCache
+        style = np.linspace(-1, 1, 512, dtype=np.float32).reshape(2, 1, 256)
+        with tempfile.TemporaryDirectory() as d:
+            pc = PhraseCache(d, 3 * 4 * 24000 + 4096, 'test')  # room for three 1 s phrases
+            a = np.random.default_rng(1).standard_normal(24000).astype(np.float32) * 0.1
+            self.assertIsNone(pc.get('ðə ˈɛnd.', style, 1.0))
+            pc.put('ðə ˈɛnd.', style, 1.0, a)
+            got = pc.get('ðə ˈɛnd.', style, 1.0)
+            self.assertEqual(got.dtype, np.float64)
+            self.assertTrue(np.array_equal(got, a.astype(np.float64)))  # the very samples, not an approximation
+            # another speed, voice or weights is another phrase
+            self.assertIsNone(pc.get('ðə ˈɛnd.', style, 1.05))
+            self.assertIsNone(pc.get('ðə ˈɛnd.', style * 0.5, 1.0))
+            self.assertIsNone(PhraseCache(d, 1 << 30, 'other weights').get('ðə ˈɛnd.', style, 1.0))
+            # a long phrase is never kept
+            pc.put('x' * (PhraseCache.MAX_PHONEMES + 1), style, 1.0, a)
+            self.assertIsNone(pc.get('x' * (PhraseCache.MAX_PHONEMES + 1), style, 1.0))
+            # past the size limit the least recently used go first
+            for i, t in enumerate(['wʌn', 'tuː', 'θɹiː']):
+                pc.put(t, style, 1.0, a)
+                os.utime(pc.path(t, style, 1.0), (1000 + i, 1000 + i))
+            os.utime(pc.path('ðə ˈɛnd.', style, 1.0), (999, 999))
+            pc.prune()
+            self.assertIsNone(pc.get('ðə ˈɛnd.', style, 1.0))
+            self.assertIsNotNone(pc.get('θɹiː', style, 1.0))
+            self.assertEqual(len([n for n in os.listdir(d) if n.endswith('.npy')]), 3)
+
+
 @unittest.skipUnless(have_models(), 'Kokoro model files not installed')
 class EngineTest(unittest.TestCase):
+    def test_phrase_cache_gives_the_same_clip(self):
+        from engine import PhraseCache
+        req = {'text': 'Thanks, Paco. Markets closed higher today.', 'voice': 'lola',
+               'phrases': [{'text': 'Thanks, Paco.', 'pauseAfter': 0.3}, {'text': 'Markets closed higher today.'}]}
+        with tempfile.TemporaryDirectory() as d:
+            self.engine._cache.clear()
+            a, _, ra = self.engine.speak(req)
+            self.engine.phrases = PhraseCache(d, 1 << 24, 'test')
+            try:
+                self.engine._cache.clear()
+                self.engine.speak(req)  # stores both phrases
+                self.assertEqual(self.engine.phrases.stats['stored'], 2)
+                self.engine._cache.clear()
+                b, _, rb = self.engine.speak(req)
+                self.assertEqual(self.engine.phrases.stats['hits'], 2)
+            finally:
+                self.engine.phrases = None
+        self.assertTrue(np.array_equal(a, b))
+        self.assertEqual(ra['words'], rb['words'])
+
     @classmethod
     def setUpClass(cls):
         from engine import VoiceEngine
         cls.engine = VoiceEngine()
+
+    def test_reports_its_weights_and_session(self):
+        import engine
+        self.assertEqual(self.engine.model_variant, engine.model_variant())
+        self.assertEqual(self.engine.session_settings, engine.session_settings())
+
+    def test_missing_weights_fall_back_to_the_default(self):
+        # VOICE_MODEL=fp16 without its file: the channel keeps its voices on the default weights, and says which
+        import engine
+        real = engine.find_models
+
+        def without_fp16(variant=None):
+            if variant == 'fp16':
+                raise FileNotFoundError('no fp16 here')
+            return real(variant)
+        keep = os.environ.get('VOICE_MODEL')
+        os.environ['VOICE_MODEL'] = 'fp16'
+        engine.find_models = without_fp16
+        try:
+            if os.environ.get('KOKORO_MODEL'):
+                self.skipTest('KOKORO_MODEL names a file')
+            other = engine.VoiceEngine()
+            self.assertEqual(other.model_variant, engine.DEFAULT_MODEL)
+        finally:
+            engine.find_models = real
+            if keep is None:
+                os.environ.pop('VOICE_MODEL', None)
+            else:
+                os.environ['VOICE_MODEL'] = keep
 
     def test_blend_and_words(self):
         text = 'Good evening. Markets rose 1.2%, and the pound gained.'
@@ -518,6 +682,9 @@ class WorkerTest(unittest.TestCase):
                 ready = json.loads(proc.stdout.readline())
                 self.assertTrue(ready['ready'])
                 self.assertIn('paco', ready['presets'])
+                # the weights and the session it runs (the voice service keys its clip cache on the weights)
+                self.assertIn(ready['model'], ('fp32', 'fp16', 'int8'))
+                self.assertEqual(set(ready['session']), {'threads', 'spin', 'opt', 'arena'})
                 self.assertEqual(ask({'id': 1, 'cmd': 'ping'}), {'id': 1, 'ok': True, 'pong': True})
                 bad = ask('{not json')
                 self.assertFalse(bad['ok'])

@@ -5,6 +5,13 @@
   python3 tools/voice/audit.py render --reqs /tmp/a/reqs.jsonl --out /tmp/a/clips
   python3 tools/voice/audit.py measure --dir /tmp/a/clips --json /tmp/a/audit.json [--scorer my_scorer.py]
   python3 tools/voice/audit.py measure --dir /tmp/a/clips --write        # tools/voice/voice-audit.json
+  python3 tools/voice/audit.py compare --a /tmp/a/clips --b /tmp/b/clips [--json out.json]    # the same lines, two ways
+
+`compare` takes the same requests rendered two ways (another model file, another session, another chain: render, or
+tools/voice/bench.py --out) and reports, per clip and per voice: whether the samples are identical (as 16-bit PCM),
+the signal-to-difference ratio when the lengths match, the duration drift, the median pitch and pitch spread moved
+(semitones), the speech level and its spread moved (dB), clicks on each side, and, when `measure` has run on both
+folders, the scorer's fields side by side (listening score, word error rate). See docs/roadmap/critique/voices-speed.md.
 
 `render` goes through the same engine as the worker (tools/voice/engine.py) and writes <out>/<voice>/<line>.wav
 plus the engine's reply; `--extra '{"melody": false}'` adds request fields (A/B tests). Clips already rendered
@@ -289,6 +296,113 @@ def cmd_measure(a):
         print('wrote', target)
 
 
+# ------------------------------------------------------------------ compare
+
+def _pcm(x):
+    return np.round(np.clip(np.asarray(x, dtype=np.float64), -1, 1) * 32767).astype(np.int16)
+
+
+def compare_clip(xa, xb, sr, ma=None, mb=None):
+    """The same request rendered two ways (a: the reference, b: the candidate): whether the samples are the same,
+    how far the length, the pitch and the loudness moved, and the clicks each has."""
+    out = {'durA': len(xa) / sr, 'durB': len(xb) / sr}
+    out['drift'] = 100.0 * (len(xb) - len(xa)) / max(1, len(xa))
+    pa, pb = _pcm(xa), _pcm(xb)
+    out['identical'] = bool(len(pa) == len(pb) and np.array_equal(pa, pb))
+    if len(xa) == len(xb):
+        err = float(np.sum((np.asarray(xb) - np.asarray(xa)) ** 2))
+        out['snr'] = 200.0 if err == 0 else round(10 * np.log10(float(np.sum(np.asarray(xa) ** 2)) / err), 2)
+        out['maxDiff'] = int(np.max(np.abs(pa.astype(np.int32) - pb.astype(np.int32)))) if len(pa) else 0
+    for tag, x in (('A', xa), ('B', xb)):
+        _, f0 = dsp.pitch_track(x, sr)
+        if len(f0) >= 10:
+            st = 12 * np.log2(f0 / np.median(f0))
+            out['f0' + tag] = float(np.median(f0))
+            out['iqr' + tag] = float(np.percentile(st, 75) - np.percentile(st, 25))
+        _, level = dsp.frame_rms_db(x, sr, hop=0.01, win=0.03)
+        act = level[level > level.max() - 30] if len(level) else level
+        out['level' + tag] = float(np.median(act)) if len(act) else -90.0
+        out['spread' + tag] = float(np.std(act)) if len(act) else 0.0
+        out['clicks' + tag] = metrics.clicks(x, sr)
+    if 'f0A' in out and 'f0B' in out:
+        out['f0St'] = 12 * np.log2(out['f0B'] / out['f0A'])
+        out['iqrSt'] = out['iqrB'] - out['iqrA']
+    out['levelDb'] = out['levelB'] - out['levelA']
+    out['spreadDb'] = out['spreadB'] - out['spreadA']
+    for k in ('lufs', 'truePeak'):
+        if ma and mb and ma.get(k) is not None and mb.get(k) is not None:
+            out[k + 'A'], out[k + 'B'] = ma[k], mb[k]
+    return out
+
+
+def cmd_compare(a):
+    """Every clip rendered in both --a and --b (same label and line): per clip and per voice."""
+    import soundfile as sf
+    rows, voices = [], {}
+    for lab_dir in sorted(glob.glob(os.path.join(a.a, '*'))):
+        label = os.path.basename(lab_dir)
+        for wav_a in sorted(glob.glob(os.path.join(lab_dir, '*.wav'))):
+            line = os.path.basename(wav_a)[:-4]
+            wav_b = os.path.join(a.b, label, line + '.wav')
+            if not os.path.exists(wav_b):
+                continue
+            xa, sr = sf.read(wav_a, dtype='float64')
+            xb, _ = sf.read(wav_b, dtype='float64')
+
+            def side(d, name):
+                meta = os.path.join(d, label, line + '.json')
+                meas = os.path.join(d, label, line + '.measure.json')
+                m = json.load(open(meta, encoding='utf-8')) if os.path.exists(meta) else {}
+                s = json.load(open(meas, encoding='utf-8')) if os.path.exists(meas) else {}
+                return m, s
+            ma, sa = side(a.a, 'a')
+            mb, sb = side(a.b, 'b')
+            row = {'label': label, 'line': line, **compare_clip(xa, xb, sr, ma, mb)}
+            for k in ('mos', 'aper', 'hnr'):
+                if isinstance(sa.get(k), (int, float)) and isinstance(sb.get(k), (int, float)):
+                    row[k + 'A'], row[k + 'B'] = sa[k], sb[k]
+            if isinstance(sa.get('wer'), dict) and isinstance(sb.get('wer'), dict):
+                row['werA'], row['werB'] = sa['wer'], sb['wer']
+            rows.append(row)
+            voices.setdefault(label, []).append(row)
+
+    def mean(rs, k):
+        v = [r[k] for r in rs if isinstance(r.get(k), (int, float))]
+        return round(float(np.mean(v)), 4) if v else None
+
+    summary = {}
+    for label, rs in list(voices.items()) + [('ALL', rows)]:
+        s = {'clips': len(rs), 'identical': sum(r['identical'] for r in rs),
+             'driftMean': mean(rs, 'drift'), 'driftAbsMean': round(float(np.mean([abs(r['drift']) for r in rs])), 3),
+             'driftAbsMax': round(float(max(abs(r['drift']) for r in rs)), 3),
+             'f0St': mean(rs, 'f0St'), 'iqrSt': mean(rs, 'iqrSt'), 'levelDb': mean(rs, 'levelDb'),
+             'spreadDb': mean(rs, 'spreadDb'), 'clicksA': sum(r['clicksA'] for r in rs),
+             'clicksB': sum(r['clicksB'] for r in rs), 'snrMin': min((r['snr'] for r in rs if 'snr' in r), default=None)}
+        for k in ('f0A', 'f0B', 'iqrA', 'iqrB', 'lufsA', 'lufsB', 'mosA', 'mosB', 'aperA', 'aperB', 'hnrA', 'hnrB'):
+            s[k] = mean(rs, k)
+        if s['mosA'] is not None:
+            d = [r['mosB'] - r['mosA'] for r in rs if 'mosA' in r]
+            s['mosDelta'] = round(float(np.mean(d)), 4)
+            s['mosDeltaSd'] = round(float(np.std(d)), 4)
+            s['mosBetter'] = int(sum(x > 0 for x in d))
+        for k in ('werA', 'werB'):
+            w = [r[k] for r in rs if isinstance(r.get(k), dict)]
+            if w:
+                s[k] = round(sum(x['errors'] for x in w) / max(1, sum(x['words'] for x in w)), 4)
+        summary[label] = s
+    for label, s in summary.items():
+        mos = f" mos {s['mosA']:.3f}->{s['mosB']:.3f} ({s['mosDelta']:+.3f}, better {s['mosBetter']}/{s['clips']})" if s.get('mosA') is not None else ''
+        wer = f" wer {s['werA']:.3f}->{s['werB']:.3f}" if 'werA' in s else ''
+        print(f"{label:8s} {s['clips']:3d} clips, identical {s['identical']:3d}, drift {s['driftMean']:+.2f}% "
+              f"(|max| {s['driftAbsMax']:.2f}%), f0 {s['f0St'] if s['f0St'] is None else round(s['f0St'], 3)} st, "
+              f"iqr {s['iqrSt'] if s['iqrSt'] is None else round(s['iqrSt'], 3)} st, level {s['levelDb']:+.2f} dB, "
+              f"clicks {s['clicksA']}->{s['clicksB']}{mos}{wer}")
+    if a.json:
+        with open(a.json, 'w', encoding='utf-8') as f:
+            json.dump({'a': a.a, 'b': a.b, 'summary': summary, 'clips': rows}, f, indent=1)
+        print('wrote', a.json)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -302,8 +416,12 @@ def main():
     m.add_argument('--scorer')
     m.add_argument('--json')
     m.add_argument('--write', action='store_true')
+    c = sub.add_parser('compare')
+    c.add_argument('--a', required=True, help='the reference clips (render or bench --out)')
+    c.add_argument('--b', required=True, help='the same requests rendered another way')
+    c.add_argument('--json')
     a = ap.parse_args()
-    {'render': cmd_render, 'measure': cmd_measure}[a.cmd](a)
+    {'render': cmd_render, 'measure': cmd_measure, 'compare': cmd_compare}[a.cmd](a)
 
 
 if __name__ == '__main__':
