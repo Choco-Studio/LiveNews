@@ -5,7 +5,7 @@
 // failures). Ctrl+C or SIGTERM stops all three. Files only unless the playout is given --rtmp (and PUBLISH_LIVE=1).
 //
 //   PORT=8790 VOICE_ENGINE=kokoro node tools/playout/run.mjs --out data/playout/air/air-%03d.ts --segment 3600 \
-//        [--buffer 60] [--size 1280x720] [--bitrate 3000k] [--for <s>]
+//        [--buffer 60] [--size 1920x1080] [--bitrate 5500k] [--crf 20] [--for <s>]
 //
 // Everything after the known options is passed to the playout (air.mjs). Logs: one line per event, each prefixed with
 // the process it came from; the playout's state is in data/playout/*-status.json and events.jsonl.
@@ -23,7 +23,7 @@ const port = Number(process.env.PORT || 8790);
 const station = `http://127.0.0.1:${port}`;
 const pass = (names) => names.flatMap((n) => (opt(n) !== null ? [`--${n}`, opt(n)] : []));
 const airArgs = [...pass(['out', 'segment', 'rtmp', 'key-env', 'dir']), ...(opt('for') ? ['--for', opt('for')] : [])];
-const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
+const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'crf', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
 if (!opt('out') && !opt('rtmp')) {
   console.error('usage: node tools/playout/run.mjs --out <file> [--segment s] | --rtmp <server> --key-env <VAR>  [--buffer 60] [--for s]');
   process.exit(1);

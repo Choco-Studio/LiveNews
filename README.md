@@ -260,7 +260,7 @@ Funcionan una vez iniciada la emisión.
 
 ### Sin OBS: `tools/stream.mjs` (servidores, sin pantalla)
 
-Abre el canal en un Chromium sin ventana, graba su imagen y su sonido dentro de la página y se los pasa a ffmpeg. Este escala la imagen de 384x216 a 1920x1080 por vecino más cercano (el pixel art no se emborrona) y emite en H.264 + AAC a 30 fps, con un fotograma clave cada 2 s, como piden YouTube y Twitch.
+Abre el canal en un Chromium sin ventana, toma los píxeles del lienzo 30 veces por segundo y su sonido dentro de la página y se los pasa a ffmpeg sin comprimir antes (una sola codificación). Este escala la imagen de 384x216 a 1920x1080 por vecino más cercano y por un número entero (x5; nunca una fracción: el pixel art no se emborrona ni salen píxeles desiguales), en BT.709, y emite en H.264 + AAC a 30 fps, con un fotograma clave cada 2 s, como piden YouTube y Twitch.
 
 ```bash
 # la clave se lee de una variable de entorno, nunca de la línea de órdenes (no queda en el historial)
@@ -272,7 +272,7 @@ while true; do
 done
 ```
 
-Para probar antes de emitir: `node tools/stream.mjs --url ... --out prueba.flv --seconds 60` graba un minuto en un archivo. Opciones: `--fps 30`, `--bitrate 4500k`, `--audio-bitrate 160k`, `--size 1920x1080`. Necesita ffmpeg y la misma instalación de Playwright/Chromium que `tools/record.mjs`.
+Para probar antes de emitir: `node tools/stream.mjs --url ... --out prueba.flv --seconds 60` graba un minuto en un archivo. Opciones: `--size 1920x1080` (o `1152x648`, x3; un tamaño que no sea múltiplo entero de 384x216 se redondea al más cercano, con un aviso), `--crf 20` y `--bitrate 5500k` (calidad constante con ese techo; `--rc cbr` gasta siempre el techo), `--capture png` (`vp8`: la captura de antes, dos codificaciones), `--fps 30`, `--audio-bitrate 160k`. Cada 10 s dice la CPU de cada parte, la memoria del navegador y si el codificador no da abasto (`SKIPPED`: entonces `--preset superfast`, luego `ultrafast`, o `--size 1152x648`). Necesita ffmpeg y la misma instalación de Playwright/Chromium que `tools/record.mjs`. Las cifras: `docs/publishing/playout.md` §12.
 
 ### Con OBS
 

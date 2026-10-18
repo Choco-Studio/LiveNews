@@ -177,8 +177,10 @@ export function prepareLocator(loc, { w = 384, h = 216, anchor = ANCHOR, frame =
   const img = ctx.createImageData(w, h);
   new Uint32Array(img.data.buffer).set(plan.pixels);
   ctx.putImageData(img, 0, 0);
-  const board = { canvas, plan };
-  if (cache.size > 64) cache.delete(cache.keys().next().value);
+  // (the plan's pixels are on the canvas now: kept twice they would double each board's 0.33 MB; the director keeps
+  // the boards of the programmes it needs, this cache only spares a place drawn again soon)
+  const board = { canvas, plan: { ...plan, pixels: null } };
+  if (cache.size >= 24) cache.delete(cache.keys().next().value);
   cache.set(key, board);
   return board;
 }

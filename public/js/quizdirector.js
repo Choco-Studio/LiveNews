@@ -17,6 +17,7 @@ import { hasRevealView } from './scenes/cards-quiz-more.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
 import { endCardLine } from './airmode.js';
 import { STINGER_DURATION } from './scenes/cards.js';
+import { loadPicture } from './pixelate.js';
 
 const STINGER_HALF = STINGER_DURATION / 2; // s from a stinger's start to its cut (director.js stinger)
 
@@ -131,13 +132,9 @@ function loadPictures(d, q) {
 
 /** The picture through the station (which fetched it when it made the edition): three tries, 2 s apart, before air. */
 function defaultLoad(id, tries = 3) {
-  if (typeof Image === 'undefined') return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => (tries > 1 ? sleep(2000).then(() => defaultLoad(id, tries - 1)).then(resolve, reject) : reject(new Error('picture unavailable')));
-    img.src = `/api/img/${encodeURIComponent(id)}`;
-  });
+  if (typeof Image === 'undefined' && typeof createImageBitmap === 'undefined') return Promise.resolve(null);
+  // (an ImageBitmap, not an <img>: its decoded pixels go with the edition, pixelate.js loadPicture)
+  return loadPicture(`/api/img/${encodeURIComponent(id)}`).catch(() => (tries > 1 ? sleep(2000).then(() => defaultLoad(id, tries - 1)) : Promise.reject(new Error('picture unavailable'))));
 }
 
 /** The question's picture, waiting a little for it if it is still on its way (null when it never came). */

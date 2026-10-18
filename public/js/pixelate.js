@@ -142,6 +142,30 @@ export function pixelate(img, w, h, { colors = 16, dither = 22, contrast = 1.12,
   return canvas;
 }
 
+/**
+ * A picture to pixelate, decoded into an ImageBitmap (its pixels freed by bitmap.close(), or by the garbage collector).
+ * Not an <img>: a picture decoded for an <img> and drawn into a canvas leaves its decoded pixels in the renderer's image
+ * cache, beyond the garbage collector's reach and kept until the machine runs short of memory. Measured 18 Oct, the 37
+ * pictures of the saved programmes pixelated ten times over as the director does: through <img> the renderer grew
+ * about 80 MB each time, to +605 MB (the cache's own ceiling), never given back; through createImageBitmap and
+ * close(), +28 MB once, then flat. A long-lived channel page loads every programme's pictures.
+ */
+export async function loadPicture(src) {
+  if (typeof createImageBitmap !== 'function' || typeof fetch !== 'function') return loadImage(src);
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`no se pudo cargar ${src} (${res.status})`);
+  return createImageBitmap(await res.blob());
+}
+
+/** Free a picture from loadPicture() now (an ImageBitmap; an <img> is left to the collector). */
+export function releasePicture(pic) {
+  try {
+    pic?.close?.();
+  } catch {
+    /* already closed */
+  }
+}
+
 export function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
