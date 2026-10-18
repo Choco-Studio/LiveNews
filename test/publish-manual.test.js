@@ -13,7 +13,7 @@ import { createApprovalServer } from '../server/publish/approval.js';
 import { publishMode, isManual } from '../server/publish/mode.js';
 import { makeAdapter } from '../server/publish/adapters/index.js';
 import { Publisher, liveBlockers } from '../server/publish/publisher.js';
-import { manualTexts, checklistFor, dailyPick, urlFits, creditsOf, prepareManual, recordManual, dayCap } from '../server/publish/manual.js';
+import { manualTexts, checklistFor, dailyPick, urlFits, creditsOf, prepareManual, recordManual, dayCap, AI_LABEL } from '../server/publish/manual.js';
 import { usingStub } from '../server/publish/compliance.js';
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
@@ -111,15 +111,25 @@ test('the texts to paste: YouTube title, description and hashtags; a caption wit
   assert.equal(x.fields[0].value, 'AI-generated: Owls. via NPR: https://www.npr.org/owls');
 });
 
-test('the switches to set by hand, per network', () => {
+test('the switches to set by hand, per network: the network\'s own AI label right after the file, and required', () => {
   const ids = (it) => checklistFor(it).map((c) => c.id);
-  assert.deepEqual(ids(clip('youtube')), ['file', 'texts', 'synthetic', 'kids']);
-  assert.deepEqual(ids(clip('tiktok')), ['file', 'texts', 'aigc', 'privacy', 'branded']);
-  assert.deepEqual(ids(clip('instagram')), ['file', 'texts', 'aiinfo']);
-  assert.deepEqual(ids({ kind: 'episode', platform: 'youtube', media: { thumb: 'a.jpg' } }), ['file', 'texts', 'synthetic', 'kids', 'thumb']);
+  assert.deepEqual(ids(clip('youtube')), ['file', 'synthetic', 'texts', 'kids']);
+  assert.deepEqual(ids(clip('tiktok')), ['file', 'aigc', 'texts', 'privacy', 'branded']);
+  assert.deepEqual(ids(clip('instagram')), ['file', 'aiinfo', 'texts']);
+  assert.deepEqual(ids(clip('facebook')), ['file', 'aiinfo', 'texts']);
+  assert.deepEqual(ids(clip('threads')), ['file', 'aiinfo', 'texts'], 'Threads: Meta\'s label by hand too');
+  assert.deepEqual(ids({ kind: 'episode', platform: 'youtube', media: { thumb: 'a.jpg' } }), ['file', 'synthetic', 'texts', 'kids', 'thumb']);
   assert.deepEqual(ids({ kind: 'text', platform: 'bluesky' }), ['texts', 'link']);
   const all = JSON.stringify(['youtube', 'tiktok', 'instagram'].map((n) => checklistFor(clip(n))));
   for (const w of ['altered or synthetic content', 'made for kids', 'AI-generated content', 'AI info']) assert.ok(all.includes(w), w);
+  // (18 Oct: no notice over a clip's first seconds; the platform's label is what a viewer sees first, so it is marked
+  // required on the sheet, and "Ya lo he publicado" needs every tick)
+  for (const n of ['youtube', 'tiktok', 'instagram', 'facebook', 'threads']) {
+    const label = checklistFor(clip(n)).filter((c) => c.ai);
+    assert.equal(label.length, 1, n);
+    assert.match(label[0].text, /^Obligatorio: /, n);
+    assert.equal(label[0], AI_LABEL[n]);
+  }
 });
 
 test('a post\'s address must be on its network\'s own host', () => {
@@ -249,7 +259,7 @@ test('prepare: only what is approved; the gate again on the signed files and the
   assert.equal(m.devCert, true);
   assert.deepEqual(m.fields.map((f) => f.id), ['title', 'description', 'hashtags']);
   assert.match(m.fields[1].value, /Editorial responsibility and complaints: editor@globit24\.example/);
-  assert.deepEqual(m.checklist.map((c) => c.id), ['file', 'texts', 'synthetic', 'kids']);
+  assert.deepEqual(m.checklist.map((c) => c.id), ['file', 'synthetic', 'texts', 'kids']);
   // the gate measured the signed copies and the description pasted, with YouTube's flags
   const g = gates.at(-1).view;
   assert.ok(g.files.length === 2 && g.files.every((f) => /\.youtube-[0-9a-f]+\.c2pa\.(mp4|jpg)$/.test(f)), JSON.stringify(g.files));
@@ -329,7 +339,7 @@ test('an edit after preparing: the words are checked again before they are hande
   assert.equal((await req('GET', `/download/${tt.id}/video`)).status, 409);
   const again = await post('/api/prepare', { id: tt.id });
   assert.equal(again.status, 200);
-  assert.deepEqual(again.json.item.manual.checklist.map((c) => c.id), ['file', 'texts', 'aigc', 'privacy', 'branded']);
+  assert.deepEqual(again.json.item.manual.checklist.map((c) => c.id), ['file', 'aigc', 'texts', 'privacy', 'branded']);
   assert.match(again.json.item.manual.fields[0].value, /^AI-produced news: presenters are AI characters/);
 });
 

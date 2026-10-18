@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { estimateTimeline } from '../../server/publish/timeline.js';
+import { IDENT_AIR } from '../../public/js/pace.js';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -47,7 +48,8 @@ export function recordSeconds(ep) {
   const est = estimateTimeline(ep, { open: 11, gap: 0.9 }).duration;
   const frames = (ep.segments || []).filter((s) => s.part === 'frame').length;
   const weather = ep.weather ? (ep.segments || []).length * 3 : 0;
-  return Math.ceil((est + frames * 9 + weather) * 1.12 + 12);
+  // (the channel's ident airs before the open: pace.js CHANNEL.ident)
+  return Math.ceil((est + IDENT_AIR + frames * 9 + weather) * 1.12 + 12);
 }
 
 /** The master: the episode in clip mode, lossless, at 1x, with its report (tools/record.mjs). */

@@ -63,18 +63,16 @@ test('a programme in its own words, with nothing held against it, passes (upload
   assert.ok(v.skipped.some((x) => x.rule === 'editorial-contact-missing' && x.why === NOT_FOR_AIR['editorial-contact-missing']));
 });
 
-test('once rendered, a programme airs only if its recording shows the AI notice at the opening and every ten minutes', () => {
-  const LINE = 'AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES';
-  const report = (spans, seconds) => ({ seconds, events: spans.flatMap(([a, b]) => [{ type: 'notice', on: true, text: LINE, v: a }, { type: 'notice', on: false, v: b }]) });
+test('once rendered, a programme airs only if its recording opens with the channel\'s ident and fits the stream\'s gap', () => {
+  const report = (identAt, seconds, card = null) => ({ seconds, events: [...(identAt === null ? [] : [{ type: 'shot', shot: 'ident', ...(card ? { card } : {}), v: identAt }]), { type: 'shot', shot: 'open', v: (identAt ?? 0) + 5.4 }] });
   // the first pass (no recording yet) does not hold it: the second does, with the rendered file's own evidence
   assert.equal(airGate(episode(), opts()).ok, true);
-  assert.deepEqual(rules(airGate(episode(), opts({ recording: report([[9.7, 17]], 420) }))), []);
-  assert.deepEqual(rules(airGate(episode(), opts({ recording: report([], 420) }))), ['opening-notice-missing']);
-  assert.deepEqual(rules(airGate(episode(), opts({ recording: report([[9.7, 17]], 1500) }))), ['periodic-notice-missing']);
-  assert.deepEqual(rules(airGate(episode(), opts({ recording: report([[9.7, 17], [618, 624], [1226, 1232]], 1500) }))), []);
-  assert.deepEqual(rules(airGate(episode(), opts({ recording: report([[9.7, 17], [618, 624]], 1500) }))), ['periodic-notice-missing'], 'the end of the programme counts too');
-  // the notice rules are about the picture: never skipped on air
-  for (const r of ['opening-notice-missing', 'periodic-notice-missing', 'ident-missing']) assert.equal(NOT_FOR_AIR[r], undefined, r);
+  assert.deepEqual(rules(airGate(episode(), opts({ recording: report(0.4, 420) }))), []);
+  assert.deepEqual(rules(airGate(episode(), opts({ recording: report(null, 420) }))), ['ident-missing']);
+  assert.deepEqual(rules(airGate(episode(), opts({ recording: report(0.4, 420, 'break') }))), ['ident-missing'], 'the break bumper is not the ident');
+  assert.deepEqual(rules(airGate(episode(), opts({ recording: report(0.4, 800) }))), ['ident-gap'], 'too long, with its break, for the 15 minutes');
+  // the ident rules are about the picture: never skipped on air
+  for (const r of ['ident-missing', 'ident-gap']) assert.equal(NOT_FOR_AIR[r], undefined, r);
 });
 
 test('verbatim: a story that copies its source is held (block), or passes with a warning (warn, a test switch)', () => {

@@ -42,7 +42,7 @@ const RATE = /(\d+(?:\.\d+)?)\s*KB\/s from the page/;
  * The live title for the programme on air (≤ 100 characters). `recorded` (pre-rendered playout, docs/publishing/
  * playout.md §5): the programmes were made ahead and air from files, so the title never says LIVE. It says the news is
  * AI-produced: the title is what a viewer reads before the stream plays, the first exposure of whoever joins it
- * mid-programme, before the picture's next notice (compliance.md §3.1).
+ * mid-programme, before the channel's next ident (compliance.md §2.10, §3.3).
  */
 export function liveTitle(now, { channel = 'GLOBIT 24', recorded = false } = {}) {
   const prog = now?.title ? String(now.title).toUpperCase() : null;

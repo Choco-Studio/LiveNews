@@ -128,9 +128,9 @@ const inkStyle = (color) => {
 /**
  * Draw the top row. `v` = { onAt, replay, recorded, program: {title, color} | null,
  * programIn, programOut, clock: 'HH:MM' } where onAt is when the graphics came
- * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times. The channel's AI
- * notice is not part of the row: it comes under it at the programme's start, after breaks and at intervals
- * (graphics/disclosure.js, drawn by graphics/index.js).
+ * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times. Nothing of the AI
+ * disclosure is part of the row or drawn under it: the channel's ident says it before every programme (owner, 18 Oct;
+ * graphics/disclosure.js, scenes/opens/ident.js).
  */
 export function drawTopRow(ctx, t, v) {
   const y = TOP.y;

@@ -3,9 +3,11 @@
 // One rule for the whole channel: every item says it is AI-produced, on screen and in its text, whether or not a law
 // would let it stay silent. The live stream cannot use the editorial-review exemption of the AI Act (Article 50(4),
 // second subparagraph: nobody reviews a bulletin before it airs), and the platforms ask for their own labels besides.
-// On screen it is said where a viewer first meets the item (Article 50(5)): the notice at a programme's start, after
-// every break and every ten minutes; over a clip's first seconds and on its end card; in the break ident. (No longer a
-// plate docked to the bug in every frame: owner, 18 Oct.) The RECREATION label stays in every frame of a recreation.
+// On screen it is said by the channel's own ident before every programme, after its break (Article 50(5): at the first
+// exposure to the programme), and on every clip's end card; a clip carries the platform's own AI label from its first
+// second.
+// Nothing over a programme, nothing inside a break (owner, 18 Oct). The RECREATION label stays in every frame of a
+// recreation.
 // One identity, said the same way everywhere, is also the honest one.
 //
 //   CHANNEL                       the channel-level statement: { name, short, onAir, notice, ident, statement, about }
@@ -36,15 +38,15 @@ export const CHANNEL = Object.freeze({
   // the on-air identity: the first words of the notice (graphics/disclosure.js)
   short: 'AI-produced news',
   onAir: 'AI-PRODUCED NEWS',
-  // the notice on screen: under the bug at a programme's start, after breaks and every ten minutes; over a clip's first
-  // seconds and on its end card (graphics/disclosure.js NOTICE_LINE says the same, a test keeps them equal)
+  // the notice on screen: under the wordmark of the channel's ident before every programme, and on a clip's end card
+  // (graphics/disclosure.js NOTICE_LINE says the same, a test keeps them equal)
   notice: NOTICE,
   // the plain-language statement (descriptions, the channel's About page, the ident's line in short form)
   statement:
     'GLOBIT 24 is AI-produced news. AI systems and the channel’s own software write the scripts from the reporting of the news organisations named on screen. ' +
     'The presenters, reporters and experts are animated characters with synthetic voices. Photos and footage are real and credited to their source. ' +
     'When a public figure appears in pixel art, it is a labelled AI RECREATION: their exact reported words in a generic synthetic voice, never their real voice or image.',
-  // the break ident's statement under the wordmark: the notice (graphics/disclosure.js IDENT_LINE)
+  // the ident's statement under the wordmark: the notice (graphics/disclosure.js IDENT_LINE)
   ident: NOTICE,
   about:
     'Who is responsible: GLOBIT 24 is published under the editorial responsibility of its owner (see the contact below). ' +
@@ -193,8 +195,10 @@ export function disclosureFor(item = {}) {
     },
     tiktok: { field: 'post_info.is_aigc', is_aigc: flag, required: hasRecreation, captionTop: opening },
     instagram: { field: 'is_ai_generated', is_ai_generated: flag, required: hasRecreation, captionTop: opening },
-    facebook: { field: null, manualLabel: hasRecreation, c2pa: true, textTop: opening },
-    threads: { field: null, manualLabel: hasRecreation && isVideo(kind), c2pa: true, textTop: opening },
+    // (no API field: Meta's own "AI info" label set by hand on every video, recreation or not: since 18 Oct the label is
+    // what a viewer sees first on a clip; the checklist asks for it and the gate holds a video without it)
+    facebook: { field: null, manualLabel: isVideo(kind), c2pa: true, textTop: opening },
+    threads: { field: null, manualLabel: isVideo(kind), c2pa: true, textTop: opening },
     x: { field: null, textTop: labels.textPrefix, automatedAccountLabel: true },
     bluesky: { field: null, textTop: labels.textPrefix, selfLabel: 'automated account in the profile' },
     mastodon: { field: null, textTop: labels.textPrefix, botAccount: true },

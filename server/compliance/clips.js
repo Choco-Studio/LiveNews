@@ -6,16 +6,17 @@
 //   sentence-cut         a cut inside any sentence (a half sentence can say what nobody said)
 //   label-out-of-frame   the recreation's AI RECREATION label or its SOURCE falls outside the crop, or loses a word
 //   label-illegible      the label is too small on the published picture (a 16:9 frame shrunk into a 9:16 one)
-//   clip-notice-missing  a clip or Short without the AI notice over its first seconds (from its first frame, at least
-//                        NOTICE_RULES.clipSeconds s, the notice's words, inside the picture and the platforms' safe
-//                        column, legible): a clip cut from mid-programme never shows the programme's opening
-//   end-card-missing     a clip or Short whose end card does not carry the notice
-//   opening-notice-missing  a programme (a whole upload, a programme of the stream) whose recording shows no notice
-//                        in its first NOTICE_RULES.openingWithin s, or for less than NOTICE_RULES.openingSeconds
-//   periodic-notice-missing  a programme of the stream with more than NOTICE_RULES.periodicMax s between two notices
-//                        (or from the last one to its end): a viewer who joins mid-programme meets it within that
-//   text-disclosure-missing  a video's caption or description whose first line does not say it is AI-produced
-//   (no rule asks for the yellow AI plate once docked to the bug: owner, 18 Oct; compliance.md §3)
+//   end-card-missing     a clip or Short without its end card carrying the AI notice (the channel ident's words)
+//   text-disclosure-missing  a video without a caption or description, or one whose first line does not say it is
+//                        AI-produced (a clip's caption: "AI-produced news: …")
+//   ident-missing        a programme (a whole upload, a programme of the stream) whose recording does not open with the
+//                        channel's ident (IDENT_RULES.startWithin s, held IDENT_RULES.minSeconds): the disclosure before
+//                        every programme and after every break; on the stream, also an ident card without the notice
+//   ident-gap            a programme of the stream long enough that, with the break after it, a viewer could go more than
+//                        IDENT_RULES.maxGap s without an ident (the ads never count: the ident is the channel's own card)
+//   (the platform's own AI label, the clip's other first-frame disclosure, is `flag-missing` / `flag-unavailable`)
+//   (no rule asks for the yellow AI plate once docked to the bug, nor for any notice over a programme or a clip's first
+//   seconds: owner, 18 Oct; compliance.md §2.10, §3)
 //   flag-missing        a platform's synthetic-media flag is not set on an upload that must carry it
 //   flag-unavailable     a platform with no API flag for a recreation (Facebook, Threads): set it by hand or leave it out
 //   election-hold        a recreation of a politician of a country inside its election window, or of a candidate
@@ -26,14 +27,15 @@
 //   timeline-missing     a clip with a recreation and no timeline: nothing can be verified, so nothing goes
 //
 //   timelineFromRecording(episode, report)   tools/record.mjs --report -> [{ start, end, text, slot, segIndex, kind, recreationId, quote }]
-//   noticeRuns(report)                       the AI notice on screen in a recording: [{ from, to, text }] (seconds)
-//   clipCards({ noun, profile, notice, endCard })   what a clip's cards say (the factory declares it: clip.cards)
+//   identRuns(report)                        the channel's ident on screen in a recording: [{ from, to }] (seconds)
+//   clipCards({ endCard })                   what a clip's end card says (the factory declares it: clip.cards)
 //   checkClip(clip, opts)                    -> { ok, violations: [{ rule, message, ... }], warnings, recreations, disclosure }
 //   frameGeometry(frame)                     -> { crop, place, output, window, scale }
-//   NOTICE_RULES                             the notice's minimums the check applies
+//   IDENT_RULES                              the ident's timing the check applies
 import { recreationOf, recreationLayout, RECREATION_WINDOW } from '../../public/js/graphics/recreation.js';
 export { RECREATION_WINDOW };
-import { noticeParts, noticeLayout, clipNoticeLayout, inVerticalSafe, nounOf, NOTICE_TIMING, NOTICE_SEP } from '../../public/js/graphics/disclosure.js';
+import { noticeParts, NOTICE_SEP } from '../../public/js/graphics/disclosure.js';
+import { CHANNEL as PACE } from '../../public/js/pace.js';
 import { V, VW, VH, boardBox } from '../../public/js/clip/layout.js';
 import { disclosureFor, recreationsIn } from './disclosure.js';
 import { electionHold, silenceHold, loadCalendar } from './elections.js';
@@ -49,53 +51,44 @@ const norm = (s) => String(s ?? '').toLowerCase().replace(/[“”"‘’'`]/g, 
 const hasQuote = (s) => /[“"][^”"]{6,}[”"]/u.test(String(s ?? ''));
 
 /**
- * The AI notice's minimums (graphics/disclosure.js NOTICE_TIMING draws more than these): a clip's notice from its first
- * frame for at least `clipSeconds`; its end card at least `endCardSeconds`; a programme's first notice within
- * `openingWithin` s of the recording's start (the open, then the first shot that can carry it) for `openingSeconds`;
- * on the stream, never more than `periodicMax` s between two notices (ten minutes, and two more for the notice to find a
- * presenter's shot to stand on).
+ * The ident's timing (pace.js CHANNEL.ident; the director airs it before every programme): a programme's recording opens
+ * with it within `startWithin` s, held at least `minSeconds`; an end card holds at least `endCardSeconds`. On the stream
+ * a viewer never goes more than `maxGap` s without one: a programme's span from its ident to its end, plus the longest
+ * break that can follow it (`breakAllowance`: the bumper, two spots, the promo and the countdown's 90 s hold, as
+ * server/station.js breakAir counts it), stays within it.
  */
-export const NOTICE_RULES = Object.freeze({
-  clipStartBy: 0.05,
-  clipSeconds: 3,
+export const IDENT_RULES = Object.freeze({
+  startWithin: 3,
+  minSeconds: Math.min(3, PACE.ident.hold),
   endCardSeconds: 2,
-  openingWithin: 30,
-  openingSeconds: 4,
-  periodicMax: NOTICE_TIMING.every + 120,
+  maxGap: 900,
+  breakAllowance: 180,
 });
-/** A first line that says what the item is: "AI-produced news: …" (a description), "AI-generated: …" (a post). */
+/** A first line that says what the item is: "AI-produced news: …" (a description, a caption), "AI-generated: …" (a post). */
 const TEXT_DISCLOSURE = /\bAI-(?:produced|generated)\b/i;
 const sameParts = (a, b) => Array.isArray(a) && a.length === b.length && a.every((x, i) => String(x).trim().toUpperCase() === b[i]);
-const nounOfProgramme = (episode) => nounOf(episode?.program?.id || null);
 
 /**
- * The AI notice on screen in a recording (the channel's graphics report each showing to the recorder: an event
- * { type: 'notice', on: true|false, text } at its video time `v`): [{ from, to, text }], a showing still on at the end
- * lasting to the recording's end.
+ * The channel's ident in a recording (the recorder logs every shot with its card's kind: tools/recorder/page.mjs; the
+ * break bumper shares the 'ident' shot with card kind 'break' and is not the ident): [{ from, to }], each held until
+ * the next shot, the last to the recording's end.
  */
-export function noticeRuns(report) {
-  const ev = (Array.isArray(report?.events) ? report.events : []).filter((e) => e?.type === 'notice' && Number.isFinite(e.v)).sort((a, b) => a.v - b.v);
+export function identRuns(report) {
+  const shots = (Array.isArray(report?.events) ? report.events : []).filter((e) => e?.type === 'shot' && Number.isFinite(e.v)).sort((a, b) => a.v - b.v);
   const end = Number.isFinite(report?.seconds) ? report.seconds : Infinity;
-  const runs = [];
-  for (const e of ev) {
-    const last = runs[runs.length - 1];
-    if (e.on !== false) {
-      if (!last || last.to !== null) runs.push({ from: e.v, to: null, text: e.text || null });
-    } else if (last && last.to === null) last.to = e.v;
-  }
-  for (const r of runs) if (r.to === null) r.to = end;
-  return runs;
+  const out = [];
+  shots.forEach((e, i) => {
+    if (e.shot === 'ident' && e.card !== 'break') out.push({ from: e.v, to: shots[i + 1] ? shots[i + 1].v : end });
+  });
+  return out;
 }
 
 /**
- * What a clip's own cards say, as the factory composites them (tools/publish/factory.mjs; clip/cards.js): the notice
- * over its first `notice` seconds and the end card's `endCard` seconds, both with the notice's words. -> clip.cards
+ * What a clip's end card says, as the factory composites it (tools/publish/factory.mjs; clip/cards.js drawEndCard): the
+ * channel ident's words for `endCard` seconds. -> clip.cards
  */
-export function clipCards({ noun = 'NEWS', profile = 'normal', notice = NOTICE_TIMING.clip, endCard = 2.6, frames = null } = {}) {
-  return {
-    notice: { from: 0, seconds: notice, noun, profile, parts: noticeParts(noun), ...(frames ? { frames } : {}) },
-    endCard: { seconds: endCard, parts: noticeParts('NEWS') },
-  };
+export function clipCards({ endCard = 2.6 } = {}) {
+  return { endCard: { seconds: endCard, parts: noticeParts('NEWS') } };
 }
 
 /** The words a segment says (for matching the recorder's speak events to segments). */
@@ -251,7 +244,7 @@ export function checkClip(clip = {}, opts = {}) {
     }
   }
 
-  // ---- the recreation's label in the frame, whole and legible; the AI notice where the viewer first meets the item
+  // ---- the recreation's label in the frame, whole and legible; the AI disclosure the item itself carries
   const isVideo = kind !== 'text' && kind !== 'image';
   if (isVideo) {
     const g = frameGeometry(clip.frame || {});
@@ -268,54 +261,30 @@ export function checkClip(clip = {}, opts = {}) {
       const px = cap * g.scale;
       if (px < need) v('label-illegible', `the label's smallest capitals are ${px.toFixed(1)} px tall on a ${g.output.h} px picture (at least ${need.toFixed(1)}): crop to the window instead of shrinking the whole frame`, { recreation: rec.id, capPx: px, need });
     }
-    // a clip or a Short: the notice over its first seconds and its end card (a clip cut from mid-programme never shows
-    // the programme's opening, so it says it itself, from its first frame)
+    // a clip or a Short: its end card, in the ident's words (a clip cut from mid-programme never shows the ident: the
+    // platform's own AI label from its first frame, its caption's first line and its end card say it)
     if (kind === 'clip' || kind === 'short') {
-      const cards = clip.cards || {};
-      const n = cards.notice || null;
-      if (!n) v('clip-notice-missing', 'the clip carries no AI notice over its first seconds (clip.cards.notice: the factory composites clip/cards.js drawNoticeCard over them): it is held until it does');
-      else {
-        const noun = n.noun || 'NEWS';
-        const want = noticeParts(noun);
-        if (!sameParts(n.parts, want)) v('clip-notice-missing', `the notice must read "${want.join(NOTICE_SEP)}" (it reads "${[].concat(n.parts || []).join(NOTICE_SEP)}")`);
-        if (!(Number(n.from ?? 0) <= NOTICE_RULES.clipStartBy)) v('clip-notice-missing', `the notice starts at ${Number(n.from).toFixed(2)} s: it must be there from the clip's first frame`);
-        if (!(Number(n.seconds) >= NOTICE_RULES.clipSeconds)) v('clip-notice-missing', `the notice holds ${Number(n.seconds) || 0} s: at least ${NOTICE_RULES.clipSeconds} s`);
-        // where it stands: inside the picture (on the vertical one, inside the platforms' safe column too), legible
-        const L = g.vertical ? clipNoticeLayout('vertical', { noun }) : g.window.active ? noticeLayout(g.window, noun) : clipNoticeLayout('horizontal', { noun, profile: n.profile || 'normal' });
-        const box = { x0: L.x, y0: L.y, x1: L.x + L.w, y1: L.y + L.h };
-        if (!inside(box, c) || (g.vertical && !inVerticalSafe(box))) v('clip-notice-missing', `the notice (x ${box.x0}-${box.x1}, y ${box.y0}-${box.y1}) is not inside the picture${g.vertical ? ' and the platforms\' safe column' : ` (x ${c.x}-${c.x + c.w})`}`, { box, crop: c });
-        const px = L.cap * g.scale;
-        if (px < need) v('clip-notice-missing', `the notice's capitals are ${px.toFixed(1)} px tall on a ${g.output.h} px picture (at least ${need.toFixed(1)})`, { capPx: px, need });
-        // read back from the rendered file (the factory counts the frames that show it)
-        if (n.frames && !(n.frames.total > 0 && n.frames.shown >= n.frames.total)) v('clip-notice-missing', `the notice shows in ${n.frames.shown || 0} of the ${n.frames.total || 0} frames it must (read back from the file): every one`, { frames: n.frames });
-      }
-      const e = cards.endCard || null;
+      const e = clip.cards?.endCard || null;
       if (!e) v('end-card-missing', 'the clip has no end card carrying the AI notice (clip.cards.endCard): it is held until it does');
       else {
         if (!sameParts(e.parts, noticeParts('NEWS'))) v('end-card-missing', `the end card must carry "${noticeParts('NEWS').join(NOTICE_SEP)}"`);
-        if (!(Number(e.seconds) >= NOTICE_RULES.endCardSeconds)) v('end-card-missing', `the end card holds ${Number(e.seconds) || 0} s: at least ${NOTICE_RULES.endCardSeconds} s`);
+        if (!(Number(e.seconds) >= IDENT_RULES.endCardSeconds)) v('end-card-missing', `the end card holds ${Number(e.seconds) || 0} s: at least ${IDENT_RULES.endCardSeconds} s`);
       }
+      if (typeof clip.text !== 'string' || !clip.text.trim()) v('text-disclosure-missing', 'the clip has no caption: its first line says it is AI-produced ("AI-produced news: …", clipmeta.js)');
     }
-    // a programme: its opening notice and, on the stream, its reminders, read from the recording of what aired
+    // a programme: it opens with the channel's ident (and on the stream, no viewer goes too long without one)
     if (whole) {
       const report = clip.recording || null;
-      if (!report) warnings.push('the opening AI notice is read from the recording and none was given (the playout checks it again once the programme is rendered)');
+      if (!report) warnings.push('the channel\'s ident is read from the recording and none was given (the playout checks it again once the programme is rendered)');
       else {
-        const runs = noticeRuns(report);
-        const end = Number.isFinite(report.seconds) ? report.seconds : Infinity;
-        const first = runs[0];
-        const want = noticeParts(nounOfProgramme(episode)).join(NOTICE_SEP);
-        if (!first) v('opening-notice-missing', 'the recording shows no AI notice: every programme opens with it (graphics/disclosure.js)');
-        else if (first.from > NOTICE_RULES.openingWithin) v('opening-notice-missing', `the AI notice first shows at ${first.from.toFixed(1)} s: within the programme's first ${NOTICE_RULES.openingWithin} s`, { at: first.from });
-        else if (first.to - first.from < NOTICE_RULES.openingSeconds && first.to < end) v('opening-notice-missing', `the opening notice holds ${(first.to - first.from).toFixed(1)} s: at least ${NOTICE_RULES.openingSeconds} s`);
-        else if (first.text && first.text !== want) v('opening-notice-missing', `the opening notice reads "${first.text}": it must read "${want}"`);
-        if (kind === 'live' && first) {
-          const starts = [...runs.map((r) => r.from), Number.isFinite(end) ? end : runs[runs.length - 1].from];
-          for (let i = 1; i < starts.length; i++) {
-            if (starts[i] - starts[i - 1] <= NOTICE_RULES.periodicMax) continue;
-            v('periodic-notice-missing', `${Math.round(starts[i] - starts[i - 1])} s without the AI notice from ${Math.round(starts[i - 1])} s: at most ${NOTICE_RULES.periodicMax} s, so a viewer who joins mid-programme meets it within that`, { from: starts[i - 1], to: starts[i] });
-            break;
-          }
+        const idents = identRuns(report);
+        const end = Number.isFinite(report.seconds) ? report.seconds : null;
+        // (on air before the recording's first frame counts: the recording may start a beat into it)
+        const first = idents.find((x) => x.from <= IDENT_RULES.startWithin && x.to > 0) || null;
+        if (!first) v('ident-missing', idents.length ? `the channel's ident first airs at ${idents[0].from.toFixed(1)} s: the programme opens with it (within ${IDENT_RULES.startWithin} s)` : 'the recording does not open with the channel\'s ident: every programme does (director.js playIdent)');
+        else if (first.to - first.from < IDENT_RULES.minSeconds) v('ident-missing', `the ident holds ${(first.to - first.from).toFixed(1)} s: at least ${IDENT_RULES.minSeconds} s`);
+        if (kind === 'live' && first && end !== null && end - first.from + IDENT_RULES.breakAllowance > IDENT_RULES.maxGap) {
+          v('ident-gap', `${Math.round(end - first.from)} s from the ident to the programme's end, and up to ${IDENT_RULES.breakAllowance} s of break after it: more than ${IDENT_RULES.maxGap} s without the channel's ident`, { span: end - first.from });
         }
       }
     }

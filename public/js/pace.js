@@ -34,6 +34,13 @@ export const CHANNEL = Object.freeze({
   // breaks (a short programme inside that window is joined to the next one by the UP NEXT promo and its stinger only),
   // commercials at most `maxAdShare` of an hour of air (server/station.js decides: request in CONTRACTS)
   breaks: Object.freeze({ ident: 4.0, blackGap: 0.3, promo: 5.5, minProgrammeBetween: 420, maxAdShare: 0.15 }),
+  // the channel's ident (scenes/opens/ident.js: GLOBIT 24, its slogan, and the AI notice under them; compliance.md §3;
+  // owner, 18 Oct: "deja solo esta versión"): before every programme, after its break, `hold` s from its stinger's
+  // cut, the continuity voice saying "This is GLOBIT 24, AI-produced news."; a filler break (no programme ready) gets
+  // one first once `refresh` s have passed since the last, so the stream never runs long without it. It is the
+  // channel's own card: never inside a break (the bumper, the spots, the promo and the countdown carry no notice),
+  // never over a programme
+  ident: Object.freeze({ hold: 5.0, refresh: 600 }),
   // master control unreachable: the standby card retries every `retry` s; after a playout error the director waits
   // `afterError` s before the next item (never a tight loop)
   standby: Object.freeze({ retry: 6, afterError: 1.5 }),
@@ -54,6 +61,19 @@ export const CHANNEL = Object.freeze({
   // reading speed used for every "readable twice" hold (words per second at a comfortable read)
   readWps: 3,
 });
+
+/** Seconds the channel's ident adds before an item: the stinger into it (half of it before the cut) and its hold. */
+export const IDENT_AIR = CHANNEL.ident.hold + CHANNEL.stinger / 2;
+
+/**
+ * Does the channel's ident air before this item? Before every programme (a replay too); before a filler break only when
+ * `since` (seconds since the last ident) has reached CHANNEL.ident.refresh. Never before an ordinary break: the
+ * programme after it opens with one.
+ */
+export function identBefore(item, since = Infinity) {
+  if (item?.kind === 'episode') return true;
+  return item?.kind === 'break' && !!item.filler && since >= CHANNEL.ident.refresh;
+}
 
 /**
  * Transition vocabulary (durations s, easing names from graphics/layout.js and

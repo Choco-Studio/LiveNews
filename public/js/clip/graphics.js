@@ -1,7 +1,6 @@
 // The graphics package in clip mode (?clip=1: a recording made to be cut into clips; docs/publishing/vertical.md §5).
 // A clip is watched later, out of the channel's flow, mostly with the sound off, so three things change and nothing
-// else does (the AI notice under the bug comes and goes as on air: a whole programme uploaded from this recording shows
-// it at its start, after breaks and every ten minutes; a clip cut from it gets its own notice card besides):
+// else does:
 //   - no clock and no LIVE tag (a clip is not live, and an hour on screen dates it); the bug stays, with the
 //     programme's name beside it for the whole clip (a clip is seen without the open that names the programme)
 //   - no ticker (its headlines belong to the hour it aired, and would put stories in a clip that it is not about)
@@ -22,7 +21,6 @@ import { TOP, STRAP, inkOn } from '../graphics/layout.js';
 import { THEME_ACCENT } from '../cast.js';
 import { WordCaptions } from './captions.js';
 import { takeMapLabel, mapKeepOut } from '../scenes/worldmap.js';
-import { clipNoticeLayout, noticeLayout, nounOf, drawNotice, FRAME } from '../graphics/disclosure.js';
 
 const ON = new Set(['news', 'bug']);
 const GRAVE = new Set(['sad', 'serious']);
@@ -91,8 +89,8 @@ export function drawProgrammeTag(ctx, x, y, title, color) {
 
 /**
  * The channel's bug (graphics/bug.js's top row, clipped to the bug: no LIVE, no clock), clean, its top-left at (x, y).
- * Returns its width. (The AI plate once docked to it is gone, owner 18 Oct: a clip says it is AI-produced in its first
- * seconds, graphics/disclosure.js drawClipNotice, on its end card and in its caption.)
+ * Returns its width. (The AI plate once docked to it is gone, owner 18 Oct: a clip says it is AI-produced on its end
+ * card, in its caption's first line and with the platform's own AI label, compliance.md §3.2.)
  */
 export function drawBugOnly(ctx, t, onAt, x = TOP.x, y = TOP.y) {
   ctx.save();
@@ -174,14 +172,6 @@ export class ClipGraphics extends Graphics {
     if (!ON.has(mode)) return;
     const bw = drawBugOnly(ctx, t, this.topAt);
     if (mode === 'news' && scene.program?.title) drawProgrammeTag(ctx, TOP.x + bw + 1, TOP.y, String(scene.program.title), THEME_ACCENT[scene.program?.theme] || P.red);
-    // the AI notice as on air, where a clip's own notice card puts it (5 px lower for the quiz, whose clips' hook holds
-    // the top row's right end): the card and this one land on the same pixels
-    const np = mode === 'news' ? this.noticeShown(t) : 0;
-    if (np > 0) {
-      const noun = nounOf(scene.program?.id);
-      const tall = scene.program?.id === 'pay-attention' || !!(scene.cast?.H && scene.cast?.A && scene.cast?.B);
-      drawNotice(ctx, FRAME.active ? noticeLayout(FRAME, noun) : clipNoticeLayout('horizontal', { noun, profile: tall ? 'tall' : 'normal' }), np, this.accentOf(scene));
-    }
     if (mode === 'news' && scene.remote) drawLinkGraphics(ctx, t, scene, this.accentOf(scene));
     if (scene.shot === 'montage' && scene.card?.vid) {
       const credit = scene.rundown?.[scene.card.index]?.footage?.credit;
@@ -215,9 +205,5 @@ export class ClipGraphics extends Graphics {
 
 /** Vertical: the channel's bookkeeping (strap state, programme tag timing) with nothing drawn on the source picture. */
 export class VerticalGraphics extends Graphics {
-  get drawsNotice() {
-    return false;
-  }
-
   render() {}
 }

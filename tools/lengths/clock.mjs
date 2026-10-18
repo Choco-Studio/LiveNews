@@ -3,8 +3,9 @@
 // (server/station.js, the clock on) runs a day on a fake clock, each programme's episodes taken in turn from the replay's
 // editions. The station plans with its own estimate (episodeAir: every segment's recorded voice, here the replay's speech
 // at the voices' measured rates, plus its pauses), while the clock moves on by the edition's air as it plays
-// (server/airtime.js voicedAir: the open, the pace profile's pauses, the end card). A programme the replay did not make
-// (WORLD WEATHER, SEVEN DAYS) airs for the middle of its targetSeconds, as in test/clock.test.js.
+// (server/airtime.js voicedAir: the open, the pace profile's pauses, the end card) and the channel's ident before it
+// (public/js/pace.js IDENT_AIR). A programme the replay did not make (WORLD WEATHER, SEVEN DAYS) airs for the middle of
+// its targetSeconds, as in test/clock.test.js.
 //
 //   node tools/lengths/clock.mjs <replay dir> [--hours 24] [--start 2026-10-12T05:00:00+01:00] [--json out.json]
 //
@@ -15,6 +16,7 @@ import path from 'node:path';
 import { Station, episodeAir, breakAir, localTime } from '../../server/station.js';
 import { loadChannel } from '../../server/channel.js';
 import { voicedAir, speechOf } from '../../server/airtime.js';
+import { IDENT_AIR } from '../../public/js/pace.js';
 
 const args = process.argv.slice(2);
 const arg = (k, d) => {
@@ -38,7 +40,7 @@ for (const r of rows) {
   if (!fs.existsSync(f)) continue;
   const ep = JSON.parse(fs.readFileSync(f, 'utf8'));
   const segs = ep.segments || [];
-  (made[r.programId] ||= []).push({ speech: segs.map((s) => speechOf(ep, s)), voiced: voicedAir(ep) });
+  (made[r.programId] ||= []).push({ speech: segs.map((s) => speechOf(ep, s)), voiced: voicedAir(ep) + IDENT_AIR });
 }
 
 const silent = { info() {}, warn() {}, error() {} };
@@ -54,7 +56,7 @@ const producer = {
       return { kind: 'episode', id: `${id}-${turn[id]}`, program: { id, title: ch.programs[id].title }, segments: e.speech.map((d) => ({ audio: { duration: d } })), plays: e.voiced };
     }
     const [lo, hi] = ch.programs[id].targetSeconds || [300, 300];
-    return { kind: 'episode', id: `${id}-mid`, program: { id, title: ch.programs[id].title }, segments: [{ audio: { duration: (lo + hi) / 2 - 12 } }], plays: (lo + hi) / 2 };
+    return { kind: 'episode', id: `${id}-mid`, program: { id, title: ch.programs[id].title }, segments: [{ audio: { duration: (lo + hi) / 2 - 12 } }], plays: (lo + hi) / 2 + IDENT_AIR };
   },
 };
 

@@ -4,7 +4,7 @@
 // silent fallback to the stub.
 //
 //   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), auditItem(item), checkClip(clip, opts),
-//   clipCards(o) what a clip's cards say (the notice, the end card),
+//   clipCards(o) what a clip's end card says,
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
 //   recordPublication(publication, o) one publication in the register (the owner's own, by hand: manual.js)

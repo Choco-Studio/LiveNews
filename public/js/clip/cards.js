@@ -5,9 +5,9 @@
 // picture under them.
 //
 //   drawHook(ctx, { format, lines, programme, accent, profile })   transparent everywhere but the title's own pixels
-//   drawNoticeCard(ctx, { format, noun, accent, profile })     the AI notice for the clip's first seconds, alone on a
-//                                                              transparent card (graphics/disclosure.js drawClipNotice)
-//   drawEndCard(ctx, t, { format, programme, accent, live, noun })   t: seconds since the card's first frame
+//   drawEndCard(ctx, t, { format, programme, accent, stream })   t: seconds since the card's first frame; it carries the
+//                                                                channel ident's AI notice (graphics/disclosure.js)
+//   endCardText({ format, programme, stream })   the words it shows, in order
 //   END_CARD_SECONDS, END_CARD_NOTICE
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
@@ -16,13 +16,12 @@ import { seg, easeOutQuint } from '../gfx/index.js';
 import { VW, VH, HW, HH, V, SAFE } from './layout.js';
 import { drawBugOnly, drawProgrammeTag } from './graphics.js';
 import { groundOf } from './vertical.js';
-import { noticeParts, drawClipNotice, drawNoticeText, NOTICE_TIMING } from '../graphics/disclosure.js';
+import { noticeParts, IDENT_ROWS, IDENT_STYLES, NOTICE_DRAWS } from '../graphics/disclosure.js';
+import { watchLine } from '../airmode.js';
 
 export const END_CARD_SECONDS = 2.6;
-/** The end card's disclosure, as it reads (graphics/disclosure.js noticeParts): checked by the publishing gate. */
+/** The end card's disclosure, as it reads (the ident's words: graphics/disclosure.js): checked by the publishing gate. */
 export const END_CARD_NOTICE = Object.freeze(noticeParts('NEWS'));
-/** How long a clip's first-seconds notice holds (the card page draws it; the factory composites it). */
-export const NOTICE_SECONDS = NOTICE_TIMING.clip;
 const S = {
   white: { color: P.white },
   white2: { color: P.white, scale: 2 },
@@ -94,27 +93,17 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     drawText(ctx, line, x + 7, 8, S.white2);
     return;
   }
-  // horizontal: under the bug's row and the AI notice under it (y 22-30, drawNoticeCard: both hold the clip's first
-  // four seconds), left at the bug's edge
+  // horizontal: under the bug's row (y 26), left at the strap's edge
   const w = Math.max(0, ...ls.map((l) => measureText(l, sc))) + 20;
   const n = ls.length;
   const h = n * pitch - (pitch - lineH) + 12;
   const x = 13;
-  const y = 33;
+  const y = 26;
   ctx.fillStyle = P.black;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = accent === P.purple ? P.fog : accent;
   ctx.fillRect(x, y, 2, h);
   ls.forEach((l, i) => drawText(ctx, l, x + 10, y + 6 + i * pitch, big ? S.white2 : S.white));
-}
-
-/**
- * The AI notice of a clip's first seconds, alone on a transparent card (the factory composites it over the clip's first
- * NOTICE_SECONDS, then wipes it out): under the bug in a horizontal clip, a super over the stage's foot in a vertical
- * one. A clip cut from mid-programme never shows the programme's opening, so it says it here, from its first frame.
- */
-export function drawNoticeCard(ctx, { format = 'vertical', noun = 'NEWS', accent = P.red, profile = 'normal' } = {}) {
-  return drawClipNotice(ctx, format, { noun, accent, profile });
 }
 
 /** Text rising into place (p 0..1) inside its own rows. */
@@ -135,21 +124,39 @@ function rise(ctx, text, x, y, p, style, align = 'left') {
 }
 
 /**
- * The end card: the channel's logo landing and glinting on its ground, the slogan, the programme it came from in its
- * accent, where to watch, and the AI notice (AI-PRODUCED NEWS, PRESENTERS ARE AI CHARACTERS, FACTS FROM CREDITED
- * SOURCES: graphics/disclosure.js). No URL is drawn (the post carries the links), so a card never goes stale.
+ * The words an end card shows, in order: { slogan, from, watch, rows }. `stream` (airmode.js streamOf): 'live' says
+ * WATCH LIVE, 'recorded' that the channel airs 24 hours a day, 'none' (no stream, the manual beta) says nothing about
+ * where to watch: `watch` is null.
  */
-export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, live = true, noun = 'NEWS' } = {}) {
+export function endCardText({ format = 'vertical', programme = '', stream = 'none' } = {}) {
+  const vertical = format === 'vertical';
+  return {
+    slogan: 'THE WORLD, PIXEL BY PIXEL',
+    from: programme ? `FROM ${String(programme).toUpperCase()}` : null,
+    watch: watchLine(stream, { vertical }),
+    rows: vertical ? noticeParts('NEWS') : [...IDENT_ROWS],
+  };
+}
+
+/**
+ * The end card: the channel's logo landing and glinting on its ground, the slogan, the programme it came from in its
+ * accent, where to watch (only when there is a stream: endCardText), and the AI notice in the channel ident's design
+ * (AI-PRODUCED NEWS in white, then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES in silver, the body face
+ * with its shadow: graphics/disclosure.js; three rows on the vertical card, whose safe column is narrower). No URL is
+ * drawn (the post carries the links), so a card never goes stale.
+ */
+export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, stream = 'none' } = {}) {
+  const text = endCardText({ format, programme, stream });
   const { w, h } = sizeOf(format);
   ctx.drawImage(groundOf(w, h, { cy: h * 0.42 }), 0, 0);
   const vertical = format === 'vertical';
   // vertical: centred on the safe column (the feed's buttons cover the right edge)
   const cx = vertical ? SAFE.cx : Math.round(w / 2);
   // the logo: horizontal, the full lock-up at 3x; vertical (216 wide: the lock-up at 2x is 250), the emblem at 4x over
-  // the channel's bug at 2x
+  // the wordmark's plate at 2x (the bug without its own small globe: one globe on the card)
   const parts = vertical
-    ? [{ variant: 'mark', scale: 4, y: 46 }, { variant: 'bug', scale: 2, y: 46 + 27 * 4 + 10 }]
-    : [{ variant: 'full', scale: 3, y: 44 }];
+    ? [{ variant: 'mark', scale: 4, y: 46 }, { variant: 'wordmark', scale: 2, y: 46 + 27 * 4 + 10 }]
+    : [{ variant: 'full', scale: 3, y: 34 }];
   const p = easeOutQuint(seg(t, 0.05, 0.45));
   let bottom = 0;
   for (const part of parts) {
@@ -169,7 +176,7 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
   const L = { h: bottom - parts[0].y };
   const ly = parts[0].y;
   let y = ly + L.h + (vertical ? 12 : 10);
-  rise(ctx, 'THE WORLD, PIXEL BY PIXEL', cx, y, seg(t, 0.45, 0.35), S.silver, 'center');
+  rise(ctx, text.slogan, cx, y, seg(t, 0.45, 0.35), S.silver, 'center');
   y += vertical ? 22 : 18;
   const rw = Math.round(40 * easeOutQuint(seg(t, 0.65, 0.3)));
   if (rw > 0) {
@@ -177,34 +184,18 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
     ctx.fillRect(cx - (rw >> 1), y, rw, 2);
   }
   y += vertical ? 12 : 10;
-  if (programme) {
-    rise(ctx, `FROM ${String(programme).toUpperCase()}`, cx, y, seg(t, 0.8, 0.35), S.white, 'center');
+  if (text.from) {
+    rise(ctx, text.from, cx, y, seg(t, 0.8, 0.35), S.white, 'center');
     y += 14;
   }
-  rise(ctx, live ? (vertical ? 'NEWS 24/7 · WATCH LIVE' : 'NEWS 24 HOURS A DAY · WATCH LIVE') : vertical ? 'NEWS 24/7' : 'NEWS 24 HOURS A DAY', cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
-  // the AI notice, at the foot of the safe area (vertical: three rows in the body face, 35 px capitals on 1920) or of
-  // the frame (horizontal: the on-air notice's one row, micro face, 25 px capitals on 1080)
-  if (vertical) {
-    const [head, ...rest] = noticeParts(noun);
-    const dy = Math.max(270, y + 20);
-    rise(ctx, head, cx, dy, seg(t, 1.1, 0.3), S.white, 'center');
-    rise(ctx, rest[0], cx, dy + 11, seg(t, 1.2, 0.3), S.silver, 'center');
-    rise(ctx, rest[1], cx, dy + 22, seg(t, 1.3, 0.3), S.silver, 'center');
-  } else {
-    const p = easeOutQuint(seg(t, 1.1, 0.3));
-    if (p > 0) {
-      const ny = h - 17;
-      ctx.save();
-      try {
-        ctx.beginPath();
-        ctx.rect(0, ny - 3, w, 9);
-        ctx.clip();
-        drawNoticeText(ctx, cx, ny + Math.round((1 - p) * 8), { noun, accent });
-      } finally {
-        ctx.restore();
-      }
-    }
-  }
+  // where to watch, only when the channel streams (airmode.js watchLine: WATCH LIVE for a live stream alone)
+  if (text.watch) rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
+  // the AI notice, in the ident's type, at the foot of the safe area (vertical: three rows, 35 px capitals on 1920) or
+  // of the frame (horizontal: the ident's two rows)
+  const rows = text.rows;
+  const dy = vertical ? Math.max(270, y + 20) : h - 30;
+  rows.forEach((row, i) => rise(ctx, row, cx, dy + 11 * i, seg(t, 1.1 + 0.1 * i, 0.3), i === 0 ? IDENT_STYLES[0] : IDENT_STYLES[1], 'center'));
+  if (seg(t, 1.1, 0.3) > 0) NOTICE_DRAWS.n++;
 }
 
 export const inkOn = (c) => (DARK_INK.has(c) ? P.black : P.white);

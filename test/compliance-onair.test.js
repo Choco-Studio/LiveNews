@@ -1,7 +1,7 @@
 // The AI disclosure on screen (docs/publishing/compliance.md §3): the logo clean (owner, 18 Oct: no AI plate docked to
-// the bug); the notice under it at a programme's start, after every break and every ten minutes, never over a
-// re-staged guest; a clip's own notice and end card; the ident's statement; the recreation's AI RECREATION label, whole
-// and inside a 9:16 or 1:1 clip's window; captions inside the window; and Open-Meteo's credit as its licence asks.
+// the bug, nothing over a programme); the channel's ident before every programme says it under the wordmark, and a
+// clip's end card in the same words; the recreation's AI RECREATION label, whole and inside a 9:16 or 1:1 clip's
+// window; captions inside the window; and Open-Meteo's credit as its licence asks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -47,21 +47,13 @@ const { recreationOf, recreationLayout, drawRecreation, evenLines, RECREATION } 
 const { Graphics } = await import('../public/js/graphics/index.js');
 const { measureText } = await import('../public/js/font.js');
 const { weatherCredit } = await import('../public/js/scenes/weather/index.js');
-const { CONTINUITY, continuityLine } = await import('../public/js/ads/index.js');
+const { CONTINUITY, continuityLine, IDENT_VOICE } = await import('../public/js/ads/index.js');
 const { CHANNEL, programmeWording } = await import('../server/compliance/disclosure.js');
 const rights = (await import('../server/compliance/credits.js')).loadRights();
 
 const yellowIn = (ctx, y0, y1) => ctx.fills.filter((f) => f.c === P.yellow && f.y >= y0 && f.y < y1);
 const topRow = (over = {}) => ({ onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '12:00', ...over });
 const scene = (over = {}) => ({ shot: 'wide', ticker: [], program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, programTagUntil: 60, ...over });
-/** Run a Graphics from 0 to t at 10 Hz with `sceneAt(t)`; returns the package and a fresh context drawn at t. */
-function runTo(t, sceneAt, g = new Graphics({ now: () => 0 }), from = 0) {
-  for (let k = from; k <= t + 1e-9; k += 0.1) g.update(k, sceneAt(k));
-  const ctx = fakeCtx();
-  g.render(ctx, t, sceneAt(t));
-  return { g, ctx };
-}
-const noticeDrawn = (ctx, L = D.noticeLayout(D.FRAME)) => ctx.fills.some((f) => f.c === P.black && f.x === L.x && f.y === L.y && f.w === L.w && f.h === L.h);
 
 test('the logo is clean: nothing docked to the bug in any frame, the LIVE tag right beside it', () => {
   D.setFrame(null);
@@ -74,8 +66,8 @@ test('the logo is clean: nothing docked to the bug in any frame, the LIVE tag ri
   const ctx = fakeCtx();
   drawTopRow(ctx, 30, topRow());
   assert.ok(ctx.fills.some((f) => f.c === P.black && f.x === TOP.x + BUG_W + 1 && f.y === TOP.y), 'the LIVE plate docks 1 px after the bug');
-  // the old mark's API is gone, so nothing can draw it again by mistake
-  for (const name of ['drawMark', 'markWidth', 'markOpen', 'MARK_TIMING']) assert.equal(D[name], undefined, name);
+  // neither the old mark's API nor the on-programme notice's is left, so nothing can draw them again by mistake
+  for (const name of ['drawMark', 'markWidth', 'markOpen', 'MARK_TIMING', 'noticeLayout', 'drawNotice', 'NOTICE_TIMING', 'drawClipNotice', 'clipNoticeLayout']) assert.equal(D[name], undefined, name);
 });
 
 test('the notice: AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES, in the server\'s words', () => {
@@ -85,110 +77,23 @@ test('the notice: AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM
     assert.equal(programmeWording(id).noun, D.nounOf(id), id);
     assert.equal(programmeWording(id).notice, D.noticeParts(D.nounOf(id)).join(' · '), id);
   }
-  assert.equal(D.noticeParts('FORECAST')[0], 'AI-PRODUCED FORECAST');
-  // one line under the top row in the full frame, inside action-safe and clear of the clock's column
-  const L = D.noticeLayout({ active: false });
-  assert.equal(L.rows.length, 1);
-  assert.equal(L.x, TOP.x);
-  assert.equal(L.y, TOP.y + TOP.h + 1, '1 px under the bug');
-  assert.ok(L.x + L.w <= W - TOP.x, `inside action-safe: ends at ${L.x + L.w}`);
-  assert.ok(L.cap * 5 >= 16, 'the micro face: 25 px capitals on 1080');
-  // drawn: a black plate (no yellow box), white then silver type, the programme's accent between the parts
-  const ctx = fakeCtx();
-  D.drawNotice(ctx, L, 1, P.red);
-  assert.equal(ctx.depth, 0);
-  assert.ok(noticeDrawn(ctx, L));
-  assert.deepEqual(yellowIn(ctx, 0, 216), [], 'no yellow');
-  // half wiped in: clipped to its left half
-  const half = fakeCtx();
-  D.drawNotice(half, L, 0.5);
-  assert.ok(half.clips.some((c) => c.w === Math.round(L.w / 2)));
-  assert.equal(D.drawNotice(fakeCtx(), L, 0), 0, 'nothing at 0');
+  assert.deepEqual([...D.IDENT_ROWS], ['AI-PRODUCED NEWS', 'PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES']);
 });
 
-test('the notice comes under the programme\'s name as the programme starts, holds, and leaves; it comes back every ten minutes', () => {
+test('nothing over a programme: a whole programme\'s graphics never draw the notice (owner: "durante el programa no hace falta")', () => {
   D.setFrame(null);
-  const T = D.NOTICE_TIMING;
-  const open = (k) => scene({ shot: k < 0.2 ? 'open' : 'wide' });
-  // before it is due: nothing; just after the graphics come on, under the programme's name
-  assert.ok(!noticeDrawn(runTo(0.2 + T.delay - 0.15, open).ctx), 'not before it is due');
-  const at2 = runTo(2, open);
-  assert.ok(noticeDrawn(at2.ctx), 'on at 2 s, while WORLD NOW is named');
-  assert.ok(at2.g.tagIn !== null && at2.g.tagIn <= 2, 'the programme name is up too');
-  assert.ok(!noticeDrawn(runTo(0.2 + T.delay + T.hold + T.wipeOut + 0.3, open).ctx), `gone after ${T.hold} s`);
-  assert.ok(!noticeDrawn(runTo(300, open).ctx), 'not in between');
-  // regular intervals: every ten minutes after its last showing, for `again` s
-  const again = runTo(0.2 + T.delay + T.every + 2, open);
-  assert.ok(noticeDrawn(again.ctx), 'back ten minutes in');
-  assert.equal(again.g.notice.shown, 2);
-  assert.ok(!noticeDrawn(runTo(0.2 + T.delay + T.every + T.again + T.wipeOut + 0.5, open).ctx), `for ${T.again} s`);
-  assert.equal(T.every, 600);
-});
-
-test('after a break the notice comes back with the graphics; it never stands over a re-staged guest or a picture', () => {
-  D.setFrame(null);
-  const T = D.NOTICE_TIMING;
-  // a break at 100-160 s: the graphics come on again at 160, the notice with them
-  const withBreak = (k) => scene({ shot: k >= 100 && k < 160 ? 'ad' : 'wide' });
-  assert.ok(noticeDrawn(runTo(160 + T.delay + 1, withBreak).ctx), 'after the interruption');
-  // a recreation on screen when it falls due: it waits, the RECREATION label keeps the top right to itself
-  const rec = { name: 'ANA SILVA', role: 'MAYOR OF LISBON', line: 'RECREATION — WORDS FROM PUBLIC STATEMENTS', credit: 'SOURCE: HARBOUR HERALD' };
-  const guest = (k) => scene({ shot: k < 0.2 ? 'open' : 'location', recreation: k < 20 ? rec : null });
-  const during = runTo(5, guest);
-  assert.ok(!noticeDrawn(during.ctx), 'not over the guest');
-  assert.ok(during.ctx.fills.some((f) => f.c === P.yellow && f.y === RECREATION.y), 'the RECREATION label is there');
-  assert.equal(during.g.notice.shown, 0);
-  // a notice on screen when the guest arrives ends at once
-  const arrives = (k) => scene({ shot: 'wide', recreation: k >= 3 ? rec : null });
-  assert.ok(noticeDrawn(runTo(2.5, arrives).ctx));
-  assert.ok(!noticeDrawn(runTo(3.2, arrives).ctx), 'gone the frame the guest is on');
-  // cut short before it was up NOTICE_TIMING.least s: back in full once the guest has gone
-  const visit = (k) => scene({ shot: 'wide', recreation: k >= 3 && k < 10 ? rec : null });
-  const back = runTo(11, visit);
-  assert.ok(noticeDrawn(back.ctx), 'back after the guest');
-  assert.equal(back.g.notice.hold, T.hold, 'at full length');
-  // a picture (its credit under the clock), the headline frame: it waits for a shot it can stand on
-  const pictures = (k) => scene({ shot: k < 0.2 ? 'open' : k < 30 ? 'full' : 'wide' });
-  assert.ok(!noticeDrawn(runTo(10, pictures).ctx), 'not over a picture, even late');
-  assert.ok(noticeDrawn(runTo(31, pictures).ctx), 'on the first studio shot');
-  // the studio wall showing a credited picture (its credit under the clock): it waits for the wall to change
-  const credited = { storyId: 's1', imageCredit: 'PHOTO: HARBOUR HERALD', imageLabel: 'EVENT' };
-  const wall = (k) => scene({ shot: 'wide', wall: k < 20 ? { mode: 'image', storyId: 's1' } : { mode: 'logo' }, images: new Map([['s1', { small: {} }]]), rundown: [credited] });
-  assert.ok(!noticeDrawn(runTo(10, wall).ctx), 'not beside a picture credit');
-  assert.ok(noticeDrawn(runTo(21, wall).ctx), 'once the wall has no picture');
-  // a board (its title sits just under the top row): never; the weather centre's forecaster: yes
-  const boards = (k) => scene({ shot: k < 0.2 ? 'open' : k < 40 ? 'fact' : 'close' });
-  assert.ok(!noticeDrawn(runTo(30, boards).ctx), 'not over a board, however long');
-  assert.ok(noticeDrawn(runTo(41, boards).ctx), 'on the presenter\'s close-up after it');
-  const weather = (k) => scene({ shot: k < 0.2 ? 'open' : 'weather', program: { id: 'world-weather', title: 'WORLD WEATHER', theme: 'weather' } });
-  assert.ok(noticeDrawn(runTo(3, weather).ctx, D.noticeLayout(D.FRAME, 'FORECAST')), 'in the weather centre, at once');
-  assert.deepEqual([...D.NOTICE_SHOTS].sort(), ['close', 'weather', 'wide']);
-});
-
-test('the notice reports each showing to the recorder (the publish gate reads the recording); the vertical picture never', async () => {
-  const events = [];
-  globalThis.__rec = { ev: (e) => events.push(e) };
-  try {
-    runTo(12, (k) => scene({ shot: k < 0.2 ? 'open' : 'wide' }));
-    assert.deepEqual(events.map((e) => e.on), [true, false]);
-    assert.equal(events[0].text, D.NOTICE_LINE);
-    assert.equal(events[0].type, 'notice');
-    events.length = 0;
-    const { ClipGraphics, VerticalGraphics } = await import('../public/js/clip/graphics.js');
-    // the horizontal clip master draws it as on air (a whole programme is uploaded from it), and says so
-    const clip = runTo(5, (k) => scene({ shot: k < 0.2 ? 'open' : 'wide' }), new ClipGraphics({ now: () => 0 }));
-    assert.ok(noticeDrawn(clip.ctx, D.clipNoticeLayout('horizontal')));
-    assert.deepEqual(events.map((e) => e.on), [true]);
-    events.length = 0;
-    // the vertical master draws no notice of its own: a vertical clip carries its notice card
-    runTo(12, (k) => scene({ shot: k < 0.2 ? 'open' : 'wide' }), new VerticalGraphics({ now: () => 0 }));
-    assert.deepEqual(events, [], 'a vertical clip carries its own notice card');
-  } finally {
-    delete globalThis.__rec;
+  const g = new Graphics({ now: () => 0 });
+  const before = D.NOTICE_DRAWS.n;
+  for (let k = 0; k <= 700; k += 0.5) {
+    const sc = scene({ shot: k < 0.2 ? 'open' : k > 300 && k < 360 ? 'ad' : 'wide' });
+    g.update(k, sc);
+    if (k % 7 < 0.5) g.render(fakeCtx(), k, sc);
   }
+  assert.equal(D.NOTICE_DRAWS.n, before, 'not at the start, not after a break, not every ten minutes');
+  assert.equal(g.notice, undefined, 'no notice clock in the graphics package');
 });
 
-test('a clip frame (?frame=9x16): the bug inside the window, no LIVE, no clock; the notice stacks inside it', () => {
+test('a clip frame (?frame=9x16): the bug inside the window, no LIVE, no clock', () => {
   const f = D.setFrame('9x16');
   assert.deepEqual({ active: f.active, w: f.w, x: f.x }, { active: true, w: 121, x: 132 });
   assert.equal(D.setFrame('9x16@20').x, 20);
@@ -201,33 +106,24 @@ test('a clip frame (?frame=9x16): the bug inside the window, no LIVE, no clock; 
   assert.deepEqual(yellowIn(ctx, 0, 216), [], 'no AI plate');
   assert.ok(!ctx.fills.some((r) => r.c === P.red && r.w === 3 && r.h === 3), 'no LIVE square');
   assert.equal(D.frameFromSearch('?autostart=1&frame=9x16@140'), '9x16@140');
-  const L = D.noticeLayout(f);
-  assert.equal(L.rows.length, 3, 'three rows, each part whole');
-  assert.ok(L.x >= f.x && L.x + L.w <= f.x + f.w, `inside the window: ${L.x}..${L.x + L.w}`);
   D.setFrame(null);
 });
 
-test('a clip\'s own notice: under the bug (horizontal), a super over the stage\'s foot (vertical); the end card says it', async () => {
-  const { drawNoticeCard, drawEndCard, END_CARD_NOTICE, NOTICE_SECONDS } = await import('../public/js/clip/cards.js');
-  const { SAFE, V } = await import('../public/js/clip/layout.js');
-  assert.deepEqual([...END_CARD_NOTICE], D.noticeParts('NEWS'));
-  assert.equal(NOTICE_SECONDS, D.NOTICE_TIMING.clip);
-  const h = fakeCtx();
-  drawNoticeCard(h, { format: 'horizontal' });
-  assert.ok(noticeDrawn(h, D.clipNoticeLayout('horizontal')));
-  const v = fakeCtx();
-  drawNoticeCard(v, { format: 'vertical', accent: P.red });
-  const L = D.clipNoticeLayout('vertical');
-  assert.ok(v.fills.some((f) => f.c === P.ink && f.y === L.y && f.h === L.h), 'the super\'s ink plate');
-  assert.ok(v.fills.some((f) => f.c === P.red && f.x === SAFE.x && f.w === 2), 'the accent bar at its left');
-  assert.ok(v.fills.every((f) => f.x >= SAFE.x && f.x + f.w <= SAFE.right && f.y >= V.stage.y && f.y + f.h <= V.stage.y + V.stage.h), 'inside the safe column, over the stage');
-  // the quiz's one-line hook holds the top row's right end: the notice goes 5 px lower
-  assert.equal(D.clipNoticeLayout('horizontal', { profile: 'tall' }).y, D.clipNoticeLayout('horizontal').y + 5);
-  // the end card draws without error in both formats at its last frame
+test('a clip\'s end card says it in the ident\'s words and type; there is no first-seconds notice card', async () => {
+  const cards = await import('../public/js/clip/cards.js');
+  assert.deepEqual([...cards.END_CARD_NOTICE], D.noticeParts('NEWS'));
+  assert.equal(cards.drawNoticeCard, undefined, 'no notice over the clip\'s first seconds (owner, 18 Oct)');
+  assert.equal(cards.NOTICE_SECONDS, undefined);
   for (const format of ['vertical', 'horizontal']) {
+    const before = D.NOTICE_DRAWS.n;
     const c = fakeCtx();
-    drawEndCard(c, 2.5, { format, programme: 'WORLD NOW' });
+    cards.drawEndCard(c, 2.5, { format, programme: 'WORLD NOW' });
     assert.equal(c.depth, 0, format);
+    assert.equal(D.NOTICE_DRAWS.n, before + 1, `${format}: the end card draws the notice`);
+    const early = fakeCtx();
+    const n0 = D.NOTICE_DRAWS.n;
+    cards.drawEndCard(early, 0.2, { format, programme: 'WORLD NOW' });
+    assert.equal(D.NOTICE_DRAWS.n, n0, `${format}: not before its rows rise`);
   }
 });
 
@@ -324,12 +220,15 @@ test('the ident says what the channel is, under the wordmark, in the words the s
   assert.equal(D.IDENT_LINE, D.NOTICE_LINE, 'the same notice');
   assert.ok(D.IDENT_W <= W - 2 * 19, 'inside graphics-safe');
   const ctx = fakeCtx();
+  const before = D.NOTICE_DRAWS.n;
   D.drawIdentLine(ctx, W / 2, 124);
+  assert.equal(D.NOTICE_DRAWS.n, before + 1);
   assert.ok(ctx.texts >= 2, 'two rows of type');
   assert.deepEqual(ctx.fills.filter((f) => f.c === P.yellow), [], 'no plate');
   const { drawIdentScene } = await import('../public/js/scenes/opens/ident.js');
   const c = fakeCtx();
   drawIdentScene(c, 2, { variant: 'dusk' });
+  assert.equal(D.NOTICE_DRAWS.n, before + 2, 'drawn in the ident');
   assert.deepEqual(c.fills.filter((f) => f.c === P.yellow && f.y >= 124 && f.y < 124 + D.IDENT_H), [], 'no yellow under the wordmark');
 });
 
@@ -346,9 +245,10 @@ test('in a narrow window the captions sit above a recreation\'s taller name supe
   assert.ok(g.captionPlace(1.5, scene).bottom <= 166 - 6, 'the full frame: above the strap line as before');
 });
 
-test('the continuity voice says it at every break; Open-Meteo is credited as its licence asks', () => {
-  for (const l of CONTINUITY.script) assert.match(l.text, /^This is GLOBIT 24, AI-produced news\. /);
-  assert.match(continuityLine(10), /AI-produced news/);
+test('the continuity voice says it over the ident, never over the break bumper; Open-Meteo is credited as its licence asks', () => {
+  assert.equal(IDENT_VOICE, 'This is GLOBIT 24, AI-produced news.');
+  assert.ok(CONTINUITY.script.some((l) => l.text === IDENT_VOICE), 'a line the server voices');
+  for (const s of [10, 70, 130]) assert.doesNotMatch(continuityLine(s), /AI/, 'the bumper says the channel\'s name and when it is back, nothing more');
   assert.equal(weatherCredit('OPEN-METEO · GDACS'), 'DATA: OPEN-METEO.COM (CC BY 4.0) · GDACS');
   assert.ok(weatherCredit('OPEN-METEO').startsWith(rights.classes['open-meteo'].onAir));
 });

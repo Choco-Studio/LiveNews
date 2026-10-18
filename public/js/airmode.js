@@ -9,6 +9,8 @@
 //   onAirTag(mode)          the top row's tag: { text: 'LIVE', pip: true } or { text: '24/7', pip: false }
 //   endCardLine(name, mode) the end card's second line
 //   startTag(mode)          the start screen's tag
+//   streamOf({ url, recorded })  what a clip may point to: 'live', 'recorded' or 'none' (no stream to watch)
+//   watchLine(stream, { vertical })  a clip end card's line about where to watch, or null
 //   falseLive(text)         the first phrase in `text` that claims the programme is live, or null
 //   FALSE_LIVE              the phrases (one regular expression)
 
@@ -23,6 +25,29 @@ export const onAirTag = (mode) => (isRecorded(mode) ? MARK_TAG : LIVE_TAG);
 
 export const endCardLine = (name, mode) => `${name} · ${isRecorded(mode) ? '24 HOURS A DAY' : 'LIVE 24 HOURS'}`;
 export const startTag = (mode) => (isRecorded(mode) ? 'NEWS • 24 HOURS' : 'LIVE • 24 HOURS');
+
+/**
+ * What a clip published off the channel may point a viewer to (its end card, clip/cards.js drawEndCard): a stream only
+ * when one exists. `url`: the stream's public address (CHANNEL_LIVE_URL, docs/publishing/setup.md: the same one the clip
+ * descriptions link); `recorded`: the channel airs pre-rendered (playout.md §5). 'live' with an address and the channel
+ * rendering in real time; 'recorded' with an address and pre-rendered playout (it airs around the clock, never "live");
+ * 'none' without an address (the manual beta has no stream: docs/publishing/beta.md), so nothing is promised.
+ */
+export function streamOf({ url = null, recorded = false } = {}) {
+  if (!String(url ?? '').trim()) return 'none';
+  return recorded === true || (typeof recorded === 'string' && isRecorded(recorded)) ? 'recorded' : 'live';
+}
+
+/**
+ * The end card's line about where to watch: WATCH LIVE only for a live stream; "24 hours a day" for a pre-rendered one
+ * (the playout fills every minute with programming: playout.md §3); null without a stream (a claim with nothing behind
+ * it would be false). Vertical cards are narrower: NEWS 24/7.
+ */
+export function watchLine(stream, { vertical = false } = {}) {
+  if (stream === 'live') return vertical ? 'NEWS 24/7 · WATCH LIVE' : 'NEWS 24 HOURS A DAY · WATCH LIVE';
+  if (stream === 'recorded') return vertical ? 'NEWS 24/7' : 'NEWS 24 HOURS A DAY';
+  return null;
+}
 
 /**
  * Words that say the programme is going out as it happens. Not the word "live" itself (people live somewhere, a live
