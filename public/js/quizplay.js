@@ -490,3 +490,23 @@ export function quizPictureAirable(question, episode = null) {
   const r = question.imageRights;
   return (!!r && r.cleared === true && r.url === image) || /^file:/i.test(image);
 }
+
+/**
+ * The licence credit PICTURE THIS draws under its board while the picture shows, as the montage draws it (graphics/
+ * remote.js drawFileCredit): { credit: 'FILE · AUTHOR · CC BY 4.0 · PIXELATED', tag: 'FILE' | 'FILE 2023' | 'PHOTO',
+ * uncleared }. A cleared record's own credit; in a private preview, an outlet's photo says PREVIEW · NOT CLEARED (with
+ * its credit when the record has one); the operator's own local picture carries none. Null when nothing is drawn.
+ */
+export function quizPictureCredit(question, episode = null) {
+  const image = question?.image;
+  if (!image) return null;
+  const r = question.imageRights;
+  if (r && r.cleared === true && r.url === image) {
+    const credit = String(r.credit || '').trim();
+    if (!credit) return null;
+    return { credit, tag: /^FILE\b/i.test(credit) ? /^FILE(?: \d{4})?/i.exec(credit)[0].toUpperCase() : 'PHOTO', uncleared: false };
+  }
+  if (/^file:/i.test(image)) return null;
+  if (episode?.picturePreview === true) return { credit: r?.credit ? String(r.credit) : null, tag: 'PHOTO', uncleared: true };
+  return null;
+}

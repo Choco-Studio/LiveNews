@@ -30,6 +30,8 @@ import { clamp, seg, easeOutQuint, easeInOutSine, clipRect, balanceLines, textW 
 import { pixelate } from '../pixelate.js';
 import { drawWorldMap } from './worldmap.js';
 import { SAFE, CX, CR, CW, LINE, SPACE, COL_W, TILE, LT, HEAD, SENT, CARD, layoutText, tileLayout, lettersLayout, lettersShown } from './quiz-fit.js';
+import { drawFileCredit } from '../graphics/remote.js';
+import { drawPreviewTag } from '../graphics/picture.js';
 
 export { SAFE, TILE, TILE_TEXT_W, layoutText, tileLayout, fitsTile, lettersLayout, fitsLetters, lettersShown, revealPieces, fitsWhere, fitsSentence, fitsToday, quizFits } from './quiz-fit.js';
 
@@ -430,6 +432,18 @@ const PIC = Object.freeze({ x: CX, y: FRAME_Y + 17, w: 128, h: 64 }); // its sla
 // the countdown bar (rows 122..124, the stake beside it) and, at the reveal, the credit's two micro lines: caps on rows
 // 121..125 and 127..131, a comma's tail on 132, one row clear of the board's last (133)
 const FOOT_Y = PIC.y + PIC.h + 2;
+// the picture's licence credit while it shows, drawn as the montage draws it (graphics/remote.js: the FILE tag, the
+// credit in micro type on ink, a long one on two lines): under the board's right edge, rows 137..147 (157 on two lines,
+// 168 with PREVIEW · NOT CLEARED under it), clear of the board's text and of the captions (from row 172)
+export const PICTURE_CREDIT_Y = SAFE.bottom + 3;
+function drawPictureCredit(ctx, c) {
+  let y = PICTURE_CREDIT_Y;
+  if (c.credit) {
+    const lines = drawFileCredit(ctx, c.credit, y, c.tag || 'FILE');
+    y += 11 + 9 * ((lines || 1) - 1);
+  }
+  if (c.uncleared) drawPreviewTag(ctx, y);
+}
 const GUTTER_X = TILE.x + TILE.w + 3; // the lock-in marks (MARK_W to the content's right edge)
 /** The picture's steps: blocks across and down and each block's size in pixels (128 x 64: every block whole). */
 export function pictureSteps(steps = [8, 16, 32, 64]) {
@@ -582,6 +596,7 @@ export function drawQuestionBoard(ctx, dt, o = {}) {
   const cd = o.countdown || null;
   const revealAt = o.revealAt ?? Infinity;
   const stepTimes = o.stepTimes || [0, cd ? cd.at : Infinity, cd ? cd.at + 2 * HALF_NOTE : Infinity, cd ? cd.at + 4 * HALF_NOTE : Infinity];
+  let credited = false;
   ctx.save();
   try {
     if (!panel(ctx, dt, PX, PY, PW, PH)) return;
@@ -600,6 +615,7 @@ export function drawQuestionBoard(ctx, dt, o = {}) {
       const f = step === 'full' ? { canvas: faces.full, blocks: PIC.w, rows: PIC.h } : faces.faces[step - 1];
       ctx.drawImage(f.canvas, 0, 0, f.blocks, f.rows, PIC.x, PIC.y, PIC.w, PIC.h);
       ctx.imageSmoothingEnabled = smooth;
+      credited = !!o.pictureCredit && dt >= 0.3; // (once the panel's wipe has uncovered the picture)
     }
     // the three tiles: up when the host starts reading them, one after another
     const revealed = dt >= revealAt;
@@ -631,6 +647,8 @@ export function drawQuestionBoard(ctx, dt, o = {}) {
   } finally {
     ctx.restore();
   }
+  // (outside the board's own clip: the credit sits under it, as long as the picture is on)
+  if (credited) drawPictureCredit(ctx, o.pictureCredit);
 }
 
 // ---------------------------------------------------------------- LETTER BY LETTER

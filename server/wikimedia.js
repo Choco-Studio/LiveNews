@@ -10,6 +10,7 @@
 //
 //   wikimediaAgent(contact)                       the User-Agent
 //   new WikimediaClient({ fetchImpl, contact, gapMs }).json(url) -> parsed JSON (throws on HTTP errors, 'paused')
+//   client.resumeIn()                             ms until a 429's pause ends (0: not paused); client.stats, .hosts
 //   new KeptAnswers({ file, now }).get(key) / .set(key, value, ttlMs) / .save()
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,11 +19,14 @@ export const DEFAULT_CONTACT = 'https://github.com/choco-studio/livenews';
 export const wikimediaAgent = (contact = DEFAULT_CONTACT) => `GLOBIT24-picturedesk/1.0 (${String(contact || DEFAULT_CONTACT).replace(/[()\r\n]/g, ' ').trim()}) node/${process.versions?.node || '22'}`;
 
 export class WikimediaClient {
-  constructor({ fetchImpl = globalThis.fetch, contact = DEFAULT_CONTACT, gapMs = 1100, timeoutMs = 8000, minPauseMs = 5000, maxPauseMs = 15 * 60_000, now = () => Date.now(), sleep = null, log = console } = {}) {
+  constructor({ fetchImpl = globalThis.fetch, contact = DEFAULT_CONTACT, gapMs = 1100, timeoutMs = 8000, sparqlTimeoutMs = 30_000, minPauseMs = 5000, maxPauseMs = 15 * 60_000, now = () => Date.now(), sleep = null, log = console } = {}) {
     this.fetch = fetchImpl;
     this.agent = wikimediaAgent(contact);
     this.gapMs = gapMs;
     this.timeoutMs = timeoutMs;
+    // the Wikidata Query Service answers in its own time (10 s for a two-line query on 17 Oct, through the proxy; its own
+    // limit is 60 s a query): a query cut at 8 s is a query asked again, so it gets longer
+    this.sparqlTimeoutMs = sparqlTimeoutMs;
     this.minPauseMs = minPauseMs;
     this.maxPauseMs = maxPauseMs;
     this.now = now;
@@ -32,6 +36,18 @@ export class WikimediaClient {
     this.lastAt = 0;
     this.pausedUntil = 0;
     this.stats = { requests: 0, ok: 0, limited: 0, failed: 0 };
+    this.hosts = {}; // host -> the same counts (which service answered what)
+  }
+
+  /** Milliseconds until a 429/503 pause ends (0: not paused). A background caller waits this out, then asks again. */
+  resumeIn() {
+    return Math.max(0, this.pausedUntil - this.now());
+  }
+
+  count(host, k) {
+    this.stats[k]++;
+    const h = (this.hosts[host] ||= { requests: 0, ok: 0, limited: 0, failed: 0 });
+    h[k]++;
   }
 
   /** True while a 429/503 pause runs (callers then answer from what is kept, or not at all). */
@@ -47,23 +63,30 @@ export class WikimediaClient {
   }
 
   /** GET a JSON answer through the queue. Throws 'paused' at once while paused (never waits a pause out). */
-  json(url, { accept = 'application/json' } = {}) {
+  json(url, { accept = 'application/json', timeoutMs = null } = {}) {
+    let host = 'other';
+    try {
+      host = new URL(url).host;
+    } catch {}
     const run = async () => {
       if (this.paused) throw Object.assign(new Error('wikimedia paused after a rate limit'), { paused: true });
       const wait = this.lastAt + this.gapMs - this.now();
       if (wait > 0) await this.sleep(wait);
       this.lastAt = this.now();
-      this.stats.requests++;
-      const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(this.timeoutMs) : undefined;
+      this.count(host, 'requests');
+      const ms = timeoutMs || (host === 'query.wikidata.org' ? this.sparqlTimeoutMs : this.timeoutMs);
+      const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
       let res;
       try {
         res = await this.fetch(url, { signal, headers: { 'user-agent': this.agent, 'api-user-agent': this.agent, accept } });
       } catch (err) {
-        this.stats.failed++;
+        this.count(host, 'failed');
         throw err;
       }
       if (res.status === 429 || res.status === 503) {
-        this.stats.limited++;
+        this.count(host, 'limited');
+        this.limitedHost = host; // (which service asked for the pause: the ahead queue's next batch then needs it least)
+        this.limitedAt = this.now();
         const waited = this.pauseFor(res);
         try {
           await res.body?.cancel?.();
@@ -71,7 +94,7 @@ export class WikimediaClient {
         throw Object.assign(new Error(`wikimedia HTTP ${res.status} (pausing ${Math.round(waited / 1000)} s)`), { status: res.status, paused: true });
       }
       if (!res.ok) {
-        this.stats.failed++;
+        this.count(host, 'failed');
         try {
           await res.body?.cancel?.();
         } catch {}
@@ -80,10 +103,10 @@ export class WikimediaClient {
       const text = await res.text();
       try {
         const data = JSON.parse(text);
-        this.stats.ok++;
+        this.count(host, 'ok');
         return data;
       } catch {
-        this.stats.failed++;
+        this.count(host, 'failed');
         throw new Error('wikimedia answer is not JSON');
       }
     };
