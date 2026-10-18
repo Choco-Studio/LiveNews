@@ -22,7 +22,8 @@ por la suya solo lo ves tú.
    `C2PA_PYTHON=/root/globit/venv/bin/python`. Para comprobarlo: `node tools/compliance/cli.mjs launch` no debe
    decir «C2PA SDK missing».
 3. **La clave de IA, para las noticias** (la escribes tú en el archivo de variables, nunca en un chat):
-   `OPENAI_API_KEY=…` y `PROVIDERS=openai,mock`. Con ella, el canal escribe las noticias con sus propias palabras y
+   `ANTHROPIC_API_KEY=…`, `ANTHROPIC_MODEL=…` (el modelo que elegiste; te lo digo yo en el chat) y
+   `PROVIDERS=anthropic,mock`. Con ella, el canal escribe las noticias con sus propias palabras y
    salen clips de ciencia, tecnología y deportes. Sin ella, solo sale el concurso, y el sistema te lo dice.
 4. **Tus cuentas**: tu canal de YouTube, una cuenta de TikTok y una de Instagram. No hace falta ninguna app de
    desarrollador ni ninguna clave: publicas tú, desde la web o el móvil, como siempre.

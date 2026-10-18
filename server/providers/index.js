@@ -1,3 +1,4 @@
+import { createAnthropicProvider } from './anthropic.js';
 import { createCodexProvider } from './codexExec.js';
 import { createOpenAICompatProvider } from './openaiCompat.js';
 import { createMockProvider } from './mock.js';
@@ -5,6 +6,7 @@ import { createInboxProvider } from './inbox.js';
 
 export function createProviders(config) {
   const factories = {
+    anthropic: () => createAnthropicProvider(config.anthropic),
     codex: () => createCodexProvider(config.codex),
     openai: () => createOpenAICompatProvider('openai', config.openai),
     deepseek: () => createOpenAICompatProvider('deepseek', config.deepseek),
@@ -41,22 +43,31 @@ export class ProviderChain {
       }
       if ((this.cooldownUntil.get(p.name) || 0) > this.now()) continue;
       const started = this.now();
+      let result = null;
       try {
-        const result = await p.generate(request);
+        result = await p.generate(request);
         const value = validate(result.text);
         this.usage.record(p.name, { ok: true, ms: this.now() - started, ...result.usage });
         this.failures.set(p.name, 0);
         return { provider: p.name, value };
       } catch (err) {
+        // what the failed call still cost (a reply that was not valid JSON, one the model declined or cut short)
+        const spent = result?.usage || err.usage || {};
+        this.usage.record(p.name, { ok: false, ms: this.now() - started, error: err.message, ...spent });
+        errors.push(`${p.name}: ${err.message}`);
+        // The fault is this one request's (the model declined it, or its reply ran out of room): the provider is
+        // fine, so no pause and no failure counted against it; the next provider tries this request.
+        if (err.requestOnly) {
+          this.log.warn?.(`[ai] ${p.name} could not write this one (${err.message})`);
+          continue;
+        }
         const n = (this.failures.get(p.name) || 0) + 1;
         this.failures.set(p.name, n);
         // Rate limits / quota: long pause. Other errors: short, growing pause.
         const quota = err.status === 429 || /quota|rate.?limit|usage limit|too many requests|\b429\b/i.test(err.message);
         const pauseMs = quota ? 30 * 60_000 : Math.min(15 * 60_000, 30_000 * 2 ** (n - 1));
         this.cooldownUntil.set(p.name, this.now() + pauseMs);
-        this.usage.record(p.name, { ok: false, ms: this.now() - started, error: err.message });
         this.log.warn?.(`[ai] ${p.name} failed (${err.message}); pausing it for ${Math.round(pauseMs / 1000)} s`);
-        errors.push(`${p.name}: ${err.message}`);
       }
     }
     if (!errors.length && nonReviewers && !this.providers.some((p) => p.reviews !== false && p.available())) {

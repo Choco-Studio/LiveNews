@@ -124,7 +124,7 @@ test('the tool runs dry on the offline fixture feeds: files only, every episode 
   try {
     const stdout = execFileSync(process.execPath, [path.join(ROOT, 'tools', 'writer', 'try.mjs'), '--episodes', '1', '--programmes', 'news-60', '--out', out], {
       cwd: ROOT,
-      env: { ...process.env, PROVIDERS: 'mock', FEEDS_FILE: 'config/feeds.fixture.json', OPENAI_API_KEY: '', DEEPSEEK_API_KEY: '', NODE_NO_WARNINGS: '1' },
+      env: { ...process.env, PROVIDERS: 'mock', FEEDS_FILE: 'config/feeds.fixture.json', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', DEEPSEEK_API_KEY: '', NODE_NO_WARNINGS: '1' },
       encoding: 'utf8',
       timeout: 120_000,
     });

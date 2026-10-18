@@ -160,7 +160,7 @@ async function newsDay(base) {
   if (skipped.length) console.log(`[beta] no son programas de noticias (se escriben con reglas, no con la IA): ${skipped.join(', ')}`);
   if (!ids.length) return null;
   if (!writers.length) {
-    console.log('[beta] Noticias: no hay redactor de IA configurado. Las noticias necesitan la clave de IA (en /etc/globit24.env: OPENAI_API_KEY y PROVIDERS=openai,mock). Sin ella, lo que escribe el redactor de reserva copia a los medios y nunca se publica: hoy solo se hace el concurso.');
+    console.log('[beta] Noticias: no hay redactor de IA configurado. Las noticias necesitan la clave de IA (en /etc/globit24.env: ANTHROPIC_API_KEY, ANTHROPIC_MODEL y PROVIDERS=anthropic,mock). Sin ella, lo que escribe el redactor de reserva copia a los medios y nunca se publica: hoy solo se hace el concurso.');
     return null;
   }
   console.log(`[beta] Noticias con el redactor de IA (${writers.map((p) => p.name).join(', ')}): ${ids.join(', ')}, ${Number(opt('ediciones', 1)) || 1} cada uno`);

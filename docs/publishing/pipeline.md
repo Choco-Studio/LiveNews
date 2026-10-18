@@ -270,7 +270,7 @@ hand, from the approval page, with every rule of the pipeline still in force.
 **The beta's day** (`tools/publish/beta.mjs hacer`, at low priority, each step timed):
 
 1. **The news, with the AI writer** (`server/publish/newsday.js`), when the provider chain has one (the owner's key:
-   `PROVIDERS=openai,mock` and `OPENAI_API_KEY`; the Codex CLI counts only when installed). The day's news programmes
+   `PROVIDERS=anthropic,mock`, `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`; the Codex CLI counts only when installed). The day's news programmes
    are made fresh from the live feeds through the channel's own producer (the write, the own-words check and its
    rewrites, the standards editor, the fit, the voices), as `tools/writer/try.mjs` makes them. Which and how many:
    `--noticias` or `BETA_NEWS` (Phase 1's light news by default: COSMOS DESK, TECH BYTES, FULL TIME when the day has
