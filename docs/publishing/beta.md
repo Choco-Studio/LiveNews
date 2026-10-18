@@ -34,7 +34,8 @@ por la suya solo lo ves tú.
 
 1. **Por la noche, el servidor prepara el día**: `node tools/publish/beta.mjs hacer` (quien te ayuda puede dejarlo
    programado cada día hacia las 21:30). Con la clave de IA escribe las noticias del día con las del momento (ciencia,
-   tecnología y, si hay resultados, deportes), les pone voz, rehace el concurso, graba cada programa, corta sus mejores
+   tecnología y, si hay resultados, deportes), les busca fotos con permiso de uso (las mismas que salen en antena, con
+   su crédito; nunca una foto de un medio), les pone voz, rehace el concurso, graba cada programa, corta sus mejores
    momentos en vertical y lo deja todo esperando. Va despacio a propósito, para no quitarle fuerza al canal: cuenta
    con una o dos horas en un servidor de dos núcleos (al terminar dice cuánto tardó cada paso). Luego dice cuántas
    publicaciones hay para hoy y por qué se retiene lo demás. Ningún clip dura menos de 10 segundos.

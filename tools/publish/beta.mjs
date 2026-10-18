@@ -13,11 +13,14 @@
 //                                                 rendered is cut from its master: server/publish/masters.js)
 //                                               - the day's text posts for the networks set to Manual (posts.mjs)
 //   node tools/publish/beta.mjs estado          what the day offers and why the rest is held (nothing made, nothing sent)
+//   node tools/publish/beta.mjs fotos           the day's news candidates and their cleared pictures, decided by the rights
+//                                               desk from the live feeds: no writer, no key, nothing made (a dry run)
 //
 // Options: --queue <dir> (data/publish), --at <ISO time> (now), --noticias a,b (BETA_NEWS, else cosmos,tech-bytes,
 // full-time; "no" for none), --ediciones <n> (1 a programme), --concurso no (no PAY ATTENTION), --material <dir>
 // (episodes made already: no news, no remake), --sources <dir> (their stories' sources, if not the day's own folder),
-// --masters-from <dir> (rendered masters; also RENDERED_MASTERS),
+// --fotos no (the news without pictures: maps and boards), --fotos-segundos <n> (how long to wait for picture decisions,
+// 120 a programme), --masters-from <dir> (rendered masters; also RENDERED_MASTERS),
 // --port <n> (8740), --max <clips per programme> (6). It runs at low priority (nice 10) and says how long each step
 // took. WORLD WEATHER is not made here: offline its forecast is demo data, never published. A programme the offline
 // writer wrote is never published (`offline-writer`, verbatim.md §7), so it is not recorded.
@@ -32,13 +35,13 @@ import { Publisher } from '../../server/publish/publisher.js';
 import { RULE_ES } from '../../server/publish/approval.js';
 import { dailyPick } from '../../server/publish/manual.js';
 import { PLATFORMS } from '../../server/publish/platforms.js';
-import { BETA_NEWS, aiWriters, makeNewsDay, newsProgrammes } from '../../server/publish/newsday.js';
+import { BETA_NEWS, PICTURE_BUDGET_MS, aiWriters, makeNewsDay, newsProgrammes, seedPictureAnswers, pictureDay } from '../../server/publish/newsday.js';
 import { masterRoots, useRenderedMaster } from '../../server/publish/masters.js';
 import { CLIP_MIN_SECONDS } from '../../server/publish/moments.js';
 
 const argv = process.argv.slice(2);
 const { opt } = argsOf(argv);
-const cmd = ['hacer', 'make', 'estado', 'status'].find((c) => argv.includes(c)) || 'pagina';
+const cmd = ['hacer', 'make', 'estado', 'status', 'fotos', 'pictures'].find((c) => argv.includes(c)) || 'pagina';
 const queueDir = path.resolve(opt('queue', path.join(root, 'data', 'publish')));
 const queue = new PublishQueue({ dir: queueDir });
 const dataDir = path.join(root, 'data');
@@ -123,6 +126,28 @@ function quizTimes(t) {
 }
 
 /**
+ * The rights desk for the beta (server/picturedesk.js), as on air: its own store (data/publish/pictures/answers.json,
+ * kept across days), seeded from the station's decisions ahead of air (data/pictures/answers.json, only read), paced
+ * Wikimedia with the station's contact, the FILE search; the image cache that verifies each picture. Null when
+ * PICTURE_DESK is off or --fotos no.
+ */
+async function pictureKit(config) {
+  if (opt('fotos') === 'no' || !config.pictures?.desk) return null;
+  const { PictureDesk } = await import('../../server/picturedesk.js');
+  const { WikimediaClient } = await import('../../server/wikimedia.js');
+  const { ImageSearch } = await import('../../server/imagesearch.js');
+  const { FaceStore } = await import('../../server/faces.js');
+  const { ImageCache } = await import('../../server/images.js');
+  const dir = path.join(queueDir, 'pictures');
+  const kept = seedPictureAnswers(config.pictures.dir, dir);
+  const wikimedia = new WikimediaClient({ contact: config.pictures.contact, log: quiet });
+  const desk = new PictureDesk({ dir, wikimedia, search: new ImageSearch({ ...config.imageSearch, wikimedia }), faces: new FaceStore({ dir, log: quiet }), mode: config.pictures.rights, enabled: true, log: quiet });
+  if (desk.mode === 'preview') console.log('[beta] PICTURE_RIGHTS=preview: las fotos de los medios pueden salir, marcadas NO AUTORIZADAS. Nada de una vista previa se publica nunca.');
+  console.log(`[beta] fotos: el escritorio de derechos, con ${kept} respuestas guardadas (las de la emisora incluidas)`);
+  return { desk, images: new ImageCache({ contact: config.pictures.contact, log: quiet }), budgetMs: (Number(opt('fotos-segundos')) || PICTURE_BUDGET_MS / 1000) * 1000 };
+}
+
+/**
  * The news programmes with the AI writer (server/publish/newsday.js), fresh from the live feeds, with their voices. ->
  * { episodes, sourcesDir } or null when the chain has no AI writer (said in Spanish: the news needs the key).
  */
@@ -148,14 +173,17 @@ async function newsDay(base) {
   const voice = createVoiceService({ ...config, voice: { ...config.voice, firstBudgetSeconds: 3600, budgetSeconds: 3600 } }, { root, log: quiet });
   const chain = new ProviderChain(providers, { record() {} }, { log: quiet });
   const sourcesDir = path.join(base, 'sources');
+  const kit = await pictureKit(config);
+  const picturesDir = path.join(base, 'pictures');
   try {
-    const r = await step('escribir y poner voz a las noticias', () => makeNewsDay({ desk, chain, channel: loadChannel(undefined, { drafts: true }), programmes: ids, editions: Number(opt('ediciones', 1)) || 1, sourcesDir, outDir: path.join(base, 'news'), config, voice, log: quiet }));
+    const r = await step('escribir, buscar las fotos y poner voz a las noticias', () => makeNewsDay({ desk, chain, channel: loadChannel(undefined, { drafts: true }), programmes: ids, editions: Number(opt('ediciones', 1)) || 1, sourcesDir, outDir: path.join(base, 'news'), config, voice, pictures: kit ? { ...kit, dir: picturesDir } : null, log: quiet }));
     for (const e of r.episodes) {
       const secs = Math.round(e.ms / 1000);
       if (e.error) console.log(`[beta]   ${e.programId}: sin edición (${e.error}) · ${secs} s`);
       else if (e.offline) console.log(`[beta]   ${e.programId}: la IA no contestó y lo escribió el redactor de reserva: no se publica · ${secs} s`);
-      else console.log(`[beta]   ${e.programId}: ${e.stories} noticias, escritas por ${e.provider} · ${secs} s`);
+      else console.log(`[beta]   ${e.programId}: ${e.stories} noticias, escritas por ${e.provider}, ${e.pictured} con foto autorizada · ${secs} s`);
     }
+    r.picturesDir = kit ? picturesDir : null;
     return r;
   } finally {
     voice?.close?.();
@@ -179,7 +207,7 @@ async function make() {
   let news = null;
   if (!opt('material')) {
     news = await newsDay(base);
-    for (const e of news?.episodes || []) if (e.file && !e.offline) jobs.push({ file: e.file, sources: news.sourcesDir });
+    for (const e of news?.episodes || []) if (e.file && !e.offline) jobs.push({ file: e.file, sources: news.sourcesDir, pictures: news.picturesDir });
     if (opt('concurso') !== 'no') {
       await step('el concurso', async () => {
         for (const t of quizTimes(at)) {
@@ -194,7 +222,8 @@ async function make() {
   }
   // (episodes made already: their stories' sources from --sources, else the day's own folder when the news day made one)
   const daySources = opt('sources') ? path.resolve(opt('sources')) : fs.existsSync(path.join(base, 'sources', 'archive')) ? path.join(base, 'sources') : null;
-  for (const f of fs.readdirSync(matDir).filter((x) => x.endsWith('.json'))) jobs.push({ file: path.join(matDir, f), sources: daySources });
+  const dayPictures = fs.existsSync(path.join(base, 'pictures')) ? path.join(base, 'pictures') : null;
+  for (const f of fs.readdirSync(matDir).filter((x) => x.endsWith('.json'))) jobs.push({ file: path.join(matDir, f), sources: daySources, pictures: dayPictures });
   const roots = masterRoots(process.env, [opt('masters-from')]);
   const sums = [];
   for (const job of jobs) {
@@ -216,6 +245,8 @@ async function make() {
     console.log(`[beta] ${f}: los clips (vertical) y la cola${rendered ? ` (del máster ya renderizado: ${path.dirname(rendered.file)})` : ''}`);
     const args = ['tools/publish/factory.mjs', '--episode', job.file, '--out', out, '--formats', 'vertical', '--queue', queueDir, '--max', String(opt('max', 6))];
     if (job.sources) args.push('--sources', job.sources);
+    // (the news' cleared pictures, served to the recorder: the clip shows them with their credits)
+    if (job.pictures) args.push('--pictures', job.pictures);
     const r = await step(`clips de ${ep?.program?.title || f}`, () => child(args, { quiet: true }));
     if (r.code) console.log(`[beta]   la fábrica salió con ${r.code}: ${r.out.trim().split('\n').slice(-2).join(' | ')}`);
     sums.push(path.join(out, 'summary.json'));
@@ -232,7 +263,41 @@ async function make() {
   console.log(`\nTiempo: ${times.map(([l, s]) => `${l} ${s >= 90 ? `${Math.floor(s / 60)} min` : `${s} s`}`).join(' · ')}`);
 }
 
+/** The day's news candidates and their cleared pictures, from the live feeds: no writer, no key, nothing made. */
+async function fotos() {
+  try {
+    os.setPriority(10);
+  } catch {
+    /* not allowed here */
+  }
+  const { config } = await import('../../server/config.js');
+  const { NewsDesk } = await import('../../server/news.js');
+  const { Producer } = await import('../../server/producer.js');
+  const { ProviderChain } = await import('../../server/providers/index.js');
+  const { loadChannel } = await import('../../server/channel.js');
+  const kit = await pictureKit(config);
+  if (!kit) return console.log('[beta] fotos: el escritorio de derechos está apagado (PICTURE_DESK=off o --fotos no)');
+  const desk = new NewsDesk({ log: quiet });
+  await step('las noticias de los feeds', () => desk.refresh());
+  console.log(`[beta]   ${desk.stories?.size ?? 0} noticias en los feeds`);
+  // (the producer only chooses the candidates here: it writes nothing, it asks no writer)
+  const producer = new Producer({ config: { ...config, dataDir: path.join(queueDir, 'pictures', 'state') }, newsDesk: desk, chain: new ProviderChain([], { record() {} }, { log: quiet }), pictureDesk: kit.desk, log: quiet });
+  const days = await step('las fotos (decisiones del escritorio de derechos)', () => pictureDay({ producer, channel: loadChannel(undefined, { drafts: true }), programmes: NEWS, pictureDesk: kit.desk, budgetMs: kit.budgetMs }));
+  kit.desk.kept.save({ force: true });
+  let all = 0;
+  let pictured = 0;
+  for (const d of days) {
+    all += d.candidates;
+    pictured += d.pictured;
+    console.log(`\n${d.programId}: ${d.pictured} de ${d.candidates} candidatas con foto autorizada`);
+    for (const s of d.stories) console.log(`  ${s.credit ? 'FOTO ' : '     '} ${String(s.title).slice(0, 80)}${s.credit ? ` · ${s.credit}` : ''}`);
+  }
+  console.log(`\nTotal: ${pictured} de ${all} noticias candidatas con foto autorizada. Nada se ha escrito ni publicado.`);
+  console.log(`Tiempo: ${times.map(([l, s]) => `${l} ${s >= 90 ? `${Math.floor(s / 60)} min` : `${s} s`}`).join(' · ')}`);
+}
+
 if (['hacer', 'make'].includes(cmd)) await make();
+else if (['fotos', 'pictures'].includes(cmd)) await fotos();
 else if (['estado', 'status'].includes(cmd)) summary();
 else {
   const port = opt('port', '8740');
