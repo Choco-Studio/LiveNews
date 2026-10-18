@@ -20,6 +20,9 @@ export const LIGHT =
 // Words that look grave but are not, in these senses: a startup "fires its CEO", a manager "was fired", a
 // "fire drill", a government or a deal that "collapses".
 const NOT_GRAVE_SENSES = [
+  // a labour strike on a day is no attack ("Gdansk rail strike on Friday" was marked grave and left out of the day's
+  // posts, 18 Oct); a military strike on a place stays grave
+  /\b(?:rail|railway|train|tube|metro|bus|port|dock|teachers?'?|nurses?'?|doctors?'?|pilots?'?|workers?'?|staff|unions?|general|national|transport|airport|postal|public[- ]sector|24-hour|48-hour|one-day|two-day)\s+strikes?\s+on\b/gi,
   /\bfire[sd]?\s+(?:its|his|her|their|the|a|an|two|three|several|hundreds of|thousands of)\s+(?:[\w-]+\s+){0,2}(?:ceo|chief\w*|boss|coach|manager|staff|workers|employees|director|head|executive|minister|adviser|advisor|founder|chairman|chairwoman|editor|players?)\b/gi,
   /\b(?:was|were|been|be|is|are|got|get|gets|getting)\s+fired\b/gi,
   /\bfire\s+(?:drills?|alarm tests?|exercises?|safety)\b/gi,
