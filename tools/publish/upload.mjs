@@ -41,7 +41,12 @@ const prog = episode.program?.id || 'programme';
 const airedAt = Date.parse(episode.airedAt || episode.createdAt || '') || Date.now();
 const THEME = episode.program?.theme || 'world';
 
-const pb = createPlaybackServer({ root });
+// (pre-rendered playout: a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded: the description never says live)
+const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
+// the end cards point to a stream only when there is one (airmode.js streamOf: LIVE only when it is live): the clip
+// end card after the programme, and the programme's own end card in the recording (the playback page's channel)
+const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
+const pb = createPlaybackServer({ root, stream });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 let master = opt('master') ? { file: path.resolve(opt('master')), report: path.resolve(opt('report')) } : null;
@@ -70,11 +75,7 @@ try {
 } catch {
   /* no archive: no article links */
 }
-// (pre-rendered playout: a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded: the description never says live)
-const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
 const meta = uploadMeta(episode, { timeline, stories, airedAt, url: process.env.CHANNEL_LIVE_URL || null, recorded });
-// the end card points to a stream only when there is one (airmode.js streamOf: WATCH LIVE only when it is live)
-const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
 say(`"${meta.title}" · ${meta.chapters.length} chapters · ${meta.sources.length} sources · ${meta.worthy ? 'worth a full upload' : `not for upload: ${meta.why.join('; ')}`}`);
 
 // ---------------------------------------------------------------- the thumbnail: the programme's own frame

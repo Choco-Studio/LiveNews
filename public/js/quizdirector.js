@@ -14,7 +14,7 @@
 import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, quizPictureAirable, quizPictureCredit, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
-import { endCardLine } from './airmode.js';
+import { endCardLine, streamOfChannel } from './airmode.js';
 
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
@@ -308,7 +308,7 @@ export async function playQuiz(d, episode) {
   await sleep(paceFor(s.program?.id).holds.signoff * 1000);
   await d.stinger(() => {
     s.quizStrip = null;
-    d.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(d.channel.name, d.channel.airMode) } });
+    d.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(d.channel.name, streamOfChannel(d.channel)) } });
   });
   await sleep(paceFor(s.program?.id).holds.endcard * 1000);
   d.quiz = null;

@@ -5,7 +5,9 @@
 // Everything here is local: no feed, no network, no voice engine. Unknown /api paths answer 404, and the episode is
 // served once, then the station stands by (the recorder stops at the clip's end).
 //
-//   const pb = createPlaybackServer({ items: [episode], voiceDir, pictureDir });
+//   const pb = createPlaybackServer({ items: [episode], voiceDir, pictureDir, stream });
+//   `stream` (public/js/airmode.js streamOf): what the recorded page may say about where the channel airs: its end card
+//   says LIVE only for 'live', "24 hours a day" for 'recorded', nothing for 'none' (the default: no stream, no claim)
 //   await pb.listen(8797);  ...  pb.close();
 import http from 'node:http';
 import fs from 'node:fs';
@@ -30,9 +32,10 @@ const VOICE_ID = /^\/api\/voice\/(v[0-9a-f]{20})\.(ogg|json)$/;
 const IMG_ID = /^\/api\/img\/(s[0-9a-f]{10})$/;
 
 /** The page's view of the channel (server/channel.js publicChannel), drafts included so every cast is known. */
-export async function channelView(root = ROOT) {
+export async function channelView(root = ROOT, { stream = 'none' } = {}) {
   const { loadChannel, publicChannel } = await import(path.join(root, 'server', 'channel.js'));
-  return publicChannel(loadChannel(undefined, { drafts: true }));
+  const s = stream === 'live' || stream === 'recorded' ? stream : 'none';
+  return { ...publicChannel(loadChannel(undefined, { drafts: true })), stream: s, ...(s === 'recorded' ? { airMode: 'recorded' } : {}) };
 }
 
 /** A voice clip's timing as the client reads it (server/voice/plan.js clientAudio), from the cache's own metadata. */
@@ -45,7 +48,7 @@ export function voiceMeta(dir, id) {
   }
 }
 
-export function createPlaybackServer({ root = ROOT, items = [], voiceDir = path.join(root, 'data', 'voice'), pictureDir = null, channel = null, ticker = [], log = () => {} } = {}) {
+export function createPlaybackServer({ root = ROOT, items = [], voiceDir = path.join(root, 'data', 'voice'), pictureDir = null, channel = null, ticker = [], log = () => {}, stream = 'none' } = {}) {
   const pub = path.join(root, 'public');
   const queue = items.slice();
   const served = [];
@@ -69,7 +72,7 @@ export function createPlaybackServer({ root = ROOT, items = [], voiceDir = path.
     try {
       if (req.method !== 'GET') return send(res, 405, { error: 'read only' });
       if (p === '/api/channel') {
-        channelJson ||= await channelView(root);
+        channelJson ||= await channelView(root, { stream });
         return send(res, 200, channelJson);
       }
       if (p === '/api/next') {

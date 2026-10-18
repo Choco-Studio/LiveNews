@@ -70,6 +70,8 @@ async function startApp(env = {}) {
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'font.js'), path.join(dir, 'public', 'js', 'font.js'));
   // the air as it plays (server/airtime.js): the pace profiles and the opens' lengths
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'pace.js'), path.join(dir, 'public', 'js', 'pace.js'));
+  // (station.js: what the page may say about where it airs, airmode.js streamOf)
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'airmode.js'), path.join(dir, 'public', 'js', 'airmode.js'));
   fs.mkdirSync(path.join(dir, 'public', 'js', 'scenes', 'opens'), { recursive: true });
   for (const f of ['cues.js', 'worldcues.js']) fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'opens', f), path.join(dir, 'public', 'js', 'scenes', 'opens', f));
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>test page</title>');
@@ -168,7 +170,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
     assert.equal(res.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(res.json, publicChannel(real));
+    assert.deepEqual(res.json, { ...publicChannel(real), stream: 'none' }, 'no CHANNEL_LIVE_URL: no stream to claim');
     assert.ok(!res.text.includes('personality'));
   });
 
