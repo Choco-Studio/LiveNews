@@ -64,7 +64,7 @@ test('the live video\'s title and description: LIVE on the live channel, never u
   const now = { id: 'e1', title: 'Cosmos Desk' };
   assert.match(liveTitle(now), /GLOBIT 24 LIVE · Now: COSMOS DESK/);
   const t = liveTitle(now, { recorded: true });
-  assert.equal(t, 'GLOBIT 24 · Now: COSMOS DESK · pixel-art news 24/7');
+  assert.equal(t, 'GLOBIT 24 · Now: COSMOS DESK · AI-produced news 24/7');
   assert.equal(falseLive(t), null);
   assert.equal(falseLive(liveTitle(null, { recorded: true })), null);
   const d = liveDescription({ now: { kind: 'episode', title: 'COSMOS DESK' }, upcoming: [{ title: 'NEWS IN 60' }] }, { recorded: true });

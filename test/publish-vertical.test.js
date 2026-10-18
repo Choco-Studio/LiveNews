@@ -1,8 +1,8 @@
 // The vertical picture and the clip's own graphics (public/js/clip/; docs/publishing/vertical.md): the zones fill the
 // 216x384 frame exactly, every PAY ATTENTION board and every news board set for it stays inside its box at every
 // moment, the hook and the end card stay inside the frame and the platforms' safe area, the captions page whole
-// words in two lines, nothing lit over grave news, a voice reading the board is not captioned twice, the AI mark
-// docks to the bug, the thumbnail's lead fits.
+// words in two lines, nothing lit over grave news, a voice reading the board is not captioned twice, the bug stands
+// clean (the AI notice is the clip's own card over its first seconds), the thumbnail's lead fits.
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -429,8 +429,6 @@ describe('the vertical picture', () => {
   });
 
   test('the vertical frame\'s own bands: the source and NEWS IN 60\'s minute on the stage (the hook holds the title band in a clip), a foot with nothing to read', async () => {
-    const mark = await import('../public/js/clip/mark.js');
-    await mark.markReady;
     const { VerticalCompositor, profileOf } = await import('../public/js/clip/vertical.js');
     const strap = { cur: { headline: 'NASA to conduct low-altitude flights over Texas', tag: 'TRANSPORT', plate: 'NASA', since: 0 }, outAt: null };
     const canvas = fakeCanvas(216, 384);
@@ -478,8 +476,6 @@ describe('the vertical picture', () => {
   });
 
   test('pictures in the vertical frame: the credit legible in the safe column, wrapped never cut; the locator and topic boards set for the tall backdrop', async () => {
-    const mark = await import('../public/js/clip/mark.js');
-    await mark.markReady;
     const { VerticalCompositor, profileOf, drawVerticalCredit, creditWords } = await import('../public/js/clip/vertical.js');
     const { P: PAL } = await import('../public/js/palette.js');
     const { measureText } = await import('../public/js/font.js');
@@ -592,19 +588,22 @@ describe('the vertical picture', () => {
     }
   });
 
-  test('the AI mark docks to the bug in every clip (the compliance desk\'s own when it is there)', async () => {
-    const mark = await import('../public/js/clip/mark.js');
-    await mark.markReady;
+  test('the bug stands clean in every clip (owner, 18 Oct): no AI plate beside it; the notice is the clip\'s own first-seconds card', async () => {
     const ctx = fakeCanvas(216, 384).getContext('2d');
     const w = G.drawBugOnly(ctx, 5, 0, 8, 10);
-    assert.ok(w > mark.clipMarkWidth(), 'the bug and its mark');
+    const { BUG_W } = await import('../public/js/graphics/bug.js');
+    assert.equal(w, BUG_W, 'the bug, nothing docked to it');
     const { P } = await import('../public/js/palette.js');
-    assert.ok(ctx.fills.some((f) => f.c === P.yellow && f.x >= 8 + 48), 'a yellow plate right of the bug');
-    // never twice: the bug's own row draws no mark (not even one clipped away), the clip's is the only one
-    const yellow = ctx.fills.filter((f) => f.c === P.yellow);
-    const span = Math.max(...yellow.map((f) => f.x + f.w)) - Math.min(...yellow.map((f) => f.x));
-    assert.ok(span <= mark.clipMarkWidth(), `one mark's width of yellow, no more: ${JSON.stringify(yellow)}`);
-    assert.ok(yellow.every((f) => visible(f)), 'no mark drawn into a clip that hides it (the bug row\'s own, clipped away)');
+    assert.ok(!ctx.fills.some((f) => f.c === P.yellow && f.x >= 8 + BUG_W), 'no yellow plate right of the bug');
+    // the notice: a super over the stage's foot, every word in the safe column, for the clip's first seconds
+    const n = fakeCanvas(216, 384).getContext('2d');
+    cards.drawNoticeCard(n, { format: 'vertical', accent: P.cyan });
+    inside(n, { x: 0, y: L.V.stage.y, w: 216, h: L.V.stage.h }, 'the notice over the stage');
+    wordsSafe(n, 'the notice');
+    assert.equal(cards.NOTICE_SECONDS, 4);
+    const h = fakeCanvas(384, 216).getContext('2d');
+    cards.drawNoticeCard(h, { format: 'horizontal' });
+    inside(h, { x: 0, y: 0, w: 384, h: 216 }, 'the horizontal notice');
   });
 
   test('captions: whole words, at most two lines a page within the width, a weak word never ends a line', () => {

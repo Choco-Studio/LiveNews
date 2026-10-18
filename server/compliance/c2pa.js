@@ -114,6 +114,7 @@ export function buildManifest(item = {}, { title = null, sources = [], credits =
         data: {
           statement: CHANNEL.statement,
           label: d.labels.onAir,
+          notice: d.labels.notice,
           programme: d.programme.id,
           ai: d.ai,
           recreations: d.recreations.map((r) => ({ name: r.name, role: r.role, outlet: r.outlet, words: 'their reported words, generic synthetic voice, pixel-art figure: not their voice or image' })),

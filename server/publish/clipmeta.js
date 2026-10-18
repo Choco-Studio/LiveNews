@@ -27,6 +27,10 @@ const PLAYERS = (ids, presenters) => ids.map((id) => presenters?.[id]?.name?.spl
  * A title within `room` characters at whole words. A quiz question's keeps its blank: the words round the ___ (the
  * question's own label first), "…" where it was cut (How many? …net profit soared ___ to a record high…).
  */
+
+/** A clip caption's first line: the AI disclosure (the on-screen notice's words in a sentence; manual.js keeps it first). */
+export const CLIP_DISCLOSURE = 'AI-produced news: presenters are AI characters with synthetic voices; every fact is from a credited source.';
+
 export function fitTitle(head, room) {
   if (head.length <= room) return head;
   const m = /^(How many\?|Where is it\?|Today or not today\?)\s+(.*)$/.exec(head);
@@ -93,7 +97,8 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
     const first = (moment.storyIds || []).map((id) => stories.get?.(id)).find(Boolean);
     lead = `${label ? `${label}. ` : ''}From ${prog} on GLOBIT 24. ${citation(outlet || first?.source || 'Source', first?.title || moment.headline)}.`;
   }
-  const disclosure = 'Presenters are AI-generated characters with synthetic voices; every fact is from the named source.';
+  // (the on-screen notice's three parts, in a sentence: graphics/disclosure.js; compliance.md §3.5)
+  const disclosure = CLIP_DISCLOSURE;
   const tags = (grave ? ['news'] : TAGS[moment.programId] || TAGS.default).slice(0, 5);
   const emoji = !grave && moment.light && EMOJI[moment.programId] ? `${EMOJI[moment.programId]} ` : '';
   // a quiz question's own title (two questions never share one); within the limit at a whole word

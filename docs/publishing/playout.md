@@ -68,14 +68,15 @@ a few minutes before it airs; the writer's "hello" near a boundary covers that, 
 
 Every programme passes the compliance desk's `preflight` (`server/compliance/`, through `server/publish/compliance.js`)
 as the stream's own output (`kind: 'live'`, compliance.md §1's first column): **rights** (a picture without its rights
-record, demo or fixture material), **verbatim** (the outlet's sentences copied), **disclosure** (the AI mark in frame)
+record, demo or fixture material), **verbatim** (the outlet's sentences copied), **disclosure** (the AI notice at the programme's start and every ten minutes, the ident)
 and **recreations** (the label in frame, the owner's review, election holds), plus the register (a story withdrawn, a
 person who asked to be left out) and the **no-LIVE rule** (§5). Twice:
 
 1. **When the station makes it**, on the finished words and before the voices (`Producer` stage `gate`): a programme
    that fails costs no voice time, is never queued, and the station makes the next one in its place.
 2. **When the renderer has rendered it**, with the recording's report (the timeline of what aired): the recreation
-   labels and the AI mark checked against it. A unit that fails is held and the renderer renders the **next unit for
+   labels and the AI notice checked against it (compliance.md §3.1: a programme whose recording shows no notice in its
+   first 30 s, or goes 12 minutes without one, is held). A unit that fails is held and the renderer renders the **next unit for
    the same air time**: the hole is filled by programming, and no clock on screen is wrong.
 
 What fails is kept in `data/playout/held/<airtime>-<id>.json` with its reasons, logged in `events.jsonl`, and shown on
@@ -158,7 +159,7 @@ air: the gate is automated).
 ## 6. Reuse: the clip factory and the whole-programme uploads read the masters
 
 Every programme's page also draws its **twin picture** (`?twin=1`, `studio.js`): the same shot under the clip graphics
-(`clip/graphics.js`: no clock, no ticker, the AI mark beside the bug, clip captions), on a second canvas, captured with
+(`clip/graphics.js`: no clock, no ticker, the AI notice under the bug as on air, clip captions), on a second canvas, captured with
 the air picture in the same frame grab. The renderer writes it as the publishing desk's own master format (384x216,
 lossless RGB H.264 + FLAC) with its report and the episode as aired, into `data/playout/masters/<episode id>/`, as the
 publishing desk's rendered-master hook reads it (`server/publish/masters.js`, `pipeline.md` §8):

@@ -4,10 +4,12 @@
 // runs them.
 //
 //   clipWindow(moment, timeline, { fps, wipeIn }) -> { start, end, duration, snappedStart, snappedEnd, hold }
-//   composeArgs({ master, hook, endcard, window, format, out, hookSeconds }) -> ffmpeg argv
+//   composeArgs({ master, hook, notice, endcard, window, format, out, hookSeconds, noticeSeconds }) -> ffmpeg argv
+//   NOTICE_SECONDS, NOTICE_OUT   the AI notice over a clip's first seconds, and its wipe out at the end of them
 //   srtFor(timeline, window) / vttFor(timeline, window) -> caption files' text (the voice's own word times)
 //   contactArgs({ clip, format, times, out }) -> ffmpeg argv for the clip's contact sheet
 import { cutsAround } from './timeline.js';
+import { NOTICE_TIMING } from '../../public/js/graphics/disclosure.js';
 
 export const SCALE = 5; // 384x216 -> 1920x1080, 216x384 -> 1080x1920
 export const FPS = 30;
@@ -16,6 +18,14 @@ const TAIL = 0.55; // s after the last word
 const frame = (t, fps = FPS) => Math.round(t * fps) / fps;
 
 const HOLD = 0.4; // s a caption stays after its sentence (clip/captions.js hold 0.35, and a frame)
+
+/**
+ * The AI notice over a clip's first seconds (graphics/disclosure.js NOTICE_TIMING.clip; clip/cards.js drawNoticeCard):
+ * there from the first frame, it slides out to the left over the last NOTICE_OUT s (the channel's wipe, in whole
+ * pixels: the overlay moves on the 1x picture, before the 5x scale).
+ */
+export const NOTICE_SECONDS = NOTICE_TIMING.clip;
+export const NOTICE_OUT = 0.25;
 
 /**
  * WORLD WEATHER's horizontal picture wipes into every board over this long, from the segment's first word: the old
@@ -72,23 +82,32 @@ export function clipWindow(moment, timeline, { fps = FPS, lead = LEAD, tail = TA
 
 /**
  * The ffmpeg graph of one clip: [master window] + hook overlay (vertical: the whole clip; horizontal: its first
- * `hookSeconds`) + the end card (its own picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18,
+ * `hookSeconds`) + the AI notice overlay (its first `noticeSeconds`, from the first frame, sliding out over the last
+ * NOTICE_OUT s) + the end card (its own picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18,
  * a keyframe a second) + AAC 160k, faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut.
  * A window with a `hold` shows its frame at `hold` from the start until then (the sound runs on underneath).
  */
-export function composeArgs({ master, hook, endcard, window, format, out, hookSeconds = 4, crf = 18 }) {
+export function composeArgs({ master, hook, notice = null, endcard, window, format, out, hookSeconds = 4, noticeSeconds = NOTICE_SECONDS, crf = 18 }) {
   const D = window.duration;
   const enable = format === 'vertical' ? '' : `:enable='lt(t,${hookSeconds})'`;
   const hold = window.hold > 0 ? `,trim=start=${window.hold.toFixed(3)},setpts=PTS-STARTPTS,tpad=start_duration=${window.hold.toFixed(3)}:start_mode=clone` : '';
+  const out0 = Math.max(0, noticeSeconds - NOTICE_OUT);
+  // inputs: 0 the master, then the hook, the notice and the end card, each when there is one
+  let k = 1;
+  const hookIn = hook ? k++ : null;
+  const noticeIn = notice ? k++ : null;
+  const endIn = endcard ? k++ : null;
   const graph = [
     `[0:v]setpts=PTS-STARTPTS,fps=${FPS}${hold}[c]`,
-    hook ? `[c][1:v]overlay=0:0${enable}:eof_action=repeat[o]` : '[c]null[o]',
+    hook ? `[c][${hookIn}:v]overlay=0:0${enable}:eof_action=repeat[h]` : '[c]null[h]',
+    notice ? `[h][${noticeIn}:v]overlay=x='if(lt(t,${out0.toFixed(3)}),0,-floor((t-${out0.toFixed(3)})/${NOTICE_OUT}*W))':y=0:eval=frame:enable='lt(t,${noticeSeconds})':eof_action=repeat[o]` : '[h]null[o]',
     `[0:a]asetpts=PTS-STARTPTS,aresample=48000,afade=t=in:st=0:d=0.12,afade=t=out:st=${Math.max(0, D - 0.35).toFixed(3)}:d=0.35[a]`,
-    endcard ? `[${hook ? 2 : 1}:v]fps=${FPS},setsar=1[ev];[${hook ? 2 : 1}:a]aresample=48000[ea];[o][a][ev][ea]concat=n=2:v=1:a=1[v][aa]` : '[o]null[v];[a]anull[aa]',
+    endcard ? `[${endIn}:v]fps=${FPS},setsar=1[ev];[${endIn}:a]aresample=48000[ea];[o][a][ev][ea]concat=n=2:v=1:a=1[v][aa]` : '[o]null[v];[a]anull[aa]',
     `[v]scale=iw*${SCALE}:ih*${SCALE}:flags=neighbor,setsar=1,format=yuv420p[vv]`,
   ].join(';');
   const args = ['-v', 'error', '-y', '-ss', window.start.toFixed(3), '-t', D.toFixed(3), '-i', master];
   if (hook) args.push('-loop', '1', '-t', D.toFixed(3), '-i', hook);
+  if (notice) args.push('-loop', '1', '-t', Math.min(D, noticeSeconds).toFixed(3), '-i', notice);
   if (endcard) args.push('-i', endcard);
   args.push('-filter_complex', graph, '-map', '[vv]', '-map', '[aa]', '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'medium', '-crf', String(crf), '-g', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', out);
   return args;

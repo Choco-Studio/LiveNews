@@ -5,8 +5,10 @@
 // picture under them.
 //
 //   drawHook(ctx, { format, lines, programme, accent, profile })   transparent everywhere but the title's own pixels
-//   drawEndCard(ctx, t, { format, programme, accent, live })   t: seconds since the card's first frame
-//   END_CARD_SECONDS
+//   drawNoticeCard(ctx, { format, noun, accent, profile })     the AI notice for the clip's first seconds, alone on a
+//                                                              transparent card (graphics/disclosure.js drawClipNotice)
+//   drawEndCard(ctx, t, { format, programme, accent, live, noun })   t: seconds since the card's first frame
+//   END_CARD_SECONDS, END_CARD_NOTICE
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
@@ -14,8 +16,13 @@ import { seg, easeOutQuint } from '../gfx/index.js';
 import { VW, VH, HW, HH, V, SAFE } from './layout.js';
 import { drawBugOnly, drawProgrammeTag } from './graphics.js';
 import { groundOf } from './vertical.js';
+import { noticeParts, drawClipNotice, drawNoticeText, NOTICE_TIMING } from '../graphics/disclosure.js';
 
 export const END_CARD_SECONDS = 2.6;
+/** The end card's disclosure, as it reads (graphics/disclosure.js noticeParts): checked by the publishing gate. */
+export const END_CARD_NOTICE = Object.freeze(noticeParts('NEWS'));
+/** How long a clip's first-seconds notice holds (the card page draws it; the factory composites it). */
+export const NOTICE_SECONDS = NOTICE_TIMING.clip;
 const S = {
   white: { color: P.white },
   white2: { color: P.white, scale: 2 },
@@ -48,12 +55,14 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     ctx.fillRect(0, 0, VW, V.title.y);
     const bw = drawBugOnly(ctx, t, 0, 8, 10);
     const line = ls.join(' ');
-    // 2x when it fits beside the bug and its AI mark, else the body face (never over the mark)
-    const big = measureText(line, 2) <= SAFE.right - 6 - (8 + bw + 4);
+    // 2x when it fits beside the bug, else the body face (never over the bug); at 2x the type's image runs 2 px past
+    // its measure, so its right edge stands 2 px in from the safe column's
+    const big = measureText(line, 2) <= SAFE.right - 2 - 6 - (8 + bw + 4);
     const w = measureText(line, big ? 2 : 1);
+    const right = SAFE.right - (big ? 2 : 0);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
-    ctx.fillRect(SAFE.right - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
-    drawText(ctx, line, SAFE.right - w, big ? 9 : 13, big ? S.white2 : S.white);
+    ctx.fillRect(right - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
+    drawText(ctx, line, right - w, big ? 9 : 13, big ? S.white2 : S.white);
     return;
   }
   if (format === 'vertical') {
@@ -74,7 +83,7 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
   }
   if (profile === 'tall') {
     // horizontal, a programme whose boards own the top of the frame (PAY ATTENTION): one line at 2x on a plate at the
-    // top row's right end, where a clip has no clock and no LIVE tag, clear of the bug, its mark and the tag
+    // top row's right end, where a clip has no clock and no LIVE tag, clear of the bug and the tag
     const line = ls.join(' ');
     const w = measureText(line, 2);
     const x = HW - 13 - w - 10;
@@ -85,17 +94,27 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     drawText(ctx, line, x + 7, 8, S.white2);
     return;
   }
-  // horizontal: under the bug's row (y 26), left at the strap's edge
+  // horizontal: under the bug's row and the AI notice under it (y 22-30, drawNoticeCard: both hold the clip's first
+  // four seconds), left at the bug's edge
   const w = Math.max(0, ...ls.map((l) => measureText(l, sc))) + 20;
   const n = ls.length;
   const h = n * pitch - (pitch - lineH) + 12;
   const x = 13;
-  const y = 26;
+  const y = 33;
   ctx.fillStyle = P.black;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = accent === P.purple ? P.fog : accent;
   ctx.fillRect(x, y, 2, h);
   ls.forEach((l, i) => drawText(ctx, l, x + 10, y + 6 + i * pitch, big ? S.white2 : S.white));
+}
+
+/**
+ * The AI notice of a clip's first seconds, alone on a transparent card (the factory composites it over the clip's first
+ * NOTICE_SECONDS, then wipes it out): under the bug in a horizontal clip, a super over the stage's foot in a vertical
+ * one. A clip cut from mid-programme never shows the programme's opening, so it says it here, from its first frame.
+ */
+export function drawNoticeCard(ctx, { format = 'vertical', noun = 'NEWS', accent = P.red, profile = 'normal' } = {}) {
+  return drawClipNotice(ctx, format, { noun, accent, profile });
 }
 
 /** Text rising into place (p 0..1) inside its own rows. */
@@ -117,10 +136,10 @@ function rise(ctx, text, x, y, p, style, align = 'left') {
 
 /**
  * The end card: the channel's logo landing and glinting on its ground, the slogan, the programme it came from in its
- * accent, where to watch, and the disclosure line (AI-made presenters, facts from credited sources). No URL is drawn
- * (the post carries the links), so a card never goes stale.
+ * accent, where to watch, and the AI notice (AI-PRODUCED NEWS, PRESENTERS ARE AI CHARACTERS, FACTS FROM CREDITED
+ * SOURCES: graphics/disclosure.js). No URL is drawn (the post carries the links), so a card never goes stale.
  */
-export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, live = true } = {}) {
+export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, live = true, noun = 'NEWS' } = {}) {
   const { w, h } = sizeOf(format);
   ctx.drawImage(groundOf(w, h, { cy: h * 0.42 }), 0, 0);
   const vertical = format === 'vertical';
@@ -163,10 +182,29 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
     y += 14;
   }
   rise(ctx, live ? (vertical ? 'NEWS 24/7 · WATCH LIVE' : 'NEWS 24 HOURS A DAY · WATCH LIVE') : vertical ? 'NEWS 24/7' : 'NEWS 24 HOURS A DAY', cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
-  // the disclosure, at the foot of the safe area (vertical) or of the frame
-  const dy = vertical ? Math.max(272, y + 22) : h - 22;
-  rise(ctx, 'PRESENTERS ARE AI-GENERATED CHARACTERS', cx, dy, seg(t, 1.1, 0.3), S.microSilver, 'center');
-  rise(ctx, 'EVERY FACT FROM A CREDITED NEWS SOURCE', cx, dy + 9, seg(t, 1.2, 0.3), S.microFog, 'center');
+  // the AI notice, at the foot of the safe area (vertical: three rows in the body face, 35 px capitals on 1920) or of
+  // the frame (horizontal: the on-air notice's one row, micro face, 25 px capitals on 1080)
+  if (vertical) {
+    const [head, ...rest] = noticeParts(noun);
+    const dy = Math.max(270, y + 20);
+    rise(ctx, head, cx, dy, seg(t, 1.1, 0.3), S.white, 'center');
+    rise(ctx, rest[0], cx, dy + 11, seg(t, 1.2, 0.3), S.silver, 'center');
+    rise(ctx, rest[1], cx, dy + 22, seg(t, 1.3, 0.3), S.silver, 'center');
+  } else {
+    const p = easeOutQuint(seg(t, 1.1, 0.3));
+    if (p > 0) {
+      const ny = h - 17;
+      ctx.save();
+      try {
+        ctx.beginPath();
+        ctx.rect(0, ny - 3, w, 9);
+        ctx.clip();
+        drawNoticeText(ctx, cx, ny + Math.round((1 - p) * 8), { noun, accent });
+      } finally {
+        ctx.restore();
+      }
+    }
+  }
 }
 
 export const inkOn = (c) => (DARK_INK.has(c) ? P.black : P.white);

@@ -28,7 +28,6 @@ export function clipSizes(opts) {
  */
 export async function installClip({ canvas, renderer, audio, channel, opts }) {
   const g = await import('./graphics.js');
-  await (await import('./mark.js')).markReady;
   if (opts.clean) {
     // the channel's bookkeeping, nothing drawn: no bug, strap or caption under a thumbnail's own type
     renderer.graphics = new g.VerticalGraphics({ audio });

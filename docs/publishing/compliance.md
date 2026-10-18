@@ -4,8 +4,12 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 
 ## Resumen para el propietario
 
-- **Todo lo que publicamos dice que lo hace la IA**, en pantalla, en la voz y en el texto. En pantalla aparece una pequeña placa amarilla **AI** junto al logo, siempre visible. Al empezar cada programa, al volver de cada pausa y cada cinco minutos, la placa se abre unos segundos y dice **AI · PRODUCED NEWS** (FORECAST en el tiempo, SPORT en deportes, QUIZ en el concurso). El ident de las pausas lo dice con palabras, y la voz de continuidad también: "This is GLOBIT 24, AI-produced news". Lo hacemos aunque alguna ley nos dejara callar. El directo no puede acogerse a la excepción de "revisión editorial", porque nadie revisa cada boletín antes de emitirlo. Además, las plataformas piden sus propias etiquetas.
-- **Las recreaciones (IN THEIR WORDS) se mantienen** y ahora llevan **AI RECREATION** en la placa amarilla, más la fuente, en cada fotograma, también en vertical (9:16).
+- **Todo lo que publicamos dice que lo hace la IA**, en pantalla, en la voz y en el texto. **La placa amarilla «AI» junto al logo ya no está** (lo pediste el 18 de octubre): el logo queda limpio. En su lugar, una línea con la letra del canal, bajo el logo, dice **AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES** al empezar cada programa, al volver de cada pausa y cada diez minutos, unos segundos cada vez (FORECAST en el tiempo, SPORT en deportes, QUIZ en el concurso).
+  - Cada clip lo dice en sus cuatro primeros segundos y en su tarjeta final. El ident de las pausas lo dice bajo la marca, y la voz de continuidad también: "This is GLOBIT 24, AI-produced news".
+  - El directo no puede acogerse a la excepción de "revisión editorial", porque nadie revisa cada boletín antes de emitirlo: ahí el aviso es obligatorio por ley.
+  - Quien entra en el directo a mitad de programa ve el aviso en la pantalla en unos diez minutos como mucho (con la emisión pregrabada, el control retiene cualquier programa que pase más de doce minutos sin él). Antes de eso ya lo ha visto en el título del directo ("AI-produced news 24/7") y en la etiqueta de YouTube. El abogado tiene que confirmar que esto basta (§9, punto 13).
+  - Además, las plataformas piden sus propias etiquetas, y las seguimos poniendo.
+- **Las recreaciones (IN THEIR WORDS) se mantienen** y llevan **AI RECREATION** en la placa amarilla, más la fuente, en cada fotograma, también en vertical (9:16). Esa etiqueta no cambia: es el caso de "deep fake" de la ley, y una prueba comprueba que nada puede quitarla.
   - El sistema que prepara los clips rechaza cualquier clip que corte la cita, que no incluya la frase del presentador que dice de quién son las palabras, o que pierda la etiqueta al recortar.
   - También rechaza cualquier subida sin la marca de "contenido sintético" de la plataforma.
   - Antes de publicar algo con una recreación hace falta tu visto bueno.
@@ -24,10 +28,10 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 
 | Rule | Live stream (24/7, YouTube Live) | Full programmes (VOD) | Clips and Shorts (YouTube, TikTok, Instagram, Facebook) | Text posts (X, Threads, Bluesky, Mastodon, LinkedIn) |
 | --- | --- | --- | --- | --- |
-| AI Act Art. 50(2): machine-readable marking (we build the system) | Applies. The visible mark is on air. C2PA cannot survive RTMP ingest. Recordings we keep are marked (§4) | Applies: C2PA on every file | Applies: C2PA on every file | Free-form text cannot carry metadata. Text watermarking is not feasible for posts under 200 tokens (CoP Measure 1.1) |
+| AI Act Art. 50(2): machine-readable marking (we build the system) | Applies. C2PA cannot survive RTMP ingest: the visible notice and the ident are on air. Recordings we keep are marked (§4) | Applies: C2PA on every file | Applies: C2PA on every file | Free-form text cannot carry metadata. Text watermarking is not feasible for posts under 200 tokens (CoP Measure 1.1) |
 | Art. 50(4): deep fake disclosure | Recreations are probably not deep fakes (§2.1), but we label them as if they were | Same | Same, and the label must survive the crop | n/a |
 | Art. 50(4): AI-generated text on matters of public interest | Applies: captions and on-screen text. No editorial review is possible on a 24/7 stream | Applies unless the owner's review qualifies. We disclose anyway | Same | Applies: the "AI-generated:" prefix |
-| Art. 50(5): clear, at first exposure, accessible | Persistent AI mark, openings every 5 min and after breaks, the spoken line at breaks | Mark plus description first line | Mark (kept inside the crop) plus caption first line | Prefix first |
+| Art. 50(5): clear, at first exposure, accessible | The notice at each programme's start, after every break and every 10 min; the ident and the spoken line at breaks; the stream's title (§2.10, §3) | The notice at its start (the clip master draws it as on air), plus description first line | The notice over the first 4 s, the end card, the caption's first line | Prefix first |
 | Copyright of text (verbatim) | Applies (communication to the public) | Applies. Refused at publish if over the rule | Same | Same |
 | YouTube altered or synthetic content | Set on the broadcast (§2.5) | `status.containsSyntheticMedia = true` | Same, for Shorts | n/a |
 | YouTube audience ("made for kids", COPPA) | `status.selfDeclaredMadeForKids = false` on the broadcast | Same, on every video | Same, for Shorts | n/a |
@@ -81,8 +85,8 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 | 1.1.2 imperceptible watermark | Audio watermark integration ready (`AUDIO_WATERMARK`). **Not active here**: the embedder could not be installed (§4). Gap until the production machine has it |
 | 1.2 non-removal of markings | We never strip markings. The publisher re-reads every file before upload (`preflight` rule `unmarked`) |
 | 1.3 provenance information | System name, publisher, time, what is AI, programme, sources, recreations in `org.globit24.disclosure` |
-| Deployers 1.1 icon with "AI" | The yellow AI mark, "AI RECREATION", "AI-generated:" prefix (§3) |
-| Deployers 1.2 placement: start, intervals, after breaks, top right for deep fakes | Persistent mark; openings at start, every 5 min, after breaks; recreation label top right (§3, §5.1) |
+| Deployers 1.1 icon with "AI" | The notice opening with AI-PRODUCED; "AI RECREATION" on its yellow plate with the double-struck AI; the "AI-generated:" prefix (§3) |
+| Deployers 1.2 placement: start, intervals, after breaks, top right for deep fakes | The notice at each programme's start, every 10 min and after every break; over a clip's first 4 s and on its end card; the recreation label top right in every frame (§3, §5.1). No persistent mark since 18 Oct (§2.10) |
 | Deployers 2.1 internal documentation | This document and the tests that enforce it |
 | Deployers 2.3 channel to flag a missing label | The complaints address; category `disclosure` in the register (§7) |
 | Deployers 4 editorial responsibility published | `EDITORIAL_CONTACT` in every description and on the About page (launch blocker) |
@@ -95,7 +99,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 - Against that, their deep-fake examples include "an individual resembling a politician, holding a speech in front of an audience". The test also takes "the possible diverse composition of the reasonably foreseeable audience", children and the elderly included, into account (point 115).
 - News is never "evidently artistic" for the lighter regime: "the informative character should always prevail" (point 122).
 - **So we label every recreation to the full deep-fake standard:** a visible label with "AI" as its main element, top right, in every frame, plus the platform flags.
-- **The presenters, experts and correspondents are not deep fakes.** They are fictional characters with no real person behind them, which matches the guidelines' fictional-characters example. They are disclosed anyway by the channel mark.
+- **The presenters, experts and correspondents are not deep fakes.** They are fictional characters with no real person behind them, which matches the guidelines' fictional-characters example. They are disclosed anyway: PRESENTERS ARE AI CHARACTERS is part of the notice (§3.1).
 
 **Penalties and supervision.** National market surveillance authorities enforce Article 50 on their own initiative or on complaint (guidelines §8.2). Spain's authority is AESIA. The Spanish bill adapting the AI Act was approved by the Council of Ministers on 26 May 2026 and is in Parliament ([Ministerio para la Transformación Digital](https://digital.gob.es/content/dam/portal-mtdfp/comunicacion/comunicacion_ministro/2026/05/2026-05-26/260526%20NP%20CMin%20APL%20IA.pdf)). Its sanctions and dates are for the lawyer to confirm (§9).
 
@@ -116,7 +120,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 
 **What we do.**
 
-- **We do not rely on the exemption.** Every output is disclosed. The live stream cannot qualify. Clips are cut from those same frames, so their burned-in label is there anyway. The platforms require their own labels regardless of the Act. The guidelines are not yet formally adopted. And one identity said everywhere is clearer and honest.
+- **We do not rely on the exemption.** Every output is disclosed. The live stream cannot qualify. Every clip carries the notice over its first seconds and on its end card (§3.2). The platforms require their own labels regardless of the Act. The guidelines are not yet formally adopted. And one identity said everywhere is clearer and honest.
 - **We still keep a review step for the riskiest item, the recreation.** Nothing with a recreation is published without a recorded owner review that checks the quote against its source (`register.recordReview`; the publish check refuses otherwise, rule `review-missing`). This protects against misquotation and defamation, not against the AI Act.
 - **We make the second condition true anyway.** The editorial contact goes in every description and on the About page (`EDITORIAL_CONTACT`; refused without it, rule `editorial-contact-missing`).
 
@@ -203,41 +207,92 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 - No AI flag in their APIs.
 - We use the text prefix, mark the account as a bot where offered (Mastodon has an "automated account" setting), and rely on C2PA, which LinkedIn displays.
 
+### 2.10 Visible disclosure at first exposure instead of a persistent mark (18 October)
+
+**What changed.** The owner had the yellow AI plate taken off the screen. It stood beside the logo in every frame of every programme, clip and open ("Quita la etiqueta IA, queda bastante mal"). In its place there is a notice at each first exposure (§3.1, §3.2), and the stream's ident, title and spoken line carry it too (§3.3). This section explains why that meets the same duties, says where it is weaker, and lists what stays.
+
+**Article by article** (the texts as quoted in §2.1).
+
+- **Art. 50(2), machine-readable marking (providers).** The Act asks for a machine-readable, detectable mark, not a visible label. That is unchanged: every exported file carries the C2PA manifest (§4), which now also records the notice's words. The plate never did this job.
+- **Art. 50(4), first subparagraph: deep fakes (deployers).**
+  - The duty covers content that resembles existing persons and would falsely appear authentic ([Art. 3(60)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)).
+  - Our presenters, experts and correspondents are visibly cartoon characters with no real person behind them. That matches the guidelines' example of fictional characters (§2.1), so they are not deep fakes.
+  - **The IN THEIR WORDS recreations of real public figures are the deep-fake case**, and we treat them as such. Their AI RECREATION — WORDS FROM PUBLIC STATEMENTS label stays exactly as it was: top right, in every frame, with the yellow plate and the capital AI, where the CoP places a deep fake's label.
+  - A test proves that the label cannot be switched off and that the notice never stands over it (`test/compliance-recreation-label.test.js`).
+- **Art. 50(4), second subparagraph: AI-generated text on matters of public interest.** Disclosure is due unless the text "has undergone a process of human review or editorial control" and a person "holds editorial responsibility" (§2.2).
+  - **The manual beta.** The owner approves every item before it goes out, and `EDITORIAL_RESPONSIBLE` and `EDITORIAL_CONTACT` name who answers for it. That may qualify for the exemption, but only if the review is substantive (guidelines points 133-136, §2.2). We do not rely on it.
+  - **The 24/7 stream.** Nobody reviews each bulletin before it airs, so the exemption cannot apply. **On the stream the disclosure is legally required.**
+  - Every output therefore still discloses. What changed is how the disclosure is shown, not whether it is shown.
+- **Art. 50(5): clearly and distinguishably, at the latest at the first interaction or exposure, and accessible.**
+  - A persistent corner mark is one way to meet this, not the only one.
+  - Ours: the notice is in the picture at each item's first exposure (a programme's start, a clip's first frame). It is in legible type, on its own plate, alone in its band. It is also the first line of the text the platforms show first.
+  - For people who listen rather than watch, there are the spoken line at every break and the description.
+- **The Code of Practice** (Measure 1.2.2 b, §2.1) asks for the label "at the start, at regular intervals and after interruptions" for live and long video. Those are the notice's three moments.
+  - The CoP wants a label whose main element is the capital "AI". The notice opens with AI-PRODUCED, and the recreation keeps its AI plate.
+  - We are not a signatory. The gap analysis in §2.1 is updated.
+- **The platforms** (§2.5-2.8): unchanged.
+  - YouTube: its altered-or-synthetic disclosure is for realistic content, and YouTube shows its own label when it is set. We set it on every upload and on the broadcast.
+  - TikTok: its AI-generated content label (`is_aigc`).
+  - Instagram: AI info (`is_ai_generated`).
+  - Facebook and Threads: set by hand.
+  - The manual-publishing checklist covers each toggle (`server/publish/manual.js`).
+
+**Where it is weaker, plainly.**
+
+- **A viewer who joins the live stream mid-programme.**
+  - With the plate, the picture told them at once. Now the picture tells them at the next notice: every ten minutes, a little later when no presenter's shot comes, and often sooner, at the next break's ident or the next programme's start. Under pre-rendered playout the gate holds any programme whose recording goes more than twelve minutes without it; the live renderer has no such gate, only the same graphics code.
+  - Their own first exposure is covered by what they see before or as the stream plays: the stream's title ("AI-produced news 24/7"), YouTube's label on the player and the description.
+  - This rests on the CoP's placement for live video and on those platform surfaces. The lawyer should confirm it (§9, item 13).
+  - If the lawyer says it is not enough, the reminder can come more often (`NOTICE_TIMING.every`), or a corner mark can return for the stream alone. Clips and uploads would not need it.
+- **A clip watched past its first four seconds** (a loop, a scrub back): the clip still has its end card, its caption's first line, the platform's label and its C2PA.
+- **A whole programme's thumbnail** no longer carries the plate.
+
+**What did not change.** The RECREATION label and every recreation rule (§5); the platforms' flags; the descriptions and captions with the disclosure first; the "AI-generated:" prefix on posts; C2PA; the spoken line at every break; the no-false-LIVE rule.
+
 ## 3. Disclosure on screen, on air and in text
 
-Design rule: **yellow means made by AI.** One plate, in one colour, used everywhere a viewer meets AI. It is the same yellow as the logo's "bit" and the RECREATION plate, so it belongs to the package rather than looking like a sticker. Renders at 4x: `/tmp/claude-0/-home-user-LiveNews/bb6f89cc-3d0e-5d2d-a7ac-e8a89a5d11d7/scratchpad/compliance/`.
+Design rule since 18 October (the owner: "Quita la etiqueta IA, queda bastante mal"): **the logo stands clean, and the channel says it is AI-produced at the moments a viewer first meets it**, in its own type. Yellow now belongs to the recreation alone: its AI RECREATION plate is unchanged (§3.4). The reasoning is in §2.10. Old beside new, at 4x and at air size: `/tmp/claude-0/-home-user-LiveNews/bb6f89cc-3d0e-5d2d-a7ac-e8a89a5d11d7/scratchpad/para-el-dueno/aviso-ia-nuevo/`.
 
-### 3.1 The channel mark (the bug)
+### 3.1 The notice
 
-- **The mark.** A 17 x 13 px yellow plate with the capital **AI** in double-struck 5x7 caps (black on yellow). It has its corners knocked off, a pixel nod to the EU icon's pill, and it docks 1 px to the right of the GLOBIT 24 bug.
-- **Always on screen.** It wipes in with the bug and never leaves while the graphics are up: the open's lock-up, the programme, breaking cards. It is drawn by `public/js/graphics/disclosure.js` and `graphics/bug.js`.
-- **When it opens.** It opens to **AI · PRODUCED NEWS** (the words in micro caps on a black plate tucked under the yellow) for 8 s:
-  - just after the programme's name leaves the top row (one thing at a time);
-  - after every break (the graphics come on again);
-  - for 6 s every 5 minutes.
-- **NEWS IN 60** keeps its name up all the way, so its mark opens with the name.
-- These openings are the CoP's "beginning… regular intervals… after interruptions". The persistent "AI" is its "throughout".
+- **The words.** AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES. The first part becomes FORECAST, SPORT or QUIZ for those programmes. It says the three things a viewer is owed: the news is made by AI, the people on screen are not people, and the facts come from named outlets.
+- **The look.** One line in the top row's micro face on its black plate, 1 px under the bug, its left edge on the bug's, like a programme credit. The first part is white, the rest silver, with a dot in the programme's accent between them. There is no box and no yellow. The capitals are 25 px tall at 1080 lines.
+- **When** (`public/js/graphics/disclosure.js` `NOTICE_TIMING`, drawn by `graphics/index.js`):
+  - at every programme's start, 0.7 s after the graphics come on, under the programme's name, for 7 s: the first exposure;
+  - every time the graphics come back from a break: after an interruption;
+  - every ten minutes after its last showing, for 6 s: regular intervals, for a viewer who joins mid-programme.
+- **Where it may stand.** Only on a presenter's shot (the studio's wide and close shots, the weather centre), where the space under the top row belongs to the set. It never stands over a re-staged guest (§3.4), a picture's credit, a board's title, the headline frame, a correspondent's plates or a breaking strap. When it falls due on one of those, it waits for the next presenter's shot. A notice cut short by a guest or a full-screen card in its first four seconds comes back in full.
+- **Checked against what aired.** The graphics report each showing to the recorder. A programme whose recording shows no notice in its first 30 s, or goes more than 12 minutes without one, is held from air (§5.5).
+- **The horizontal clip master** (`?clip=1`, the recording a whole programme is uploaded from) draws the notice as on air, so a whole programme on YouTube opens with it too.
 
-### 3.2 Per-programme wording
+**Per programme.** The notice's first part and the description's line come from `server/compliance/disclosure.js` and `graphics/disclosure.js` (kept equal by a test).
 
-The noun in the opened mark and the description's line come from `server/compliance/disclosure.js` and `graphics/disclosure.js` (kept equal by a test).
-
-| Programme | Opened mark | Description line (after the channel's first line) |
+| Programme | Notice opens with | Description line (after the channel's first line) |
 | --- | --- | --- |
-| WORLD NOW | AI · PRODUCED NEWS | WORLD NOW: the stories shaping our world, presented by Paco Pixel and Lola Byte, animated characters with synthetic voices. |
-| TECH BYTES | AI · PRODUCED NEWS | technology news, presented by Max Circuit and Ada Volt… |
-| COSMOS DESK | AI · PRODUCED NEWS | science, space and our planet, presented by Dr Nova Reyes and UNIT-8… |
-| MONEY MINUTE | AI · PRODUCED NEWS | markets and money, presented by Penny Sterling… Not financial advice: the programme reports what its sources say. |
-| NEWS IN 60 | AI · PRODUCED NEWS | the headlines in a minute, presented by Sam… |
-| WORLD WEATHER | AI · PRODUCED FORECAST | …Written by software from Open-Meteo forecasts and GDACS alerts; no figure is made up. |
-| SEVEN DAYS | AI · PRODUCED NEWS | …Told only from what GLOBIT 24 aired this week. |
-| FULL TIME | AI · PRODUCED SPORT | the day in sport, presented by Kai and Rosa… |
-| PAY ATTENTION | AI · PRODUCED QUIZ | …Every question comes from a story GLOBIT 24 has already aired. |
+| WORLD NOW | AI-PRODUCED NEWS | WORLD NOW: the stories shaping our world, presented by Paco Pixel and Lola Byte, animated characters with synthetic voices. |
+| TECH BYTES | AI-PRODUCED NEWS | technology news, presented by Max Circuit and Ada Volt… |
+| COSMOS DESK | AI-PRODUCED NEWS | science, space and our planet, presented by Dr Nova Reyes and UNIT-8… |
+| MONEY MINUTE | AI-PRODUCED NEWS | markets and money, presented by Penny Sterling… Not financial advice: the programme reports what its sources say. |
+| NEWS IN 60 | AI-PRODUCED NEWS | the headlines in a minute, presented by Sam… |
+| WORLD WEATHER | AI-PRODUCED FORECAST | …Written by software from Open-Meteo forecasts and GDACS alerts; no figure is made up. |
+| SEVEN DAYS | AI-PRODUCED NEWS | …Told only from what GLOBIT 24 aired this week. |
+| FULL TIME | AI-PRODUCED SPORT | the day in sport, presented by Kai and Rosa… |
+| PAY ATTENTION | AI-PRODUCED QUIZ | …Every question comes from a story GLOBIT 24 has already aired. |
 
-### 3.3 The ident and the continuity voice
+### 3.2 A clip's notice and its end card
 
-- **The ident** (every break and between programmes) carries a line under the wordmark: **[AI] PRODUCED NEWS · ANIMATED PRESENTERS · SYNTHETIC VOICES**. It is silver body type with a 1 px shadow, still with the wordmark. The star field keeps clear of it.
-- **The continuity voice** now opens every break line with "This is GLOBIT 24, AI-produced news." (`public/js/ads/index.js`). The disclosure is heard as well as seen, which matters for people listening rather than watching.
+- A clip cut from mid-programme never shows the programme's opening, so it says it itself **from its first frame, for four seconds** (`public/js/clip/cards.js` `drawNoticeCard`, composited by the factory: `server/publish/render.js` `composeArgs`):
+  - **horizontal:** the on-air notice under the bug, with the hook plate under it;
+  - **vertical:** a super over the stage's foot, with an accent bar and ink plate like the presenters' name supers, three rows in the body face (35 px capitals on 1920), inside the platforms' safe column.
+- It slides out over its last quarter second. The factory reads the finished clip back and counts the frames that show it (`clip.cards.notice.frames`). A clip without it is held (§5.5).
+- **The end card** says it again: AI-PRODUCED NEWS, PRESENTERS ARE AI CHARACTERS, FACTS FROM CREDITED SOURCES (vertical: three rows in the body face; horizontal: the notice's one row). It replaces "PRESENTERS ARE AI-GENERATED CHARACTERS / EVERY FACT FROM A CREDITED NEWS SOURCE", which did not say the news itself is AI-produced.
+- **A whole programme's thumbnail** now shows the bug only. The upload's description, YouTube's own label and the image's C2PA carry the disclosure (§9, item 13).
+
+### 3.3 The ident, the continuity voice and the live title
+
+- **The ident** (every break and between programmes) says the notice under the wordmark in two rows: AI-PRODUCED NEWS in white, then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES in silver, body type with a 1 px shadow, still with the wordmark. It replaces the line that opened with the yellow AI plate. It is the stream's periodic disclosure for whoever joined mid-programme.
+- **The continuity voice** still opens every break line with "This is GLOBIT 24, AI-produced news." (`public/js/ads/index.js`). The disclosure is heard as well as seen, which matters for people who are listening rather than watching.
+- **The live title** says "AI-produced news 24/7" (`server/publish/live.js` `liveTitle`), where it used to say "pixel-art news". The title is what a viewer reads before the stream plays, so it is the first exposure for whoever joins mid-programme. YouTube's own altered-or-synthetic label, set on the broadcast (§2.5), shows on the player for news.
 
 ### 3.4 The recreation label
 
@@ -255,6 +310,8 @@ The noun in the opened mark and the description's line come from `server/complia
 4. The credits (§6).
 5. The channel statement.
 6. Who answers for the channel, from `EDITORIAL_CONTACT`.
+
+A clip's caption on TikTok, Instagram and Facebook opens with "AI-produced news: presenters are AI characters with synthetic voices; every fact is from a credited source." (`server/publish/clipmeta.js` `CLIP_DISCLOSURE`; `manual.js` keeps it first when the owner pastes it). The publish check refuses a video whose caption or description does not open with the disclosure (`text-disclosure-missing`).
 
 `textPost(item)` starts with **"AI-generated:"**, then the words, the source and the link, within the network's length. The CoP places the label "above or at the top of the text".
 
@@ -279,7 +336,7 @@ Why not "AI GENERATED" over the whole picture? Our photos and footage are real. 
   - Without `C2PA_CERT` and `C2PA_KEY` the channel makes a **development** certificate chain once in `data/compliance/c2pa/`. The key is readable only by its owner and never enters the repository.
   - Validators then show "signing certificate untrusted", which is expected.
   - For launch we need a certificate from a CA on the C2PA trust list (launch blocker).
-- **The live stream.** RTMP ingest re-encodes and carries no C2PA. On air the disclosure is the burned-in mark. The recordings the publisher exports are marked. Under pre-rendered playout the programmes air from files, but the stream is still re-encoded at ingest: the playout's check before air does not require C2PA (rule `unmarked` is reported as skipped there), and the masters the publishing desk cuts from are marked by its own gate when exported.
+- **The live stream.** RTMP ingest re-encodes and carries no C2PA. On air the disclosure is the notice, the ident and the spoken line (§3). The recordings the publisher exports are marked. Under pre-rendered playout the programmes air from files, but the stream is still re-encoded at ingest: the playout's check before air does not require C2PA (rule `unmarked` is reported as skipped there), and the masters the publishing desk cuts from are marked by its own gate when exported.
 - **What could not be installed.**
   - `c2patool`, the C2PA command-line tool, is not installed. GitHub release downloads answer **403** through this environment's proxy. Building it from crates.io needs more disk than the machine has free (96 % full), so the build was stopped.
   - The SDK's Python binding from PyPI is the same open-source C2PA implementation, and it is what we use.
@@ -307,14 +364,14 @@ Everything the feature already does stays:
 ### 5.1 The label in every frame, also in 9:16
 
 - **Clip frames.** A clip for a vertical or square platform is recorded with `?frame=9x16` (or `9x16@<x>`, `1x1`, `4x5`). A recreation's 9:16 window is `RECREATION_WINDOW` = `9x16@64`, centred on the guest at the lectern. The graphics that carry a disclosure are then laid out inside that window:
-  - the bug and the AI mark (its words open only where they fit whole, so a 9:16 window keeps the plate);
+  - the bug, and the notice when it shows (its three parts stacked, each whole, in a narrow window);
   - the label, stacked: AI RECREATION, then WORDS FROM / PUBLIC STATEMENTS, then the source in the package's micro face for sources (SOURCE: CIRCUIT WEEKLY), all above the guest's eyes;
   - the name super: the role wraps to up to four lines on its tag and the name to two, rather than losing a word;
   - the captions, always above the super.
 - **Line breaks** fall where a subtitler would put them (`evenLines`): never after a word that binds to the next ("OF", "THE"), at a natural point when one fits (after "SOURCE:", before "OF" or "FROM"), and otherwise where the lines are most even, with no lone word left under the rest. So the tag reads CHIEF EXECUTIVE / OF NIMBUS RAIL, and a long source reads SOURCE: / THE WALL STREET JOURNAL with the outlet's name whole. A role or name that even four lines cannot hold is reported, and the publish check refuses that window: a word is never dropped silently.
 - The clock and the ticker stay out of a clip.
 - `recreationLayout(rec, frame)` is the single source of where every plate goes. The renderer draws from it and the publish check verifies the crop against it.
-- **The publishing desk's vertical picture** is composed again, not cropped (`frame.layout: 'vertical-216x384'`, output 1080 × 1920, scale 5; `docs/publishing/vertical.md`). With `frame.vertical`, `recreationLayout` sets the label for that frame: the plates (AI RECREATION, WORDS FROM PUBLIC STATEMENTS, the source's credit) at the stage's top right inside the platforms' safe column, all in the body face (35 px on 1920), and the role and name at the stage's foot. `checkClip` (`frameGeometry`) reads the same layout, so a vertical clip passes when its label is whole, inside the frame and the stage, and legible at the output size. It is refused as `label-out-of-frame` or `label-illegible` otherwise (`test/compliance-clips.test.js`). The AI mark is checked docked to the bug at (8 + bug width + 1, 10), and the clip draws it once.
+- **The publishing desk's vertical picture** is composed again, not cropped (`frame.layout: 'vertical-216x384'`, output 1080 × 1920, scale 5; `docs/publishing/vertical.md`). With `frame.vertical`, `recreationLayout` sets the label for that frame: the plates (AI RECREATION, WORDS FROM PUBLIC STATEMENTS, the source's credit) at the stage's top right inside the platforms' safe column, all in the body face (35 px on 1920), and the role and name at the stage's foot. `checkClip` (`frameGeometry`) reads the same layout, so a vertical clip passes when its label is whole, inside the frame and the stage, and legible at the output size. It is refused as `label-out-of-frame` or `label-illegible` otherwise (`test/compliance-clips.test.js`). The clip's notice is checked the same way: inside the picture and the safe column, legible at the output size (`clip-notice-missing`).
 - **Tested** on centred, left and right 9:16, 1:1, 4:5 and 3:4 windows with long outlets, names and real long roles (Secretary-General of the United Nations, Director-General of the World Health Organization) (`test/compliance-onair.test.js`). Rendered at 4x in 9:16, 1:1 and 4:5.
 - **Legibility.** The label's smallest capitals must be at least 1.6 % of the published picture's height (16 px minimum). These are the body face's 7 px, or the micro face's 5 px for the source in a window, which is 44 px on a 1920 px picture. A whole 16:9 frame shrunk into a 9:16 picture gives 19.7 px on 1920. That fails, and the check says to crop to the window instead.
 
@@ -372,17 +429,18 @@ Everything the feature already does stays:
 
 ### 5.5 The publish-time check refuses
 
-`checkClip` and `preflight` refuse, never just warn, on any of these rules:
+`checkClip` and `preflight` refuse, never just warn, on any of these rules. No rule asks for the yellow AI plate once docked to the bug (`mark-out-of-frame` is gone: §2.10):
 
 | Group | Rules |
 | --- | --- |
 | Recreations and cuts | `provenance-missing`, `quote-cut`, `sentence-cut`, `timeline-missing` |
-| Labels in the frame | `label-out-of-frame`, `label-illegible`, `mark-out-of-frame` |
+| Labels in the frame | `label-out-of-frame`, `label-illegible` |
+| The AI notice (§3) | `clip-notice-missing` (a clip or Short without the notice from its first frame for at least 3 s, with its words, inside the picture and the safe column, legible, read back from the file), `end-card-missing`, `opening-notice-missing` (a programme whose recording shows no notice in its first 30 s, or for less than 4 s), `periodic-notice-missing` (a programme of the stream with more than 12 minutes between notices), `ident-missing` (the stream's break ident without the notice) |
 | Platform flags | `flag-missing`, `flag-unavailable` |
 | Elections | `election-hold`, `election-silence` |
 | Register and review | `blocked`, `review-missing` |
 | Content | `demo`, `rights-missing`, `not-publishable`, `verbatim`, `offline-writer` (an episode the offline fallback writer wrote: never published, `verbatim.md` §7) |
-| Files and text | `unmarked`, `file-missing`, `text-disclosure-missing` |
+| Files and text | `unmarked`, `file-missing`, `text-disclosure-missing` (a post without "AI-generated:" first; a video whose caption or description does not open with the disclosure) |
 | Responsibility | `editorial-contact-missing` |
 
 ## 6. Credits and rights
@@ -553,7 +611,9 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 | `textPost(item, { max })` | `{ text, source, link }` | the post, "AI-generated:" first, within `max` |
 | `creditsFor(item)` | `{ episode }` or an episode | `["Reporting: …", "Pictures: …", "Footage: …", "Weather data by Open-Meteo.com (CC BY 4.0)…", "Map data: Natural Earth", "Voices: synthetic…", "Presenters, sets, graphics and music: original…"]` |
 | `auditItem(item)` | same | `{ assets, missing, credits }` |
-| `checkClip(clip, opts)` | `{ id, kind, episode, range: { start, end }, timeline? \| recording?, frame?: { crop, output, place, window }, platforms, flags, text?, publishAt? }`; `opts: { now, calendar, register, requireReview, dataDir }` | `{ ok, violations: [{ rule, message, … }], warnings, recreations, disclosure }` |
+| `checkClip(clip, opts)` | `{ id, kind, episode, range: { start, end }, timeline? \| recording?, frame?: { crop, output, place, window }, cards?: clipCards(…), platforms, flags, text?, publishAt? }` (a programme: its `recording` with the notice's events; a clip: its `cards`); `opts: { now, calendar, register, requireReview, dataDir }` | `{ ok, violations: [{ rule, message, … }], warnings, recreations, disclosure }` |
+| `clipCards({ noun, profile, notice, endCard, frames })` | what the factory composited: the notice's seconds from the first frame, the end card's seconds, the frames read back | `{ notice: { from, seconds, noun, profile, parts, frames? }, endCard: { seconds, parts } }` |
+| `noticeRuns(report)` | a recording's report (the graphics' `notice` events) | `[{ from, to, text }]` in seconds |
 | `timelineFromRecording(episode, report)` | the episode and `tools/record.mjs --report` | `[{ start, end, text, slot, segIndex, kind: 'speech'\|'provenance'\|'recreation', recreationId, quote }]` |
 | `markFile(path, manifest, opts)` | a file and `buildManifest(item, { title, sources, credits })` | `{ ok, path, label, validation, timestamped, devCert, aiGenerated, watermark }`. Throws if it cannot mark |
 | `readMark(path)` | a file | `{ ok, aiGenerated, sourceType, disclosure, validation, state, signer }` |
@@ -569,7 +629,7 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 1. Record the episode with `tools/record.mjs --report` (vertical: add `&frame=9x16` to the URL).
 2. Build the timeline and choose the range.
 3. For a recreation, get the owner's `recordReview`.
-4. Export the file and run `markFile` (and on the thumbnail too).
+4. Export the file with its notice card and end card (`render.js` `composeArgs`), declare them (`clipCards`), and run `markFile` (and on the thumbnail too).
 5. Run `preflight(item, { register, getStory })`. **Stop if not ok.**
 6. Upload with the flags from `disclosureFor` (on YouTube both `containsSyntheticMedia: true` and `selfDeclaredMadeForKids: false`) and the text from `describe` or `textPost`.
 7. Run `recordPublication({ itemId, parentId, platform, remoteId, url, storyIds, recreations: result.recreations, flags, manifest })`.
@@ -640,6 +700,11 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
    - the feeds themselves and the pictures are read without robots.txt (a feed is published to be read; a picture is
      not a page). On 17 Oct no picture host's file kept a picture from us. Confirm that a feed's terms allow
      broadcasting from it with credit.
+
+13. **Visible disclosure at first exposure instead of a persistent mark** (§2.10, §3). Since 18 October no AI plate stands beside the logo. The notice comes at each programme's start, after every break and every ten minutes, over each clip's first four seconds and on its end card, and in the break ident. The live title, YouTube's label, the descriptions and C2PA carry it too. The recreations keep their label in every frame. Confirm:
+   - that this meets Art. 50(5) ("at the latest at the time of the first interaction or exposure") for the live stream, where the exemption of Art. 50(4) second subparagraph cannot apply, for a viewer who joins mid-programme. Today that viewer meets the on-screen notice within about ten minutes (twelve at most under pre-rendered playout, whose gate checks it), and the title and YouTube's label before that;
+   - that the clips (the notice from the first frame for four seconds, the end card, the caption's first line, the platform's flag) and a whole programme's thumbnail without a mark are enough;
+   - what interval, if any, the lawyer would want instead (`NOTICE_TIMING.every`), or whether the stream alone should keep a corner mark.
 
 **What the launch report blocks on today** (`node tools/compliance/cli.mjs launch`, or `launchReport()`):
 

@@ -1,28 +1,46 @@
-// The channel's AI disclosure on screen (docs/publishing/compliance.md §3; AI Act Art. 50(4)-(5); the EU Code of
-// Practice on transparency of AI-generated content, Commitment 1: an icon whose main element is the capital "AI",
-// shown at the start, at intervals and after every break, clear against any background).
+// The channel's AI disclosure on screen (docs/publishing/compliance.md §3; AI Act Art. 50(4)-(5): clearly and
+// distinguishably, at the latest at the first exposure; the EU Code of Practice on transparency of AI-generated
+// content: at the start, at regular intervals and after every interruption for live and long video).
 //
-// One mark, one colour language: YELLOW MEANS MADE BY AI. The mark docks to the bug's right edge, the same yellow
-// plate the RECREATION label stands on, black "AI" in double-struck 5x7 caps with its corners knocked off (a pixel
-// nod to the EU icon's pill). It never leaves the screen while the graphics are up. At the programme's start, after
-// every break and every five minutes it opens for a few seconds into the channel's words on a black plate,
-// AI · PRODUCED NEWS (FORECAST, SPORT, QUIZ by programme), the EU icon's "AI GENERATED" in our type, and closes again.
+// Owner, 18 Oct: "Quita la etiqueta IA, queda bastante mal". The yellow AI plate docked to the bug is gone: the logo
+// stands clean. The same words now come at the moments a viewer first meets the channel, in its own type:
+//
+//   THE NOTICE      AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES
+//                   one line in the top row's micro face on its black plate, tucked under the bug like a programme
+//                   credit: white for what the channel is, silver for the rest, the programme's accent between them.
+//                   It wipes in under the programme's name as a programme starts (the first exposure), again every
+//                   time the graphics come back from a break (after an interruption), and every ten minutes in between
+//                   (regular intervals), for a few seconds each time. (FORECAST, SPORT, QUIZ by programme.)
+//   THE IDENT       the break ident's statement under the wordmark: AI-PRODUCED NEWS, then the rest of the notice
+//                   (scenes/opens/ident.js; every break and between programmes)
+//   A CLIP          its first seconds carry the notice too (a clip cut from mid-programme never shows the opening):
+//                   under the bug in a horizontal clip, as a super over the stage's foot in a vertical one, drawn by
+//                   the publishing desk's card page (clip/cards.js drawClipNotice) and composited over the clip's first
+//                   NOTICE_TIMING.clip seconds; its end card says it again
+//
+// Never over a re-staged guest: the RECREATION label (graphics/recreation.js) keeps its place, its yellow plate and
+// its double-struck AI, in every frame, untouched (the deep-fake case, Art. 50(4) first subparagraph).
 //
 // Frames: a clip cut to 9:16 or 1:1 is recorded with ?frame=9x16 (or 9x16@<x>, 1x1, 4x5): the graphics that carry a
-// disclosure (this mark, the recreation's label and name, the captions) are laid out inside that window, so the crop
+// disclosure (the notice, the recreation's label and name, the captions) are laid out inside that window, so the crop
 // keeps them whole and legible; the clock and the ticker stay out of a clip.
 //
 //   FRAME                          the active window { active, aspect, x, w, cx }
 //   setFrame(spec) / frameFromSearch(search)
-//   markOpen(t, from, onAt)        0..1, how far the mark is open at render time t (deterministic)
 //   nounOf(programId)              NEWS, FORECAST, SPORT or QUIZ
-//   markWidth(open, noun)          its width in px
-//   drawMark(ctx, x, y, open, noun)
-//   drawBoldAI(ctx, x, y, color)   the double-struck AI (also the recreation label's)
-//   AI_W                           the bold AI's width
+//   noticeParts(noun)              ['AI-PRODUCED NEWS', 'PRESENTERS ARE AI CHARACTERS', 'FACTS FROM CREDITED SOURCES']
+//   NOTICE_LINE                    the parts joined by " · " (the server's CHANNEL.notice says the same)
+//   NOTICE_TIMING                  when it shows on air and how long it holds in a clip
+//   noticeLayout(frame, noun)      where the on-air notice goes: { x, y, w, h, rows, font, cap }
+//   drawNotice(ctx, layout, p, accent)          p: 0..1, how much of it is wiped in
+//   drawNoticeText(ctx, cx, y, { noun, accent }) its words on one row, no plate (the horizontal end card)
+//   clipNoticeLayout(format, opts) / drawClipNotice(ctx, format, opts)   a clip's first-seconds notice
+//   IDENT_LINE, IDENT_W, drawIdentLine(ctx, cx, y)                       the ident's statement
+//   drawBoldAI(ctx, x, y, color), AI_W     the double-struck AI of the RECREATION label (unchanged)
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { W, TOP, rect, easeOut, easeIn, clamp01 } from './layout.js';
+import { W, TOP, rect, clamp01 } from './layout.js';
+import { V, SAFE, VW, VH } from '../clip/layout.js';
 
 // ------------------------------------------------------------------------------------------------ frames
 
@@ -58,98 +76,179 @@ export function frameFromSearch(search) {
 
 if (typeof location !== 'undefined' && location?.search) setFrame(frameFromSearch(location.search));
 
-// ------------------------------------------------------------------------------------------------ the mark
+// ------------------------------------------------------------------------------------------------ the words
 
-/** When the mark opens: at the graphics' start (the open, a return from a break), then every `every` s. */
-export const MARK_TIMING = Object.freeze({ hold: 8, every: 300, again: 6, open: 0.35, close: 0.25, delay: 0.4 });
+/** The programme's noun (the server's disclosure.js programmeWording says the same). */
+export const NOTICE_NOUN = Object.freeze({ 'world-weather': 'FORECAST', 'full-time': 'SPORT', 'pay-attention': 'QUIZ' });
+export const nounOf = (programId) => NOTICE_NOUN[programId] || 'NEWS';
+
+/** The notice's three parts: what the channel is, who presents it, where the facts come from. */
+export function noticeParts(noun = 'NEWS') {
+  return [`AI-PRODUCED ${String(noun || 'NEWS').toUpperCase()}`, 'PRESENTERS ARE AI CHARACTERS', 'FACTS FROM CREDITED SOURCES'];
+}
+export const NOTICE_SEP = ' · ';
+export const NOTICE_LINE = noticeParts('NEWS').join(NOTICE_SEP);
 
 /**
- * How far the mark is open (0 closed .. 1 open) at render time t. It first opens at `from` (just after the
- * programme's name has left the top row, or when the graphics come on) for `hold` s, then every `every` s after the
- * graphics came on (`onAt`) for `again` s, and again after every break (the graphics come on again: a new onAt).
+ * When the notice shows. On air: `delay` s after the graphics come on (a programme's start, every return from a break)
+ * it wipes in and holds `hold` s; then every `every` s (from its last showing) for `again` s. It stands only on a
+ * presenter's shot, where the space under the top row is the set's (the studio's wide and close, the weather centre):
+ * never over a re-staged guest, a picture and its credit, a board's title, the headline frame or a correspondent's
+ * plates; when it falls due on one of those it waits for the next presenter's shot. Cut short (a guest, a card)
+ * before `least` s, it comes back in full at the next one. In a clip: the first `clip` s.
  */
-export function markOpen(t, from, onAt = from) {
-  const pulse = (start, hold) => {
-    const s = t - start;
-    if (!(s >= 0)) return 0;
-    if (s < MARK_TIMING.open) return easeOut(s / MARK_TIMING.open);
-    if (s < hold) return 1;
-    return 1 - easeIn(clamp01((s - hold) / MARK_TIMING.close));
-  };
-  const first = pulse(from, MARK_TIMING.hold);
-  if (t < from + MARK_TIMING.hold + MARK_TIMING.close) return first;
-  const k = Math.floor((t - onAt) / MARK_TIMING.every);
-  return k >= 1 ? pulse(onAt + k * MARK_TIMING.every, MARK_TIMING.again) : 0;
+export const NOTICE_TIMING = Object.freeze({ delay: 0.7, hold: 7, every: 600, again: 6, least: 4, wipeIn: 0.3, wipeOut: 0.25, clip: 4 });
+/** The shots the on-air notice may stand on (graphics/index.js). */
+export const NOTICE_SHOTS = Object.freeze(new Set(['wide', 'close', 'weather']));
+
+// ------------------------------------------------------------------------------------------------ the notice on air
+
+const PLATE_H = 9; // a micro-face plate: 2 px, the 5 px capitals, 2 px (the top row's LIVE and LONDON)
+const PAD = 4;
+const MICRO = 'micro';
+const HEAD_STYLE = Object.freeze({ color: P.white, font: MICRO });
+const REST_STYLE = Object.freeze({ color: P.silver, font: MICRO });
+const sepStyles = new Map();
+const sepStyle = (accent) => {
+  let s = sepStyles.get(accent);
+  if (!s) sepStyles.set(accent, (s = Object.freeze({ color: accent === P.purple ? P.fog : accent, font: MICRO })));
+  return s;
+};
+
+/**
+ * Where the on-air notice goes: under the top row (1 px below the bug), its left edge on the bug's. The full frame
+ * takes it on one line; a clip's narrow window stacks the three parts, each whole.
+ * -> { x, y, w, h, rows: [[part, ...]], font: 'micro', cap: 5 }
+ */
+const layouts = new Map();
+export function noticeLayout(frame = FRAME, noun = 'NEWS') {
+  // (cached: drawn every frame while it shows)
+  const key = `${frame?.active ? `${frame.x}|${frame.w}` : 'full'}|${noun}`;
+  const hit = layouts.get(key);
+  if (hit) return hit;
+  const L = layoutOf(frame, noun);
+  if (layouts.size < 64) layouts.set(key, Object.freeze(L));
+  return L;
+}
+function layoutOf(frame, noun) {
+  const parts = noticeParts(noun);
+  const x = frame?.active ? frame.x + 4 : TOP.x;
+  const room = frame?.active ? frame.w - 8 : W - 2 * TOP.x;
+  const one = measureText(parts.join(NOTICE_SEP), 1, MICRO) + 2 * PAD;
+  const rows = one <= room ? [parts] : parts.map((p) => [p]);
+  const w = Math.max(...rows.map((r) => measureText(r.join(NOTICE_SEP), 1, MICRO))) + 2 * PAD;
+  const h = rows.length * (PLATE_H - 2) + 2;
+  return { x, y: TOP.y + TOP.h + 1, w, h, rows, font: MICRO, cap: 5 };
 }
 
-/** The programme's noun in the open mark (the server's disclosure.js programmeWording says the same). */
-export const MARK_NOUN = Object.freeze({ 'world-weather': 'FORECAST', 'full-time': 'SPORT', 'pay-attention': 'QUIZ' });
-export const nounOf = (programId) => MARK_NOUN[programId] || 'NEWS';
-
-const PAD = 3; // the plate's side padding
-export const AI_W = measureText('AI') + 1; // double-struck: one pixel wider
-const PLATE_W = PAD + AI_W + PAD;
-const WORDS_STYLE = Object.freeze({ color: P.white, font: 'micro' });
-const wordsOf = (noun) => `PRODUCED ${String(noun || 'NEWS').toUpperCase()}`;
-const wordsW = (noun) => measureText(wordsOf(noun), 1, 'micro') + 8;
-
-/** The mark's width when `open` (0..1) with the programme's noun (NEWS, FORECAST, SPORT, QUIZ). */
-export function markWidth(open = 0, noun = 'NEWS') {
-  return PLATE_W + Math.round(wordsW(noun) * clamp01(open));
+/** One row of parts from x on the cap line y: the first part white, the others silver, the accent's dot between. */
+function drawParts(ctx, parts, x, y, accent, first) {
+  let cx = x;
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      drawText(ctx, NOTICE_SEP, cx, y, sepStyle(accent));
+      cx += measureText(NOTICE_SEP, 1, MICRO);
+    }
+    drawText(ctx, part, cx, y, first && i === 0 ? HEAD_STYLE : REST_STYLE);
+    cx += measureText(part, 1, MICRO);
+  });
 }
 
-/** The double-struck "AI" (5x7 caps drawn twice, one pixel apart) with its cap line at y. */
-export function drawBoldAI(ctx, x, y, color = P.black) {
-  drawText(ctx, 'AI', x, y, { color });
-  drawText(ctx, 'AI', x + 1, y, { color });
+/** The notice's words on one row without a plate (a card's ground is calm), centred on cx: returns their width. */
+export function drawNoticeText(ctx, cx, y, { noun = 'NEWS', accent = P.red } = {}) {
+  const parts = noticeParts(noun);
+  const w = measureText(parts.join(NOTICE_SEP), 1, MICRO);
+  drawParts(ctx, parts, Math.round(cx - w / 2), y, accent, true);
+  return w;
 }
 
-/** A plate with its four corner pixels knocked off (the pill, in pixels). */
-function pill(ctx, x, y, w, h, color) {
-  rect(ctx, x + 1, y, w - 2, h, color);
-  rect(ctx, x, y + 1, 1, h - 2, color);
-  rect(ctx, x + w - 1, y + 1, 1, h - 2, color);
+/** The notice, `p` (0..1) of it wiped in from the left in whole pixels. Returns its width. */
+export function drawNotice(ctx, L, p = 1, accent = P.red) {
+  const vis = Math.round(L.w * clamp01(p));
+  if (vis <= 0) return 0;
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.rect(Math.round(L.x), Math.round(L.y), vis, L.h);
+    ctx.clip();
+    rect(ctx, L.x, L.y, L.w, L.h, P.black);
+    L.rows.forEach((row, i) => drawParts(ctx, row, L.x + PAD, L.y + 2 + i * (PLATE_H - 2), accent, i === 0));
+  } finally {
+    ctx.restore();
+  }
+  return L.w;
 }
 
-/** The channel's statement under the ident's wordmark (server/compliance/disclosure.js CHANNEL.ident, in our type). */
-export const IDENT_LINE = 'AI-PRODUCED NEWS · ANIMATED PRESENTERS · SYNTHETIC VOICES';
-const IDENT_REST = IDENT_LINE.replace(/^AI-/, '');
-const IDENT_STYLE = Object.freeze({ color: P.silver, shadow: P.black });
-/** Width of the ident's statement: the AI plate, then the words. */
-export const IDENT_W = PLATE_W + 4 + measureText(IDENT_REST);
+// ------------------------------------------------------------------------------------------------ a clip's notice
 
-/** The ident's statement centred on cx, the plate's top at y: [AI] PRODUCED NEWS · ANIMATED PRESENTERS · … */
+const BODY_PITCH = 10; // body face: 7 px capitals, 3 px between rows
+/**
+ * A clip's first-seconds notice. Horizontal: the on-air notice under the bug (where a clip has no LIVE tag and no
+ * clock: the hook plate starts under it, clip/cards.js), or, when the quiz's one-line hook holds the top row's right
+ * end, 5 px lower. Vertical: a super over the stage's foot, inside the platforms' safe column (the feeds cover the top
+ * strip, the right edge and the foot), in the body face (35 px capitals on 1920: legible at the published size),
+ * the accent's bar at its left like the channel's name supers.
+ * -> { x, y, w, h, rows, font, cap }
+ */
+export function clipNoticeLayout(format = 'vertical', { noun = 'NEWS', profile = 'normal' } = {}) {
+  if (format !== 'vertical') {
+    const L = noticeLayout({ active: false }, noun);
+    return profile === 'tall' ? { ...L, y: L.y + 5 } : L;
+  }
+  const rows = noticeParts(noun).map((p) => [p]);
+  const w = 2 + Math.max(...rows.map((r) => measureText(r[0]))) + 2 * PAD + 1;
+  const h = rows.length * BODY_PITCH + 3;
+  return { x: SAFE.x, y: V.stage.y + V.stage.h - h - 6, w, h, rows, font: 'body', cap: 7 };
+}
+
+/** Draw a clip's notice (transparent everywhere else: the card page composites it over the clip's first seconds). */
+export function drawClipNotice(ctx, format = 'vertical', { noun = 'NEWS', profile = 'normal', accent = P.red, p = 1 } = {}) {
+  const L = clipNoticeLayout(format, { noun, profile });
+  if (format !== 'vertical') return drawNotice(ctx, L, p, accent);
+  const vis = Math.round(L.w * clamp01(p));
+  if (vis <= 0) return 0;
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.rect(L.x, L.y, vis, L.h);
+    ctx.clip();
+    rect(ctx, L.x, L.y, 2, L.h, accent === P.purple ? P.fog : accent);
+    rect(ctx, L.x + 2, L.y, L.w - 2, L.h, P.ink);
+    L.rows.forEach((row, i) => drawText(ctx, row[0], L.x + 2 + PAD, L.y + 2 + i * BODY_PITCH, { color: i === 0 ? P.white : P.silver }));
+  } finally {
+    ctx.restore();
+  }
+  return L.w;
+}
+
+/** Is a box { x0, y0, x1, y1 } clear of the vertical feeds' covered areas (the safe column, x 8-188, y 32-300)? */
+export const inVerticalSafe = (b) => b.x0 >= SAFE.x && b.x1 <= SAFE.right && b.y0 >= 32 && b.y1 <= 300 && b.x0 >= 0 && b.y1 <= VH && b.x1 <= VW;
+
+// ------------------------------------------------------------------------------------------------ the ident
+
+/** The channel's statement under the ident's wordmark (server/compliance/disclosure.js CHANNEL.ident). */
+export const IDENT_LINE = NOTICE_LINE;
+const IDENT_HEAD = noticeParts('NEWS')[0];
+const IDENT_REST = noticeParts('NEWS').slice(1).join(NOTICE_SEP);
+const IDENT_HEAD_STYLE = Object.freeze({ color: P.white, shadow: P.black });
+const IDENT_REST_STYLE = Object.freeze({ color: P.silver, shadow: P.black });
+/** Width of the ident's statement (its longer row). */
+export const IDENT_W = Math.max(measureText(IDENT_HEAD), measureText(IDENT_REST));
+export const IDENT_H = 7 + 4 + 7;
+
+/** The ident's statement centred on cx, from y: AI-PRODUCED NEWS, and under it the rest of the notice. */
 export function drawIdentLine(ctx, cx, y) {
-  const x = Math.round(cx - IDENT_W / 2);
-  pill(ctx, x, y, PLATE_W, TOP.h, P.yellow);
-  drawBoldAI(ctx, x + PAD, y + 3, P.black);
-  drawText(ctx, IDENT_REST, x + PLATE_W + 4, y + 3, IDENT_STYLE);
+  drawText(ctx, IDENT_HEAD, Math.round(cx - measureText(IDENT_HEAD) / 2), y, IDENT_HEAD_STYLE);
+  drawText(ctx, IDENT_REST, Math.round(cx - measureText(IDENT_REST) / 2), y + 11, IDENT_REST_STYLE);
   return IDENT_W;
 }
 
-/**
- * The mark at (x, y), TOP.h tall: the yellow AI plate, and when open the black plate of words beside it, revealed
- * left to right in whole pixels. Returns its width.
- */
-export function drawMark(ctx, x, y, open = 0, noun = 'NEWS') {
-  const h = TOP.h;
-  const ww = Math.round(wordsW(noun) * clamp01(open));
-  if (ww > 0) {
-    // the words' plate tucks under the AI plate's right edge, so the two read as one label
-    ctx.save();
-    try {
-      ctx.beginPath();
-      ctx.rect(Math.round(x + PLATE_W - 1), Math.round(y), ww + 1, h);
-      ctx.clip();
-      const full = wordsW(noun);
-      rect(ctx, x + PLATE_W - 1, y, full + 1, h, P.black);
-      rect(ctx, x + PLATE_W - 1 + full, y + 1, 1, h - 2, P.black);
-      drawText(ctx, wordsOf(noun), x + PLATE_W + 3, y + 4, WORDS_STYLE);
-    } finally {
-      ctx.restore();
-    }
-  }
-  pill(ctx, x, y, PLATE_W, h, P.yellow);
-  drawBoldAI(ctx, x + PAD, y + 3, P.black);
-  return PLATE_W + ww;
+// ------------------------------------------------------------------------------------------------ the RECREATION label's AI
+
+export const AI_W = measureText('AI') + 1; // double-struck: one pixel wider
+
+/** The double-struck "AI" (5x7 caps drawn twice, one pixel apart) with its cap line at y (the RECREATION label's). */
+export function drawBoldAI(ctx, x, y, color = P.black) {
+  drawText(ctx, 'AI', x, y, { color });
+  drawText(ctx, 'AI', x + 1, y, { color });
 }

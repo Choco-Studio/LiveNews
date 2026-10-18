@@ -6,7 +6,7 @@ channel's own drawing code, in bands laid out for a phone. It is rendered by the
 (`?format=vertical`), recorded by the deterministic recorder, and scaled 5x by nearest neighbour.
 
 Code: `public/js/clip/` (`index.js` the switch, `layout.js` the zones, `vertical.js` the compositor, `vboards.js`,
-`vquiz.js`, `vweather.js` and `vsport.js` the boards, `captions.js`, `graphics.js`, `cards.js`, `mark.js`, `thumb.js`).
+`vquiz.js`, `vweather.js` and `vsport.js` the boards, `captions.js`, `graphics.js`, `cards.js`, `thumb.js`).
 Labs: `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`, `/lab/thumb.html`; `/lab/weather.html`
 draws the vertical stage of the weather's map shots beside its frame.
 
@@ -19,15 +19,15 @@ draws the vertical stage of the weather's map shots beside its frame.
   to a window on the horizontal frame.
 - **Readable on a phone with the sound off.** Captions at 2x (14 px caps at 1x, 70 px on a 1080-wide screen), the hook
   at 2x, every word inside the platforms' safe area.
-- **Disclosed.** The AI mark stands beside the bug all clip long, drawn once (the bug's own row draws no second
-  mark), the RECREATION label is set for the tall frame when a recreation is on screen (§3.8), and the end card says
-  how the channel is made.
+- **Disclosed.** The AI notice stands over the stage's foot for the clip's first four seconds (a super, in the body
+  face, inside the safe column: `compliance.md` §3.2), the RECREATION label is set for the tall frame when a recreation
+  is on screen (§3.8), and the end card says it again. The bug stands clean (owner, 18 Oct: no AI plate beside it).
 
 ## 2. The grid and the zones (`layout.js`)
 
 | Zone | Rows (1x) | What it holds |
 |---|---|---|
-| MAST | 0–31 | The channel's bug at (8, 10), the AI mark docked to it, the programme's tag at the right (or the quiz's hook) |
+| MAST | 0–31 | The channel's bug at (8, 10), the programme's tag at the right (or the quiz's hook) |
 | TITLE | 32–71 | In a clip, the hook, all clip long (it is laid over the master's mast and band: §5). In the master, the story's tag and headline, or the programme's title and tagline. |
 | STAGE | 72–247 (216 × 176) | The picture: the speaker, the board, the map, the photo. Over a single, a map or a picture, the story's source on a plate at the top left (SOURCE: NASA); NEWS IN 60's progress rule along its top edge. A board, the montage and a recreation carry their own credit. |
 | CAPS | 248–299 | The captions: two lines at 2x on black boxes |
@@ -250,7 +250,8 @@ crisp, but it is a crop, and §8 lists what remains.
 
 - No clock and no LIVE tag, because a clip is not live.
 - No ticker: its headlines belong to the hour it aired.
-- The bug stays, with the AI mark docked to it and the programme's tag beside it for the whole clip.
+- The bug stays, with the programme's tag beside it for the whole clip. The AI notice comes and goes under it as on
+  air (a whole programme is uploaded from this recording).
 - NEWS IN 60 keeps its progress rule, as on air: a 2 px track along the stage's top edge, filled in yellow as its
   minute runs (the title band is the hook's in a clip).
 - The story's source is never in the foot (the feeds cover it) nor in the title band (the hook covers it): it is on a
@@ -281,12 +282,18 @@ The hook is drawn by the channel's own code (`/lab/clip.html`) and laid over the
 - the logo landing and glinting (vertical: the emblem at 4x over the bug at 2x);
 - THE WORLD, PIXEL BY PIXEL;
 - the programme's accent rule, FROM <PROGRAMME>, NEWS 24 HOURS A DAY · WATCH LIVE;
-- the disclosure: PRESENTERS ARE AI-GENERATED CHARACTERS, EVERY FACT FROM A CREDITED NEWS SOURCE.
+- the AI notice: AI-PRODUCED NEWS, PRESENTERS ARE AI CHARACTERS, FACTS FROM CREDITED SOURCES (vertical: three rows in
+  the body face, inside the safe column; horizontal: one row in the micro face).
 
 No URL is drawn, so a card never goes stale: the post carries the links.
 
-**The AI mark** (`mark.js`) is the compliance desk's own (`graphics/disclosure.js` `drawMark`, closed) when that module
-is in the build. Until then a plain mark of the same shape stands in: a yellow plate with black double-struck AI.
+**The AI notice** (`cards.js` `drawNoticeCard`, the compliance desk's `graphics/disclosure.js` `drawClipNotice`) holds
+the clip's first four seconds, from the first frame, then slides out to the left over a quarter second (`render.js`
+`composeArgs`). Vertical: a super over the stage's foot, the programme's accent bar, three rows in the body face.
+Horizontal: the on-air notice's line under the bug (the hook plate starts under it; for the quiz, whose hook holds the
+top row's right end, 5 px lower). The factory reads the clip back and counts the frames that show it; the gate holds a
+clip without it (`clip-notice-missing`) or without its end card (`end-card-missing`). The AI plate that stood beside the
+bug (`mark.js`) is gone.
 
 ## 6. Thumbnails for whole programmes (`thumb.js`)
 
@@ -301,7 +308,7 @@ goes **right**, over the wall and its board, and her face stays clear (`side: 'r
 - the type's side dimmed by an ordered dither of black, which is pixel-true and has no blur. It reaches as far as 60 %
   of the frame and fades over its last 32 pixels. Behind the type block itself it is solid, so none of the wall's own
   lettering reads between the lines;
-- the bug and the AI mark;
+- the bug (clean: the upload's description, YouTube's label and the file's C2PA carry the disclosure);
 - the programme's name on its accent plate at 2x;
 - the lead at 3x (at most three lines of 11 characters, cut at its own colon or after the last strong word), or at 2x
   (lines of 16) when a word is longer than 11, or the programme's tagline;

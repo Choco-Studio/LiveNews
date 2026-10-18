@@ -25,6 +25,7 @@ import { makeAdapter } from './adapters/index.js';
 import { PLATFORMS, DAILY } from './platforms.js';
 import { localParts } from './queue.js';
 import { CLIP_MIN_SECONDS } from './moments.js';
+import { CLIP_DISCLOSURE } from './clipmeta.js';
 
 /** A package the gate passed is handed out for this long; after it, it is checked (and signed) again. */
 export const PREPARED_TTL = 6 * 3600_000;
@@ -66,8 +67,9 @@ export function checklistFor(item) {
   return list;
 }
 
-// a clip's caption (clipmeta.js): its disclosure sentence, which goes first (compliance.md §1: "the caption's first line")
-const CLIP_DISCLOSURE = 'Presenters are AI-generated characters with synthetic voices; every fact is from the named source.';
+// a clip's caption (clipmeta.js): its disclosure sentence, which goes first (compliance.md §1: "the caption's first line");
+// a caption written before 18 Oct carries the older sentence, which gives way to it
+const OLD_DISCLOSURE = 'Presenters are AI-generated characters with synthetic voices; every fact is from the named source.';
 const CONTACT_LINE = /^Editorial responsibility and complaints:.*$/m;
 
 /** The credits a description lists ("Credits:" then "· …" lines: compliance.describe). */
@@ -118,7 +120,10 @@ export function manualTexts(item, { env = process.env } = {}) {
   }
   // TikTok, Instagram, Facebook: the caption, the AI disclosure first, then the credits (the description's)
   let caption = String(item.text || '').trim();
-  if (caption.endsWith(CLIP_DISCLOSURE)) caption = caption.slice(0, -CLIP_DISCLOSURE.length).trim();
+  for (const d of [OLD_DISCLOSURE, CLIP_DISCLOSURE]) {
+    if (caption.startsWith(d) && d !== CLIP_DISCLOSURE) caption = caption.slice(d.length).trim();
+    if (caption.endsWith(d)) caption = caption.slice(0, -d.length).trim();
+  }
   if (!caption.startsWith(CLIP_DISCLOSURE)) caption = `${CLIP_DISCLOSURE}\n\n${caption}`;
   const credits = creditsOf(item.description);
   if (credits.length) caption += `\n\nCredits: ${credits.join(' · ')}`;

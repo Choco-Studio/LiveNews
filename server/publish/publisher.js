@@ -58,6 +58,8 @@ export function gateView(item, { now = Date.now() } = {}) {
     text: item.kind === 'text' ? makeAdapter(item.platform, { env: {}, dryRun: true }).postText(item) : item.text,
     sourceTexts: item.sourceTexts || null,
     labelFrames: item.gate?.labelFrames || null,
+    // what the clip's own cards say: the AI notice over its first seconds, read back from the file, and its end card
+    cards: item.gate?.cards || null,
     // the vertical picture is recomposed at 216x384 and scaled 5x (docs/publishing/vertical.md), not a crop
     frame: item.gate?.frame || (item.format === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null),
     publishAt: item.schedule?.at ?? now,

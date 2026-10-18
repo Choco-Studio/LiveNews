@@ -2,11 +2,14 @@
 //
 // One rule for the whole channel: every item says it is AI-produced, on screen and in its text, whether or not a law
 // would let it stay silent. The live stream cannot use the editorial-review exemption of the AI Act (Article 50(4),
-// second subparagraph: nobody reviews a bulletin before it airs), every clip is cut from those same frames, and the
-// platforms ask for their own labels besides. One identity, said the same way everywhere, is also the honest one.
+// second subparagraph: nobody reviews a bulletin before it airs), and the platforms ask for their own labels besides.
+// On screen it is said where a viewer first meets the item (Article 50(5)): the notice at a programme's start, after
+// every break and every ten minutes; over a clip's first seconds and on its end card; in the break ident. (No longer a
+// plate docked to the bug in every frame: owner, 18 Oct.) The RECREATION label stays in every frame of a recreation.
+// One identity, said the same way everywhere, is also the honest one.
 //
-//   CHANNEL                       the channel-level statement: { name, short, onAir, statement, about, contact }
-//   programmeWording(id)          per-programme wording: { title, noun, onAir, line }
+//   CHANNEL                       the channel-level statement: { name, short, onAir, notice, ident, statement, about }
+//   programmeWording(id)          per-programme wording: { title, noun, onAir, notice, line }
 //   writerOf(episode)             'ai' | 'software' (who wrote the words: an AI writer or the channel's rule-based one)
 //   recreationsIn(episode)        [{ id, name, role, outlet, slot, storyId, words }] of an episode's IN THEIR WORDS pieces
 //   disclosureFor(item)           flags, labels and text per platform for an episode, a clip, a Short or a text post
@@ -21,20 +24,28 @@
 //   Facebook, Threads, X, Bluesky, Mastodon, LinkedIn: no API flag for this; the label in the frame, the C2PA
 //              manifest (Meta and LinkedIn read it) and the words at the top of the text carry the disclosure.
 
+// The notice's three parts (graphics/disclosure.js noticeParts: the same words, kept equal by a test).
+const noticeOf = (noun = 'NEWS') => [`AI-PRODUCED ${noun}`, 'PRESENTERS ARE AI CHARACTERS', 'FACTS FROM CREDITED SOURCES'].join(' · ');
+const NOTICE = noticeOf('NEWS');
+
 export const PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'threads', 'x', 'bluesky', 'mastodon', 'linkedin'];
 
 /** The channel-level statement. `contact` is filled from the environment (EDITORIAL_CONTACT) when it is set. */
 export const CHANNEL = Object.freeze({
   name: 'GLOBIT 24',
-  // the on-air identity: the AI mark in the top row expands to this (graphics/disclosure.js)
+  // the on-air identity: the first words of the notice (graphics/disclosure.js)
   short: 'AI-produced news',
   onAir: 'AI-PRODUCED NEWS',
+  // the notice on screen: under the bug at a programme's start, after breaks and every ten minutes; over a clip's first
+  // seconds and on its end card (graphics/disclosure.js NOTICE_LINE says the same, a test keeps them equal)
+  notice: NOTICE,
   // the plain-language statement (descriptions, the channel's About page, the ident's line in short form)
   statement:
     'GLOBIT 24 is AI-produced news. AI systems and the channel’s own software write the scripts from the reporting of the news organisations named on screen. ' +
     'The presenters, reporters and experts are animated characters with synthetic voices. Photos and footage are real and credited to their source. ' +
     'When a public figure appears in pixel art, it is a labelled AI RECREATION: their exact reported words in a generic synthetic voice, never their real voice or image.',
-  ident: 'AI-PRODUCED NEWS · ANIMATED PRESENTERS · SYNTHETIC VOICES',
+  // the break ident's statement under the wordmark: the notice (graphics/disclosure.js IDENT_LINE)
+  ident: NOTICE,
   about:
     'Who is responsible: GLOBIT 24 is published under the editorial responsibility of its owner (see the contact below). ' +
     'Corrections and complaints, including requests to remove a recreation of you: write to the contact address; we answer within 24 hours.',
@@ -47,7 +58,7 @@ export function editorialContact(env = process.env) {
   return contact ? { name: name || null, contact } : null;
 }
 
-// Per programme: the noun in the expanded AI mark (AI-PRODUCED NEWS / FORECAST / SPORT…) and the description's line.
+// Per programme: the noun in the notice (AI-PRODUCED NEWS / FORECAST / SPORT…) and the description's line.
 const PROGRAMMES = {
   'world-now': { title: 'WORLD NOW', noun: 'NEWS', what: 'the stories shaping our world', cast: 'Paco Pixel and Lola Byte' },
   'tech-bytes': { title: 'TECH BYTES', noun: 'NEWS', what: 'technology news', cast: 'Max Circuit and Ada Volt' },
@@ -69,6 +80,7 @@ export function programmeWording(id) {
     title: p.title,
     noun: p.noun,
     onAir: `AI-PRODUCED ${p.noun}`,
+    notice: noticeOf(p.noun),
     line: `${p.title}: ${p.what}, presented by ${p.cast}, animated characters with synthetic voices.`,
     ...(p.data ? { data: p.data } : {}),
     ...(p.advice ? { advice: p.advice } : {}),
@@ -158,7 +170,7 @@ export function disclosureFor(item = {}) {
   for (const r of recreations) lines.push(recreationLine(r));
   const labels = {
     onAir: prog.onAir,
-    mark: 'AI',
+    notice: prog.notice,
     ...(hasRecreation ? { recreation: 'AI RECREATION — WORDS FROM PUBLIC STATEMENTS', source: 'SOURCE: <OUTLET>' } : {}),
     textPrefix: 'AI-generated:',
   };
