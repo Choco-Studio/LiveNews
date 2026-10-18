@@ -132,7 +132,7 @@ test('a post\'s address must be on its network\'s own host', () => {
   assert.ok(!urlFits('x', 'javascript:alert(1)'));
 });
 
-test('the day\'s pick: Phase 1\'s lower ends (3 Shorts, 3 TikToks, 2 Reels), best first, never held, grave or published', () => {
+test('the day\'s pick: Phase 1\'s lower ends (3 Shorts, 3 TikToks, 2 Reels), best first, never held, grave, too short or published', () => {
   const dir = tmp('man-pick-');
   const now = Date.parse('2026-10-18T10:00:00Z');
   const q = new PublishQueue({ dir, now: () => now });
@@ -141,12 +141,13 @@ test('the day\'s pick: Phase 1\'s lower ends (3 Shorts, 3 TikToks, 2 Reels), bes
   for (let i = 0; i < 5; i++) for (const net of ['youtube', 'tiktok', 'instagram']) q.enqueue(clip(net, { source: { momentId: `m${i}`, storyIds: [`s${i}`] }, score: i }));
   q.enqueue(clip('youtube', { source: { momentId: 'held' }, score: 99, compliance: { ok: false, violations: [{ rule: 'verbatim' }] } }));
   q.enqueue(clip('youtube', { source: { momentId: 'grave' }, score: 98, grave: true }));
+  q.enqueue(clip('youtube', { source: { momentId: 'short' }, score: 97, media: { duration: 6.53 } }));
   let p = dailyPick(q, { now, phase: 1 });
   const on = (net) => p.ids.map((id) => q.get(id)).filter((it) => it.platform === net);
   assert.equal(on('youtube').length, 3);
   assert.equal(on('tiktok').length, 3);
   assert.equal(on('instagram').length, 2);
-  assert.deepEqual(on('youtube').map((it) => it.score), [4, 3, 2], 'best first; never the held or the grave one');
+  assert.deepEqual(on('youtube').map((it) => it.score), [4, 3, 2], 'best first; never the held, the grave or the 6.5 s one');
   assert.deepEqual(p.caps.youtube.video, { cap: 3, done: 0 });
   // one published today on YouTube: two left for today
   const first = on('youtube')[0];

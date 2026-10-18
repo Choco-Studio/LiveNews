@@ -34,7 +34,9 @@ rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the 
        tools/record.mjs --lossless --progressive --seed 1 --time <aired> --report
 
    The same seed, item and clock give both formats the same timeline. The factory checks the drift between them; it
-   measured 0.000 s on every episode.
+   measured 0.000 s on every episode. A master already in the masters folder (`<prog>-<format>.mkv` with its
+   `.report.json`) is kept, not recorded again: that is where `beta.mjs` puts a programme the pre-rendered playout has
+   already rendered (`server/publish/masters.js`).
 2. **The timeline** (§3) from the report.
 3. **The moments** (§2), found and scored. In Phase 1 only the light, sensible ones are chosen. Choosing takes the
    best of each kind first, so a programme yields variety; it never takes two clips of the same words, and a moment
@@ -98,7 +100,9 @@ when that fits, else the whole headline in the body face. A running-order label 
   weather, which choose their own stories) no story is of a kind the quiz desk refuses as a game (`quiz/desk.js`
   `excludedKind`).
 - `publishable(moments, { phase })`: in Phase 1 only light moments, in Phase 2 nothing grave, in Phase 3 all. In
-  every phase the sense must be at least 7, and demo data is never published.
+  every phase the sense must be at least 7, the moment must last at least 10 s (`CLIP_MIN_SECONDS`, YouTube's and
+  TikTok's own minimum, the end card on top; round 7: a 3-second story passed every other rule), and demo data is
+  never published.
 - **Never a story that copies its source** (`markCopied`). The factory runs the compliance desk's verbatim lint over
   the episode first (`lintEpisode` against the archive's titles and summaries, and the articles when cached): a moment
   that tells a story whose aired words copy their source is refused (`verbatim`) and not chosen, because the gate

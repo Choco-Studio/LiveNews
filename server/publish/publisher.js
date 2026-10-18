@@ -115,7 +115,7 @@ export class Publisher {
     // 2. the compliance gate, again, at the moment of publishing
     // (the verbatim lint: the item's own stories against their sources in the archive)
     this.sourcesOf ||= compliance.archiveGetStory({ dataDir: this.dataDir });
-    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir), getStory: compliance.clipGetStory(item.source?.storyIds, this.sourcesOf) });
+    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir), getStory: compliance.clipGetStory(item.source?.storyIds, compliance.sourcesForItem(item, this.sourcesOf, (this.sourcesCache ||= new Map()))) });
     item.compliance = { ok: !!gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: !!this.usingStub, checkedAt: this.now() };
     if (!gate.ok) {
       item.status = 'held';
@@ -204,6 +204,7 @@ export class Publisher {
   recheck() {
     // (the archive and its articles as they are now: a long-running publisher never measures against a stale copy)
     this.sourcesOf = compliance.archiveGetStory({ dataDir: this.dataDir });
+    this.sourcesCache = new Map();
     return recheckQueue({ queue: this.queue, view: (it) => this.gateItem(it), dataDir: this.dataDir, gate: this.gate, now: this.now, getStory: this.sourcesOf, usingStub: this.usingStub });
   }
 

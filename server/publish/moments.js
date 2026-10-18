@@ -491,8 +491,15 @@ export function detectMoments(episode, { timeline = null } = {}) {
 }
 
 /** Moments a phase may publish: light, not demo, sense at least `minSense` (Phase 1: the light programmes only). */
-export function publishable(moments, { phase = 1, minSense = 7 } = {}) {
-  return moments.filter((m) => !m.demo && !m.copied && !m.uncleared && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+/**
+ * The floor of a published clip, in seconds of the moment itself (the end card comes on top): YouTube's and TikTok's own
+ * minimum. A shorter moment is not worth a viewer's swipe nor the owner's minute (round 7: a 3-second story passed every
+ * other rule, a 6.5 s Reel with its end card).
+ */
+export const CLIP_MIN_SECONDS = 10;
+
+export function publishable(moments, { phase = 1, minSense = 7, minSeconds = CLIP_MIN_SECONDS } = {}) {
+  return moments.filter((m) => !m.demo && !m.copied && !m.uncleared && m.scores.sense >= minSense && !(Number(m.duration) < minSeconds) && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
 }
 
 /**

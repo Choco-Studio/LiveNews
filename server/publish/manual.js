@@ -24,6 +24,7 @@ import { gateView } from './publisher.js';
 import { makeAdapter } from './adapters/index.js';
 import { PLATFORMS, DAILY } from './platforms.js';
 import { localParts } from './queue.js';
+import { CLIP_MIN_SECONDS } from './moments.js';
 
 /** A package the gate passed is handed out for this long; after it, it is checked (and signed) again. */
 export const PREPARED_TTL = 6 * 3600_000;
@@ -141,12 +142,13 @@ export function dayCap(platform, kind, phase = 1) {
 /**
  * The day's review in the beta (plan.md Phase 1: about 15 minutes): per network, its best waiting items, up to the
  * lower end of the phase's daily range less what was already published there today (in its time zone); never a
- * compliance refusal, never anything grave in Phase 1, never what the ledger already holds.
+ * compliance refusal, never anything grave in Phase 1, never a clip under 10 s, never what the ledger already holds.
  * -> { ids: [item ids], caps: { [platform]: { [kind]: { cap, done } } } }
  */
 export function dailyPick(queue, { now = Date.now(), phase = queue.settings().phase } = {}) {
   const ledger = queue.ledger(false);
-  const items = queue.list({ status: OFFERED }).filter((it) => it.compliance?.ok !== false && !(phase <= 1 && it.grave) && !queue.published(it.key) && !queue.nearDuplicate(it));
+  // (a clip under the 10-second floor, queued before the floor, is not offered either: moments.js CLIP_MIN_SECONDS)
+  const items = queue.list({ status: OFFERED }).filter((it) => it.compliance?.ok !== false && !(phase <= 1 && it.grave) && !(it.kind === 'clip' && Number(it.media?.duration) < CLIP_MIN_SECONDS) && !queue.published(it.key) && !queue.nearDuplicate(it));
   const caps = {};
   const ids = [];
   const nets = [...new Set(items.map((it) => it.platform))];
@@ -214,7 +216,7 @@ export async function prepareManual(queue, id, { dataDir = null, now = Date.now(
     // (an unsigned copy is not handed out: the gate below then refuses it, `unmarked`)
     files[kind] = m.ok ? m.path || out : out;
   }
-  const sources = getStory || compliance.archiveGetStory({ dataDir });
+  const sources = getStory || compliance.sourcesForItem(it, compliance.archiveGetStory({ dataDir }));
   const view = { ...gateView(it, { now }), text: texts.gateText, files: Object.values(files) };
   const g = gate(view, { now, register: register === undefined ? compliance.register(dataDir) : register, getStory: compliance.clipGetStory(it.source?.storyIds, sources), env });
   const violations = [...(g.violations || [])];

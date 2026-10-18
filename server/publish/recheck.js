@@ -44,12 +44,13 @@ export function recheckQueue({ queue, view, dataDir = null, gate = compliance.pr
   const reg = register === undefined ? compliance.register(dataDir) : register;
   const sources = getStory === undefined ? compliance.archiveGetStory({ dataDir }) : getStory;
   const out = { checked: 0, passed: 0, held: [], released: [] };
+  const folders = new Map(); // (an item with its own sources folder: the beta's news day)
   const waiting = queue.list({ status: [...WAITING] });
   const ours = queue.list({ status: 'held' }).filter((it) => heldBy(it) === 'recheck');
   for (const item of [...waiting, ...ours]) {
     const v = view(item);
     const pictures = refreshRights(v.episode, { now: t });
-    const g = gate(v, { now: t, register: reg, getStory: compliance.clipGetStory(item.source?.storyIds, sources) });
+    const g = gate(v, { now: t, register: reg, getStory: compliance.clipGetStory(item.source?.storyIds, compliance.sourcesForItem(item, sources, folders)) });
     out.checked++;
     const verdict = { ok: !!g.ok, violations: g.violations || [], warnings: g.warnings || [], stub: !!usingStub, checkedAt: t, recheck: true };
     if (!g.ok && item.status !== 'held') {

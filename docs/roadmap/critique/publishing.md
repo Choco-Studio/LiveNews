@@ -1083,6 +1083,91 @@ What `beta.mjs hacer` gives for a beta day on 17 Oct (cleared pictures only, the
 - The PAY ATTENTION material is remade with a fresh week (`material.mjs`), so it can ask a story the station's own quiz
   asked this week; on the beta, with no live stream, nothing else aired.
 
+## Round 8: the beta's news, with the AI writer
+
+Round 7 was merged (a98f94f). The gap that mattered for the beta was its news: the remake of the archive
+(`material.mjs`) writes with the offline writer, and since the AI writer's merge (0b6910c) the gate holds every item
+of an offline-written edition (`offline-writer`), so the beta offered PAY ATTENTION only. The owner is putting his key
+on his server (`PROVIDERS=openai,mock`).
+
+### What was asked, and what was done
+
+1. **`beta.mjs hacer` with the AI writer** (`server/publish/newsday.js`). When the provider chain has an AI writer (any
+   available provider but the offline mock; the Codex CLI only when it is installed, as it reports itself available and
+   fails only when it spawns), `hacer` makes the day's news programmes fresh from the live feeds through the channel's
+   own producer: the write, the own-words check and its rewrites, the editor, the fit and the voices, as
+   `tools/writer/try.mjs` makes them.
+   - **Lean.** `--noticias` or `BETA_NEWS` choose the programmes (COSMOS DESK, TECH BYTES, and FULL TIME when the day has
+     results, by default: Phase 1's light news), and `--ediciones` how many of each (1). There are no pictures yet: the
+     stories show their maps and boards, as in the remake. Everything runs at nice 10, and every step says how long it
+     took.
+   - **The sources.** Each story an edition tells is recorded, with the article the desk read, in the day's own folder
+     (`factory/<day>/sources/archive`, `…/compliance/articles`), never in the station's archive.
+   - **The factory** measures the clips against that folder (`--sources`). It also reads the stories' links from it, so
+     each clip credits its outlet.
+   - **Later checks.** The queued item keeps its sources folder (`gate.sourcesDir`), and the re-check, the publisher
+     and the page's "Preparar" measure it there (`compliance.sourcesForItem`). The first end-to-end run found this: the
+     factory queued the clip, and the summary's re-check, reading only the station's archive, held it as
+     `sources-missing`.
+   - **When the AI fails.** An edition the AI did not write (the chain fell back) is reported, and it is not recorded.
+   - **Without a key**, `hacer` says plainly, in Spanish, that the news needs it and which two lines to add, and makes
+     PAY ATTENTION as before.
+2. **Rendered masters** (`server/publish/masters.js`). This desk does not render anything. The hook: a programme the
+   pre-rendered playout has already rendered, `<root>/<episode id>/vertical.mkv` with its `vertical.report.json` (the
+   recorder's report at 30 fps) under `RENDERED_MASTERS` or `--masters-from`, is linked where the factory keeps a
+   master. The factory then cuts it instead of recording the programme.
+3. **The 10-second floor** (`moments.js` `CLIP_MIN_SECONDS`). A moment shorter than YouTube's and TikTok's minimum is
+   never publishable, and the day's pick leaves out a shorter clip queued before the floor (round 7's 6.5 s Reel).
+4. **The posts with the AI writer** (`posts.mjs --data`, the day's sources folder). A post carries an aired line only
+   when the line passes the verbatim rule against the article. The AI-written stories give one: none of the three is a
+   bare citation (below).
+
+Also: a clip whose hook fell back to the programme's name no longer gets a title naming the programme twice
+("COSMOS DESK | COSMOS DESK | GLOBIT 24", seen on the end-to-end run). It cites the story's headline instead.
+
+### What ran
+
+- `test/publish-newsday.test.js`, with the fake model of `test/fixtures/fake-model.js` (no key, no network):
+  - the news day through the producer, and the stories with their articles in the sources folder;
+  - the factory's choice and gate on it (the lint, the sources gate, the floor) into the queue and the day's pick;
+  - the re-check against the item's own folder, against a copy without it (held: `sources-missing`), and against the
+    offline writer's edition when the AI fails (`offline-writer`);
+  - `posts.mjs --data` giving a line on each post;
+  - the rendered-master hook;
+  - `beta.mjs hacer` without a key.
+- **End to end, by hand, with the fake model** (the scratch folder's `e2eq`):
+  - The real COSMOS DESK from the channel's own configuration, three stories in the channel's words (the fixture's own),
+    made by the real producer with the station's neural voices: 259 s (the voices are most of it).
+  - Then `beta.mjs hacer --material` recorded and cut it: 2 min 26 s for a one-minute programme. That gave 3 moments:
+    1 light and publishable (22 s, Oslo's library), and 2 not light (a council's decision, a strike). The clip was
+    queued for YouTube, TikTok and Instagram.
+  - After the sources-folder fix, the re-check kept all three and the day's pick offered them.
+  - On the page, "Preparar" signed the clip (C2PA, the development chain) and passed the real gate. Its description
+    now reads "written by AI from the named sources".
+  - The day's posts: three X posts, each with an aired line in the channel's words: "From next month, readers in Oslo
+    can use the main public library on Sundays too.", "The Harbour Herald reports that the mayor puts the cost at about
+    40 million euros.", "The operator says buses will replace some trains on a reduced timetable."
+- No real key here: a real AI day was not run. The owner's server runs it with `beta.mjs hacer` once his key is in.
+
+### Found, not fixed (not this desk's)
+
+- **`facts.js` reads a strike "on Friday" as an attack.** "Gdansk train drivers to strike on Friday" has severity 2
+  (`strikes? on`), so its post waits for the owner and stays out of a Phase 1 day.
+- **The channel's aired headline is the outlet's title.** The producer puts each story's title on its strap, so a
+  clip's title and a post's head cite the outlet. Only the lines are the channel's own words.
+
+### What remains for the beta
+
+- **The owner's:** the key (`OPENAI_API_KEY`, `PROVIDERS=openai,mock`), `EDITORIAL_CONTACT`, `PUBLISH_MODE=manual`,
+  the C2PA SDK and the daily timer (`server-setup.md` §7).
+- **Time on two cores.** Here, with four cores shared with other desks:
+  - three short stories voiced in about 4 minutes;
+  - a one-minute programme recorded and cut in 2.5 minutes;
+  - PAY ATTENTION's seven minutes recorded in about 45 (round 7).
+  A real day of three news programmes and the quiz is one to two hours. Fewer programmes (`--noticias`) or a rendered
+  master shortens it.
+- **Pictures** in the beta's news clips (the cleared pictures' desk, and the recorder serving their files).
+
 ---
 
 ## Notes for the compliance desk (integration)
@@ -1174,8 +1259,8 @@ the last two were added in round 5:
 12. A clip-scoped picture audit at the gate (today one uncleared picture anywhere in an episode holds all its clips; the
     factory already scopes its own refusal to what a moment shows).
 13. After two weeks of numbers (`plan.md` §7), the weights of the kinds of moment (`moments.js` `KIND_BASE`).
-14. A floor of 10 s for a published clip (round 7: a 3-second story passed every rule).
+14. ~~A floor of 10 s for a published clip~~ (round 8: `CLIP_MIN_SECONDS`).
 15. Open-Meteo's paid plan wired into `weather.js` (its endpoint and key) before `OPEN_METEO_API_KEY` may clear the
     launch blocker (the compliance desk's check reads only that the variable is set).
-16. The beta's news clips: `material.mjs` remakes with the offline writer (held: `offline-writer`); the remake with
-    the AI writer, or the station keeping its aired episodes for the factory.
+16. ~~The beta's news clips~~ (round 8: the AI writer's news day, `newsday.js`); a real day on the owner's server with
+    his key, and pictures in its clips.
