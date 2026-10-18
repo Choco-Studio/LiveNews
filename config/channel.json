@@ -184,7 +184,7 @@
     },
     "kai": {"name": "Kai Sprite", "role": "Sports presenter", "personality": "sports presenter, quick and warm, a reporter who became an anchor: knows when a result is a story, enjoys a number, never shouts", "voice": {"gender": "male", "lang": "en-GB", "pitch": 1, "rate": 1.08}},
     "rosa": {"name": "Rosa Rally", "role": "Sports analyst", "personality": "former international midfielder turned analyst: calm, exact and dry; explains what a result means from the facts (the table, a record, a run, what comes next) and never judges a player", "voice": {"gender": "female", "lang": "en-GB", "pitch": 0.98, "rate": 1.0}},
-    "qm": {"name": "Quinn Query", "role": "Quizmaster", "personality": "PAY ATTENTION's quizmaster (name, face and voice provisional until the owner chooses: Quinn Query, Theo Tally or Layla Level): quick, warm and exact; enjoys the game more than winning it; keeps the score and the facts straight; gives every answer as it aired, with its source; never mocks a guess", "voice": {"gender": "female", "lang": "en-US", "pitch": 1.12, "rate": 1.08}}
+    "qm": {"name": "Theo Tally", "role": "Quizmaster", "personality": "PAY ATTENTION's quizmaster (chosen by the owner, 18 Oct): the showman who keeps the tally: brisk, warm and fair, enjoys a close game more than any winner, and never lets a point or a fact slip; keeps the score and the facts straight; gives every answer as it aired, with its source; never mocks a guess", "voice": {"gender": "male", "lang": "en-US", "pitch": 1.08, "rate": 1.1}}
   },
   "programs": {
     "world-now": {

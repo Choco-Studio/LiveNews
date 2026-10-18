@@ -85,11 +85,11 @@ test('the host is the presenter qm: registered in the config and the cast, its l
   const qm = CHANNEL.presenters.qm;
   assert.ok(qm, 'qm is a presenter in config/channel.json');
   assert.equal(qm.role, 'Quizmaster');
-  assert.equal(qm.name, HOST_NAMES.A.name, 'the option-A name stands until the owner chooses');
-  assert.match(qm.personality, /provisional/, 'the name is marked provisional');
-  for (const l of ['A', 'B', 'C']) assert.ok(qm.personality.includes(HOST_NAMES[l].name), `the personality names option ${l}`);
-  assert.match(qm.personality, /quick, warm and exact/);
-  assert.equal(qm.voice.gender, HOST_NAMES.A.gender);
+  // the owner chose candidate B on 18 Oct: its name, persona and gender, and the look the switch names
+  assert.equal(HOST_LOOK, 'B');
+  assert.equal(qm.name, HOST_NAMES[HOST_LOOK].name, 'the chosen candidate\'s name');
+  assert.ok(qm.personality.includes('keeps the tally'), 'the chosen candidate\'s persona');
+  assert.equal(qm.voice.gender, HOST_NAMES[HOST_LOOK].gender);
   assert.ok(PRESENTER_IDS.includes('qm'));
   assert.equal(LOOKS.qm.id, 'qm');
   assert.equal(lookFor('qm', qm), LOOKS.qm, 'its own look, not a fallback');

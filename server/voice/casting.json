@@ -327,8 +327,8 @@
   }
  },
  "qm": {
-  "voice": "af_bella:0.6+af_kore:0.4",
-  "speed": 1.0,
+  "voice": "am_puck:0.55+am_eric:0.45",
+  "speed": 1.02,
   "lang": "en-us",
   "pauses": {
    "comma": 0.15,
@@ -339,7 +339,7 @@
    "colon": 0.3,
    "dash": 0.2
   },
-  "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). Re-cast 16 Oct (owner: \"la voz de la chica de camiseta roja suena fatal\"): the first three candidates were voices of other languages reading English (no English voice was free under the old rule). A is now af_bella, Kokoro's second-best English voice (A-), with 40% af_kore for a lower, rounder middle than Lola's heart-and-bella; bright and quick, American. Measured on the audit copy (tools/voice/audit.py, docs/roadmap/critique/voices-naturalness.md): predicted listening score 4.46; word error rate 0.040; accent +0.34; F0 ~178 Hz, 15.6 characters a second; nearest lola 47, mika 53, june 54 (before: 4.15, WER 0.040, accent +0.18, 15.4 cps).",
+  "notes": "PAY ATTENTION's host: candidate B, chosen by the owner on 18 Oct (\"Candidata B para presentar el concurso\"; the naturalness round's samples). a light, lively baritone, American: am_puck (C+) with 45% am_eric; predicted listening score 4.47; word error rate 0.045; accent +0.40; F0 ~132 Hz, 15.6 characters a second; nearest vic 37, kai 39, tomas 42 (before: 3.80, WER 0.060, accent -0.21, 15.2 cps)",
   "candidates": {
    "A": {
     "voice": "af_bella:0.6+af_kore:0.4",
@@ -388,10 +388,10 @@
    }
   },
   "previous": {
-   "voice": "jf_gongitsune:0.7+pf_dora:0.3",
-   "speed": 1.08,
+   "voice": "af_bella:0.6+af_kore:0.4",
+   "speed": 1.0,
    "lang": "en-us",
-   "notes": "PAY ATTENTION's host, provisional (candidate A; the owner hears A, B and C: public/lab/pay-attention-voices). No component any presenter, correspondent, expert, the continuity announcer or an advert uses: every English Kokoro voice is taken, so the host's are non-English voices read with English phonemes (as Clara, Amara, Leo and Ines blend theirs), each with its tonal match in tools/voice/tone.json (measure.py tone-add: without it the host sat about 3 dB duller than the cast from 2 kHz up). Measured with that match on the casting's own copy against every voice in this file (40-band mel cepstrum, coefficients 1-12, mean distance; PocketSphinx word error rate): the cast's closest pairs that share a component are 32 (Clara-Ines af_sky, Kai-Max am_puck), the closest that share none 45-47. A: jf_gongitsune with 30% pf_dora, en-US: a bright, quick, warm voice (median F0 ~207 Hz, IQR 4.5 st), nearest Rhea 71, Amara 74, Clara 76; WER 0.14 over four copies (the quiz's own lines among them; the cast 0.09-0.26 on the same four). Pauses its own: a beat before an answer (colon 0.30, ellipsis 0.55) and after a question (0.44), the rest a game's quick pace."
+   "notes": "candidate A (af_bella 60 % + af_kore 40 %), provisional host until the owner chose B on 18 Oct"
   }
  }
 }
