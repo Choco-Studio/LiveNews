@@ -32,7 +32,14 @@ const S = {
 };
 const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink, 'full-time': P.orange, 'pay-attention': P.purple };
 const accentFor = (programId, accent) => accent || PROGRAM_ACCENT[programId] || P.red;
-const styleOf = (scale, ink = false) => (ink ? (scale === 3 ? S.ink3 : scale === 2 ? S.ink2 : S.ink) : scale === 3 ? S.white3 : scale === 2 ? S.white2 : S.white);
+const BIG = new Map();
+/** The board's type at a scale: white, or ink on MONEY MINUTE's paper (any scale: a lone figure goes to 4x). */
+const styleOf = (scale, ink = false) => {
+  if (scale <= 3) return ink ? (scale === 3 ? S.ink3 : scale === 2 ? S.ink2 : S.ink) : scale === 3 ? S.white3 : scale === 2 ? S.white2 : S.white;
+  const key = `${scale}|${ink}`;
+  if (!BIG.has(key)) BIG.set(key, Object.freeze({ color: ink ? P.ink : P.white, scale }));
+  return BIG.get(key);
+};
 /** Micro text cut to `w` px with dots, measured in the micro face it is drawn in (gfx `ellipsis` measures the body
  * face, wider, and would cut a credit that fits: "SOURCE: GUARDIA…"). */
 export function microFit(text, w) {
@@ -42,6 +49,14 @@ export function microFit(text, w) {
   return `${s}...`;
 }
 const srcLine = (source, maxW) => (source ? microFit(`SOURCE: ${String(source).toUpperCase()}`, maxW) : '');
+
+/**
+ * On the glass a line is whole or not there: it pops in at its beat (p past half way), never half risen out of its mask,
+ * so no frame of a vertical clip, its first above all, shows a line cut in two.
+ */
+function pop(ctx, text, x, y, p, style) {
+  if (p >= 0.5 && text) drawText(ctx, text, x, y, style);
+}
 
 /** Text rising into place inside a mask at its own rows (p 0..1), as the channel's boards. */
 function rise(ctx, text, x, y, p, style) {
@@ -71,8 +86,13 @@ export function figureRows(fact, numbers) {
     }
     if (r.length) return r;
   }
-  const f = parseFigure(typeof fact === 'string' ? fact : String(fact ?? ''));
-  return f.text ? [{ figure: f.text, label: f.rest, f, qual: f.qual }] : [];
+  const raw = typeof fact === 'string' ? fact : String(fact ?? '');
+  const f = parseFigure(raw);
+  if (f.text) return [{ figure: f.text, label: f.rest, f, qual: f.qual }];
+  // a fact that ends on its figure (ECONOMY UP 0.1%): the figure large, the words before it its label
+  const m = raw.trim().match(/^(.*\S)\s+([$€£¥]?\d[\d,]*(?:\.\d+)?\s?(?:%|PER ?CENT|[KMB]|MN|BN|TN)?)$/i);
+  const t = m ? parseFigure(m[2]) : null;
+  return t?.text && !t.rest ? [{ figure: t.text, label: m[1].toUpperCase(), f: t, qual: t.qual }] : [];
 }
 
 /** Which board a card is (the horizontal card's own order of precedence, cards.js drawFactCard). */
@@ -96,84 +116,120 @@ export function boardKind(o = {}) {
 // ---------------------------------------------------------------- layouts
 // Every layout is a list of rows { y, h, draw(ctx, x, y, dt) } under a kicker, measured from the panel's top; the
 // panel is centred in the stage. Cached per card object (a card's content never changes while it is on air).
+//
+// On the vertical frame's glass (bare: the compositor's glass and frame stand behind the board, the whole stage) a
+// board is set as large as the stage lets it: its words at 2x (T2) when every row fits the stage that way, else at the
+// body size (T1), never shrunk past it and never cut; the kicker and the source line in the body face, the kicker in
+// the programme's accent.
 
 const LAYOUTS = new WeakMap();
-const KICK_Y = 10; // the kicker's caps (micro, 5 px) from the panel's top
+const KICK_Y = 10; // the kicker's caps from the panel's top
 const TOP = 24; // the first row from the panel's top
 const PAD = 12;
+const TOPB = 27; // bare: under a kicker in the body face
+const PADB = 8; // bare: the glass is the panel, its frame the edge
+/**
+ * On the glass, how far a board's own cascade has run on the shot's first frame (s): its kicker and first four rows
+ * whole (a figure with its label, a headline over its figure), so a clip that opens on a board opens on the board, not
+ * on its kicker; a fifth row and on pops in at its beat.
+ */
+export const PRE = 1.6;
+/** The body face's two sizes: a block of n lines is n * lh - (lh - cap) tall. */
+export const T1 = Object.freeze({ s: 1, lh: 11, cap: 7, gap: 9 });
+export const T2 = Object.freeze({ s: 2, lh: 18, cap: 14, gap: 11 });
+const blockH = (n, T) => (n ? n * T.lh - (T.lh - T.cap) : 0);
+const metrics = (w, bare) => ({ pad: bare ? PADB : PAD, inner: w - 2 * (bare ? PADB : PAD), top: bare ? TOPB : TOP });
 
-function finish(rows, src, w, h, inner, extra = {}) {
+function finish(rows, src, w, h, inner, extra = {}, { bare = false, pad = PAD, T = T1 } = {}) {
   // fit the stage: drop the source line, then the last rows
   let list = rows.slice();
-  const bottomOf = (l) => (l.length ? l[l.length - 1].y + l[l.length - 1].h : TOP);
+  const top = bare ? TOPB : TOP;
+  const srcH = bare ? 17 : 15;
+  const bottomOf = (l) => (l.length ? l[l.length - 1].y + l[l.length - 1].h : top);
   let s = src;
-  let H = bottomOf(list) + (s ? 15 : 0) + 9;
+  let H = bottomOf(list) + (s ? srcH : 0) + 9;
+  let dropped = false;
   if (H > h && s) {
     s = '';
-    H -= 15;
+    H -= srcH;
+    dropped = true;
   }
   while (H > h && list.length > 1) {
     list = list.slice(0, -1);
     H = bottomOf(list) + 9;
+    dropped = true;
   }
-  return { rows: list, src: s, srcY: bottomOf(list) + 6, PH: H, inner, PW: w, ...extra };
+  return { rows: list, src: s, srcY: bottomOf(list) + 6, PH: H, inner, PW: w, pad, bare, T, dropped, ...extra };
 }
 
-function layoutFigures(o, w, h, programId) {
-  const inner = w - 2 * PAD;
+function srcFor(source, inner, bare) {
+  if (!source) return '';
+  const s = `SOURCE: ${String(source).toUpperCase()}`;
+  return bare ? ellipsis(s, inner, 1) : srcLine(source, inner);
+}
+
+function layoutFigures(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const rows = figureRows(o.fact, o.numbers);
   const paper = programId === 'money-minute';
   const out = [];
-  let y = TOP;
+  let y = top;
   if (paper && o.headline) {
-    const title = balanceLines(String(o.headline), inner, 1, 2);
-    out.push({ y, h: title.length * 11 - 4, kind: 'title', lines: title });
-    y += title.length * 11 - 4 + 6;
+    const title = balanceLines(String(o.headline), inner, T.s, 2);
+    out.push({ y, h: blockH(title.length, T), kind: 'title', lines: title, T });
+    y += blockH(title.length, T) + 6;
     out.push({ y, h: 1, kind: 'rule' });
     y += 8;
   }
+  const opt = { bare, pad, T };
   if (!rows.length) {
-    // a fact without a figure: its words at 2x when they fit three lines, else 1x
-    const big = balanceLines(String(o.fact || ''), inner, 2, 3);
+    // a fact without a figure: its words at 2x when they fit three lines (four on the glass), else 1x
+    const big = balanceLines(String(o.fact || ''), inner, 2, bare ? 4 : 3);
     const two = !big[big.length - 1]?.endsWith('...');
     const lines = two ? big : balanceLines(String(o.fact || ''), inner, 1, 6);
     const lh = two ? 18 : 11;
     out.push({ y, h: lines.length * lh - (lh - 7 * (two ? 2 : 1)), kind: 'text', lines, scale: two ? 2 : 1, lh });
-    return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(o.label || 'KEY FACT', inner, 1), paper });
+    return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(o.label || 'KEY FACT', inner, 1), paper }, opt);
   }
-  // one figure: 3x when it fits; two or three: the size every one of them fits (never one big, one small)
-  const scale = rows.every((r) => textW(r.figure, 3) <= inner) && rows.length === 1 ? 3 : rows.every((r) => textW(r.figure, 2) <= inner) ? 2 : 1;
+  // one figure: 3x when it fits (4x on the glass at 2x); two or three: the size every one of them fits (never one
+  // big, one small)
+  const fits = (s) => rows.every((r) => textW(r.figure, s) <= inner);
+  const scale = rows.length === 1 && T.s === 2 && fits(4) ? 4 : rows.length === 1 && fits(3) ? 3 : T.s === 2 && fits(3) ? 3 : fits(2) ? 2 : 1;
+  const qh = bare ? 10 : 7;
+  // the labels a size under their figures (a 2x figure keeps 1x labels: the figure leads)
+  const TL = T.s === 2 && scale >= 3 ? T2 : T1;
   for (const r of rows) {
     const qual = r.qual ? ellipsis(r.qual, inner, 1) : '';
     const fig = ellipsis(r.figure, inner, scale);
-    const label = r.label ? balanceLines(r.label, inner, 1, 2) : [];
-    const rh = (qual ? 7 : 0) + 7 * scale + 5 + 1 + (label.length ? 6 + label.length * 11 - 4 : 0);
-    out.push({ y, h: rh, kind: 'figure', qual, fig, figW: textW(fig, scale), scale, label });
-    y += rh + 10;
+    const label = r.label ? balanceLines(r.label, inner, TL.s, 2) : [];
+    const rh = (qual ? qh : 0) + 7 * scale + 5 + 1 + (label.length ? 6 + blockH(label.length, TL) : 0);
+    out.push({ y, h: rh, kind: 'figure', qual, qh, fig, figW: textW(fig, scale), scale, label, T: TL });
+    y += rh + (bare ? 12 : 10);
   }
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(boardTitle('numbers', { programId, kicker: o.label }) || 'BY THE NUMBERS', inner, 1), paper });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(boardTitle('numbers', { programId, kicker: o.label }) || 'BY THE NUMBERS', inner, 1), paper }, opt);
 }
 
-function layoutKnown(o, w, h) {
-  const inner = w - 2 * PAD;
+function layoutKnown(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const points = o.known.slice(0, 3).map((p) => String(p));
-  const tw = inner - 9;
+  const bullet = T.s === 2 ? 12 : 9;
+  const tw = inner - bullet;
   const out = [];
-  let y = TOP;
+  let y = top;
   for (const p of points) {
-    const lines = balanceLines(p, tw, 1, 4);
-    out.push({ y, h: lines.length * 11 - 4, kind: 'point', lines });
-    y += lines.length * 11 - 4 + 9;
+    const lines = balanceLines(p, tw, T.s, 4);
+    out.push({ y, h: blockH(lines.length, T), kind: 'point', lines, T, bullet });
+    y += blockH(lines.length, T) + T.gap;
   }
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: 'WHAT WE KNOW' });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: 'WHAT WE KNOW' }, { bare, pad, T });
 }
 
 // HOW THE WEEK UNFOLDED (SEVEN DAYS), set for the tall frame as on air: the week's diary, up to five days, oldest
 // first, the day at 2x in its own column (right-aligned on the widest, WED), a node on the rail beside it, the day's
 // headline beside the rail at 1x on up to three lines (never cut). Only when every day is a day's name that fits the
 // column; a dated step falls back to the timeline (the date over its words).
-function layoutWeek(o, w, h, programId) {
-  const inner = w - 2 * PAD;
+function layoutWeek(o, w, h, programId, { bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const steps = o.timeline.slice(0, 5);
   const dayW = textW('WED', 2);
   const days = steps.map((p) => String(p.when).toUpperCase().trim());
@@ -182,37 +238,37 @@ function layoutWeek(o, w, h, programId) {
   const textX = railX + 7;
   const tw = inner - textX;
   const out = [];
-  let y = TOP;
+  let y = top;
   steps.forEach((p, i) => {
     const lines = balanceLines(String(p.what).trim(), tw, 1, 3);
     const rh = Math.max(14, lines.length * 11 - 4);
     out.push({ y, h: rh, kind: 'day', when: days[i], lines, dayW, railX, textX });
-    y += rh + 8;
+    y += rh + (bare ? 12 : 8);
   });
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(boardTitle('timeline', { programId }), inner, 1) });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(boardTitle('timeline', { programId }), inner, 1) }, { bare, pad, T: T1 });
 }
 
-function layoutTimeline(o, w, h, programId) {
+function layoutTimeline(o, w, h, programId, { T = T1, bare = false } = {}) {
   if (programId === 'seven-days') {
-    const week = layoutWeek(o, w, h, programId);
+    const week = layoutWeek(o, w, h, programId, { bare });
     if (week) return week;
   }
-  const inner = w - 2 * PAD;
+  const { pad, inner, top } = metrics(w, bare);
   const steps = o.timeline.slice(0, 3);
   const tx = 14; // the words' column right of the rail
   const tw = inner - tx;
   const dates = steps.map((p) => String(p.when).toUpperCase().replace(/\b(JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\b/g, '$1').replace(/\s+/g, ' ').trim());
   const ws = dates.every((d) => textW(d, 2) <= tw) ? 2 : 1;
   const out = [];
-  let y = TOP;
+  let y = top;
   steps.forEach((p, i) => {
     const when = ellipsis(dates[i], tw, ws);
-    const lines = balanceLines(String(p.what), tw, 1, 3);
-    const rh = 7 * ws + 5 + lines.length * 11 - 4;
-    out.push({ y, h: rh, kind: 'step', when, ws, lines, tx });
+    const lines = balanceLines(String(p.what), tw, T.s, 3);
+    const rh = 7 * ws + 5 + blockH(lines.length, T);
+    out.push({ y, h: rh, kind: 'step', when, ws, lines, tx, T });
     y += rh + 10;
   });
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(boardTitle('timeline', { programId }), inner, 1) });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(boardTitle('timeline', { programId }), inner, 1) }, { bare, pad, T });
 }
 
 const SCALE_WORDS = { thousand: 1e3, k: 1e3, million: 1e6, m: 1e6, mn: 1e6, billion: 1e9, bn: 1e9, b: 1e9, trillion: 1e12, tn: 1e12 };
@@ -221,85 +277,89 @@ function numOf(v) {
   return m ? Number(m[1]) * (m[2] ? SCALE_WORDS[m[2].toLowerCase()] : 1) : NaN;
 }
 
-function layoutChange(o, w, h) {
-  const inner = w - 2 * PAD;
+function layoutChange(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const c = o.change;
   const from = String(c.from).toUpperCase();
   const to = String(c.to).toUpperCase();
-  const vs = textW(from, 3) <= inner && textW(to, 3) <= inner ? 3 : textW(from, 2) <= inner && textW(to, 2) <= inner ? 2 : 1;
+  const fit = (s) => textW(from, s) <= inner && textW(to, s) <= inner;
+  const vs = T.s === 2 && fit(4) ? 4 : fit(3) ? 3 : fit(2) ? 2 : 1;
   const up = numOf(c.to) > numOf(c.from) ? 'UP' : numOf(c.to) < numOf(c.from) ? 'DOWN' : '';
+  const lab = bare ? 9 : 7;
   const out = [];
-  let y = TOP;
-  out.push({ y, h: 7 + 2 + 7 * vs, kind: 'from', text: ellipsis(from, inner, vs), vs });
-  y += 9 + 7 * vs + 6;
+  let y = top;
+  out.push({ y, h: lab + 2 + 7 * vs, kind: 'from', text: ellipsis(from, inner, vs), vs, lab });
+  y += lab + 2 + 7 * vs + 6;
   out.push({ y, h: 12, kind: 'arrow' });
   y += 12 + 6;
-  out.push({ y, h: 7 + 2 + 7 * vs, kind: 'to', text: ellipsis(to, inner, vs), vs, up });
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: ellipsis(String(c.label).toUpperCase(), inner, 1) });
+  out.push({ y, h: lab + 2 + 7 * vs, kind: 'to', text: ellipsis(to, inner, vs), vs, up, lab });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(String(c.label).toUpperCase(), inner, 1) }, { bare, pad, T });
 }
 
-function layoutTerm(o, w, h) {
-  const inner = w - 2 * PAD;
+function layoutTerm(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const term = String(o.term.term).toUpperCase();
   const ts = textW(term, 3) <= inner ? 3 : 2;
   const tl = balanceLines(term, inner, ts, 2);
-  const plain = balanceLines(String(o.term.plain), inner, 1, 6);
+  const plain = balanceLines(String(o.term.plain), inner, T.s, 6);
   const out = [];
-  let y = TOP;
+  let y = top;
   out.push({ y, h: tl.length * (7 * ts + 4) - 4, kind: 'term', lines: tl, ts });
   y += tl.length * (7 * ts + 4) - 4 + 6;
   out.push({ y, h: 1, kind: 'accentRule' });
   y += 8;
-  out.push({ y, h: plain.length * 11 - 4, kind: 'lines', lines: plain });
-  return finish(out, '', w, h, inner, { kicker: 'IN PLAIN ENGLISH' });
+  out.push({ y, h: blockH(plain.length, T), kind: 'lines', lines: plain, T });
+  return finish(out, '', w, h, inner, { kicker: 'IN PLAIN ENGLISH' }, { bare, pad, T });
 }
 
-function layoutQuote(o, w, h) {
-  const inner = w - 2 * PAD;
+function layoutQuote(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const text = `${String(o.quote.text).replace(/^["“'‘]+|["”'’]+$/g, '')}`;
-  const big = balanceLines(text, inner, 2, 4);
+  const big = balanceLines(text, inner, 2, T.s === 2 ? 6 : 4);
   const two = !big[big.length - 1]?.endsWith('...');
   const lines = two ? big : balanceLines(text, inner, 1, 9);
   const lh = two ? 18 : 11;
   const out = [];
-  let y = TOP + 2;
+  let y = top + 2;
   out.push({ y, h: 6, kind: 'mark' });
   y += 12;
   out.push({ y, h: lines.length * lh - (lh - 7 * (two ? 2 : 1)), kind: 'quote', lines, scale: two ? 2 : 1, lh });
   y += lines.length * lh - (lh - 7 * (two ? 2 : 1)) + 8;
   if (o.quote.by) out.push({ y, h: 7, kind: 'by', text: ellipsis(`— ${String(o.quote.by).toUpperCase()}`, inner, 1) });
-  return finish(out, '', w, h, inner, { kicker: 'IN THEIR WORDS' });
+  return finish(out, '', w, h, inner, { kicker: 'IN THEIR WORDS' }, { bare, pad, T });
 }
 
-function layoutWho(o, w, h) {
-  const inner = w - 2 * PAD;
-  const T = 24;
-  const tw = inner - T - 8;
+function layoutWho(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
+  const big = T.s === 2;
+  const box = big ? 30 : 24;
+  const tw = inner - box - 8;
+  const nh = big ? 17 : 10; // a name line's pitch
   const out = [];
-  let y = TOP;
+  let y = top;
   for (const p of o.who.slice(0, 3)) {
-    const name = balanceLines(String(p.name).toUpperCase(), tw, 1, 2);
+    const name = balanceLines(String(p.name).toUpperCase(), tw, big ? 2 : 1, 2);
     const role = balanceLines(String(p.role || '').toUpperCase(), tw, 1, 2);
-    const th = name.length * 10 + (role.length ? 2 + role.length * 9 : 0);
-    const rh = Math.max(T, th);
-    out.push({ y, h: rh, kind: 'person', ini: initialsOf(p.name), name, role, T, tw, ty: Math.round((rh - th) / 2) });
-    y += rh + 8;
+    const th = name.length * nh - (big ? 3 : 0) + (role.length ? 3 + role.length * 9 : 0);
+    const rh = Math.max(box, th);
+    out.push({ y, h: rh, kind: 'person', ini: initialsOf(p.name), name, role, T: box, tw, nh, ns: big ? 2 : 1, ty: Math.round((rh - th) / 2) });
+    y += rh + (big ? 10 : 8);
   }
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: "WHO'S WHO" });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: "WHO'S WHO" }, { bare, pad, T });
 }
 
-function layoutShare(o, w, h) {
-  const inner = w - 2 * PAD;
+function layoutShare(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
   const s = o.share;
   const chart = shareChart(s.value, s.fraction);
   const value = String(s.value).toUpperCase();
-  const vs = textW(value, 3) <= inner ? 3 : textW(value, 2) <= inner ? 2 : 1;
+  const vs = T.s === 2 && textW(value, 4) <= inner ? 4 : textW(value, 3) <= inner ? 3 : textW(value, 2) <= inner ? 2 : 1;
   const out = [];
-  let y = TOP;
+  let y = top;
   if (s.lead) {
-    const lead = balanceLines(String(s.lead), inner, 1, 2);
-    out.push({ y, h: lead.length * 11 - 4, kind: 'lead', lines: lead });
-    y += lead.length * 11 - 4 + 7;
+    const lead = balanceLines(String(s.lead), inner, T.s, 2);
+    out.push({ y, h: blockH(lead.length, T), kind: 'lead', lines: lead, T });
+    y += blockH(lead.length, T) + 7;
   }
   if (chart.kind !== 'none') {
     const perRow = chart.kind === 'people' ? Math.min(chart.of, 12) : 10;
@@ -307,42 +367,80 @@ function layoutShare(o, w, h) {
     out.push({ y, h: gh, kind: 'chart', chart, perRow });
     y += gh + 8;
   }
-  out.push({ y, h: (s.qualifier ? 8 : 0) + 7 * vs, kind: 'value', value: ellipsis(value, inner, vs), vs, qual: s.qualifier ? ellipsis(String(s.qualifier).toUpperCase(), inner, 1) : '' });
-  y += (s.qualifier ? 8 : 0) + 7 * vs + 6;
-  const label = balanceLines(String(s.label), inner, 1, 3);
-  out.push({ y, h: label.length * 11 - 4, kind: 'lines', lines: label });
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: 'IN PROPORTION' });
+  const qh = bare ? 10 : 8;
+  out.push({ y, h: (s.qualifier ? qh : 0) + 7 * vs, kind: 'value', value: ellipsis(value, inner, vs), vs, qh, qual: s.qualifier ? ellipsis(String(s.qualifier).toUpperCase(), inner, 1) : '' });
+  y += (s.qualifier ? qh : 0) + 7 * vs + 6;
+  const label = balanceLines(String(s.label), inner, T.s, 3);
+  out.push({ y, h: blockH(label.length, T), kind: 'lines', lines: label, T });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: 'IN PROPORTION' }, { bare, pad, T });
 }
 
-function layoutNext(o, w, h) {
-  const inner = w - 2 * PAD;
-  const leaf = nextLeaf(o.next);
-  const LW = 40, LH = 46;
+const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+/**
+ * The calendar leaf (scenes/cards-more.js nextLeaf), a loose "28 OCTOBER" read as the date it is: the day large under
+ * the month's three letters, as a dated step shows it (the leaf's 36 px would cut OCTOBER to OCTOB...).
+ */
+function vLeaf(next) {
+  const l = nextLeaf(next);
+  if (l.big || !/^\d{1,2}$/.test(l.head)) return l;
+  const m = MONTHS.find((x) => x === l.foot || (l.foot.length >= 3 && x.startsWith(l.foot)));
+  return m ? { head: m.slice(0, 3), big: l.head, foot: '', line: '' } : l;
+}
+
+function layoutNext(o, w, h, programId, { T = T1, bare = false } = {}) {
+  const { pad, inner, top } = metrics(w, bare);
+  const leaf = vLeaf(o.next);
+  const LW = 40;
+  const LH = 46;
+  if (T.s === 2) {
+    // on the glass: the calendar leaf over the words, the words at 2x across the board (a tall board for a tall frame;
+    // a leaf with no weekday under its day is 6 rows shorter)
+    const lines = balanceLines(String(o.next.what), inner, 2, 4);
+    if (!lines[lines.length - 1]?.endsWith('...')) {
+      // (the date in words beside the leaf, not under it: WEDNESDAY 28 OCTOBER, TODAY or TOMORROW before it)
+      const said = leaf.big && leaf.line ? balanceLines(leaf.line, inner - LW - 10, 1, 3) : [];
+      const lh2 = leaf.big && leaf.foot ? LH : 40;
+      const out = [];
+      let y = top;
+      out.push({ y, h: lh2, kind: 'leaf', leaf, LW, LH: lh2, lines: said, lh: 11, big: false, tw: inner - LW - 10, ty: Math.round((lh2 - (said.length * 11 - 4)) / 2) });
+      y += lh2 + 6;
+      out.push({ y, h: blockH(lines.length, T2), kind: 'lines', lines, T: T2 });
+      return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: 'WHAT HAPPENS NEXT' }, { bare, pad, T });
+    }
+  }
   const tw = inner - LW - 10;
-  const two = balanceLines(String(o.next.what), tw, 2, 3);
-  const big = !two[two.length - 1]?.endsWith('...') && two.length <= 3;
+  const two = balanceLines(String(o.next.what), tw, 2, T.s === 2 ? 4 : 3);
+  const big = !two[two.length - 1]?.endsWith('...');
   const lines = big ? two : balanceLines(String(o.next.what), tw, 1, 5);
   const lh = big ? 18 : 11;
-  const line = leaf.big ? ellipsis(leaf.line, inner, 1) : '';
+  const line = leaf.big && leaf.line ? ellipsis(leaf.line, inner, 1) : '';
   const out = [];
-  let y = TOP;
+  let y = top;
   const th = lines.length * lh - (lh - 7 * (big ? 2 : 1));
   out.push({ y, h: Math.max(LH, th), kind: 'leaf', leaf, LW, LH, lines, lh, big, tw, ty: Math.round((Math.max(LH, th) - th) / 2) });
   y += Math.max(LH, th) + 7;
-  if (line) out.push({ y, h: 5, kind: 'micro', text: line });
-  return finish(out, srcLine(o.source, inner), w, h, inner, { kicker: 'WHAT HAPPENS NEXT' });
+  if (line) out.push({ y, h: bare ? 7 : 5, kind: 'micro', text: line });
+  return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: 'WHAT HAPPENS NEXT' }, { bare, pad, T });
 }
 
 const BUILDERS = { figures: layoutFigures, known: layoutKnown, timeline: layoutTimeline, change: layoutChange, term: layoutTerm, quote: layoutQuote, who: layoutWho, share: layoutShare, next: layoutNext };
 
-/** The board's layout for a stage of w x h (cached per card). */
-export function verticalBoardLayout(card, w, h, programId = '') {
+/**
+ * The board's layout for a stage of w x h (cached per card). Bare (on the vertical frame's glass): at 2x when every row
+ * and the source fit the stage that way, else at the body size.
+ */
+export function verticalBoardLayout(card, w, h, programId = '', bare = false) {
   const kind = boardKind(card);
   if (!kind || !BUILDERS[kind]) return null;
   let per = LAYOUTS.get(card);
-  const key = `${kind}|${w}|${h}|${programId}`;
+  const key = `${kind}|${w}|${h}|${programId}|${bare ? 1 : 0}`;
   if (per?.key === key) return per.L;
-  const L = { kind, ...BUILDERS[kind](card, w, h, programId) };
+  let L = null;
+  if (bare) {
+    const big = BUILDERS[kind](card, w, h, programId, { T: T2, bare: true });
+    if (big && !big.dropped) L = { kind, ...big };
+  }
+  L ||= { kind, ...BUILDERS[kind](card, w, h, programId, { T: T1, bare }) };
   LAYOUTS.set(card, { key, L });
   return L;
 }
@@ -361,43 +459,53 @@ function person(ctx, x, y, color) {
  * Draw the board of `card` in the stage box { x, y, w, h } on its own clock dt (s since the board's cut). Returns
  * false when the card is not a board this module lays out (the caller then shows something else).
  */
-export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', accent = null } = {}) {
+export function drawVerticalBoard(ctx, dt0, card, { x, y, w, h, programId = '', accent = null, bare = false } = {}) {
+  // (bare: the board's cascade is pre-rolled by PRE, so its kicker and first rows are whole on the shot's first frame:
+  // a clip that opens on a board opens on a composed frame; nothing on a story board follows the voice)
+  const dt = bare ? dt0 + PRE : dt0;
+  const R = bare ? pop : rise;
   const PW = w - 16;
-  const L = verticalBoardLayout(card, PW, h - 8, programId);
+  const L = verticalBoardLayout(card, PW, h - 8, programId, bare);
   if (!L) return false;
   const acc = accentFor(programId, accent);
   const paper = !!L.paper;
   const PX = x + 8;
   const PY = y + clamp(Math.round((h - L.PH) / 2), 4, Math.max(4, h - L.PH - 4));
-  const vis = Math.round(PW * easeOutQuint(seg(dt, 0, 0.3)));
+  // (bare: the glass and its frame are already there, whole from the shot's first frame: nothing wipes in)
+  const vis = bare ? PW : Math.round(PW * easeOutQuint(seg(dt, 0, 0.3)));
   if (vis <= 0) return true;
-  const tx = PX + PAD;
+  const tx = PX + L.pad;
   const ink = paper;
   const textStyle = paper ? S.ink : S.white;
+  const lineStyle = (T) => styleOf(T?.s || 1, ink);
   ctx.save();
   try {
-    clipRect(ctx, PX, PY, vis, L.PH);
+    // MONEY MINUTE's paper: cream, an ink edge on the right and the foot (on the glass: the whole sheet, the glass's
+    // height, the board's rows centred on it; no small card floating in the screen)
+    const sheet = paper && bare ? { y: y + 4, h: h - 8 } : { y: PY, h: L.PH };
+    clipRect(ctx, PX, sheet.y, vis, sheet.h);
     if (paper) {
-      // MONEY MINUTE's paper: cream, an ink edge on the right and the foot, a shadow under it
       ctx.fillStyle = P.cream;
-      ctx.fillRect(PX, PY, PW, L.PH);
+      ctx.fillRect(PX, sheet.y, PW, sheet.h);
       ctx.fillStyle = P.tan;
-      ctx.fillRect(PX + PW - 1, PY + 1, 1, L.PH - 1);
-      ctx.fillRect(PX + 1, PY + L.PH - 1, PW - 1, 1);
-    } else {
+      ctx.fillRect(PX + PW - 1, sheet.y + 1, 1, sheet.h - 1);
+      ctx.fillRect(PX + 1, sheet.y + sheet.h - 1, PW - 1, 1);
+    } else if (!bare) {
       ctx.fillStyle = P.black;
       ctx.fillRect(PX, PY, PW, L.PH);
       ctx.fillStyle = P.slate;
       ctx.fillRect(PX, PY, PW, 1);
     }
-    drawText(ctx, L.kicker, tx, PY + KICK_Y, paper ? S.microSlate : S.microFog);
+    // the kicker: micro fog on the channel's panel; on the glass, the body face in the programme's accent
+    if (bare) drawText(ctx, L.kicker, tx, PY + KICK_Y, { color: paper ? P.darkGreen : acc === P.purple ? P.fog : acc });
+    else drawText(ctx, L.kicker, tx, PY + KICK_Y, paper ? S.microSlate : S.microFog);
     const rule = paper ? P.darkGreen : acc;
     L.rows.forEach((r, i) => {
       const ry = PY + r.y;
       const at = 0.3 + i * 0.4;
       switch (r.kind) {
         case 'title':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * 11, seg(dt, 0.25 + k * 0.07, 0.34), textStyle));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * r.T.lh, seg(dt, 0.25 + k * 0.07, 0.34), lineStyle(r.T)));
           break;
         case 'rule': {
           const rw = Math.round(L.inner * easeOutQuint(seg(dt, 0.35, 0.3)));
@@ -408,13 +516,13 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           break;
         }
         case 'text':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * r.lh, seg(dt, at + k * 0.07, 0.34), styleOf(r.scale, ink)));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * r.lh, seg(dt, at + k * 0.07, 0.34), styleOf(r.scale, ink)));
           break;
         case 'figure': {
           let fy = ry;
           if (r.qual) {
-            drawText(ctx, r.qual, tx, fy, paper ? S.microSlate : S.microSilver);
-            fy += 7;
+            drawText(ctx, r.qual, tx, fy, L.bare ? (paper ? S.ink : S.silver) : paper ? S.microSlate : S.microSilver);
+            fy += r.qh;
           }
           const ruleY = fy + 7 * r.scale + 5;
           const rw = Math.round(r.figW * easeOutQuint(seg(dt, at, 0.25)));
@@ -423,15 +531,17 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
             ctx.fillRect(tx, ruleY, rw, 1);
           }
           if (dt >= at + 0.35) drawText(ctx, r.fig, tx, fy, styleOf(r.scale, ink));
-          r.label.forEach((ln, k) => rise(ctx, ln, tx, ruleY + 7 + k * 11, seg(dt, at + 0.4 + k * 0.07, 0.34), textStyle));
+          r.label.forEach((ln, k) => R(ctx, ln, tx, ruleY + 7 + k * r.T.lh, seg(dt, at + 0.4 + k * 0.07, 0.34), lineStyle(r.T)));
           break;
         }
-        case 'point':
+        case 'point': {
           if (dt < at) break;
+          const b = r.T.s === 2 ? 4 : 3;
           ctx.fillStyle = acc;
-          ctx.fillRect(tx, ry + 2, 3, 3);
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx + 9, ry + k * 11, seg(dt, at + 0.05 + k * 0.07, 0.34), S.white));
+          ctx.fillRect(tx, ry + (r.T.s === 2 ? 5 : 2), b, b);
+          r.lines.forEach((ln, k) => R(ctx, ln, tx + r.bullet, ry + k * r.T.lh, seg(dt, at + 0.05 + k * 0.07, 0.34), lineStyle(r.T)));
           break;
+        }
         case 'step': {
           // the rail down the steps, a node each, the date rising beside it and what happened under the date
           const railX = tx + 3;
@@ -446,8 +556,8 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           if (dt < at) break;
           ctx.fillStyle = acc;
           ctx.fillRect(railX - 1, ry + (r.ws === 2 ? 5 : 2), 3, 3);
-          rise(ctx, r.when, tx + r.tx, ry, seg(dt, at + 0.05, 0.34), styleOf(r.ws));
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx + r.tx, ry + 7 * r.ws + 5 + k * 11, seg(dt, at + 0.12 + k * 0.07, 0.34), S.white));
+          R(ctx, r.when, tx + r.tx, ry, seg(dt, at + 0.05, 0.34), styleOf(r.ws));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx + r.tx, ry + 7 * r.ws + 5 + k * r.T.lh, seg(dt, at + 0.12 + k * 0.07, 0.34), lineStyle(r.T)));
           break;
         }
         case 'day': {
@@ -465,13 +575,13 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           if (dt < at) break;
           ctx.fillStyle = acc;
           ctx.fillRect(railX - 1, ry + 5, 3, 3);
-          rise(ctx, r.when, tx + r.dayW - textW(r.when, 2), ry, seg(dt, at + 0.04, 0.34), S.white2);
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx + r.textX, ry + 4 + k * 11 - (r.lines.length > 1 ? 4 : 0), seg(dt, at + 0.12 + k * 0.07, 0.34), S.white));
+          R(ctx, r.when, tx + r.dayW - textW(r.when, 2), ry, seg(dt, at + 0.04, 0.34), S.white2);
+          r.lines.forEach((ln, k) => R(ctx, ln, tx + r.textX, ry + 4 + k * 11 - (r.lines.length > 1 ? 4 : 0), seg(dt, at + 0.12 + k * 0.07, 0.34), S.white));
           break;
         }
         case 'from':
-          drawText(ctx, 'FROM', tx, ry, S.microFog);
-          rise(ctx, r.text, tx, ry + 9, seg(dt, 0.3, 0.34), styleOf(r.vs));
+          drawText(ctx, 'FROM', tx, ry, L.bare ? S.fog : S.microFog);
+          R(ctx, r.text, tx, ry + r.lab + 2, seg(dt, 0.3, 0.34), styleOf(r.vs));
           break;
         case 'arrow': {
           const p = easeOutQuint(seg(dt, 0.55, 0.3));
@@ -489,11 +599,11 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
         }
         case 'to':
           if (dt < 0.8) break;
-          drawText(ctx, r.up ? `TO · ${r.up}` : 'TO', tx, ry, S.microFog);
-          rise(ctx, r.text, tx, ry + 9, seg(dt, 0.85, 0.34), styleOf(r.vs));
+          drawText(ctx, r.up ? `TO · ${r.up}` : 'TO', tx, ry, L.bare ? S.fog : S.microFog);
+          R(ctx, r.text, tx, ry + r.lab + 2, seg(dt, 0.85, 0.34), styleOf(r.vs));
           break;
         case 'term':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * (7 * r.ts + 4), seg(dt, 0.3 + k * 0.08, 0.34), styleOf(r.ts)));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * (7 * r.ts + 4), seg(dt, 0.3 + k * 0.08, 0.34), styleOf(r.ts)));
           break;
         case 'accentRule': {
           const rw = Math.round(L.inner * easeOutQuint(seg(dt, 0.5, 0.3)));
@@ -504,20 +614,20 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           break;
         }
         case 'lines':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * 11, seg(dt, at + k * 0.07, 0.34), S.white));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * (r.T?.lh || 11), seg(dt, at + k * 0.07, 0.34), lineStyle(r.T)));
           break;
         case 'lead':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * 11, seg(dt, 0.3 + k * 0.07, 0.34), S.silver));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * (r.T?.lh || 11), seg(dt, 0.3 + k * 0.07, 0.34), { color: P.silver, scale: r.T?.s || 1 }));
           break;
         case 'mark':
           ctx.fillStyle = acc;
           for (let yy = 0; yy < QUOTE_MARK.length; yy++) for (let xx = 0; xx < 8; xx++) if (QUOTE_MARK[yy][xx] === '#') ctx.fillRect(tx + xx, ry + yy, 1, 1);
           break;
         case 'quote':
-          r.lines.forEach((ln, k) => rise(ctx, ln, tx, ry + k * r.lh, seg(dt, 0.35 + k * 0.08, 0.34), styleOf(r.scale)));
+          r.lines.forEach((ln, k) => R(ctx, ln, tx, ry + k * r.lh, seg(dt, 0.35 + k * 0.08, 0.34), styleOf(r.scale)));
           break;
         case 'by':
-          rise(ctx, r.text, tx, ry, seg(dt, 0.6, 0.34), S.fog);
+          R(ctx, r.text, tx, ry, seg(dt, 0.6, 0.34), S.fog);
           break;
         case 'person': {
           if (dt < at) break;
@@ -538,8 +648,9 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
             ctx.restore();
           }
           const nx = tx + r.T + 8;
-          r.name.forEach((ln, k) => rise(ctx, ln, nx, ry + r.ty + k * 10, seg(dt, at + 0.12 + k * 0.06, 0.34), S.white));
-          r.role.forEach((ln, k) => rise(ctx, ln, nx, ry + r.ty + r.name.length * 10 + 2 + k * 9, seg(dt, at + 0.22 + k * 0.06, 0.34), S.fog));
+          const nb = r.name.length * r.nh - (r.ns === 2 ? 3 : 0);
+          r.name.forEach((ln, k) => R(ctx, ln, nx, ry + r.ty + k * r.nh, seg(dt, at + 0.12 + k * 0.06, 0.34), styleOf(r.ns)));
+          r.role.forEach((ln, k) => R(ctx, ln, nx, ry + r.ty + nb + 3 + k * 9, seg(dt, at + 0.22 + k * 0.06, 0.34), S.fog));
           break;
         }
         case 'chart': {
@@ -566,8 +677,8 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
           break;
         }
         case 'value':
-          if (r.qual && dt >= 0.6) drawText(ctx, r.qual, tx, ry, S.microFog);
-          if (dt >= 0.95) rise(ctx, r.value, tx, ry + (r.qual ? 8 : 0), seg(dt, 0.95, 0.3), styleOf(r.vs));
+          if (r.qual && dt >= 0.6) drawText(ctx, r.qual, tx, ry, L.bare ? S.fog : S.microFog);
+          if (dt >= 0.95) R(ctx, r.value, tx, ry + (r.qual ? r.qh : 0), seg(dt, 0.95, 0.3), styleOf(r.vs));
           break;
         case 'leaf': {
           const p = easeOutQuint(seg(dt, 0.3, 0.4));
@@ -588,27 +699,30 @@ export function drawVerticalBoard(ctx, dt, card, { x, y, w, h, programId = '', a
               if (r.leaf.big) {
                 const bs = textW(r.leaf.big, 3) <= r.LW - 4 ? 3 : 2;
                 drawText(ctx, r.leaf.big, tx + ((r.LW - textW(r.leaf.big, bs)) >> 1), ly + (bs === 3 ? 13 : 16), styleOf(bs, true));
-                drawText(ctx, r.leaf.foot, tx + ((r.LW - measureText(r.leaf.foot, 1, 'micro')) >> 1), ly + 38, S.microInk);
+                if (r.leaf.foot) drawText(ctx, r.leaf.foot, tx + ((r.LW - measureText(r.leaf.foot, 1, 'micro')) >> 1), ly + 38, S.microInk);
+              } else if (textW(r.leaf.foot, 1) <= r.LW - 4) {
+                drawText(ctx, r.leaf.foot, tx + ((r.LW - textW(r.leaf.foot, 1)) >> 1), ly + 24, S.ink);
               } else {
-                const foot = ellipsis(r.leaf.foot, r.LW - 4, 1);
-                drawText(ctx, foot, tx + ((r.LW - textW(foot, 1)) >> 1), ly + 24, S.ink);
+                // (a long word in the micro face, whole, before any dots)
+                const foot = microFit(r.leaf.foot, r.LW - 4);
+                drawText(ctx, foot, tx + ((r.LW - measureText(foot, 1, 'micro')) >> 1), ly + 25, S.microInk);
               }
             } finally {
               ctx.restore();
             }
           }
           const wx = tx + r.LW + 10;
-          r.lines.forEach((ln, k) => rise(ctx, ln, wx, ry + r.ty + k * r.lh, seg(dt, 0.7 + k * 0.08, 0.34), r.big ? S.white2 : S.white));
+          r.lines.forEach((ln, k) => R(ctx, ln, wx, ry + r.ty + k * r.lh, seg(dt, 0.7 + k * 0.08, 0.34), r.big ? S.white2 : S.white));
           break;
         }
         case 'micro':
-          rise(ctx, r.text, tx, ry, seg(dt, 0.55, 0.34), S.microWhite);
+          R(ctx, r.text, tx, ry, seg(dt, 0.55, 0.34), L.bare ? S.white : S.microWhite);
           break;
         default:
           break;
       }
     });
-    if (L.src) drawText(ctx, L.src, tx, PY + L.srcY, paper ? S.microSlate : S.microFog);
+    if (L.src) drawText(ctx, L.src, tx, PY + L.srcY, L.bare ? (paper ? { color: P.slate } : S.fog) : paper ? S.microSlate : S.microFog);
   } finally {
     ctx.restore();
   }

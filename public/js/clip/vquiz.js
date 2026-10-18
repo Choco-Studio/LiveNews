@@ -55,8 +55,19 @@ const MARK_W = 9 + NAME_MAX;
 
 /** The column's geometry in a box: the panel (4 px in) and the content (12 px in). */
 function cols(box) {
-  return { px: box.x + 4, py: box.y + 4, pw: box.w - 8, ph: box.h - 8, x: box.x + 12, r: box.x + box.w - 12, cw: box.w - 24 };
+  return { px: box.x + 4, py: box.y + 4, pw: box.w - 8, ph: box.h - 8, x: box.x + 12, r: box.x + box.w - 12, cw: box.w - 24, bare: !!box.bare };
 }
+/**
+ * On the glass (bare) a board's entrance is pre-rolled by PRE seconds: its kicker, its frame, its question and its
+ * players' marks are whole on the shot's first frame, so a clip that opens on a board opens on a composed frame. Only
+ * the entrance (`entry(C, dt)`); what follows the voice and the plan (the locks, the countdown, the reveal) keeps the
+ * board's own clock.
+ */
+const PRE = 0.9;
+const entry = (C, dt) => (C.bare ? dt + PRE : dt);
+// a board that is all entrance (the round's card, the scores, the table): settled from its first frame on the glass
+const SETTLED = 2.5;
+const settled = (C, dt) => (C.bare ? dt + SETTLED : dt);
 
 function rise(ctx, text, x, y, p, style) {
   if (p <= 0 || !text) return;
@@ -72,8 +83,15 @@ function rise(ctx, text, x, y, p, style) {
   }
 }
 
-/** The panel wiped in from the left (leaves the clip set: the caller saves and restores). */
-function panel(ctx, dt, x, y, w, h) {
+/**
+ * The panel wiped in from the left (leaves the clip set: the caller saves and restores). Bare (the vertical frame's
+ * glass and marquee already stand behind the board, whole from the shot's first frame): no panel and no wipe.
+ */
+function panel(ctx, dt, x, y, w, h, bare = false) {
+  if (bare) {
+    clipRect(ctx, x, y, w, h);
+    return true;
+  }
   const vis = Math.round(w * ease(dt, 0, 0.3));
   if (vis <= 0) return false;
   clipRect(ctx, x, y, vis, h);
@@ -176,11 +194,15 @@ function drawLines(ctx, L, x, y, color, dt = 99, at = -1, align = 'left') {
 // ---------------------------------------------------------------- the header, the foot
 
 /** The kicker and the frame: 2x when the frame fits the column (beside `beside` px kept free), else 1x. Returns the y under it. */
-function header(ctx, dt, C, kicker, frame, beside = 0) {
-  rise(ctx, kicker, C.x, C.py + 7, seg(dt, 0.2, 0.35), S.microFog);
+function header(ctx, dt0, C, kicker, frame, beside = 0) {
+  // (on the glass the kicker in the body face, the frame under it: both read at a phone's size)
+  const dt = entry(C, dt0);
+  const k = C.bare ? 9 : 0;
+  if (C.bare) rise(ctx, ellipsis(up(kicker), C.cw, 1), C.x, C.py + 6, seg(dt, 0.2, 0.35), S.fog);
+  else rise(ctx, kicker, C.x, C.py + 7, seg(dt, 0.2, 0.35), S.microFog);
   const big = textW(frame, 2) <= C.cw - beside;
-  rise(ctx, frame, C.x, C.py + 15, seg(dt, 0.25, 0.35), big ? S.white2 : S.white);
-  return C.py + 15 + (big ? 14 : 7) + 7;
+  rise(ctx, frame, C.x, C.py + 15 + k, seg(dt, 0.25, 0.35), big ? S.white2 : S.white);
+  return C.py + 15 + k + (big ? 14 : 7) + 7;
 }
 
 function drawCountdown(ctx, dt, x, y, w, cd, h = 3) {
@@ -225,27 +247,29 @@ function vHowMany(ctx, dt, o, box) {
   const revealed = dt >= revealAt;
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph)) return;
+    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
     let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'howmany' }), o.frame || frameOf('howmany'));
     const L = revealed ? layoutText(q.masked, C.cw, 12, q.sentence) : layoutText(q.masked, C.cw, 12);
-    drawLines(ctx, L, C.x, y + 2, P.white, dt, revealed ? revealAt : 0.35);
+    drawLines(ctx, L, C.x, y + 2, P.white, revealed ? dt : entry(C, dt), revealed ? revealAt : 0.35);
     y += 2 + L.h + 10;
     // the desks' guess boxes, one under the other, up from the first moments (empty: three slate dots)
+    // (on the glass a guess box is 25 px and the guess stands at 2x when it fits: the game's own numbers large)
+    const GB = C.bare ? { h: 25, pitch: 29, gy: 9 } : { h: 17, pitch: 21, gy: 5 };
     ['A', 'B'].forEach((seat, i) => {
-      const bp = ease(dt, 0.45 + 0.1 * i, 0.3);
+      const bp = ease(entry(C, dt), 0.45 + 0.1 * i, 0.3);
       if (bp <= 0) return;
       const bx = C.x;
-      const by = y + i * 21;
+      const by = y + i * GB.pitch;
       const bw = C.cw;
       const g = (o.guesses || []).find((x) => x.seat === seat) || null;
       ctx.save();
       try {
-        clipRect(ctx, bx, by, Math.round(bw * bp), 17);
+        clipRect(ctx, bx, by, Math.round(bw * bp), GB.h);
         ctx.fillStyle = P.slate;
-        ctx.fillRect(bx, by, bw, 17);
+        ctx.fillRect(bx, by, bw, GB.h);
         ctx.fillStyle = P.black;
-        ctx.fillRect(bx + 1, by + 1, bw - 2, 15);
-        const gy = by + 5;
+        ctx.fillRect(bx + 1, by + 1, bw - 2, GB.h - 2);
+        const gy = by + GB.gy;
         const mw = drawMark(ctx, seat, nameOf(o.players, seat), bx + 5, gy, 'id');
         const lx = bx + 5 + mw + 5;
         const lw = measureText('GUESS', 1, 'micro') + 4;
@@ -260,6 +284,19 @@ function vHowMany(ctx, dt, o, box) {
           return;
         }
         const said = up(g.said);
+        if (C.bare && textW(said, 2) + 10 <= bx + bw - vx) {
+          // on the glass: the guess at 2x, lit gold at the reveal when it scored, its points beside it
+          ctx.save();
+          try {
+            clipRect(ctx, vx - 2, by + 2, Math.round((bx + bw - vx) * p), GB.h - 4);
+            const scored = revealed && (g.points || 0) > 0 && ease(dt, revealAt + 0.45, 0.2) >= 1;
+            drawText(ctx, said, vx, gy - 4, { color: scored ? P.yellow : revealed ? P.silver : P.white, scale: 2 });
+            if (scored) drawText(ctx, `+${g.points}`, vx + textW(said, 2) + 4, gy, S.white);
+          } finally {
+            ctx.restore();
+          }
+          return;
+        }
         ctx.save();
         try {
           clipRect(ctx, vx - 2, gy - 3, Math.round((bx + bw - vx) * p), 14);
@@ -295,23 +332,28 @@ function vHowMany(ctx, dt, o, box) {
     // cursor blinking on the bed's half notes, the countdown under it while it runs; at the reveal the answer lands in
     // the box in the reveal's yellow (the box widens to it), its label under it. The box is one width whatever the
     // answer, so it gives nothing away. On a short stage, the countdown at the foot.
-    const midTop = y + 2 * 21 + 6;
+    const midTop = y + 2 * GB.pitch + (C.bare ? 2 : 6);
     const midH = footY - 6 - midTop;
     const cx = C.x + (C.cw >> 1);
     const fig = q.figure || null;
     const value = up(fig ? `${fig.qualifier ? `${fig.qualifier} ` : ''}${fig.value}` : '');
-    const big = value && textW(value, 3) <= C.cw - 10 ? 3 : 2;
-    if (midH >= 58) {
-      const my = midTop + ((midH - 58) >> 1);
-      const p = ease(dt, 0.75, 0.3);
+    // (a short board keeps the module, compact: a 21-row box, the answer at 2x, the countdown at the foot)
+    const full = midH >= 58;
+    const compact = !full && midH >= 42;
+    const big = full && value && textW(value, 3) <= C.cw - 10 ? 3 : 2;
+    // (on the glass the module is settled from the board's first frame, like its header: nothing half open)
+    const me = C.bare ? settled(C, dt) : entry(C, dt);
+    if (full || compact) {
+      const my = midTop + ((midH - (full ? 58 : 41)) >> 1);
+      const p = ease(me, 0.75, 0.3);
       if (p > 0) {
         const head = revealed ? 'THE ANSWER' : 'YOUR GUESS?';
         const hw = textW(head, 2);
         if (revealed) drawText(ctx, head, cx - (hw >> 1), my, S.white2);
-        else rise(ctx, head, cx - (hw >> 1), my, seg(dt, 0.75, 0.3), S.white2);
+        else rise(ctx, head, cx - (hw >> 1), my, seg(me, 0.75, 0.3), S.white2);
         const bw0 = Math.min(C.cw, 96);
         const bw = revealed && value ? Math.min(C.cw, Math.max(bw0, textW(value, big) + 12)) : bw0;
-        const bh = 27;
+        const bh = full ? 27 : 21;
         const by = my + 20;
         const open = Math.round(bw * p);
         ctx.fillStyle = P.slate;
@@ -327,15 +369,38 @@ function vHowMany(ctx, dt, o, box) {
             }
           } else if (value) {
             const vw = textW(value, big);
-            rise(ctx, value, cx - (vw >> 1), by + (big === 3 ? 3 : 6), seg(dt, revealAt + 0.15, 0.3), { color: P.yellow, scale: big });
+            rise(ctx, value, cx - (vw >> 1), by + (big === 3 ? 3 : full ? 6 : 3), seg(dt, revealAt + 0.15, 0.3), { color: P.yellow, scale: big });
           }
         }
         const cd = o.countdown || null;
-        if (!revealed && cd && dt >= cd.at) drawCountdown(ctx, dt, C.x + ((C.cw - 140) >> 1), by + bh + 6, 140, cd, 5);
-        const label = revealed ? up(fig?.label || '') : '';
+        if (!revealed && cd && dt >= cd.at) {
+          if (full) drawCountdown(ctx, dt, C.x + ((C.cw - 140) >> 1), by + bh + 6, 140, cd, 5);
+          else drawCountdown(ctx, dt, C.x + ((C.cw - 128) >> 1), footY + 4, 128, cd);
+        }
+        const label = revealed && full ? up(fig?.label || '') : '';
         if (label) rise(ctx, label, cx - (measureText(label, 1, 'micro') >> 1), by + bh + 6, seg(dt, revealAt + 0.3, 0.3), S.microSilver);
       }
-    } else if (!revealed) drawCountdown(ctx, dt, C.x + ((C.cw - 128) >> 1), footY + 4, 128, o.countdown || null);
+    } else {
+      // a long question leaves a strip under the guesses: on the glass it still has a job, the module's words alone
+      // (YOUR GUESS? at 2x; at the reveal the answer at 2x in the reveal's yellow), centred in it
+      if (C.bare && midH >= 16) {
+        if (revealed && value) {
+          // THE ANSWER over the figure when the strip has room for both (the figure at 3x when it has more), else
+          // the figure alone at 2x
+          const labelled = midH >= 25;
+          const vs = labelled && midH >= 32 && textW(value, 3) <= C.cw ? 3 : textW(value, 2) <= C.cw ? 2 : 1;
+          const bh = (labelled ? 11 : 0) + 7 * vs;
+          const my = midTop + ((midH - bh) >> 1);
+          if (labelled) drawText(ctx, 'THE ANSWER', cx - (textW('THE ANSWER', 1) >> 1), my, S.silver);
+          const vw = textW(value, vs);
+          rise(ctx, value, cx - (vw >> 1), my + (labelled ? 11 : 0), seg(dt, revealAt + 0.15, 0.3), { color: P.yellow, scale: vs });
+        } else if (!revealed) {
+          const head = 'YOUR GUESS?';
+          drawText(ctx, head, cx - (textW(head, 2) >> 1), midTop + ((midH - 14) >> 1), S.white2);
+        }
+      }
+      if (!revealed) drawCountdown(ctx, dt, C.x + ((C.cw - 128) >> 1), footY + 4, 128, o.countdown || null);
+    }
     if (revealed) drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), C.cw, 2, 'REPORTED'), C.x, footY, dt, revealAt + 0.3);
   } finally {
     ctx.restore();
@@ -449,10 +514,10 @@ function vWhere(ctx, dt, o, box) {
   const locks = namedLocks(o.locks, o.players);
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph)) return;
+    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
     let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'where' }), o.frame || frameOf('where'));
     const H1 = revealed && q.masked ? layoutText(q.masked, C.cw, 5, q.words) : layoutText(q.masked || q.words, C.cw, 5);
-    drawLines(ctx, H1, C.x, y + 1, P.white, dt, revealed && q.masked ? revealAt : 0.35);
+    drawLines(ctx, H1, C.x, y + 1, P.white, revealed && q.masked ? dt : entry(C, dt), revealed && q.masked ? revealAt : 0.35);
     // (room for the headline's longer layout, masked or whole, so the map never moves at the reveal)
     const Hmax = Math.max(H1.h, layoutText(q.masked || q.words, C.cw, 5).h, q.masked ? layoutText(q.masked, C.cw, 5, q.words).h : 0);
     y += 1 + Hmax + 7;
@@ -463,7 +528,7 @@ function vWhere(ctx, dt, o, box) {
     const MH = C.py + C.ph - footH - 3 - MY;
     const W2 = whereLayoutV(q, locks, MW, MH);
     if (!W2) return;
-    const mp = ease(dt, 0.3, 0.3);
+    const mp = ease(entry(C, dt), 0.3, 0.3);
     if (mp > 0) {
       ctx.save();
       try {
@@ -534,12 +599,16 @@ function vWhere(ctx, dt, o, box) {
 
 // ---------------------------------------------------------------- LETTER BY LETTER
 
-const LT = { w: 11, h: 15, row: 18, word: 6 };
+const LT = { w: 11, h: 15, row: 18, word: 6, s: 1 };
+// on the glass the tiles at 2x when every word fits the column and the rows fit the board: the game's own pieces large
+// (a narrower tile, 13 px, for a headline with a long word: the 2x letter is 10 px)
+const LT2 = { w: 15, h: 21, row: 25, word: 8, s: 2 };
+const LT2N = { w: 13, h: 19, row: 23, word: 7, s: 2 };
 const LETTER_RE = /[\p{L}\p{N}]/u;
 const LETTERS = new Map();
 /** The letter tiles at the column's width (quiz-fit.js lettersLayout's rules: words whole, rows centred). */
-function lettersLayoutV(words, cw) {
-  const key = `${cw}|${words}`;
+function lettersLayoutV(words, cw, T = LT) {
+  const key = `${cw}|${T.s}|${words}`;
   let L = LETTERS.get(key);
   if (L) return L;
   const chars = [...String(words ?? '')];
@@ -549,7 +618,7 @@ function lettersLayoutV(words, cw) {
     if (/\s/.test(ch)) {
       if (cur.length) ws.push(cur);
       cur = [];
-    } else cur.push({ i, ch, tile: LETTER_RE.test(ch), w: LETTER_RE.test(ch) ? LT.w : measureText(ch) });
+    } else cur.push({ i, ch, tile: LETTER_RE.test(ch), w: LETTER_RE.test(ch) ? T.w : measureText(ch, T.s) });
   });
   if (cur.length) ws.push(cur);
   const widthOf = (wd) => wd.reduce((t, c, k) => t + c.w + (k ? 1 : 0), 0);
@@ -557,9 +626,9 @@ function lettersLayoutV(words, cw) {
   let row = null;
   for (const wd of ws) {
     const w = widthOf(wd);
-    if (row && row.w + LT.word + 1 + w <= cw) {
+    if (row && row.w + T.word + 1 + w <= cw) {
       row.words.push(wd);
-      row.w += LT.word + 1 + w;
+      row.w += T.word + 1 + w;
     } else {
       row = { words: [wd], w };
       rows.push(row);
@@ -568,9 +637,9 @@ function lettersLayoutV(words, cw) {
   const cells = [];
   rows.forEach((r, ri) => {
     let x = Math.round((cw - r.w) / 2);
-    const y = ri * LT.row;
+    const y = ri * T.row;
     r.words.forEach((wd, wi) => {
-      if (wi) x += LT.word + 1;
+      if (wi) x += T.word + 1;
       wd.forEach((c, k) => {
         if (k) x += 1;
         cells.push({ ...c, x, y });
@@ -578,7 +647,7 @@ function lettersLayoutV(words, cw) {
       });
     });
   });
-  L = { cells, rows: rows.length, h: rows.length * LT.row - 3 };
+  L = { cells, rows: rows.length, h: rows.length * T.row - 3, T, fits: rows.every((r) => r.w <= cw) };
   if (LETTERS.size > 40) LETTERS.delete(LETTERS.keys().next().value);
   LETTERS.set(key, L);
   return L;
@@ -602,7 +671,7 @@ function vLetters(ctx, dt, o, box) {
   const stageAt = stage ? times[stage - 1] : 0;
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph)) return;
+    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
     let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'letters', desk: q.desk }), o.frame || frameOf('letters'));
     // the buzzer lamps on their own row: unlit, lit gold on a buzz, slate and OUT on a stall
     const players = o.players?.length ? o.players : [{ seat: 'A', name: '' }, { seat: 'B', name: '' }];
@@ -611,22 +680,27 @@ function vLetters(ctx, dt, o, box) {
       const b = (o.buzzes || []).find((x) => x.seat === pl.seat && dt >= (x.at ?? Infinity));
       const out = b?.stall && dt >= b.at + 0.9;
       const w = markWidth(pl.name);
-      if (dt >= 0.4) {
+      if (entry(C, dt) >= 0.4) {
         drawMark(ctx, pl.seat, pl.name, lx, y, b && !out ? 'lit' : 'off');
         if (out) drawText(ctx, 'OUT', lx + w + 3, y + 1, S.microFog);
       }
       lx += w + (out ? measureText('OUT', 1, 'micro') + 3 : 0) + 14;
     });
     y += 14;
-    const L = lettersLayoutV(q.words, C.cw);
     const footH = 14;
     const room = C.py + C.ph - footH - y;
+    const fit = (T) => {
+      const l = C.bare ? lettersLayoutV(q.words, C.cw, T) : null;
+      return l && l.fits && l.h <= room ? l : null;
+    };
+    const L = fit(LT2) || fit(LT2N) || lettersLayoutV(q.words, C.cw);
+    const T = L.T;
     const top = y + Math.max(0, Math.round((room - L.h) / 2));
-    const tilesIn = ease(dt, 0.45, 0.35);
+    const tilesIn = ease(entry(C, dt), 0.45, 0.35);
     if (tilesIn > 0) {
       ctx.save();
       try {
-        clipRect(ctx, C.x, top - 2, Math.round(C.cw * tilesIn), L.rows * LT.row + 2);
+        clipRect(ctx, C.x, top - 2, Math.round(C.cw * tilesIn), L.rows * T.row + 2);
         const gold = revealed && o.winner ? ease(dt, revealAt, 0.3) : 0;
         const fresh = L.cells.filter((c) => c.tile && shown.has(c.i) && !prev.has(c.i));
         for (const cell of L.cells) {
@@ -636,24 +710,24 @@ function vLetters(ctx, dt, o, box) {
           if (cell.tile) {
             if (goldHere) {
               ctx.fillStyle = P.yellow;
-              ctx.fillRect(cx, cy, LT.w, LT.h);
-            } else purpleBox(ctx, cx, cy, LT.w, LT.h);
+              ctx.fillRect(cx, cy, T.w, T.h);
+            } else purpleBox(ctx, cx, cy, T.w, T.h);
           }
           const show = revealed || shown.has(cell.i);
           if (!show) continue;
           if (!cell.tile) {
-            drawText(ctx, cell.ch, cx, cy + 4, S.white);
+            drawText(ctx, cell.ch, cx, cy + (T.s === 2 ? 4 : 4), T.s === 2 ? S.white2 : S.white);
             continue;
           }
           const k = fresh.indexOf(cell);
           const at = revealed && !shown.has(cell.i) ? revealAt : k >= 0 ? stageAt + (0.3 * k) / Math.max(1, fresh.length) : -1;
           const p = seg(dt, at, 0.15);
           if (p <= 0) continue;
-          const off = Math.round((1 - easeOutQuint(p)) * 11);
+          const off = Math.round((1 - easeOutQuint(p)) * (T.h - 4));
           ctx.save();
           try {
-            clipRect(ctx, cx + 1, cy + 1, LT.w - 2, LT.h - 2);
-            drawText(ctx, cell.ch, cx + ((LT.w - textW(cell.ch, 1)) >> 1), cy + 4 + off, goldHere ? S.black : S.white);
+            clipRect(ctx, cx + 1, cy + 1, T.w - 2, T.h - 2);
+            drawText(ctx, cell.ch, cx + ((T.w - textW(cell.ch, T.s)) >> 1), cy + (T.s === 2 ? 4 : 4) + off, goldHere ? (T.s === 2 ? { color: P.black, scale: 2 } : S.black) : T.s === 2 ? S.white2 : S.white);
           } finally {
             ctx.restore();
           }
@@ -682,18 +756,18 @@ function vToday(ctx, dt, o, box) {
   const total = o.total || 6;
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph)) return;
+    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
     let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'today', k: (o.index ?? 0) + 1, n: total }), o.frame || frameOf('today'));
     const pad = 4;
     const L = layoutText(it.words, C.cw - 2 * pad - 2, 4);
     const ch = L.h + 2 * pad + 2;
-    const cp = ease(dt, 0.35, 0.25);
+    const cp = ease(entry(C, dt), 0.35, 0.25);
     if (cp > 0) {
       ctx.save();
       try {
         clipRect(ctx, C.x, y, Math.round(C.cw * cp), ch);
         purpleBox(ctx, C.x, y, C.cw, ch);
-        drawLines(ctx, L, C.x + C.cw / 2, y + pad + 1, P.white, dt, 0.45, 'center');
+        drawLines(ctx, L, C.x + C.cw / 2, y + pad + 1, P.white, entry(C, dt), 0.45, 'center');
       } finally {
         ctx.restore();
       }
@@ -792,12 +866,12 @@ function vPicture(ctx, dt, o, box) {
   const stepTimes = o.stepTimes || [0, cd ? cd.at : Infinity, cd ? cd.at + 2 * HALF_NOTE : Infinity, cd ? cd.at + 4 * HALF_NOTE : Infinity];
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph)) return;
+    if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
     // the players' shapes and names on the frame's row (the tiles' marks below are their shapes alone)
     const players = (o.players || []).slice(0, 2);
     const legendW = players.reduce((t, p) => t + markWidth(p.name) + 8, 0);
     let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'picture' }), o.frame || frameOf('picture'), legendW);
-    if (dt >= 0.4) {
+    if (entry(C, dt) >= 0.4) {
       let lx = C.r - legendW + 8;
       for (const p of players) {
         drawMark(ctx, p.seat, p.name, lx, C.py + 18, 'id');
@@ -883,26 +957,31 @@ const RULES = { picture: 'LOCK IN EARLY: 3, 2 OR 1 POINTS', letters: 'FIRST TO N
 const DESKS = { world: 'WORLD', business: 'BUSINESS', tech: 'TECHNOLOGY', science: 'SCIENCE', sport: 'SPORT' };
 const centred = (C, h) => C.py + Math.max(0, Math.round((C.ph - h) / 2));
 
-function vRound(ctx, dt, o, box) {
+function vRound(ctx, dt0, o, box) {
   const title = o.sudden ? 'SUDDEN DEATH' : ROUND_TITLES[o.type] || up(o.title || '');
   if (!title) return;
   const C = cols(box);
+  const dt = settled(C, dt0);
   const kicker = o.sudden ? 'TIE-BREAK' : o.k ? `ROUND ${ORDINALS[o.k - 1] || o.k}` : '';
   const rule = o.sudden ? 'FIRST TO NAME THE HEADLINE WINS' : (o.type === 'howmany' && o.exact ? RULES.howmanyExact : RULES[o.type]) || '';
-  // the round's name is the clip's first picture: 3x when it fits one line of the column, else 2x on up to two
-  const big = textW(title, 3) <= C.cw;
+  // the round's name is the clip's first picture: 3x when it fits one line of the column, else 2x on up to two (on
+  // the glass: 3x on up to two lines, the round's number at 2x in gold over it)
+  const three = C.bare ? balanceLines(title, C.cw, 3, 2) : [title];
+  const big = C.bare ? !three[three.length - 1]?.endsWith('...') : textW(title, 3) <= C.cw;
   const ts = big ? 3 : 2;
   const lh = big ? 25 : 18;
-  const tl = big ? [title] : balanceLines(title, C.cw, 2, 2);
+  const tl = big ? three : balanceLines(title, C.cw, 2, 2);
   const rl = balanceLines(rule, C.cw, 1, 2);
-  const h = 12 + tl.length * lh + 8 + rl.length * 11 + 8;
+  const kh = C.bare ? 9 : 0;
+  const h = 12 + kh + tl.length * lh + 8 + rl.length * 11 + 8;
   const y = centred(C, h);
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, y, C.pw, h)) return;
-    rise(ctx, kicker, C.x, y + 8, seg(dt, 0.2, 0.3), S.microFog);
-    tl.forEach((l, i) => rise(ctx, l, C.x, y + 17 + i * lh, seg(dt, 0.28 + i * 0.06, 0.35), big ? S.white3 : S.white2));
-    const ry = y + 17 + tl.length * lh - 1;
+    if (!panel(ctx, dt, C.px, y, C.pw, h, C.bare)) return;
+    if (C.bare) rise(ctx, kicker, C.x, y + 4, seg(dt, 0.2, 0.3), { color: P.yellow, scale: 2 });
+    else rise(ctx, kicker, C.x, y + 8, seg(dt, 0.2, 0.3), S.microFog);
+    tl.forEach((l, i) => rise(ctx, l, C.x, y + 17 + kh + i * lh, seg(dt, 0.28 + i * 0.06, 0.35), big ? S.white3 : S.white2));
+    const ry = y + 17 + kh + tl.length * lh - 1;
     const rp = ease(dt, 0.4, 0.3);
     if (rp > 0) purpleBox(ctx, C.x, ry, Math.max(3, Math.round(Math.max(...tl.map((l) => textW(l, ts))) * rp)), 3);
     rl.forEach((l, i) => rise(ctx, l, C.x, ry + 8 + i * 11, seg(dt, 0.5 + i * 0.06, 0.3), S.silver));
@@ -920,8 +999,9 @@ function vDouble(ctx, dt, o, box) {
   const pickAt = o.pick ? o.pickAt ?? 0 : Infinity;
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, y, C.pw, h)) return;
-    const bp = ease(dt, 0.2, 0.3);
+    if (!panel(ctx, dt, C.px, y, C.pw, h, C.bare)) return;
+    const de = settled(C, dt);
+    const bp = ease(de, 0.2, 0.3);
     if (bp > 0) {
       ctx.save();
       try {
@@ -936,7 +1016,7 @@ function vDouble(ctx, dt, o, box) {
     const line = offered.length > 1 ? 'PICKS THE DESK' : 'PLAYS FOR DOUBLE POINTS';
     const lw = markWidth(name) + 6 + textW(line, 1);
     const lx = C.x + ((C.cw - lw) >> 1);
-    if (dt >= 0.45) {
+    if (de >= 0.45) {
       drawMark(ctx, o.player, name, lx, y + 56, 'id');
       drawText(ctx, line, lx + markWidth(name) + 6, y + 56, S.silver);
     }
@@ -945,7 +1025,7 @@ function vDouble(ctx, dt, o, box) {
     offered.forEach((desk, i) => {
       const tx = C.x + ((C.cw - total) >> 1) + i * (tw + 8);
       const ty = y + 70;
-      const p = ease(dt, 0.55 + i * 0.12, 0.25);
+      const p = ease(de, 0.55 + i * 0.12, 0.25);
       if (p <= 0) return;
       const label = DESKS[desk] || up(desk);
       const state = dt >= pickAt ? (desk === o.pick ? 'right' : 'wrong') : 'open';
@@ -964,7 +1044,8 @@ function vDouble(ctx, dt, o, box) {
     });
     const other = o.leader || (o.player === 'A' ? 'B' : 'A');
     const stake = [`DOUBLE POINTS FOR ${markName(name)}`, `SINGLE FOR ${markName(nameOf(o.players, other))}`];
-    stake.forEach((s, i) => rise(ctx, s, C.x + ((C.cw - measureText(s, 1, 'micro')) >> 1), y + 94 + i * 8, seg(dt, 0.8 + i * 0.05, 0.3), S.microFog));
+    if (C.bare) stake.forEach((s, i) => rise(ctx, s, C.x + ((C.cw - textW(s, 1)) >> 1), y + 92 + i * 10, seg(de, 0.8 + i * 0.05, 0.3), i ? S.fog : S.silver));
+    else stake.forEach((s, i) => rise(ctx, s, C.x + ((C.cw - measureText(s, 1, 'micro')) >> 1), y + 94 + i * 8, seg(de, 0.8 + i * 0.05, 0.3), S.microFog));
   } finally {
     ctx.restore();
   }
@@ -974,12 +1055,13 @@ function vScores(ctx, dt, o, box) {
   const players = (o.players || []).slice(0, 2);
   if (players.length < 2) return;
   const C = cols(box);
+  if (C.bare) return vScoresBig(ctx, dt, o, C, players);
   const sc = o.scores || {};
   const h = 62;
   const y = centred(C, h);
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, y, C.pw, h)) return;
+    if (!panel(ctx, dt, C.px, y, C.pw, h, C.bare)) return;
     rise(ctx, up(o.title || 'THE SCORES'), C.x, y + 7, seg(dt, 0.2, 0.3), S.microFog);
     const half = C.pw >> 1;
     ctx.fillStyle = P.slate;
@@ -991,6 +1073,55 @@ function vScores(ctx, dt, o, box) {
       const s = String(sc[pl.seat] ?? 0);
       const style = o.winner ? (o.winner === pl.seat ? S.yellow3 : S.silver3) : S.white3;
       rise(ctx, s, Math.round(cx - textW(s, 3) / 2), y + 34, seg(dt, 0.45 + i * 0.1, 0.35), style);
+    });
+  } finally {
+    ctx.restore();
+  }
+}
+
+/** A player's shape at 2x (cards-quiz.js drawSeat's own seven rows, each pixel two by two). */
+function seat2(ctx, seat, x, y, color) {
+  const proxy = {
+    set fillStyle(c) {
+      ctx.fillStyle = c;
+    },
+    fillRect(a, b, w, h) {
+      ctx.fillRect(x + a * 2, y + b * 2, w * 2, h * 2);
+    },
+  };
+  drawSeat(proxy, seat, 0, 0, color);
+}
+
+/**
+ * The final scores on the glass, set to fill it: the title, then each player in a half, the shape and the name at 2x,
+ * the score at 5x under it (the winner's in gold), landing in turn.
+ */
+function vScoresBig(ctx, dt0, o, C, players) {
+  const dt = settled(C, dt0);
+  const sc = o.scores || {};
+  const h = 10 + 9 + 12 + 14 + 10 + 35 + 8;
+  const y = centred(C, h);
+  ctx.save();
+  try {
+    if (!panel(ctx, dt, C.px, y, C.pw, h, true)) return;
+    const title = up(o.title || 'THE SCORES');
+    rise(ctx, title, C.x + ((C.cw - textW(title, 1)) >> 1), y + 6, seg(dt, 0.2, 0.3), S.fog);
+    const half = C.pw >> 1;
+    ctx.fillStyle = P.slate;
+    if (dt >= 0.3) ctx.fillRect(C.px + half, y + 30, 1, h - 34);
+    players.forEach((pl, i) => {
+      const cx = C.px + half * i + (half >> 1);
+      let name = up(pl.name);
+      while (name.length > 2 && textW(name, 2) > half - 22) name = name.slice(0, -1);
+      const mw = 14 + 4 + textW(name, 2);
+      if (dt >= 0.35 + i * 0.1) {
+        const mx = Math.round(cx - mw / 2);
+        seat2(ctx, pl.seat, mx, y + 30, P.white);
+        drawText(ctx, name, mx + 18, y + 30, S.white2);
+      }
+      const s = String(sc[pl.seat] ?? 0);
+      const style = o.winner ? (o.winner === pl.seat ? { color: P.yellow, scale: 5 } : { color: P.silver, scale: 5 }) : { color: P.white, scale: 5 };
+      rise(ctx, s, Math.round(cx - textW(s, 5) / 2), y + 55, seg(dt, 0.45 + i * 0.1, 0.35), style);
     });
   } finally {
     ctx.restore();
@@ -1013,13 +1144,14 @@ function vTable(ctx, dt, o, box) {
   const rows = tableRows(o.standings, o.players);
   if (!rows.length) return;
   const C = cols(box);
+  if (C.bare) return vTableBig(ctx, dt, o, C, rows);
   const tonight = new Map((o.players || []).map((p) => [p.id || p.name, p]));
   const pitch = 11;
   const h = 20 + rows.length * pitch + 5;
   const y = centred(C, h);
   ctx.save();
   try {
-    if (!panel(ctx, dt, C.px, y, C.pw, h)) return;
+    if (!panel(ctx, dt, C.px, y, C.pw, h, C.bare)) return;
     rise(ctx, up(o.title || "THIS WEEK'S TABLE"), C.x, y + 7, seg(dt, 0.2, 0.3), S.microFog);
     const colP = C.r - 40;
     const colW = C.r;
@@ -1055,6 +1187,95 @@ function vTable(ctx, dt, o, box) {
     ctx.restore();
   }
 }
+
+/**
+ * The week's table on the glass, set to fill it: the title, then a row a player at 2x (the shape, the name as the
+ * boards call them, the wins), the rank and the games played in the body face beside them; tonight's two players'
+ * shapes in gold. Up to eight rows (tableRows), never a name cut mid-word.
+ */
+/**
+ * The table's title over a short week, as the round's card sets its name: its first words at 2x in gold, the last
+ * word at 3x (THIS WEEK'S / TABLE), or null when either line is too wide for the column.
+ */
+function tableTitle(title, cw) {
+  const words = title.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return textW(title, 3) <= cw ? { kick: '', main: title } : null;
+  const kick = words.slice(0, -1).join(' ');
+  const main = words[words.length - 1];
+  return textW(kick, 2) <= cw && textW(main, 3) <= cw ? { kick, main } : null;
+}
+
+function vTableBig(ctx, dt0, o, C, rows) {
+  const dt = settled(C, dt0);
+  const tonight = new Map((o.players || []).map((p) => [p.id || p.name, p]));
+  const title = up(o.title || "THIS WEEK'S TABLE");
+  // the rows share the board: a short week stands large (up to three players: the names at 3x when every one fits,
+  // the wins at 5x, how many played under the name; four: 2x names, the wins at 3x), a full one keeps 20 px a row
+  const shortTable = rows.length <= 4;
+  const big = rows.length <= 3;
+  const tt = shortTable ? tableTitle(title, C.cw) : null;
+  const titleH = tt ? (tt.kick ? 48 : 30) : 22;
+  const pitch = clamp(Math.floor((C.ph - 12 - titleH) / Math.max(1, rows.length)), 20, big ? 48 : shortTable ? 34 : 23);
+  const ws = big && pitch >= 44 ? 5 : pitch >= 30 ? 3 : 2;
+  const colW = C.r;
+  const nx = C.x + 28;
+  const winsW = Math.max(...rows.map((r) => textW(wins(r.wins), ws)));
+  // (on a large row the name runs to the wins; PLAYED is a line under it, not a column)
+  const large = ws === 5;
+  const colP = C.r - (ws === 3 ? 52 : 44);
+  const room = large ? colW - winsW - 10 - nx : colP - 12 - 4 - nx;
+  // (at 3x a long name goes by its first name, PENNY for PENNY STERLING, as the host calls the players)
+  const names3 = rows.map((r) => tableName(r.name || r.id, Math.floor(room / 3)));
+  const ns = large && names3.every((n) => !n.endsWith('...') && textW(n, 3) <= room) ? 3 : 2;
+  const h = titleH + rows.length * pitch;
+  const y = centred(C, h);
+  ctx.save();
+  try {
+    if (!panel(ctx, dt, C.px, y - 4, C.pw, h + 8, true)) return;
+    if (tt) {
+      if (tt.kick) drawText(ctx, tt.kick, C.x, y + 2, { color: P.yellow, scale: 2 });
+      drawText(ctx, tt.main, C.x, y + (tt.kick ? 19 : 2), S.white3);
+    } else rise(ctx, title, C.x, y + 6, seg(dt, 0.2, 0.3), S.fog);
+    const hy = y + titleH - 10;
+    if (dt >= 0.3) {
+      if (!large) drawText(ctx, 'PLAYED', colP - measureText('PLAYED', 1, 'micro'), hy, S.microFog);
+      drawText(ctx, 'WINS', colW - measureText('WINS', 1, 'micro'), hy, S.microFog);
+    }
+    rows.forEach((r, i) => {
+      const nh = ns === 3 ? 21 : 14;
+      const blockH = large ? 35 : 21;
+      const ry = y + titleH + i * pitch + Math.max(0, (pitch - blockH) >> 1);
+      const p = seg(dt, 0.35 + i * 0.07, 0.3);
+      if (p <= 0) return;
+      const t = tonight.get(r.id);
+      const off = Math.round((1 - easeOutQuint(p)) * 16);
+      ctx.save();
+      try {
+        // (a line's image carries padding above its caps: the clip keeps it, so the line is whole on its first frame)
+        if (large) clipRect(ctx, C.px, ry - 8, C.pw, blockH + 14);
+        else clipRect(ctx, C.px, ry - 3, C.pw, 26);
+        // a large row: the name and its PLAYED line centred on the wins' 35 rows
+        const ny = large ? ry + ((blockH - (nh + 9)) >> 1) : ry;
+        const rank = String(r.rank);
+        drawText(ctx, rank, C.x + 6 - textW(rank, 1), ny + (ns === 3 ? 7 : 4) + off, S.fog);
+        if (t) seat2(ctx, t.seat, C.x + 10, ny + (ns === 3 ? 4 : 0) + off, P.yellow);
+        const name = ns === 3 ? names3[i] : tableName(r.name || r.id, Math.floor(room / 2));
+        drawText(ctx, name, nx, ny + off, ns === 3 ? S.white3 : S.white2);
+        const pl = String(r.played);
+        if (large) drawText(ctx, `PLAYED ${pl}`, nx, ny + nh + 4 + off, S.microFog);
+        else drawText(ctx, pl, colP - textW(pl, 1), ry + 4 + off, S.silver);
+        const wv = wins(r.wins);
+        const wy = large ? ry : ry + (ws === 3 ? -3 : 0);
+        drawText(ctx, wv, colW - textW(wv, ws), wy + off, ws === 5 ? WINS5 : ws === 3 ? S.white3 : S.white2);
+      } finally {
+        ctx.restore();
+      }
+    });
+  } finally {
+    ctx.restore();
+  }
+}
+const WINS5 = Object.freeze({ color: P.white, scale: 5 });
 
 export const VQUIZ = Object.freeze({ picture: vPicture, letters: vLetters, where: vWhere, howmany: vHowMany, today: vToday, round: vRound, double: vDouble, final: vScores, table: vTable });
 
@@ -1098,11 +1319,20 @@ function ground(w, h) {
   return c;
 }
 
-/** Wire the boards into the vertical compositor (clip/index.js calls it). */
+/**
+ * Wire the boards into the vertical compositor (clip/index.js calls it): each board on the glass in the quiz's marquee
+ * (clip/vset.js), bare, whole from the shot's first frame; without the compositor's glass, on the room's dark ground.
+ */
 export function installQuiz(comp) {
   comp.drawMark = drawMark;
   comp.quiz = (t, scene, dt, box) => {
     const b = box || comp.stageBox(scene);
+    if (!VQUIZ[scene.card?.board]) return false;
+    if (typeof comp.glassPanel === 'function') {
+      comp.glassPanel(t);
+      // (inside the marquee: its 6 px band, 2 px clear of it)
+      return drawVerticalQuizBoard(comp.ctx, t, dt, scene.card, { x: b.x + 2, y: b.y + 4, w: b.w - 4, h: b.h - 8, bare: true });
+    }
     comp.ctx.drawImage(ground(b.w, b.h), b.x, b.y);
     return drawVerticalQuizBoard(comp.ctx, t, dt, scene.card, b);
   };

@@ -15,12 +15,22 @@
 </head>
 <body>
 <h1>Clip cards: the hook title and the end card, both formats (docs/publishing/vertical.md §5)</h1>
-<p>The publishing desk renders these through window.__clipLab (tools/publish/factory.mjs). ?run=end&amp;format=vertical&amp;programme=PAY%20ATTENTION&amp;theme=quiz plays the end card on its own clock with the channel's ident (for tools/record.mjs).</p>
+<p>The publishing desk renders these through window.__clipLab (tools/publish/factory.mjs). ?run=end&amp;format=vertical&amp;programme=PAY%20ATTENTION&amp;theme=quiz plays the end card on its own clock with the channel's ident (for tools/record.mjs), on the programme's own set behind glass (clip/vset.js; the theme names the programme, or &amp;programId=).</p>
 <div class="grid" id="grid"></div>
 <script type="module">
 import { P } from '/js/palette.js';
 import { THEME_ACCENT } from '/js/cast.js';
 import { drawHook, drawEndCard, sizeOf, END_CARD_SECONDS } from '/js/clip/cards.js';
+import { VerticalSet } from '/js/clip/vset.js';
+import { setKit } from '/js/clip/index.js';
+
+// the programme's set for the vertical end card (the theme names the programme: one theme, one programme)
+const THEME_PROGRAMME = { world: 'world-now', tech: 'tech-bytes', space: 'cosmos', money: 'money-minute', flash: 'news-60', weather: 'world-weather', week: 'seven-days', sport: 'full-time', quiz: 'pay-attention' };
+const vset = new VerticalSet(await setKit());
+const backdropOf = (spec) => {
+  const id = spec.programId || THEME_PROGRAMME[spec.theme];
+  return spec.format === 'vertical' && id ? vset.backdrop(id) : null;
+};
 
 const qs = new URLSearchParams(location.search);
 const mk = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
@@ -39,7 +49,7 @@ function endCanvas(spec, t) {
   const c = mk(w, h);
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream || 'none' });
+  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream || 'none', backdrop: backdropOf(spec) });
   return c;
 }
 window.__clipLab = {
@@ -53,7 +63,8 @@ if (run === 'end') {
   // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
   // (&stream=live|recorded|none, airmode.js streamOf: WATCH LIVE only for a live stream, "24 hours a day" for the
   // pre-rendered one, nothing about where to watch without a stream; none unless the factory says otherwise)
-  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', stream: qs.get('stream') || 'none' };
+  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', programId: qs.get('programId') || '', stream: qs.get('stream') || 'none' };
+  const backdrop = backdropOf(spec);
   const { w, h } = sizeOf(spec.format);
   const screen = mk(w, h);
   screen.id = 'screen';
@@ -63,7 +74,7 @@ if (run === 'end') {
   const t0 = performance.now();
   const frame = () => {
     requestAnimationFrame(frame);
-    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream });
+    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream, backdrop });
   };
   frame();
   if (qs.get('sting') === '1') {

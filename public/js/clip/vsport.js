@@ -53,39 +53,63 @@ function land(ctx, text, x, y, p, style) {
   const off = Math.round((1 - easeOutQuint(p)) * -10);
   ctx.save();
   try {
-    clipRect(ctx, x - 2, y - 2, textW(text, 3) + 4, 25);
+    const sc = style?.scale || 3;
+    // (a scale row of air over the caps: the glyph image's own line above them stays whole)
+    clipRect(ctx, x - 2, y - sc - 1, textW(text, sc) + 2 * sc + 4, 8 * sc + 3);
     drawText(ctx, text, x, y + off, style);
   } finally {
     ctx.restore();
   }
 }
-/** The panel wiping in from the left, its slate rule, the kicker and the sport's icon; false while it is closed. */
-function panel(ctx, dt, x, y, w, h, kicker, icon, acc) {
-  const vis = Math.round(w * easeOutQuint(seg(dt, 0, 0.3)));
+/**
+ * The panel wiping in from the left, its slate rule, the kicker and the sport's icon; false while it is closed. Bare
+ * (the vertical frame's glass and frame already stand behind it, whole from the first frame): no panel, no wipe, the
+ * kicker in the body face in the accent.
+ */
+function panel(ctx, dt, x, y, w, h, kicker, icon, acc, bare = false) {
+  const vis = bare ? w : Math.round(w * easeOutQuint(seg(dt, 0, 0.3)));
   if (vis <= 0) return false;
   clipRect(ctx, x, y, vis, h);
-  ctx.fillStyle = P.black;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(x, y, w, 1);
+  if (!bare) {
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(x, y, w, 1);
+  }
   let kx = x + PAD;
   if (icon) {
     drawIcon(ctx, icon, kx, y + 6, P.fog, P.slate);
     kx += 15;
   }
-  drawText(ctx, kicker, kx, y + 9, S.microFog);
-  ctx.fillStyle = acc;
-  ctx.fillRect(x, y + 1, 2, h - 1);
+  drawText(ctx, kicker, kx, y + (bare ? 8 : 9), bare ? { color: acc } : S.microFog);
+  if (!bare) {
+    ctx.fillStyle = acc;
+    ctx.fillRect(x, y + 1, 2, h - 1);
+  }
   return true;
 }
 /** Two names in one type size: 2x on one line each when both fit, else 1x on up to two lines each. */
-function names(a, b, maxW) {
+function names(a, b, maxW, bare = false) {
   const ns = [a, b].map((n) => String(n || '').toUpperCase());
   if (ns.every((t) => textW(t, 2) <= maxW)) return ns.map((t) => ({ lines: [t], scale: 2 }));
+  // on the glass a long name takes two lines at 2x (PIXELBURG / UNITED) before it drops to the body face
+  if (bare) {
+    const two = ns.map((t) => balanceLines(t, maxW, 2, 2));
+    if (two.every((ls) => !ls[ls.length - 1]?.endsWith('...') && ls.every((l) => textW(l, 2) <= maxW))) return two.map((ls) => ({ lines: ls, scale: 2 }));
+  }
   return ns.map((t) => ({ lines: textW(t, 1) <= maxW ? [t] : balanceLines(t, maxW, 1, 2).map((l) => ellipsis(l, maxW, 1)), scale: 1 }));
 }
+const SCORE = new Map();
+const scoreStyle = (color, scale) => {
+  const k = `${color}|${scale}`;
+  if (!SCORE.has(k)) SCORE.set(k, Object.freeze({ color, scale }));
+  return SCORE.get(k);
+};
 
-export function drawVerticalScoreline(ctx, dt, card, box, acc = P.orange) {
+export function drawVerticalScoreline(ctx, dt0, card, box, acc = P.orange) {
+  // (on the glass the card is all entrance, nothing follows the voice: settled from the shot's first frame, the names
+  // whole, the scores landed, FT or DRAW under them)
+  const dt = box.bare ? dt0 + 1.3 : dt0;
   const sc = card?.score;
   if (!sc?.a || !sc?.b) return false;
   const x = box.x + M;
@@ -93,10 +117,13 @@ export function drawVerticalScoreline(ctx, dt, card, box, acc = P.orange) {
   // the home side first when the source names one, else the winner first (the source's order on a draw)
   const homeIsB = sc.home && sc.home === sc.b;
   const rows = homeIsB ? [{ name: sc.b, score: sc.sb, won: false, side: 'HOME' }, { name: sc.a, score: sc.sa, won: !sc.draw, side: 'AWAY' }] : [{ name: sc.a, score: sc.sa, won: !sc.draw, side: sc.home ? 'HOME' : '' }, { name: sc.b, score: sc.sb, won: false, side: sc.home ? 'AWAY' : '' }];
-  const scoreW = Math.max(...rows.map((r) => textW(String(r.score), 3)));
+  // the scores at 4x on the glass (3x on the channel's panel)
+  const ss = box.bare ? 4 : 3;
+  const scoreW = Math.max(...rows.map((r) => textW(String(r.score), ss)));
   const nameW = w - 2 * PAD - scoreW - 8;
-  const laid = names(rows[0].name, rows[1].name, nameW).map((n, i) => ({ ...rows[i], ...n }));
-  const rowH = (r) => Math.max(25, r.lines.length * (r.scale === 2 ? 16 : 10) + (r.side ? 8 : 0));
+  const laid = names(rows[0].name, rows[1].name, nameW, !!box.bare).map((n, i) => ({ ...rows[i], ...n }));
+  // (two lines at 2x keep 4 px between them, as every 2x block on the glass)
+  const rowH = (r) => Math.max(25, r.lines.length * (r.scale === 2 ? 18 : 10) + (r.side ? 8 : 0));
   const src = card.source ? microFit(`SOURCE: ${String(card.source).toUpperCase()}`, w - 2 * PAD) : '';
   const stage = sc.stage ? String(sc.stage).toUpperCase() : '';
   const top = 22;
@@ -104,12 +131,12 @@ export function drawVerticalScoreline(ctx, dt, card, box, acc = P.orange) {
   const y0 = box.y + Math.max(2, Math.round((box.h - h) / 2));
   ctx.save();
   try {
-    if (!panel(ctx, dt, x, y0, w, h, 'RESULT', iconOf(sc.sport), acc)) return true;
+    if (!panel(ctx, dt, x, y0, w, h, 'RESULT', iconOf(sc.sport), acc, !!box.bare)) return true;
     let y = y0 + top;
     const draw = sc.draw;
     laid.forEach((r, i) => {
       const rh = rowH(r);
-      const lh = r.scale === 2 ? 16 : 10;
+      const lh = r.scale === 2 ? 18 : 10;
       const at = 0.35 + i * 0.12;
       const style = r.won || draw ? (r.scale === 2 ? S.white2 : S.white) : r.scale === 2 ? S.silver2 : S.silver;
       const textH = r.lines.length * lh - (lh - 7 * r.scale) + (r.side ? 8 : 0);
@@ -117,7 +144,7 @@ export function drawVerticalScoreline(ctx, dt, card, box, acc = P.orange) {
       r.lines.forEach((l, k) => rise(ctx, l, x + PAD, ty + k * lh, seg(dt, at + k * 0.06, 0.34), style));
       if (r.side && dt >= 0.9) drawText(ctx, r.side, x + PAD, ty + r.lines.length * lh - (lh - 7 * r.scale) + 3, S.microFog);
       const t = String(r.score);
-      land(ctx, t, x + w - PAD - textW(t, 3), y + ((rh - 21) >> 1), seg(dt, 0.65 + i * 0.12, 0.3), r.won ? { color: acc, scale: 3 } : draw ? S.white3 : S.silver3);
+      land(ctx, t, x + w - PAD - textW(t, ss), y + ((rh - 7 * ss) >> 1), seg(dt, 0.65 + i * 0.12, 0.3), scoreStyle(r.won ? acc : draw ? P.white : P.silver, ss));
       y += rh + 6;
       if (i === 0 && dt >= 0.3) {
         ctx.fillStyle = P.ink;
@@ -162,10 +189,12 @@ export function drawVerticalScoreboard(ctx, dt, card, box, acc = P.orange) {
   const credit = card.source ? `SOURCE${/\s\/\s/.test(card.source) ? 'S' : ''}: ${String(card.source).toUpperCase()}` : '';
   const h = head + rows.length * pitch + 4 + (credit ? 9 : 0);
   const y0 = box.y + Math.max(2, Math.round((box.h - h) / 2));
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(x - 1, y0 - 1, w + 2, h + 2);
-  ctx.fillStyle = P.black;
-  ctx.fillRect(x, y0, w, h);
+  if (!box.bare) {
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(x - 1, y0 - 1, w + 2, h + 2);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y0, w, h);
+  }
   const title = ellipsis(String(card.title || 'THE LATEST RESULTS').toUpperCase(), w - 16, 1);
   drawText(ctx, title, x + ((w - textW(title, 1)) >> 1), y0 + 4, { color: acc });
   ctx.fillStyle = P.slate;
@@ -235,15 +264,17 @@ export function drawVerticalComingUp(ctx, dt, card, box, acc = P.orange) {
   if (fixtures.length < 2) return false;
   const x = box.x + M;
   const w = box.w - 2 * M;
-  const pv = easeOutQuint(seg(dt, 0, 0.3));
+  const pv = box.bare ? 1 : easeOutQuint(seg(dt, 0, 0.3));
   if (pv <= 0) return true;
   ctx.save();
   try {
     clipRect(ctx, x, box.y + 4, Math.round(w * pv), box.h - 8);
-    ctx.fillStyle = P.black;
-    ctx.fillRect(x, box.y + 4, w, box.h - 8);
-    ctx.fillStyle = P.slate;
-    ctx.fillRect(x, box.y + 4, w, 1);
+    if (!box.bare) {
+      ctx.fillStyle = P.black;
+      ctx.fillRect(x, box.y + 4, w, box.h - 8);
+      ctx.fillStyle = P.slate;
+      ctx.fillRect(x, box.y + 4, w, 1);
+    }
     const title = String(card.title || 'COMING UP').toUpperCase();
     drawText(ctx, ellipsis(title, w - 2 * PAD, 1), x + PAD, box.y + 10, { color: acc });
     const LW = 34;

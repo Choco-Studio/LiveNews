@@ -3,11 +3,16 @@
 // laid out for a phone (clip/layout.js): the bug and the programme at the top, the story's tag and headline, the
 // stage, the captions, a calm foot for the feed's own text.
 //
+// Under every band, edge to edge and top to bottom, the programme's own studio stood on end (clip/vset.js): its set
+// drawn by the studio's renderer for a tall picture, its lights breathing. A presenter's single is the studio itself
+// made tall (the set above and below the Stage's own frame, from its camera); a board is on tinted glass over the set,
+// in the set's bezel (the quiz's in its lamp-lit marquee), whole from its first frame.
+//
 // The stage, by what the horizontal director has on air (scene.shot):
 //   studio (wide, close)  the speaker's single, framed for a tall picture by a Stage of its own (v2 runtime/stage.js,
 //                         a second instance: its own camera on the voice's owner, its own cue clock on the same plan,
-//                         so the presenter gestures on the same words), cut when the voice changes hands
-//   fact                  the board set again for the stage's width (clip/vboards.js)
+//                         so the presenter gestures on the same words), cut when the voice changes hands, made tall
+//   fact                  the board set again for the stage's width (clip/vboards.js), on glass
 //   map                   the channel's map drawn at the stage's size (scenes/worldmap.js takes any viewport)
 //   full                  the story's picture, the stage's width of it, panning as on air
 //   montage, tease        the headline frame set again: the picture or the place's map, the headline at 2x under it
@@ -22,11 +27,10 @@ import { THEME_ACCENT, presenterName } from '../cast.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import { drawWorldMap } from '../scenes/worldmap.js';
 import { picturePan } from '../pace.js';
-import { clamp, seg, easeOutQuint, balanceLines, textW } from '../gfx/index.js';
+import { clamp, seg, easeOutQuint, balanceLines } from '../gfx/index.js';
 import { bayer } from '../gfx/dither.js';
 import { mk } from '../gfx/canvas.js';
 import { u32 } from '../gfx/color.js';
-import { TOP } from '../graphics/layout.js';
 import { contentWords } from '../graphics/index.js';
 import { VW, VH, V, HW, HH, SAFE, boardBox } from './layout.js';
 import { WordCaptions, CLIP_CAPTION } from './captions.js';
@@ -35,8 +39,12 @@ import { drawBugOnly, drawProgrammeTag, speechNow, graveNow, boardRepeats } from
 import { pictureCreditOf } from '../graphics/picture.js';
 import { prepareLocator, drawLocator } from '../graphics/locator.js';
 import { drawTopicBoard } from '../graphics/topicboard.js';
+import { VerticalSet, twinkle, drawBoardFrame, glassRect, glassScrims, glint, OVERLAP } from './vset.js';
 
 const ST = V.stage;
+// the presenter's single made tall: the Stage's 216 rows from this row (its framings put the eyes about 70 rows down:
+// a third of the way down the picture), the set above and below it from the same camera
+export const SINGLE_TOP = Object.freeze({ normal: 58, tall: 40 });
 const REST_WALL = Object.freeze({ mode: 'rest' });
 // the tall stage (no title band): the quiz, whose boards and three people need the frame's full 216 rows
 const TALL = Object.freeze({ x: 0, y: V.title.y, w: VW, h: V.stage.y + V.stage.h - V.title.y });
@@ -89,17 +97,26 @@ export function groundOf(w, h, { cx = w / 2, cy = h * 0.45, reach = 0.9 * Math.m
   return c;
 }
 
-/** The framing a vertical single asks the Stage for: the quiz's own singles, a duo's single, a solo's centred single. */
+/**
+ * The framing a vertical single asks the Stage for: the quiz's own singles; every other presenter, duo or solo, in the
+ * vertical's own single (camera.js 'tall': the close's scale, k 3.8, the head on the 384-wide frame's middle column and
+ * walked clear of the bezel like any single), so the tall crop centres the head over the safe column on either seat.
+ * (Round 10's first pass used the close, head at x 136 or 248: walked clear of the bezel it landed at x 81 on FULL
+ * TIME's seat A, past where a crop can centre it.)
+ */
 export function verticalFraming(cast, slot) {
   if (cast?.H && cast?.A && cast?.B) return slot === 'H' ? 'quiz-host' : slot === 'A' ? 'quiz-a' : 'quiz-b';
-  return cast?.B ? 'single' : 'mcu';
+  return 'tall';
 }
 
 /** Where a 216-wide window sits over a 384-wide frame to centre `x` (clamped to the frame). */
 export const windowX = (x, w = VW) => clamp(Math.round(x - w / 2), 0, HW - w);
 
 export class VerticalCompositor {
-  constructor({ canvas, source, renderer = null, audio = null, channel = null, makeStage = null }) {
+  constructor({ canvas, source, renderer = null, audio = null, channel = null, makeStage = null, vset = null }) {
+    // the programme's set stood on end (clip/vset.js: the studio's renderer when clip/index.js hands it in, else the
+    // programme's colours on a graded field)
+    this.vset = vset || new VerticalSet(null);
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
@@ -157,15 +174,23 @@ export class VerticalCompositor {
       const on = !['start', 'standby', 'ad', 'ident', 'promo', 'countdown', 'breakingCard'].includes(scene.shot);
       if (on && this.lastMode !== 'on') this.onAt = t;
       this.lastMode = on ? 'on' : 'off';
+      this.t = t;
       this.sp = speechNow(this.audio, scene);
       this.profile = profileOf(scene);
       this.box = this.profile.box;
+      this.programId = scene.program?.id || 'world-now';
+      this.theme = scene.program?.theme || 'world';
+      this.set = this.vset.backdrop(this.programId);
+      // the picture under every band: the presenter's single made tall, else the programme's set stood on end
+      this.tall = !on ? null : STUDIO.has(scene.shot) ? this.tallSingle(t, scene) : scene.shot === 'weather' && this.weatherCloseup ? this.weatherCloseup(t, scene) : null;
+      if (!this.tall) this.drawBackdrop(t);
       this.drawStage(t, scene);
+      // the top and the foot under tinted glass: the feeds lay their buttons and words there
+      glassScrims(ctx);
       if (on) {
-        if (this.profile.title) this.drawTitle(t, scene);
+        // (the title band holds the clip's hook, laid over the master by the factory: the master leaves it to the set)
         this.drawMast(t, scene);
         if (this.profile.captions !== false) this.drawCaptions(t, scene);
-        this.drawFoot(t, scene);
       } else this.drawChannelFrame(t, scene);
     } catch (err) {
       this.log(err);
@@ -184,8 +209,10 @@ export class VerticalCompositor {
       const shot = scene.shot;
       const dt = t - (scene.shotSince || 0);
       this.shownPicture = null; // the story whose picture this frame's stage shows (its credit is drawn over it)
-      if (STUDIO.has(shot)) this.studio(t, scene);
-      else if (shot === 'fact') {
+      if (STUDIO.has(shot)) {
+        if (this.tall) this.nameTag(t, scene, this.speaker);
+        else this.middle(scene);
+      } else if (shot === 'fact') {
         if (!this.board(t, scene, dt)) this.middle(scene);
       } else if (shot === 'map') this.map(t, scene, dt);
       else if (shot === 'full') this.picture(t, scene, dt);
@@ -196,12 +223,14 @@ export class VerticalCompositor {
       else if (shot === 'quiz' && this.quiz?.(t, scene, dt, boardBox(this.box))) {
         /* the programme's own vertical board */
       } else if (shot === 'scores' && this.sport && scene.card?.scores?.length) {
-        // FULL TIME's SCORE CENTRE: the board set again, a result on two lines
-        this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-        this.sport.scoreboard(this.ctx, dt, scene.card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
+        // FULL TIME's SCORE CENTRE: the board set again, a result on two lines, on the glass
+        this.glassPanel(t);
+        this.sport.scoreboard(this.ctx, dt, scene.card, { ...boardBox(this.box), bare: true }, THEME_ACCENT[scene.program?.theme] || P.orange);
       } else if (shot === 'weather' && this.weather?.(t, scene, boardBox(this.box))) {
         /* WORLD WEATHER's board set again, or the window on the presenter */
       } else this.middle(scene);
+      // the correspondent's name on their link, as the speaker's on a single (a re-staged guest keeps its own label)
+      if ((shot === 'location' || shot === 'twoway') && this.channel?.presenters?.[scene.remote?.id] && scene.remote.kind !== 'restage' && !scene.recreation) this.nameTagOf(t, scene, scene.remote.id);
       // PAY ATTENTION's scores strip over the studio (the half-time scores and the banter after them)
       if (scene.quizStrip && STUDIO.has(shot)) this.quizStrip(t, scene.quizStrip);
       // the story's source and NEWS IN 60's minute, on the stage: in a clip the hook holds the title band and the feeds
@@ -214,28 +243,52 @@ export class VerticalCompositor {
     } finally {
       ctx.restore();
     }
+    // a picture window (a map, a photo, a location, the montage's backdrop) framed in the programme's accent, set into
+    // the studio like the set's own screens
+    if (this.windowed) this.windowRules(this.windowed);
+    this.windowed = null;
   }
 
-  /** The horizontal frame's middle, 216 wide (the fallback for a shot with no vertical layout of its own). */
-  middle(scene, cx = HW / 2) {
-    const sx = windowX(cx);
-    const sy = clamp(Math.round((HH - this.box.h) / 2), 0, HH - this.box.h);
-    this.ctx.drawImage(this.src, sx, sy, VW, this.box.h, 0, this.box.y, VW, this.box.h);
+  // ------------------------------------------------------------------ the set
+
+  /** The programme's set stood on end over the whole frame, its lights breathing. */
+  drawBackdrop(t) {
+    const set = this.set || this.vset.backdrop(this.programId);
+    this.ctx.drawImage(set.img, 0, 0);
+    twinkle(this.ctx, t, set.lights);
   }
 
-  /** Who the vertical single shows: the voice's owner, else the last one, else the director's focus. */
-  speakerOf(scene) {
-    const cast = scene.cast || {};
-    const slot = this.sp?.slot;
-    if (slot && cast[slot]) return slot;
-    if (this.speaker && cast[this.speaker]) return this.speaker;
-    if (scene.focus && cast[scene.focus]) return scene.focus;
-    return Object.keys(cast)[0] || 'A';
+  /** Tinted glass over the stage (the board's ground: the set reads through it as shape and light) and its frame. */
+  glassPanel(t, box = this.box) {
+    const r = glassRect(box);
+    const set = this.set || this.vset.backdrop(this.programId);
+    this.ctx.drawImage(set.glass, r.x, r.y, r.w, r.h, r.x, r.y, r.w, r.h);
+    drawBoardFrame(this.ctx, t, r, this.programId, THEME_ACCENT[this.theme] || P.red);
+    return r;
   }
 
-  studio(t, scene) {
+  /** The accent rules above and below a picture window (rows y0..y1), the set's own frame lines. */
+  windowRules({ y0, y1 }) {
+    const ctx = this.ctx;
+    const acc = THEME_ACCENT[this.theme] || P.red;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(0, y0 - 3, VW, 1);
+    ctx.fillRect(0, y1 + 2, VW, 1);
+    ctx.fillStyle = acc === P.purple ? P.fog : acc;
+    ctx.fillRect(0, y0 - 2, VW, 2);
+    ctx.fillRect(0, y1, VW, 2);
+    glint(ctx, this.t || 0, 0, y0 - 2, VW, acc === P.purple ? P.fog : acc);
+  }
+
+  /**
+   * The presenter's single made tall: the Stage's own frame (216 rows, the speaker centred over the safe column), and
+   * above and below it the set from the very same camera (clip/vset.js single), so the presenter sits in the studio:
+   * the wall rises behind the head to the set's top, the desk runs on to the frame's foot. Returns { top, sx } or null
+   * (no Stage: the backdrop and the frame's middle).
+   */
+  tallSingle(t, scene) {
     const stage = this.vstage();
-    if (!stage) return this.middle(scene);
+    if (!stage) return null;
     const slot = this.speakerOf(scene);
     if (slot !== this.speaker) {
       this.speaker = slot;
@@ -252,24 +305,74 @@ export class VerticalCompositor {
     // the studio wall at rest behind the single (wall.js 'rest', as behind a two-way's box): no plate, map label,
     // figure or wordmark for the tall crop to cut in half; the story's own picture, map and figure have their shots
     p.wall = REST_WALL;
-    const ok = stage.frame(this.auxCtx, t, p, true);
-    if (!ok) return this.middle(scene);
-    // the speaker's head: their seat's screen x and neck line in this frame (the Stage's visible list)
-    let hx = this.lastHead.x;
-    let ny = this.lastHead.y;
-    for (const it of stage.vis || []) {
-      if (it.slot === slot) {
-        hx = it.x;
-        ny = it.y;
-      }
+    let ok = false;
+    try {
+      ok = stage.frame(this.auxCtx, t, p, true);
+    } catch (err) {
+      this.log(err);
     }
+    if (!ok) return null;
+    // the speaker's head: their seat's screen x in this frame (the Stage's visible list)
+    let hx = this.lastHead.x;
+    for (const it of stage.vis || []) if (it.slot === slot) hx = it.x;
     this.lastHead.x = hx;
-    this.lastHead.y = ny;
-    const sx = windowX(hx);
-    // the neck two thirds down the stage: the eyes on its upper third, room over the hair
-    const sy = clamp(Math.round(ny - this.box.h * 0.62), 0, HH - this.box.h);
-    this.ctx.drawImage(this.aux, sx, sy, VW, this.box.h, 0, this.box.y, VW, this.box.h);
-    this.nameTag(t, scene, slot);
+    // the head over the safe column's middle (the feeds' buttons cover the right edge)
+    const sx = clamp(Math.round(hx - SAFE.cx), 0, HW - VW);
+    const top = this.profile?.name === 'tall' ? SINGLE_TOP.tall : SINGLE_TOP.normal;
+    const ext = this.vset.single(stage);
+    const ctx = this.ctx;
+    if (ext) {
+      ctx.drawImage(ext.above, sx, 0, VW, HH, 0, top - HH, VW, HH);
+      // (the speaker's body goes on below the Stage's frame: a contestant's podium is lower than a desk)
+      let below = ext.below;
+      try {
+        below = this.vset.singleBelow(stage, ext, t) || ext.below;
+      } catch (err) {
+        this.log(err);
+      }
+      // (from the row the Stage's own frame ends on: the rasteriser leaves a frame's last row to the set, so a body
+      // crossing it would show a line of wall)
+      ctx.drawImage(below, sx, OVERLAP - 1, VW, HH - OVERLAP + 1, 0, top + HH - 1, VW, HH - OVERLAP + 1);
+      twinkle(ctx, t, ext.lightsAbove, -sx, top - HH);
+      twinkle(ctx, t, ext.lightsBelow, -sx, top + HH - OVERLAP);
+      ctx.drawImage(this.aux, sx, 0, VW, HH - 1, 0, top, VW, HH - 1);
+    } else {
+      this.drawBackdrop(t);
+      ctx.drawImage(this.aux, sx, 0, VW, HH, 0, top, VW, HH);
+    }
+    return { top, sx };
+  }
+
+  /**
+   * A shot the compositor cannot make tall itself (WORLD WEATHER's close-up, drawn by its own centre): the horizontal
+   * frame's whole height (216 rows, not the stage's 176), centred on `cx` over the safe column, from the stage's top
+   * row, over the programme's set and framed as a window: the presenter as large as the frame gives him.
+   */
+  tallWindow(t, cx) {
+    this.drawBackdrop(t);
+    const sx = clamp(Math.round(cx - SAFE.cx), 0, HW - VW);
+    const y0 = V.stage.y;
+    this.ctx.drawImage(this.src, sx, 0, VW, HH, 0, y0, VW, HH);
+    this.windowed = { y0, y1: y0 + HH };
+    return { top: y0, sx };
+  }
+
+  /** The horizontal frame's middle, 216 wide (the fallback for a shot with no vertical layout of its own). */
+  middle(scene, cx = HW / 2) {
+    const sx = windowX(cx);
+    const sy = clamp(Math.round((HH - this.box.h) / 2), 0, HH - this.box.h);
+    this.ctx.drawImage(this.src, sx, sy, VW, this.box.h, 0, this.box.y, VW, this.box.h);
+    this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
+  }
+
+  /** Who the vertical single shows: the voice's owner, else the last one, else the director's focus. */
+  speakerOf(scene) {
+    const cast = scene.cast || {};
+    const slot = this.sp?.slot;
+    if (slot && cast[slot]) return slot;
+    if (this.speaker && cast[this.speaker]) return this.speaker;
+    if (scene.focus && cast[scene.focus]) return scene.focus;
+    return Object.keys(cast)[0] || 'A';
   }
 
   /** The quiz's scores as a strip at the stage's foot: ● LOLA 12 │ ■ SAM 8 (scenes/cards-quiz.js drawScoresStrip's). */
@@ -309,7 +412,12 @@ export class VerticalCompositor {
 
   /** The speaker's name on their first turn (as the channel's name super), at the stage's foot left. */
   nameTag(t, scene, slot) {
-    const id = scene.cast?.[slot];
+    this.nameTagOf(t, scene, scene.cast?.[slot]);
+  }
+
+  /** The name super of a presenter or correspondent by id (a correspondent's on their link: the place's shot, the
+   * two-way), once a programme, for 4.5 s from their first frame. */
+  nameTagOf(t, scene, id) {
     if (!id) return;
     this.introduced ||= new Map();
     const key = `${scene.episode?.id || scene.program?.id || ''}|${id}`;
@@ -343,18 +451,22 @@ export class VerticalCompositor {
   board(t, scene, dt) {
     const card = scene.card;
     const kind = boardKind(card);
+    const acc = THEME_ACCENT[scene.program?.theme];
+    // every board on the glass over the set, in its frame, whole from the shot's first frame (the board's own rows
+    // rise into it as on air; no panel wipes in: a clip that opens on a board opens on a composed frame)
+    const box = { ...boardBox(this.box), bare: true };
     if (kind === 'score' && this.sport) {
-      this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-      return this.sport.scoreline(this.ctx, dt, card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
+      this.glassPanel(t);
+      return this.sport.scoreline(this.ctx, dt, card, box, acc || P.orange);
     }
     // FULL TIME's COMING UP and THE MOMENT ON THE BOARD, set for the tall frame
     if ((kind === 'fixtures' || kind === 'chalk') && this.sport?.[kind]) {
-      this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-      return this.sport[kind](this.ctx, dt, card, boardBox(this.box), THEME_ACCENT[scene.program?.theme] || P.orange);
+      this.glassPanel(t);
+      return this.sport[kind](this.ctx, dt, card, box, acc || P.orange);
     }
     if (!kind || ['score', 'chalk', 'fixtures'].includes(kind)) return false;
-    this.ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
-    return drawVerticalBoard(this.ctx, dt, card, { ...boardBox(this.box), programId: scene.program?.id, accent: THEME_ACCENT[scene.program?.theme] });
+    this.glassPanel(t);
+    return drawVerticalBoard(this.ctx, dt, card, { ...box, programId: scene.program?.id, accent: acc });
   }
 
   /**
@@ -366,6 +478,7 @@ export class VerticalCompositor {
     const w = SAFE.right + 8;
     drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
     this.seaStrip(w);
+    this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
   }
 
   /** The stage beyond the safe column, after a map drawn to its edge: the map's last column of sea, carried on. */
@@ -380,6 +493,7 @@ export class VerticalCompositor {
     const { ox, oy } = picturePan(dt, pic.width - VW, pic.height - this.box.h, scene.panDir, scene.program?.id);
     this.ctx.drawImage(pic, -Math.round(ox), this.box.y - Math.round(oy));
     this.shownPicture = scene.storyId;
+    this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
   }
 
   /**
@@ -411,6 +525,7 @@ export class VerticalCompositor {
     if (!scene.card?.footage && scene.remote && Number.isFinite(scene.remote.lat)) {
       drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: SAFE.right + 8, h: this.box.h, lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, follow: true });
       this.seaStrip(SAFE.right + 8);
+      this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
       return;
     }
     this.middle(scene);
@@ -425,7 +540,7 @@ export class VerticalCompositor {
     // the two boxes (studio/remote.js TWOWAY: 176x99 at x 12 and 196, y 32, a fog frame and a shadow): one over the
     // other, each from 9 rows under its top (air over the hair; the head stays whole), the frame's top line redrawn
     const ctx = this.ctx;
-    ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+    this.glassPanel(0);
     const bw = 178;
     const bh = 82;
     const x = Math.round(SAFE.cx - bw / 2);
@@ -492,7 +607,7 @@ export class VerticalCompositor {
       // its box right-aligned in the safe column, above the tallest headline plate
       drawTopicBoard(ctx, item, { accent: acc, dt, frame: { x: 0, y: this.box.y, w: VW, h: this.box.h, right: SAFE.right - 4, top: 30, bottom: this.box.h - 116, maxW: SAFE.w - 8 } });
     } else {
-      ctx.drawImage(groundOf(VW, this.box.h), 0, this.box.y);
+      this.glassPanel(t);
       // FULL TIME (the sport theme draws no topic board): the story's sport, the horizontal frame's chip, set large in
       // the field, so a result without a picture or a place never opens on an empty stage (publishing round 6)
       if (scene.program?.theme === 'sport' && item.kicker) this.sportTag(item.kicker, acc, dt);
@@ -510,18 +625,18 @@ export class VerticalCompositor {
     // the plate rises from the safe area's foot, never less than 64 rows tall (the backdrop above it keeps the rest)
     const plateH = Math.max(64, textH + 16 + (item.source ? 10 : 0));
     const py = this.box.y + this.box.h - plateH;
-    const p = easeOutQuint(seg(dt, 0, 0.3));
+    // (the plate whole from the shot's first frame: a clip opening on the montage opens on a composed frame; its lines
+    // rise into it)
+    this.windowed = { y0: this.box.y, y1: py };
     ctx.fillStyle = P.black;
-    ctx.fillRect(0, py, Math.round(VW * p), plateH);
-    ctx.fillStyle = acc;
-    ctx.fillRect(0, py, Math.round(VW * p), 1);
+    ctx.fillRect(0, py, VW, plateH);
     for (let i = 0; i < lines.length; i++) {
-      const lp = seg(dt, 0.15 + i * 0.07, 0.3);
+      const lp = seg(dt + 0.5, 0.15 + i * 0.07, 0.3); // (pre-rolled: the headline whole on the shot's first frame)
       if (lp <= 0) continue;
       drawText(ctx, lines[i], 12, py + 8 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
     }
-    // (the source with the headline's first line, never on the bare field before the plate has wiped in)
-    if (item.source && seg(dt, 0.15, 0.3) > 0) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
+    // (the source on the plate with the headline)
+    if (item.source) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
     // the tag: TOP STORIES (with the pips of the run) or STILL TO COME (on the plate: the clip's hook covers the
     // title band all clip long)
     const tag = tease ? 'STILL TO COME' : 'TOP STORIES';
@@ -558,48 +673,6 @@ export class VerticalCompositor {
       const w = measureText(title) + 8;
       drawProgrammeTag(ctx, SAFE.right - w, 10, title, color);
     }
-  }
-
-  /** The story's tag and headline (the channel's strap, set for the tall frame), else the programme's title. */
-  drawTitle(t, scene) {
-    const ctx = this.ctx;
-    const y0 = V.title.y;
-    const g = this.renderer?.graphics;
-    // (in a clip the hook holds this band all clip long: what a viewer must see lives on the stage, sourcePlate)
-    const cur = g?.strap?.cur && g.strap.outAt === null ? g.strap.cur : null;
-    const rec = scene.recreation;
-    const headline = cur?.headline || '';
-    if (headline && !rec && !['montage', 'tease'].includes(scene.shot)) {
-      const tag = cur.tag || '';
-      const color = cur.tagColor || THEME_ACCENT[scene.program?.theme] || P.red;
-      const two = balanceLines(headline.toUpperCase(), SAFE.w, 1, 2);
-      const fits = !two[two.length - 1]?.endsWith('...');
-      const lines = fits ? two : balanceLines(headline.toUpperCase(), SAFE.w, 1, 3);
-      const showTag = fits && tag;
-      const since = Math.max(0, t - (cur.since || 0));
-      const p = easeOutQuint(seg(since, 0, 0.35));
-      let y = y0 + (showTag ? 4 : 3);
-      if (showTag) {
-        const tw = measureText(tag) + 8;
-        const vis = Math.round(tw * p);
-        if (vis > 0) {
-          ctx.fillStyle = color;
-          ctx.fillRect(8, y, vis, 11);
-          if (vis >= tw) drawText(ctx, tag, 12, y + 2, { color: inkOn(color) });
-        }
-        y += 14;
-      }
-      for (let i = 0; i < lines.length; i++) {
-        const lp = seg(since, 0.1 + i * 0.07, 0.3);
-        if (lp > 0) drawText(ctx, lines[i], 8, y + i * 11 + Math.round((1 - easeOutQuint(lp)) * 3), S.white);
-      }
-      return;
-    }
-    // no story strap: the programme (and, in a quiz, the board's round)
-    const title = String(scene.program?.title || this.channel?.name || 'GLOBIT 24');
-    const tagline = scene.program?.tagline ? String(scene.program.tagline) : '';
-    drawText(ctx, title, 8, y0 + 7, S.white2);
-    if (tagline) drawText(ctx, microFit(tagline, SAFE.w), 8, y0 + 27, S.microFog);
   }
 
   /**
@@ -661,17 +734,6 @@ export class VerticalCompositor {
     if (boardRepeats(text, scene)) text = null;
     this.caps.update(t, text, sp.charIndex, { grave: graveNow(scene, sp.slot) });
     this.caps.draw(this.ctx, t, { cx: SAFE.cx, bottom: V.caps.y + V.caps.h - 4 });
-  }
-
-  drawFoot(t, scene) {
-    const ctx = this.ctx;
-    const y = V.foot.y;
-    // the foot: the feeds' buttons and caption sit over it, so it carries nothing a viewer must read (the source is in
-    // the title band, beside the story's tag): a rule and the channel's name, small
-    ctx.fillStyle = P.slate;
-    ctx.fillRect(8, y, SAFE.w, 1);
-    const lw = measureLogo({ variant: 'full', scale: 1 }).w;
-    drawLogo(ctx, Math.round((VW - lw) / 2), VH - 30, { variant: 'full', scale: 1, t: null });
   }
 
   /** Full-frame channel shots (start, standby, break bumper...): the frame's middle and the logo. */
@@ -766,5 +828,3 @@ export function creditWords(text, firstPx, restPx = firstPx, font = 'body') {
   return lines;
 }
 
-const DARK_INK = new Set([P.yellow, P.cyan, P.green, P.cream, P.white, P.silver, P.orange, P.pink]);
-const inkOn = (c) => (DARK_INK.has(c) ? P.black : P.white);

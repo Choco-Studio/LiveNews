@@ -194,23 +194,36 @@ export function drawVerticalWeatherBoard(ctx, t, board, state, box) {
 }
 
 /**
- * Give the vertical compositor its weather stage: the board set again when one is up; the world, a zone or a warning
- * composed again at the stage's size (scenes/weather/index.js drawWeatherVertical: the map the stage's full width,
- * every word in the safe column); the close-up, the horizontal frame's window centred on the presenter.
+ * Give the vertical compositor its weather stage: the board set again when one is up, on the glass over the weather
+ * centre's wall (clip/vset.js); the world, a zone or a warning composed again at the stage's size
+ * (scenes/weather/index.js drawWeatherVertical: the map the stage's full width, every word in the safe column), framed
+ * as a window; the close-up, the horizontal frame's full height centred on the presenter, standing on the centre's LED
+ * line (weatherCloseup, drawn under every band like a studio single).
  */
 export function installWeather(comp) {
   comp.weather = (t, scene, box) => {
     const v = weatherView(t);
     if (!v) return false;
     if (v.board && v.state) {
-      comp.ctx.drawImage(groundOf(box.w, box.h), box.x, box.y);
+      if (typeof comp.glassPanel === 'function') comp.glassPanel(t);
+      else comp.ctx.drawImage(groundOf(box.w, box.h), box.x, box.y);
       return drawVerticalWeatherBoard(comp.ctx, t, v.board, v.state, box);
     }
-    if (drawWeatherVertical(comp.ctx, t, { x: 0, y: box.y, w: VW, h: box.h }, { x0: SAFE.x, x1: SAFE.right })) return true;
+    if (drawWeatherVertical(comp.ctx, t, { x: 0, y: box.y, w: VW, h: box.h }, { x0: SAFE.x, x1: SAFE.right })) {
+      comp.windowed = { y0: box.y, y1: box.y + box.h };
+      return true;
+    }
+    // (the close-up: drawn under the bands by weatherCloseup)
+    if (comp.tall) return true;
     if (Number.isFinite(v.presenterX)) {
       comp.middle(scene, v.presenterX);
       return true;
     }
     return false;
+  };
+  comp.weatherCloseup = (t) => {
+    const v = weatherView(t);
+    if (!v || v.board || v.shot !== 'mcu' || !Number.isFinite(v.presenterX) || typeof comp.tallWindow !== 'function') return null;
+    return comp.tallWindow(t, v.presenterX);
   };
 }

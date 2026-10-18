@@ -5,10 +5,18 @@ lose the boards' edges and shrink the type. The vertical picture is therefore **
 channel's own drawing code, in bands laid out for a phone. It is rendered by the real renderer in clip mode
 (`?format=vertical`), recorded by the deterministic recorder, and scaled 5x by nearest neighbour.
 
-Code: `public/js/clip/` (`index.js` the switch, `layout.js` the zones, `vertical.js` the compositor, `vboards.js`,
-`vquiz.js`, `vweather.js` and `vsport.js` the boards, `captions.js`, `graphics.js`, `cards.js`, `thumb.js`).
-Labs: `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`, `/lab/thumb.html`; `/lab/weather.html`
-draws the vertical stage of the weather's map shots beside its frame.
+Code: `public/js/clip/` (`index.js` the switch, `layout.js` the zones, `vertical.js` the compositor, `vset.js` the
+programme's set stood on end, `vboards.js`, `vquiz.js`, `vweather.js` and `vsport.js` the boards, `captions.js`,
+`graphics.js`, `cards.js`, `thumb.js`). Labs: `/lab/vertical.html` (every programme's frames from the real
+compositor: its single, a board, a map, the montage, the end card, the quiz's boards; served by the playback server,
+which answers `/api/channel`), `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`,
+`/lab/thumb.html`; `/lab/weather.html` draws the vertical stage of the weather's map shots beside its frame.
+
+**Round 10 (owner, 18 Oct: "eso queda fatal", "el fondo no pega nada").** Until round 9 the frame was a flat dark
+field with the bands in black: a small board floated in empty space, every programme looked the same, and a clip could
+open on a panel half wiped in. Since round 10 every frame is the programme's own studio, stood on end (§1, §2), boards
+sit on glass in the set's own frame and are set as large as the stage lets them (§3.3, §3.5), and a clip opens on a
+composed frame.
 
 ## 1. Principles
 
@@ -19,20 +27,61 @@ draws the vertical stage of the weather's map shots beside its frame.
   to a window on the horizontal frame.
 - **Readable on a phone with the sound off.** Captions at 2x (14 px caps at 1x, 70 px on a 1080-wide screen), the hook
   at 2x, every word inside the platforms' safe area.
+- **The programme's own set, stood on end** (`vset.js`). Under every band, edge to edge and top to bottom, is the
+  programme's studio, drawn by the studio's own renderer (v2 `studio/set.js`: its wall, dressing, light and desk) for a
+  tall picture: WORLD NOW under its four clocks before the city at night, TECH BYTES before its circuit board, COSMOS
+  at its window on the Earth, MONEY MINUTE in its panelled room under the ticker, NEWS IN 60 in its control room,
+  SEVEN DAYS before its sunset skyline, FULL TIME by its floodlit pitch, PAY ATTENTION under its marquee, WORLD
+  WEATHER in its weather centre. Its lights breathe (§2). There is no flat field and no empty band.
+- **Large.** A presenter is the studio made tall (§3.1), shoulders across most of the frame; a board takes the whole
+  stage and its type the largest size that fits (§3.3, §3.5).
+- **Whole from the first frame.** Nothing wipes in on the vertical frame: a board's glass and frame are there from the
+  shot's first frame, its kicker and first rows already in place, its later lines popping in whole at their beat, never
+  half risen out of a mask (§3.3). A clip therefore opens on a composed frame, whatever shot it opens on.
 - **Disclosed.** The end card says it in the channel ident's words, the caption opens with it, and the platform's own
   AI label is required on every clip (`compliance.md` §3.2). The RECREATION label is set for the tall frame when a
   recreation is on screen (§3.8). Nothing stands over the clip's first seconds, and the bug stands clean (owner, 18 Oct:
-  no AI plate beside it, the ident's words only).
+  no AI plate beside it, the ident's words only),
+  and no layout of round 10 adds one.
 
 ## 2. The grid and the zones (`layout.js`)
 
 | Zone | Rows (1x) | What it holds |
 |---|---|---|
-| MAST | 0–31 | The channel's bug at (8, 10), the programme's tag at the right (or the quiz's hook) |
-| TITLE | 32–71 | In a clip, the hook, all clip long (it is laid over the master's mast and band: §5). In the master, the story's tag and headline, or the programme's title and tagline. |
-| STAGE | 72–247 (216 × 176) | The picture: the speaker, the board, the map, the photo. Over a single, a map or a picture, the story's source on a plate at the top left (SOURCE: NASA); NEWS IN 60's progress rule along its top edge. A board, the montage and a recreation carry their own credit. |
-| CAPS | 248–299 | The captions: two lines at 2x on black boxes |
-| FOOT | 300–383 | A slate rule and the full logo at the bottom, nothing else. The feeds put their own buttons and text here, so nothing a viewer must read lives in it. |
+| MAST | 0–31 | The channel's bug at (8, 10), clean, the programme's tag at the right (or the quiz's hook), on the set's ceiling under tinted glass |
+| TITLE | 32–71 | In a clip, the hook on its black plate, all clip long (laid over the master: §5); round the plate, the set. The master draws nothing here. |
+| STAGE | 72–247 (216 × 176) | The picture: the board on its glass, the map, the photo (a single runs on from row 58: §3.1). Over a single, a map or a picture, the story's source on a plate at the top left (SOURCE: NASA); NEWS IN 60's progress rule along its top edge. A board, the montage and a recreation carry their own credit. |
+| CAPS | 248–299 | The captions: two lines at 2x on black boxes, over the set's lower wall or the presenter's desk |
+| FOOT | 300–383 | The set's desk and floor under tinted glass, nothing to read and no logo: the feeds put their own buttons and text here, and the bug carries the channel's name. |
+
+**The picture under the bands** (`vertical.js` `frame`): the programme's set stood on end (`vset.js` `backdrop`), or
+the presenter's single made tall (§3.1), drawn first over the whole frame; then the stage's content; then the top and
+the foot under tinted glass (`glassScrims`: the picture read back and every colour taken to the dark end of its own
+hue, fading in over a few rows, so the bug, the tag and the feeds' own words read on a calm ground while the set still
+shows); then the mast and the captions.
+
+**The set stood on end** (`vset.js`). The studio's camera never rotates and its screen row is a pure offset
+(`geometry.js`: sy = hy + (Y − cam.y)·k), so renders of one camera 216 rows apart meet without a seam. Each
+programme's camera (`VSETS`: zoom 1.822 on the video wall, solved so the screen is the glass: 190 px wide on its
+columns, its top and foot on its rows) is rendered twice for the frame: rows 0–159 with the set's header behind the
+hook's plate (the clocks, the ticker, the moon's phases, the week's days peep out beside it), rows 160–383 from the
+same camera 56 rows lower (PAY ATTENTION: zoom 1.622, rows 0–139, then 87 lower), so the wall's foot runs behind the captions (the city's lights, the
+circuit board, the Earth's rim, the panelling, the pitch) and the desk with its GLOBIT 24 plate sits in the foot. The
+two halves share every column (the camera only pedestals), so the set's uprights run straight through the seam,
+which the board's glass covers; the screen between them is the wall's own field, a tall screen for a tall board. It is
+baked once per programme; its practical lights (lone lit pixels: windows, stars, LEDs, lamps) breathe on their own
+slow beats (`twinkle`), and the accent rule of a board's frame or a window catches a glint every 5.5 s (`glint`).
+WORLD WEATHER airs from its own weather centre, not the network's studio: its tall view is drawn in the centre's terms
+(`weatherBackdrop`: the rig across the top, the curved wall's glass with the satellite's cloud and an isobar, the cyan
+LED line at row 288, the glossy floor mirroring the wall). Without the studio's renderer (node tests) the backdrop is
+the programme's colours on a graded field.
+
+**Glass** (`vset.js` `GLASS`, `glassRect`): a board stands on the set seen through tinted glass, 190 × the stage less
+6 px (x 3–193, centred on the safe column), every colour taken to the dark end of its hue (white and the greys to ink,
+the warm colours to maroon, the blues to navy, the greens to their darkest): the set reads through as shapes and its
+own colour, its lettering never does, and the board's type stands on nothing lighter than navy. Its frame is the set's
+screen bezel with the programme's accent along the top (`drawBoardFrame`); PAY ATTENTION's is its marquee: a purple
+band in a fog rim with a chase of gold lamps.
 
 **The safe area** (`PLATFORM_SAFE`): x 8–188, y 32–300. TikTok, Reels and Shorts all lay their buttons over the right
 edge (about 12 % of the width) and their caption and handle over the foot (about 20 % of the height), so every word a
@@ -64,11 +113,24 @@ reads), so their stage runs on through the captions' band to row 300 (216 × 228
 A second instance of the v2 stage (`runtime/stage.js`) draws the speaker's own single:
 
 - It is fed a proxy of the scene with `shot: 'close'`, the speaker's focus and a framing for a tall picture
-  (`verticalFraming`: the quiz host and players on their own seats, a duo's speaker single, a solo presenter's
-  medium close-up).
+  (`verticalFraming`: the quiz host and players on their own seats; every other presenter, duo or solo, in the
+  vertical's own single, camera.js `tall`: the close's scale, k 3.8, the head on the 384-wide frame's middle column,
+  so the tall crop centres it over the safe column on either seat. It is not walked clear of the wall's bezel as the
+  horizontal singles are: the wall behind is at rest, and the walk drifted the camera. Round 10's first pass used the
+  close, whose walk left FULL TIME's seat A head at x 81 and seat B's at 316, past where a crop can centre them).
 - Its own camera points at the voice's owner. Its cue clock runs on the same plan, so the presenter gestures on the
   same words as on air.
-- The crop centres on the head (from the seat's screen x and its neck), so the eyes sit about a third down the stage.
+- **Made tall** (round 10, `vertical.js` `tallSingle`, `vset.js` `single`). The Stage's frame is shown whole, its 216
+  rows from row 58, the speaker's head over the safe column's middle; above it and below it the set is rendered from
+  the very same camera (hy + 216 and hy − 216), so the wall rises behind the head to the set's top and the desk runs on
+  to the frame's foot: the presenter sits in the studio, shoulders across most of the frame, eyes about a third of the
+  way down it, and no window edge cuts the picture. The extensions are rendered once per camera (a cut makes new
+  ones). PAY ATTENTION's single starts at row 40 (its hook is in the mast).
+- **The body goes on below the frame** (`vset.js` `singleBelow`): every frame the Stage's own actors are drawn again,
+  at the same instant, over the set below (clipped by its desks and podiums: a contestant's podium is lower than a
+  desk). The set below is rendered `OVERLAP` (8) rows higher and shown from the row the Stage's frame ends on: the
+  rasteriser leaves a frame's first and last rows to the set, and a body crossing the join would otherwise show a
+  line of wall.
 - It cuts when the voice changes hands, as a director would, and the speaker's name tag rises for 4.5 s after each cut.
 - The studio wall behind the single is at rest (`wall.js` 'rest'): the programme's art without its words. A plate, map
   label or wordmark would be cut in half by the tall crop.
@@ -77,15 +139,30 @@ A second instance of the v2 stage (`runtime/stage.js`) draws the speaker's own s
 
 A two-shot on air becomes the speaker's single (§3.1): a phone shows one face well rather than two badly. The two-way
 (correspondent and studio) stacks the two boxes one over the other, each 178 × 82 from the horizontal frame's own
-boxes.
+boxes, on the glass over the set.
 
 ### 3.3 Boards (`vboards.js`)
 
-Each story board is laid out again for the stage's width as a single column centred in the stage. The panel wipes in
-from the left, the kicker is in micro type, and rows rise in turn, as on air. Precedence is the horizontal card's own
-(`boardKind`).
+Each story board is laid out again for the stage's width as a single column centred in the stage, on the glass over
+the set in the set's frame (§2: `bare`, no panel of its own). Precedence is the horizontal card's own (`boardKind`).
 
-- **figures:** up to three figures with their labels. MONEY MINUTE's are on cream paper with an ink edge.
+- **As large as the stage lets it be** (`verticalBoardLayout(card, w, h, programId, bare)`): its words at 2x (`T2`) when
+  every row and the source line fit the stage that way, else at the body size (`T1`), never shrunk past it and never
+  cut. A lone figure goes to 4x when it fits, two or three to 3x; their labels a size under them. WHAT HAPPENS NEXT
+  stands its calendar leaf over its words at 2x, the date in words beside the leaf (WEDNESDAY 28 OCTOBER); a loose
+  "28 OCTOBER" is read as the date it is (OCT over a large 28), never cut to OCTOB.... The kicker and the source are
+  in the body face (35 px on 1920), the kicker in the programme's accent.
+- **Whole from the first frame.** Nothing wipes in. The board's own cascade is pre-rolled by `PRE` (1.6 s), so its
+  kicker and first four rows are there on the shot's first frame (a figure with its label, a headline over its
+  figure: a clip that opens on a board opens on the board, not on its kicker), and a fifth row and on pops in whole at
+  its beat (`pop`), never half risen out of its mask.
+
+On the channel's panel (the horizontal frame's own boards, unchanged) the panel wipes in from the left, the kicker is
+in micro type, and rows rise in turn.
+
+- **figures:** up to three figures with their labels (a fact that ends on its figure, ECONOMY UP 0.1%, is set as the
+  figure over its label, not as a line of words). MONEY MINUTE's are on cream paper with an ink edge; on the
+  glass the paper is the whole sheet, the glass's height, the rows centred on it (no small card floating in the screen).
 - **known:** WHAT WE KNOW, its points.
 - **timeline:** a vertical rail with up to three dates.
 - **change:** from, an arrow, to, and the label.
@@ -97,10 +174,13 @@ from the left, the kicker is in micro type, and rows rise in turn, as on air. Pr
 
 A board that does not fit drops its source line first, then its last rows, and never shrinks its type.
 
-**FULL TIME** (`vsport.js`):
+**FULL TIME** (`vsport.js`), on the glass like every board (`box.bare`: no panel, no wipe, the RESULT kicker in the
+body face in the accent; the RESULT card, all entrance, settled from its first frame: both names whole, both scores
+landed, FT or DRAW under them):
 
-- **The RESULT card:** the sport's icon and RESULT, the two names in one type size (2x when both fit, else 1x on up
-  to two lines), the home side first when the source names one (HOME and AWAY under the names), the scores at 3x
+- **The RESULT card:** the sport's icon and RESULT, the two names in one type size (2x when both fit; on the glass a
+  long name takes two lines at 2x, PIXELBURG / UNITED; else 1x on up to two lines), the home side first when the source
+  names one (HOME and AWAY under the names), the scores at 3x (4x on the glass)
   landing from above, the winner white with the accent's score, then FT or DRAW once both have landed, the stage and
   the source.
 - **The SCORE CENTRE:** the board with its title in the accent, each result on two lines (home over away), so no name
@@ -123,7 +203,9 @@ board under its own kicker.
 The channel's world map (`scenes/worldmap.js`) takes any viewport. It is drawn with the story's view on a viewport
 that ends 8 px right of the safe column, so the pin and the place's name land inside the column and are as sharp as on
 air. The map's last column of sea is then repeated to the frame's edge (`seaStrip`): the strip under the buttons holds
-only sea. A picture's pan does the same.
+only sea. A picture's pan does the same. A map, a picture, a location shot or the montage's backdrop is a window set
+into the studio: the programme's accent rule along its top and its foot over a black shadow line, as the set frames its
+own screens (`windowRules`), with the glint passing along the top one.
 
 ### 3.5 PAY ATTENTION's boards (`vquiz.js`)
 
@@ -138,11 +220,30 @@ picture's whole-block sharpening, the credit lines), so a question reads the sam
 shape, never a letter, tells who locked in. `test/publish-vertical.test.js` draws every lab case at every moment and
 checks that nothing leaves the box.
 
+On the vertical frame (round 10) every quiz board stands on the glass inside the quiz's marquee (the set's own: a purple
+band, a fog rim, a chase of gold lamps stepping every 0.12 s), bare, inside the band:
+
+- **Large where the board is sparse.** THIS WEEK'S TABLE sets its names at 2x with the players' shapes at 2x
+  (tonight's two in gold), the rank and games played beside them; its rows share the board. A short week is set like
+  the round's card: THIS WEEK'S at 2x in gold over TABLE at 3x; with three players or fewer (the owner's case of
+  18 Oct: two) the names go to 3x, the wins to 5x and the games played to a line under each name, rows up to 46 px;
+  with four, rows of 34 px and the wins at 3x. The final scores stand at 5x under the names at 2x; the
+  round's card has its number at 2x in gold over its name at 3x on up to two lines; LETTER BY LETTER's tiles go to 2x
+  (15 × 21, or 13 × 19 for a headline with a long word) when every word fits the column and the rows fit the board;
+  HOW MANY?'s guesses stand at 2x in their boxes when they fit; DOUBLE OR NOTHING's stake is in the body face.
+- **Whole from the first frame.** A question board's kicker, frame, question and players' marks are pre-rolled
+  (`PRE`, 0.9 s) and the boards that are all entrance (the round's card, the scores, the table, DOUBLE OR NOTHING's
+  offer) are settled from their first frame (`SETTLED`); what follows the voice and the plan (the locks, the countdown,
+  the reveal, the pick) keeps the board's own clock.
+
 HOW MANY? gives the space under the players' guesses a job all question long, because the board is on screen while
 the host reads and the countdown often runs over the players' faces: YOUR GUESS? at 2x over an empty answer box at 3x
 height, its cursor blinking on the bed's half notes, and the countdown under it while it runs. At the reveal the box
 reads THE ANSWER and the figure lands in it at 3x in the reveal's yellow, its label under it, the credit at the foot.
-The box is one width whatever the answer, so it gives nothing away.
+The box is one width whatever the answer, so it gives nothing away. On a board too short for all of it (a long
+question on the glass), the module is compact: a 21-row box with the answer at 2x, the countdown at the foot; with a
+question of five lines, only its words stay in the strip (YOUR GUESS? at 2x, the answer at 2x in yellow at the reveal).
+On the glass the module is settled from the board's first frame, like its header.
 
 ### 3.6 WORLD WEATHER (`vweather.js`)
 
@@ -174,8 +275,10 @@ width, under the feeds' buttons too, and every word stays inside the safe column
 - **A warning:** the storm in the band over the panel. The warnings panel is centred in the column and slides in from
   its edge, so it is never seen past it.
 
-The close-up keeps the horizontal frame's window, centred on the presenter's close-up. The world time-lapse is a clip
-moment of its own (`weather-map`, THE NEXT 24 HOURS).
+The close-up (round 10) shows the horizontal frame's whole height, 216 rows from the stage's top, centred on the
+presenter over the safe column, as a window over the weather centre's tall view (`tallWindow`; `vweather.js`
+`weatherCloseup`). The boards stand on the glass over the centre's wall, the maps are windows (§3.4). The world
+time-lapse is a clip moment of its own (`weather-map`, THE NEXT 24 HOURS).
 `test/publish-vertical.test.js` drives the weather centre through the world, three zones and the warning. It checks
 every word, frame by frame, against the column and the stage, and checks that the high or low being named is in the
 column.
@@ -186,7 +289,8 @@ The story's picture fills the stage's width, panning as on air. The headline mon
 on the montage stage (§2, rows 72–300): the picture as the backdrop, centred on the safe column,
 a black plate with the headline at 2x as tall as its lines need (1x past four lines), the source under them
 (SOURCE: …), and TOP STORIES with the run's pips, or STILL TO COME, on the plate's top edge (in a clip the hook
-holds the title band all clip long). The montage has no captions, because its plate shows the words the voice
+holds the title band all clip long). The plate is whole from the shot's first frame and its headline is pre-rolled
+(round 10): a clip that opens on the montage opens on its headline. The montage has no captions, because its plate shows the words the voice
 reads.
 
 A story with no picture has a board of its own, prepared for the tall backdrop (216 × 228):
@@ -270,28 +374,33 @@ crisp, but it is a crop, and §8 lists what remains.
 A headline is never cut, because a cut one says what the story did not ("NEANDERTHAL / REMAINS MAY"). A running-order
 label (AND FINALLY, NUMBER OF THE DAY) is never a hook. Placement:
 
-- Vertical: in the title band, beside an accent bar, all clip long.
-- PAY ATTENTION's tall stage: one line in the mast, where the programme's tag would be ("PLAY ALONG", "FULL ROUND").
+- Vertical: in the title band on a black plate as large as its lines, beside an accent bar, all clip long. The card is
+  clear everywhere else (round 10; it was a black band over the whole top), so the programme's set shows round it.
+- PAY ATTENTION's tall stage: one line in the mast on a black plate, where the programme's tag would be ("PLAY ALONG",
+  "FULL ROUND").
 - Horizontal: a plate under the top row for the first four seconds, or for the quiz, whose boards own the top, one
   line at the top row's right end. A horizontal WORLD WEATHER board has no hook plate: its heading (HOT & COLD, THE
   NEXT THREE DAYS) is in the plate's place and says the same.
 
 The hook is drawn by the channel's own code (`/lab/clip.html`) and laid over the master before the 5x scale.
 
-**The end card** (2.6 s, with the channel's ident sting) shows:
+**The end card** (2.6 s, with the channel's ident sting) shows, vertical (round 10):
 
-- the logo landing and glinting (vertical: the emblem at 4x over the wordmark's plate at 2x, the bug without its own
-  small globe, so the card shows one globe);
+- the programme's own set behind tinted glass (the set the clip stood in: `clip.html` bakes it from the programme's
+  theme), the programme's accent rules opening from the column's middle over the mast and over the feeds' band;
+- the logo landing and glinting (the emblem at 4x over the wordmark's plate at 2x, the bug without its own small globe,
+  so the card shows one globe);
 - THE WORLD, PIXEL BY PIXEL;
-- the programme's accent rule, FROM <PROGRAMME>, and where to watch only when there is a stream (`airmode.js`
-  `streamOf`, from `CHANNEL_LIVE_URL`): NEWS 24 HOURS A DAY · WATCH LIVE (vertical: NEWS 24/7 · WATCH LIVE) for a live
-  stream, NEWS 24 HOURS A DAY for the pre-rendered one, nothing without a stream (the manual beta). A clip never points
-  to a stream that does not exist;
-- the AI disclosure in the channel ident's design: AI-PRODUCED NEWS in white, then PRESENTERS ARE AI CHARACTERS and
-  FACTS FROM CREDITED SOURCES in silver (vertical: three rows in the body face, inside the safe column; horizontal: the
-  ident's two rows).
+- FROM, then the programme on its accent plate at 2x (its tag beside the bug, made large);
+- where to watch only when there is a stream (`airmode.js` `streamOf`, from `CHANNEL_LIVE_URL`): NEWS 24/7 at 2x for
+  the pre-rendered stream, NEWS 24/7 · WATCH LIVE in the body face for a live one, nothing without a stream (the manual
+  beta). A clip never points to a stream that does not exist;
+- the AI disclosure in the channel ident's design, three rows at the foot of the safe area: AI-PRODUCED NEWS in white,
+  then PRESENTERS ARE AI CHARACTERS and FACTS FROM CREDITED SOURCES in silver, the body face with its shadow.
 
-No URL is drawn, so a card never goes stale: the post carries the links.
+Horizontal: the full lock-up at 3x, the slogan, the accent rule, FROM <PROGRAMME>, where to watch as above (NEWS 24
+HOURS A DAY, · WATCH LIVE for a live stream alone) and the ident's two rows. No URL is drawn, so a card never goes
+stale: the post carries the links.
 
 **The AI disclosure** (owner, 18 Oct: the channel's ident alone, nothing over a programme or a clip's first seconds)
 is the end card, the caption's first line ("AI-produced news: …") and the platform's own AI label. The factory declares
@@ -342,4 +451,8 @@ Nothing changes on air without `?clip=1` or `?format=vertical`.
   league of 13 Oct); its first real edition should be watched in vertical before its clips are approved.
 - The quiz's and the weather's labs (`/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`) show every board.
   The tests draw them all at every moment and check nothing leaves its box.
-- The quiz's first frame is the round card's panel wiping in, so the hook in the mast carries the first 0.3 s.
+- ~~The quiz's first frame is the round card's panel wiping in~~ (round 10: every board is whole from its first frame).
+- The backdrops are rendered from the studio sets as they are: a programme whose set changes gets its new vertical set
+  at once, but its tall camera (`VSETS`) should be looked at again on `/lab/vertical.html`.
+- WORLD WEATHER's tall view is drawn for the vertical frame (`weatherBackdrop`), not by its centre's own renderer: the
+  centre's wall picture shows only through its own windows (the close-up, the maps).

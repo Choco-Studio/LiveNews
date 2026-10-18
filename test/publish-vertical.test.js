@@ -1,8 +1,11 @@
 // The vertical picture and the clip's own graphics (public/js/clip/; docs/publishing/vertical.md): the zones fill the
-// 216x384 frame exactly, every PAY ATTENTION board and every news board set for it stays inside its box at every
-// moment, the hook and the end card stay inside the frame and the platforms' safe area, the captions page whole
-// words in two lines, nothing lit over grave news, a voice reading the board is not captioned twice, the bug stands
-// clean, the thumbnail's lead fits.
+// 216x384 frame exactly, the programme's own set stands behind every band, every PAY ATTENTION board and every news
+// board set for it stays inside its box at every moment (on the channel's panel and on the vertical frame's glass),
+// a board on the glass is whole from its first frame, every presenter's single can be centred over the safe column,
+// the hook and the end card stay inside the frame and the platforms' safe area (the hook clear but for its plates, the
+// end card on the programme's set, WATCH LIVE only for a live stream), the captions page whole words in two lines,
+// nothing lit over grave news, a voice reading the board is not captioned twice, the bug stands clean, the thumbnail's
+// lead fits.
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -47,6 +50,16 @@ function fakeCanvas(width = 216, height = 384) {
   cv.getContext = () => ctx;
   return cv;
 }
+/**
+ * A line of type drawn whole: its glyphs inside what its clip leaves visible (a text image carries 2 rows of padding a
+ * scale above its caps and 3 under them; a mask may cut the padding, never the caps).
+ */
+const wholeText = (im) => {
+  const v = visible(im);
+  if (!v) return false;
+  const s = Math.max(1, Math.round(im.h / 12));
+  return v.x <= im.x + 1 && v.x + v.w >= im.x + im.w - 1 && v.y <= im.y + 2 * s && v.y + v.h >= im.y + im.h - 3 * s;
+};
 /** The visible part of a draw (its clip applied): null when fully clipped away. */
 const visible = (d) => {
   if (!d.clip) return d;
@@ -114,6 +127,70 @@ describe('the vertical picture', () => {
     assert.equal(L.VH * 5, 1920);
   });
 
+  test('the programme\'s own set stands behind every band: each programme has its tall camera, WORLD WEATHER its centre', async () => {
+    const VS = await import('../public/js/clip/vset.js');
+    const { readFileSync } = await import('node:fs');
+    const channel = JSON.parse(readFileSync(new URL('../config/channel.json', import.meta.url), 'utf8'));
+    // (the channel's programmes and its drafts: FULL TIME and PAY ATTENTION have their sets built ahead of air)
+    const ids = [...new Set([...Object.keys(channel.programs || channel.programmes || {}), 'full-time', 'pay-attention'])];
+    assert.ok(ids.length >= 9, `the channel's programmes: ${ids}`);
+    for (const id of ids) assert.ok(VS.VSETS[id], `${id} has its vertical set`);
+    for (const id of ids) if (id !== 'world-weather') assert.equal(VS.VSETS[id].style, id, `${id} stands in its own studio`);
+    assert.equal(VS.VSETS['pay-attention'].frame, 'marquee', 'the quiz\'s boards in its marquee');
+    // without the studio's renderer (node): the programme's colours, WORLD WEATHER's centre drawn in its own terms,
+    // every pixel a palette colour, the frame filled top to bottom
+    const set = new VS.VerticalSet(null);
+    const { P } = await import('../public/js/palette.js');
+    const { u32 } = await import('../public/js/gfx/color.js');
+    const pal = new Set(Object.values(P).map((c) => u32(c) >>> 0));
+    for (const id of ['cosmos', 'world-weather']) {
+      const b = set.backdrop(id);
+      assert.equal(b.px.length, L.VW * L.VH);
+      assert.ok(b.px.every((c) => pal.has(c >>> 0)), `${id}: palette colours only`);
+      assert.ok(b.img && b.glass, `${id}: the set and its glass`);
+    }
+    // the glass takes every colour to the dark end of its hue: nothing lighter than navy behind a board's words
+    const { lstar32 } = await import('../public/js/v2/canvas25d/studio/color.js');
+    for (const [from, to] of Object.entries(VS.GLASS)) assert.ok(lstar32(u32(P[to])) <= 36, `${from} -> ${to} is dark`);
+    // the frame: the set drawn first, edge to edge, top to bottom; a board on its glass in the set's frame
+    const { VerticalCompositor } = await import('../public/js/clip/vertical.js');
+    const canvas = fakeCanvas(216, 384);
+    const comp = new VerticalCompositor({ canvas, source: fakeCanvas(384, 216), renderer: { graphics: { strap: { cur: null, outAt: null } } }, channel: { name: 'GLOBIT 24' } });
+    comp.frame(5, { shot: 'fact', shotSince: 5, program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, card: { numbers: [{ value: '4.75%', label: 'main interest rate' }], source: 'BBC Business' } });
+    const ctx = canvas.getContext('2d');
+    assert.deepEqual([ctx.images[0].x, ctx.images[0].y, ctx.images[0].w, ctx.images[0].h], [0, 0, L.VW, L.VH], 'the set first, the whole frame');
+    const glass = ctx.images.find((im) => im.w === 190 && im.y === L.V.stage.y + 3);
+    assert.ok(glass, 'the stage under glass (190 wide, 3 px in)');
+    assert.ok(ctx.fills.some((f) => f.y === L.V.stage.y + 3 && f.h === 2 && f.w === 190), 'the programme\'s accent along the glass\'s top');
+  });
+
+  test('every presenter\'s single can be centred over the safe column, either seat, duo or solo (FULL TIME\'s seat A sat at x 81)', async () => {
+    const { verticalFraming, SINGLE_TOP } = await import('../public/js/clip/vertical.js');
+    const CAM = await import('../public/js/v2/canvas25d/camera.js');
+    const { SET } = await import('../public/js/v2/canvas25d/studio/geometry.js');
+    const { lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
+    assert.equal(verticalFraming({ A: 'kai', B: 'rosa' }, 'A'), 'tall');
+    assert.equal(verticalFraming({ A: 'paco' }, 'A'), 'tall');
+    assert.equal(verticalFraming({ H: 'qm', A: 'unit8', B: 'penny' }, 'B'), 'quiz-b');
+    // the tall crop's window can put x anywhere in [SAFE.cx, 384 - (216 - SAFE.cx)] over the safe column's middle
+    const lo = L.SAFE.cx;
+    const hi = 384 - (L.VW - L.SAFE.cx);
+    for (const [programId, cast] of [['full-time', { A: 'kai', B: 'rosa' }], ['world-now', { A: 'paco', B: 'lola' }], ['seven-days', { A: 'paco' }], ['money-minute', { A: 'penny' }], ['news-60', { A: 'sam' }]]) {
+      for (const focus of Object.keys(cast)) {
+        const solo = !cast.B;
+        const name = verticalFraming(cast, focus);
+        const cam = CAM.framing(name, { framing: name, cast, focus, solo, programId, move: null });
+        const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[focus];
+        const head = CAM.framingInfo(cam, [{ slot: focus, X, look: lookFor(cast[focus]) }]).heads[0];
+        assert.ok(head.cx >= lo + 20 && head.cx <= hi - 20, `${programId} ${focus}: the head at x ${head.cx}, where the crop centres it`);
+        assert.ok(head.y0 >= 20, `${programId} ${focus}: the crown in frame (${head.y0})`);
+        assert.ok(head.s >= 3.5, `${programId} ${focus}: the close's scale (${head.s})`);
+        // the face in the frame's upper half, above the captions (the eyes about a third of the way down)
+        assert.ok(SINGLE_TOP.normal + head.y1 < L.V.caps.y - 40, `${programId} ${focus}: the face (to row ${SINGLE_TOP.normal + head.y1}) well above the captions`);
+      }
+    }
+  });
+
   test('clip mode is asked for by the URL, and only then', () => {
     const p = (s) => new URLSearchParams(s);
     assert.deepEqual(clipIdx.clipOptions(p('')), { on: false, vertical: false });
@@ -143,9 +220,56 @@ describe('the vertical picture', () => {
       }
     }
     assert.ok(n > 30, `${n} board moments checked`);
+    // on the vertical frame's glass: bare (no panel, no wipe), inside the quiz's marquee (its 6 px band), the same
+    // moments and the shot's first frame
+    const IN = { x: BOX.x + 2, y: BOX.y + 4, w: BOX.w - 4, h: BOX.h - 8, bare: true };
+    const boxB = (fn) => (ctx, t, o) => fn(ctx, t, o, IN);
+    const VB2 = { ...Q, drawQuestionBoard: boxB(VQ.VQUIZ.picture), drawLettersBoard: boxB(VQ.VQUIZ.letters), drawWhereBoard: boxB(VQ.VQUIZ.where), drawHowManyBoard: boxB(VQ.VQUIZ.howmany), drawTodayBoard: boxB(VQ.VQUIZ.today), drawScoresStrip: (ctx, t, o) => (o.compact ? null : VQ.VQUIZ.final(ctx, t, o, IN)), drawDoubleCard: boxB(VQ.VQUIZ.double), drawTableBoard: boxB(VQ.VQUIZ.table), drawRoundCard: boxB(VQ.VQUIZ.round) };
+    let m = 0;
+    for (const [id, , c] of quizCases({ Q: VB2, pics, HN: Q.HALF_NOTE, NOW: Date.parse('2026-10-13T20:20:00Z') })) {
+      if (id === 'strip') continue;
+      for (const [name, t] of Object.entries({ first: 0, ...(c.moments || {}) })) {
+        const ctx = fakeCanvas().getContext('2d');
+        c.draw(ctx, t);
+        inside(ctx, IN, `${id} on the glass at ${name}`);
+        wordsSafe(ctx, `${id} on the glass at ${name}`);
+        assert.ok(!ctx.fills.some((f) => f.c === '#181425' && f.w >= IN.w - 16 && f.h >= 40), `${id} on the glass at ${name}: no panel of its own`);
+        m++;
+      }
+    }
+    assert.ok(m > 30, `${m} board moments checked on the glass`);
   });
 
-  test('every news board set for the vertical stage stays inside its box, its words in the safe column', () => {
+  test('PAY ATTENTION on the glass: the round, the table and the scores set large; the round whole on its first frame', async () => {
+    const IN = { x: 2, y: 36, w: 192, h: 208, bare: true };
+    const tall = (ctx) => ctx.images.filter((im) => im.h >= 14 && im.h <= 40);
+    // the week's table: names and wins at 2x, never a name cut mid-word
+    const table = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.table(table, 0, { players: [{ seat: 'A', name: 'LOLA', id: 'lola' }, { seat: 'B', name: 'SAM', id: 'sam' }], standings: [{ id: 'penny', name: 'PENNY STERLING', played: 4, wins: 3 }, { id: 'lola', name: 'LOLA', played: 3, wins: 2.5 }, { id: 'unit8', name: 'UNIT-8', played: 2, wins: 1 }, { id: 'sam', name: 'SAM', played: 3, wins: 0.5 }] }, IN);
+    assert.ok(tall(table).length >= 8, `the table's names and wins at 2x on its first frame: ${tall(table).length}`);
+    inside(table, IN, 'table');
+    // the owner's case, a week of two: THIS WEEK'S (gold, 2x) over TABLE at 3x, the names at 3x, the wins at 5x
+    const two = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.table(two, 0, { players: [{ seat: 'A', name: 'UNIT-8', id: 'unit8' }, { seat: 'B', name: 'PENNY', id: 'penny' }], standings: [{ id: 'unit8', name: 'UNIT-8', played: 1, wins: 1 }, { id: 'penny', name: 'PENNY', played: 1, wins: 0 }] }, IN);
+    inside(two, IN, 'a week of two');
+    const at = (k) => two.images.filter((im) => Math.round(im.h / 12) === k).length;
+    assert.equal(at(2), 1, "THIS WEEK'S at 2x");
+    assert.equal(at(3), 3, 'TABLE and both names at 3x');
+    assert.equal(at(5), 2, 'both wins at 5x');
+    for (const im of two.images) assert.ok(wholeText(im), `whole on the first frame: ${JSON.stringify(im)}`);
+    // the final scores: at 5x (35 px)
+    const fin = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.final(fin, 0, { players: [{ seat: 'A', name: 'UNIT-8' }, { seat: 'B', name: 'PENNY' }], scores: { A: 12, B: 8 }, title: 'FINAL SCORE', winner: 'A' }, IN);
+    assert.ok(fin.images.some((im) => im.h >= 35), 'the scores at 5x');
+    inside(fin, IN, 'final');
+    // the round's card: its name at 3x and the round's number, whole on the shot's first frame (no mask cutting them)
+    const round = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.round(round, 0, { type: 'letters', k: 2 }, IN);
+    assert.ok(round.images.some((im) => im.h >= 21), 'LETTER BY LETTER at 3x');
+    for (const im of round.images) assert.ok(wholeText(im), `whole on the first frame: ${JSON.stringify(im)}`);
+  });
+
+  test('every news board set for the vertical stage stays inside its box, its words in the safe column', async () => {
     const STAGE = L.boardBox({ x: 0, y: L.V.stage.y, w: L.VW, h: L.V.stage.h });
     const boards = {
       figures: { numbers: [{ value: '$1.3 billion', label: 'acquisition' }, { value: '68.7%', label: 'profit rise' }], source: 'TechCrunch' },
@@ -161,15 +285,49 @@ describe('the vertical picture', () => {
     for (const [kind, card] of Object.entries(boards)) {
       assert.equal(VB.boardKind(card), kind);
       for (const prog of ['world-now', 'money-minute', 'cosmos']) {
-        for (const dt of [0.1, 0.6, 3]) {
-          const ctx = fakeCanvas().getContext('2d');
-          const drew = VB.drawVerticalBoard(ctx, dt, card, { ...STAGE, programId: prog });
-          assert.ok(drew, `${kind} drew`);
-          inside(ctx, STAGE, `${kind} (${prog}) at ${dt}`);
-          wordsSafe(ctx, `${kind} (${prog}) at ${dt}`);
+        for (const bare of [false, true]) {
+          for (const dt of [0, 0.1, 0.6, 3]) {
+            const ctx = fakeCanvas().getContext('2d');
+            const drew = VB.drawVerticalBoard(ctx, dt, card, { ...STAGE, programId: prog, bare });
+            assert.ok(drew, `${kind} drew`);
+            const label = `${kind} (${prog}${bare ? ', glass' : ''}) at ${dt}`;
+            inside(ctx, STAGE, label);
+            wordsSafe(ctx, label);
+            if (!bare) continue;
+            // on the glass: whole from the first frame (no line half risen out of its mask, no panel wiping in)
+            for (const im of ctx.images) if (visible(im)) assert.ok(wholeText(im), `${label}: a line cut by a mask ${JSON.stringify(im)}`);
+            if (dt === 0) assert.ok(ctx.images.length >= 2, `${label}: the kicker and its first row on the first frame`);
+          }
         }
       }
     }
+    // on the glass a board is as large as the stage lets it be: WHAT HAPPENS NEXT and a lone figure at 2x and over
+    const big = (card) => VB.verticalBoardLayout(card, STAGE.w - 16, STAGE.h - 8, 'news-60', true);
+    assert.equal(big(boards.next).T.s, 2, 'WHAT HAPPENS NEXT at 2x');
+    // with its source line too, and a loose "28 OCTOBER" read as the date it is (OCT over a large 28, never OCTOB...)
+    const sourced = big({ ...boards.next, source: 'BBC News' });
+    assert.equal(sourced.T.s, 2, 'WHAT HAPPENS NEXT at 2x with its source');
+    assert.ok(sourced.src, 'its source kept');
+    const leaf = sourced.rows.find((r) => r.kind === 'leaf').leaf;
+    assert.deepEqual([leaf.head, leaf.big], ['OCT', '28']);
+    // MONEY MINUTE's paper on the glass is the whole sheet, the glass's height (no small card floating in the screen)
+    const { P: PAL } = await import('../public/js/palette.js');
+    const pc = fakeCanvas().getContext('2d');
+    VB.drawVerticalBoard(pc, 3, { numbers: [{ value: '4.75%', label: 'main interest rate' }], source: 'BBC Business' }, { ...STAGE, programId: 'money-minute', bare: true });
+    assert.ok(pc.fills.some((f) => f.c === PAL.cream && f.y === STAGE.y + 4 && f.h === STAGE.h - 8), 'the paper the glass\'s height');
+    // a fact that ends on its figure (MONEY MINUTE's ECONOMY UP 0.1%) is a figure with its label, not a line of words
+    assert.deepEqual(VB.figureRows('ECONOMY UP 0.1%').map((r) => [r.figure, r.label]), [['0.1%', 'ECONOMY UP']]);
+    assert.equal(VB.verticalBoardLayout({ fact: 'ECONOMY UP 0.1%', label: 'BY THE NUMBERS', source: 'BBC Business' }, STAGE.w - 16, STAGE.h - 8, 'money-minute', true).rows[0].scale, 4, 'its figure at 4x');
+    // and the figure drawn at the size its layout gives it (4x, not the body face)
+    for (const [prog, ctx] of [['money-minute', pc], ['world-now', null]]) {
+      const c = ctx || fakeCanvas().getContext('2d');
+      const card = { fact: '£1.6BN PURCHASE', numbers: [{ value: '£1.6BN', label: 'PURCHASE' }], source: 'Guardian Business' };
+      if (!ctx) VB.drawVerticalBoard(c, 3, card, { ...STAGE, programId: prog, bare: true });
+      const want = VB.verticalBoardLayout(ctx ? { numbers: [{ value: '4.75%', label: 'main interest rate' }], source: 'BBC Business' } : card, STAGE.w - 16, STAGE.h - 8, prog, true).rows[0].scale;
+      assert.ok(want >= 3 && c.images.some((im) => Math.round(im.h / 12) === want), `${prog}: the lone figure drawn at ${want}x`);
+    }
+    assert.ok(big({ numbers: [{ value: '4.75%', label: 'main interest rate' }] }).rows[0].scale >= 3, 'a lone figure at 3x or 4x');
+    assert.equal(VB.verticalBoardLayout(boards.known, STAGE.w - 16, STAGE.h - 8, 'world-now', true).T.s, 1, 'three long points stay at the body size, never cut');
   });
 
   test('HOW MANY? gives the space under the guesses a job all question long, with or without the countdown on the board', async () => {
@@ -193,6 +351,24 @@ describe('the vertical picture', () => {
       inside(ctx, BOX, `HOW MANY? ${label}`);
       wordsSafe(ctx, `HOW MANY? ${label}`);
     }
+    // on the glass, in the marquee, with a question of five lines: the strip under the guesses keeps its job (YOUR
+    // GUESS? at 2x; the answer at 2x at the reveal), and the board is whole on its first frame
+    const IN = { x: 2, y: 36, w: 192, h: 208, bare: true };
+    const long = { ...q, masked: 'The new X Subscription combines X\'s paid features with AI tools like Grok and Cursor, offering plans ranging from $8 to ▮▮▮▮ per month.', sentence: 'The new X Subscription combines X\'s paid features with AI tools like Grok and Cursor, offering plans ranging from $8 to $200 per month.', figure: { value: '$200', label: 'PER MONTH', qualifier: '', exact: true } };
+    const glassRead = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.howmany(glassRead, 0, { ...o, question: long }, IN);
+    const twoX = (ctx) => ctx.images.filter((im) => Math.round(im.h / 12) === 2 && im.y > 150);
+    assert.ok(twoX(glassRead).length >= 1, 'YOUR GUESS? at 2x in the strip');
+    for (const im of glassRead.images) if (visible(im)) assert.ok(wholeText(im), `HOW MANY? on the glass, first frame: ${JSON.stringify(im)}`);
+    const glassAnswer = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.howmany(glassAnswer, 17, { ...o, question: long, guesses: [{ seat: 'A', said: '$150', at: 10, points: 0 }, { seat: 'B', said: '$200', at: 12, points: 3 }] }, IN);
+    assert.ok(twoX(glassAnswer).length >= 1, 'the answer at 2x in the strip');
+    // the TSMC question (four lines) leaves room for THE ANSWER over the figure at 3x
+    const tsmc = fakeCanvas().getContext('2d');
+    VQ.VQUIZ.howmany(tsmc, 17, { ...o, guesses: [{ seat: 'A', said: '70%', at: 10, points: 2 }, { seat: 'B', said: '80%', at: 12, points: 0 }] }, IN);
+    assert.ok(tsmc.images.some((im) => Math.round(im.h / 12) === 3 && im.y > 150), 'the answer at 3x under THE ANSWER');
+    inside(tsmc, IN, 'HOW MANY? TSMC on the glass, revealed');
+    inside(glassAnswer, IN, 'HOW MANY? on the glass, revealed');
   });
 
   test('a credit in the micro face is measured in it: never cut when it fits (17 Oct: "SOURCE: GUARDIA…")', async () => {
@@ -349,12 +525,22 @@ describe('the vertical picture', () => {
       { score: { a: 'Portland Trail Blazers', b: 'London Lions', sa: 119, sb: 66, draw: false, sport: 'basketball' } },
       { score: { a: 'Starfield City', b: 'Ledgerton Rovers', sa: 2, sb: 2, draw: true } },
     ];
-    for (const c of cards) for (const dt of [0.1, 0.5, 1, 5]) {
+    for (const c of cards) for (const dt of [0, 0.1, 0.5, 1, 5]) for (const bare of [false, true]) {
       const ctx = fakeCanvas().getContext('2d');
-      assert.ok(SP.drawVerticalScoreline(ctx, dt, c, STAGE));
-      inside(ctx, STAGE, `scoreline ${c.score.a} at ${dt}`);
-      wordsSafe(ctx, `scoreline ${c.score.a} at ${dt}`);
+      assert.ok(SP.drawVerticalScoreline(ctx, dt, c, { ...STAGE, bare }));
+      inside(ctx, STAGE, `scoreline ${c.score.a} at ${dt}${bare ? ' on the glass' : ''}`);
+      wordsSafe(ctx, `scoreline ${c.score.a} at ${dt}${bare ? ' on the glass' : ''}`);
+      if (bare) assert.ok(!ctx.fills.some((f) => f.c === '#181425' && f.w >= STAGE.w - 40), 'on the glass: no panel of its own');
+      // on the glass the card is settled from its first frame: both sides named, whole, and both scores landed
+      if (bare && dt === 0) {
+        for (const im of ctx.images) if (visible(im)) assert.ok(wholeText(im), `scoreline ${c.score.a} on the glass, first frame: ${JSON.stringify(im)}`);
+        assert.ok(ctx.images.filter((im) => Math.round(im.h / 12) >= 4).length >= 2, `scoreline ${c.score.a}: both scores at 4x on the first frame`);
+      }
     }
+    // on the glass a long name takes two lines at 2x rather than the body face (PIXELBURG / UNITED)
+    const two = fakeCanvas().getContext('2d');
+    SP.drawVerticalScoreline(two, 2, { score: { a: 'Pixelburg United', b: 'Bitport Athletic', sa: 3, sb: 1, sport: 'football' }, source: 'Pixelburg Sport' }, { ...STAGE, bare: true });
+    assert.equal(two.images.filter((im) => Math.round(im.h / 12) === 2).length, 4, 'two names on two lines each, at 2x');
     const row = (a, b, sa, sb, day) => ({ a, b, sa, sb, sport: 'football', day });
     for (const n of [1, 3, 4, 5, 6]) {
       const rows = Array.from({ length: n }, (_, i) => row(`Home Side Number ${i} With A Long Name`, `Away ${i}`, 100 + i, i, i % 2 ? 'SUN' : null));
@@ -412,47 +598,56 @@ describe('the vertical picture', () => {
         inside(v, { x: 0, y: 0, w: 216, h: 384 }, `vertical hook ${profile} ${lines}`);
         wordsSafe(v, `vertical hook ${profile} ${lines}`);
         for (const im of v.images) assert.ok(im.y + im.h <= (profile === 'tall' ? L.V.title.y : L.V.stage.y), 'the hook keeps to the mast and title band');
+        // clear but for its plates: the programme's set shows round them (never a black band across the frame)
+        for (const f of v.fills) assert.ok(!(f.x <= 0 && f.x + f.w >= L.VW && f.h >= 20), `a band across the frame: ${JSON.stringify(f)}`);
         const h = fakeCanvas(384, 216).getContext('2d');
         cards.drawHook(h, { format: 'horizontal', lines, programme: 'PAY ATTENTION', profile });
         inside(h, { x: 0, y: 0, w: 384, h: 216 }, `horizontal hook ${profile}`);
       }
     }
-    for (const t of [0.2, 1, 2.5]) {
-      const v = fakeCanvas(216, 384).getContext('2d');
-      cards.drawEndCard(v, t, { format: 'vertical', programme: 'COSMOS DESK' });
-      inside(v, { x: 0, y: 0, w: 216, h: 384 }, `vertical end card at ${t}`);
-      wordsSafe(v, `vertical end card at ${t}`);
-      const h = fakeCanvas(384, 216).getContext('2d');
-      cards.drawEndCard(h, t, { format: 'horizontal', programme: 'COSMOS DESK' });
-      inside(h, { x: 0, y: 0, w: 384, h: 216 }, `horizontal end card at ${t}`);
+    // the end card on the programme's own set behind glass; LIVE only when there is a live stream to watch
+    for (const stream of ['none', 'recorded']) assert.doesNotMatch(JSON.stringify(cards.endCardText({ format: 'vertical', programme: 'COSMOS DESK', stream })), /LIVE/, `no LIVE without a live stream (${stream})`);
+    const backdrop = { glass: fakeCanvas(216, 384), img: fakeCanvas(216, 384), lights: [] };
+    const withSet = fakeCanvas(216, 384).getContext('2d');
+    cards.drawEndCard(withSet, 2.5, { format: 'vertical', programme: 'COSMOS DESK', backdrop });
+    assert.equal(withSet.images[0].img, backdrop.glass, 'the set behind glass under the card');
+    for (const stream of ['none', 'recorded', 'live']) {
+      for (const t of [0.2, 1, 2.5]) {
+        const v = fakeCanvas(216, 384).getContext('2d');
+        cards.drawEndCard(v, t, { format: 'vertical', programme: 'COSMOS DESK', stream, backdrop });
+        inside(v, { x: 0, y: 0, w: 216, h: 384 }, `vertical end card at ${t} (${stream})`);
+        wordsSafe(v, `vertical end card at ${t} (${stream})`);
+        const h = fakeCanvas(384, 216).getContext('2d');
+        cards.drawEndCard(h, t, { format: 'horizontal', programme: 'COSMOS DESK', stream });
+        inside(h, { x: 0, y: 0, w: 384, h: 216 }, `horizontal end card at ${t} (${stream})`);
+      }
     }
   });
 
-  test('the vertical frame\'s own bands: the source and NEWS IN 60\'s minute on the stage (the hook holds the title band in a clip), a foot with nothing to read', async () => {
+  test('the vertical frame\'s own bands: the source and NEWS IN 60\'s minute on the stage, the title band left to the clip\'s hook, a foot with nothing to read', async () => {
     const { VerticalCompositor, profileOf } = await import('../public/js/clip/vertical.js');
     const strap = { cur: { headline: 'NASA to conduct low-altitude flights over Texas', tag: 'TRANSPORT', plate: 'NASA', since: 0 }, outAt: null };
     const canvas = fakeCanvas(216, 384);
     const comp = new VerticalCompositor({ canvas, source: fakeCanvas(384, 216), renderer: { graphics: { strap } }, channel: { name: 'GLOBIT 24' } });
-    const scene = { shot: 'close', program: { id: 'cosmos', title: 'COSMOS DESK', theme: 'space' }, storyId: 's1', rundown: [{ storyId: 's1', source: 'NASA' }] };
-    comp.profile = profileOf(scene);
-    comp.box = comp.profile.box;
+    const scene = { shot: 'close', program: { id: 'cosmos', title: 'COSMOS DESK', theme: 'space' }, storyId: 's1', rundown: [{ storyId: 's1', source: 'NASA' }], subtitle: 'NASA will fly low over the Texas farmland this autumn to measure emissions from the fields.' };
     const ctx = canvas.getContext('2d');
-    comp.drawMast(9, scene);
-    comp.drawTitle(9, scene);
-    const band = ctx.images.length;
-    comp.sourcePlate(9, scene);
-    comp.caps.update(1, 'NASA will fly low over the Texas farmland this autumn to measure emissions from the fields.', 30);
-    comp.caps.draw(ctx, 1, { cx: L.SAFE.cx, bottom: L.V.caps.y + L.V.caps.h - 4 });
-    const before = ctx.images.length;
-    comp.drawFoot(9, scene);
-    assert.ok(wordsSafe(ctx, 'mast, title, source, captions') > 5);
+    // the whole frame: the set, the stage, the mast and the captions (no Stage here: the frame's middle on the set)
+    comp.frame(9, scene);
+    assert.ok(wordsSafe(ctx, 'mast, source, captions') > 5);
     // the source on a plate at the stage's top left, inside the safe column (a clip's hook covers the whole band)
     const plate = ctx.fills.find((f) => f.y === L.V.stage.y + 4 && f.h === 9);
     assert.ok(plate && plate.x === L.SAFE.x && plate.y === L.V.stage.y + 4, JSON.stringify(plate));
-    assert.ok(ctx.images.slice(band, before).some((im) => im.y >= L.V.stage.y && im.y < L.V.stage.y + 16), 'SOURCE: NASA at the stage\'s top left');
-    assert.ok(!ctx.images.slice(0, band).some((im) => im.y >= L.V.title.y && im.y < L.V.title.y + 16 && im.x > 50), 'nothing beside the tag: the hook covers the band');
-    const footWords = ctx.images.slice(before).filter((im) => im.h <= 8);
-    assert.equal(footWords.length, 0, 'no source or other small type in the foot (the feeds cover it)');
+    assert.ok(ctx.images.some((im) => im.h <= 12 && im.y >= L.V.stage.y && im.y < L.V.stage.y + 16), 'SOURCE: NASA at the stage\'s top left');
+    // the title band is the clip's hook's: the master draws no word there (the set shows until the hook lies over it)
+    assert.ok(!ctx.images.some((im) => im.h <= 24 && im.y >= L.V.title.y && im.y + im.h <= L.V.title.y + L.V.title.h), 'no word in the title band');
+    // the foot: the set under glass, nothing to read and nothing to compete with the feeds' words
+    const footWords = ctx.images.filter((im) => im.h <= 24 && im.y >= L.PLATFORM_SAFE.bottom);
+    assert.equal(footWords.length, 0, 'no type in the foot (the feeds cover it)');
+    // the picture under it all fills the frame edge to edge, top to bottom: the programme's set
+    assert.ok(ctx.images.some((im) => im.x === 0 && im.y === 0 && im.w === L.VW && im.h === L.VH), 'the set behind every band');
+    // the compositor's own bands
+    comp.profile = profileOf(scene);
+    comp.box = comp.profile.box;
     // no plate once the strap has gone, nor on the quiz's tall stage
     const c2 = fakeCanvas(216, 384);
     const comp2 = new VerticalCompositor({ canvas: c2, source: fakeCanvas(384, 216), renderer: { graphics: { strap: { ...strap, outAt: 8 } } }, channel: { name: 'GLOBIT 24' } });

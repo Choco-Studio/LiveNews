@@ -1230,6 +1230,303 @@ pictures ahead of air (3eb1895: `server/pictureahead.js`, `server/picturedesk.js
 
 ---
 
+## Round 10: the vertical look, after the owner's "eso queda fatal"
+
+Round 9 was merged. The owner looked at a PAY ATTENTION frame of the beta (THIS WEEK'S TABLE: a small table floating in
+a big dark space, a faint dotted radial glow, a caption, the logo at the bottom) and said it looked bad and that "el
+fondo no pega nada", the background fits nothing.
+
+### What he saw, and why he was right
+
+Part of what he saw was this desk's own 4x review sheet, which tinted the platforms' covered zones red over the frames
+(a red strip down the right, a red line across the foot). That sheet misled him, and it is gone (below). But the clean
+frames of the beta's clip (`pay-attention-quiz-round-26-38-vertical`) made his point on their own:
+
+1. **A flat field that belongs to nothing.** Every programme stood on the same dark navy, a dotted radial glow behind
+   the stage and black bands above and below it. Only 46 % of the frame (the 176-row stage) showed a picture.
+2. **Small boards lost in empty space.** THIS WEEK'S TABLE was 1x type in a 60-row panel in a 216-row stage; the round's
+   card, the final scores and most news boards were the same.
+3. **One layout for nine programmes.** Only the tag's colour told WORLD NOW from COSMOS DESK.
+4. **A first frame half drawn.** The clip opened at 0.00 s on the round card's panel wiping in from the left.
+
+The panel agreed with him on all four. The design below answers each.
+
+### The study
+
+**The horizontal programmes**, rendered in the set lab (`/lab/v2-set.html`, wide and single framings) and the quiz set
+lab, and in the station's own frames of 17 Oct:
+
+- **WORLD NOW**: floor-to-ceiling glass over a city at night (navy sky, lit windows in orange), red uprights and a red
+  rule framing the wall, four city clocks along its top (NYC LON TYO SYD), the globe on the video wall, the desk's red
+  GLOBIT 24 plate and its red line. Cool and calm; red the only warm colour.
+- **TECH BYTES**: a blue circuit-board wall with copper traces and data pulses, "> TECH BYTES" over the screen, display
+  cabinets of gadgets either side, cyan lines, a steel desk.
+- **COSMOS DESK**: the darkest room, a window on space: the Earth's rim with its cyan air and the night side's city
+  lights, the Moon, two constellations and a nebula, the Moon's phases along the top, a magenta desk line.
+- **MONEY MINUTE**: a panelled room in warm wood, the bull and the bear in their niches, the market ticker along the top,
+  a wooden floor; green accent, its figures on cream paper.
+- **NEWS IN 60**: a dark control room, the 60-second dial, a wall of feeds, the rundown board, a yellow line.
+- **SEVEN DAYS**: the city at sunset through the glass (purple to red), the week's days along the top with the weekend in
+  coral, pendant lamps.
+- **FULL TIME**: an open pitchside platform: floodlight towers, the stand, the mown pitch, a scoreboard clock, orange.
+- **PAY ATTENTION**: a game show: the central screen in a purple marquee lit by gold lamps, steel pillars, spotlight
+  towers, the contestants' purple podiums with their scores and lamp shapes (the circle, the square).
+- **WORLD WEATHER**: its own weather centre: a curved wall of satellite maps, a cyan LED line at its foot, a glossy
+  floor, a lighting rig.
+
+Each set is the programme's identity: its wall, its light, its colour and one signature strip along the top. None of it
+reached the vertical frame, whose singles even showed the wall's blank screens behind the presenter.
+
+**Strong vertical formats.** The panel's platform-growth designer described what the best news Shorts and Reels and
+quiz Reels have in common: broadcasters' vertical news cuts, graphics-led explainers (The Economist's on TikTok and
+Reels since 2022), trivia Reels. Two searches on 18 Oct backed the rules with published guidance: CNN Newsource's
+vertical-video playbook (compose for the tall frame, never crop the 16:9 one), and agencies' notes on the feeds'
+overlays (keep the top tenth and the bottom fifth clear of text and mind the right edge; viewers decide within two
+seconds; captions read in the middle third; the overlays change several times a year, so check a current preview):
+
+1. **Full bleed.** The picture or the show's own ground fills 9:16; nothing is letterboxed or left black.
+2. **The hook in the top third**, big (two or three short lines), on a plate or a stroke that keeps it legible over
+   anything.
+3. **The presenter large**: head and shoulders across the width, the eyes a third of the way down.
+4. **Layered depth**: the ground (the set or the picture, often dimmed), the subject, then the type in front.
+5. **Big captions** in the lower middle, above the feeds' band, the spoken word lit.
+6. **One colour identity per show**: the same frame, bars and accent on every clip.
+7. **Something always moving, nothing jittering**: the ground breathes, elements build, a glint passes; text holds still.
+8. **No dead space**: the zones the feeds cover still carry the ground, never information.
+9. **Quiz Reels**: the question as one big card, the pieces of the game (tiles, options) across the width, a visible
+   clock, a strong reveal, the score large.
+10. **The first frame is a whole, legible composition**: the feeds often show it before the clip plays.
+
+### The design: the programme's set, stood on end
+
+`docs/publishing/vertical.md` §1–§3 and §5 have it in full. In short, for every programme:
+
+- **The backdrop is the programme's own studio** (`public/js/clip/vset.js`), drawn by the studio's renderer for a tall
+  picture. The set's camera never rotates and its screen row is a pure offset, so renders 216 rows apart meet without a
+  seam: a 384-row picture of the set. The header strip sits behind the hook's plate and peeks out beside it, the wall's
+  foot runs behind the captions, the desk and its plate sit in the foot under tinted glass.
+- **A presenter is the studio made tall**: the vertical Stage's frame shown whole from row 58, and above and below it
+  the set from the very same camera, the body drawn on below the frame. No window edge; shoulders across most of the
+  frame; the head over the safe column's middle (the vertical's own single, camera.js `tall`).
+- **A board stands on glass in the set's frame**: the set seen through tinted glass, the set's screen bezel with the
+  programme's accent along its top (PAY ATTENTION's marquee with its chase of gold lamps), the board's type at 2x where
+  the stage allows, whole from the first frame.
+- **Maps, pictures and locations are windows** framed by the programme's accent rules, as the set frames its screens.
+- **Live, never busy**: the set's lights breathe (lone lit pixels dim on their own slow beats), a glint runs along a
+  frame's accent rule every 5.5 s, the marquee's lamps chase; the type holds still.
+- **The bands**: the hook on a black plate (the card is clear elsewhere), the mast and the foot under tinted glass so
+  the feeds' own words read, no logo in the foot.
+- **The end card** on the programme's set behind glass: the logo, the slogan, the programme on its accent plate at 2x,
+  where to watch only when there is a stream (NEWS 24/7 at 2x; WATCH LIVE only for a live one), the AI notice in the
+  ident's three rows.
+- **The disclosure**: no layout adds an AI plate, and nothing stands over the clip (the compliance desk's final form,
+  merged during this round): the end card says it in the channel ident's words.
+
+Programme by programme, what the frame shows (backdrop camera zoom 1.8 on the video wall, centred; the single from the
+Stage's own framing):
+
+| Programme | Top (behind the hook) | Behind a board, around it | Behind the captions | Foot | Board frame |
+|---|---|---|---|---|---|
+| WORLD NOW | the red rule and the four clocks | the tall screen, red uprights, the city at its edge | the city's lights | the desk, its red plate | steel bezel, red accent |
+| TECH BYTES | "> TECH BYTES" over the board | the circuit board, the cabinets' edge | traces and pads | the steel desk | slate bezel, cyan |
+| COSMOS DESK | the Moon's phases | the window on space | the Earth's rim, its city lights | the desk | slate bezel, magenta |
+| MONEY MINUTE | the ticker | the panelling | the wood and the floor | the desk, its plate | brown bezel, green; the paper board |
+| NEWS IN 60 | the control room's ceiling | the screen, the monitors' edge | the yellow desk line | the desk, its plate | slate bezel, yellow |
+| SEVEN DAYS | the week's days, the weekend in coral | the sunset city | the city's lights | the desk | steel bezel, coral |
+| FULL TIME | the floodlights' tops | the stand | the pitch | the platform's edge | slate bezel, orange |
+| PAY ATTENTION | the hook in the mast | the marquee screen | the podiums | the host's podium and plate | the marquee, its lamps chasing |
+| WORLD WEATHER | the lighting rig | the curved wall, its cloud | the cyan LED line | the glossy floor | steel bezel, blue |
+
+### What ran
+
+- **The real compositor on real editions.** A snapshot tool on the recorder's fake clock (the same page init as
+  `tools/record.mjs`, no video) took a vertical frame every 2 s of nine saved episodes with their recorded voices:
+  PAY ATTENTION of 17 Oct 13:00 (the clip the owner saw), WORLD NOW, TECH BYTES, COSMOS DESK and NEWS IN 60 of 17 Oct
+  07:30, MONEY MINUTE of 16 Oct 17:10, SEVEN DAYS and WORLD WEATHER of 17 Oct 13:20, and FULL TIME's demo edition of
+  13 Oct. The same instants were taken from the code as merged (e0c53e9, served from an export of that commit, with
+  PAY ATTENTION's new host, 6096e82) and from this round's with the compliance desk's round merged (4b26c65), so every
+  "before" and "after" below is the same programme at the same moment. (Some voices of the demo editions are not in
+  the voice store since the casting change: those lines play on the fallback voice, at the same times.)
+- **`/lab/vertical.html`**, new: every programme's single, a board, a map, the montage, the end card and the quiz's boards
+  from synthetic scenes through the real compositor, the Stage and the studio's renderer.
+- **The tests**: `test/publish-vertical.test.js` (25 tests: 3 new, 6 rewritten or extended) and the full suite.
+- Judged at air size (the frame at 2x on a 1440-pixel-high screen, about a phone's 1080 × 1920 at arm's length) and
+  at 3x and 4x for the pixel, by the panel's **platform-growth designer** and **broadcast graphics designer**, with the
+  social video producer and the pixel artist.
+
+### First pass: what the panel found
+
+The first full pass (PAY ATTENTION's whole edition, the lab's every programme) after the design was in place.
+
+**Platform-growth designer.**
+
+1. THIS WEEK'S TABLE, the owner's own case, with two players in the week: two rows at 2x in a 200-row board still left
+   most of the marquee empty.
+2. HOW MANY? lost its YOUR GUESS? box on the glass: the larger kicker and the marquee's inset left the module no room
+   under a four-line question, so the lower third of the board stood empty while the guesses came in.
+3. LETTER BY LETTER fell back to 1x tiles for a headline with an eleven-letter word.
+4. DOUBLE OR NOTHING's stake ("DOUBLE POINTS FOR PENNY") was still micro type, 25 px on 1920.
+5. A duo's second presenter stood off the safe column (Lola's head at x 150 of 216): the duo single's framing on seat B
+   puts her head near the 384-wide frame's right edge, past where the crop can centre it.
+
+**Broadcast graphics designer.**
+
+6. A contestant's single was cut across the jacket at the foot of the Stage's frame: the set below it was rendered
+   without her (a podium stands lower than a desk), a hard line at row 256.
+7. The set's own screen showed beside the board's frame: a second lamp border down the quiz's right strip, and the two
+   halves of the backdrop each drew the screen's emblem (WORLD NOW's globe twice, COSMOS's planet twice).
+8. The tall screen's field was a Bayer gradient: through the glass, a fine checker behind 1x type at 3x.
+9. With the first glass (white to slate) the set's lettering read through a board's top (the clocks' names, the ticker);
+   with the first backdrop camera the desk's GLOBIT 24 plate sat across the glass's foot, a red sliver under the board.
+
+**Social video producer.**
+
+10. The round's card, the table and the scores opened empty and built in 0.6 s: on a clip's first frame, an empty
+    marquee. Story boards opened on their kicker alone, a row half risen out of its mask in the next frames.
+
+**Pixel artist.**
+
+11. The end card's opening rules ran off the frame at x −10 (a test caught it).
+
+### Fixes after the first pass
+
+1. **The table's rows share the board** (`vquiz.js` `vTableBig`): a week of four players or fewer has its title at 2x,
+   rows up to 34 px and the wins at 3x; a full week keeps 20 px rows at 2x.
+2. **HOW MANY?'s guesses at 2x** in 25-row boxes when they fit, and a compact module (a 21-row box, the answer at 2x,
+   the countdown at the foot) when the board is short; the marquee's inset down to 4 px.
+3. **A narrower 2x tile** (13 × 19) for a headline with a long word, before the 1x tiles.
+4. **The stake in the body face.**
+5. **A duo's single larger and nearer the middle**: the close single (`close`, k 3.8: headX 136, its mirror 248), 12 %
+   larger than the duo single (not enough: the second pass found heads still off the column, fix 1 below).
+6. **The body goes on below the frame** (`vset.js` `singleBelow`): every frame the Stage's own actors are drawn again,
+   at the same instant, 216 rows lower over the set below (clipped by its desks and podiums).
+7. **The set's screen is the glass** (`VSETS`): each camera is solved so that the screen is 190 px wide on the glass's
+   columns and its top and foot on the glass's rows (zoom 1.822, PAY ATTENTION's framed board 1.622); the tall
+   screen's interior is the wall's own field, the emblem left out.
+8. **The screen flat behind the type**: the field's top colour fades into its foot colour over 20 rows under the bezel.
+9. **The glass to the dark end of each hue** (white and the greys to ink), and the backdrop in two halves: the header
+   behind the hook's plate, the desk and its plate in the foot.
+10. **Whole from the first frame**: the entrance of the round's card, the table, the scores and DOUBLE OR NOTHING's
+    offer is settled on the glass (`SETTLED`); a question board's header, question and marks are pre-rolled (`PRE`);
+    a story board's cascade is pre-rolled 1 s and its later lines pop in whole (`pop`).
+11. **The rules clamped to the frame.**
+
+### Second pass: every programme's frames, at air size and at 4x
+
+The second pass judged the clean frames of all nine editions (75 to 148 a programme, every 2 s) and the lab's frames
+of each programme's single, boards, map, montage and end card. Seven findings:
+
+**Platform-growth designer.**
+
+1. **Heads off the safe column.** WORLD NOW's Paco sat 10 px left of the column's middle, TECH BYTES' Ada 34 px right
+   of it, FULL TIME's Kai 17 px left and cut by the frame's edge when he turned to Rosa. The close framing (head at
+   x 136 or 248) is walked clear of the wall's bezel like every horizontal single, and the walk left FULL TIME's seat A
+   head at x 81 and seat B's at 316: past where a 216-wide crop can centre it.
+2. **THIS WEEK'S TABLE with two players**, the owner's own case on the beta's last frame, still had two rows at 2x in
+   a 200-row marquee: better than the 1x table he saw, not yet a card.
+3. **A loose date cut on the leaf.** WHAT HAPPENS NEXT with "28 OCTOBER" showed OCTOB... under 28, and with its
+   source line the board fell back to the body size.
+
+**Broadcast graphics designer.**
+
+4. **A line of wall across every tall single**, one pixel high, where the Stage's frame meets the set below it: the
+   rasteriser leaves a frame's first and last rows to the set, so the body was missing on both sides of the join.
+5. **MONEY MINUTE's figure at 1x.** £1.6BN, laid out at 4x, was drawn in the body face (the board's style table
+   stopped at 3x), and its cream card floated small in the middle of the glass.
+6. **FULL TIME's result in the body face.** PIXELBURG UNITED and BITPORT ATHLETIC are too long for one line at 2x,
+   so the names fell to 1x and the scores stayed at 3x on a board with room for more.
+
+**Social video producer.**
+
+7. **A correspondent without a name.** SEVEN DAYS' Dr Amara Pulse at the hospital: her name was on the strap in the
+   title band, which a clip's hook covers, so no frame of a clip named her.
+
+### Fixes after the second pass
+
+1. **The vertical's own single** (camera.js `tall`): the close's scale, the head on the 384-wide frame's middle
+   column, not walked off the bezel (the wall behind is at rest), the crown kept in frame. Every presenter, duo or solo,
+   is now centred over the safe column on either seat, and the solos are 19 % larger than their medium close-up. A
+   test measures the head on FULL TIME, WORLD NOW, SEVEN DAYS and MONEY MINUTE, both seats.
+2. **A short week set like the round's card**: THIS WEEK'S at 2x in gold over TABLE at 3x; up to three players, the
+   names at 3x, the wins at 5x, the games played on a line under each name; four players, rows of 34 px.
+3. **The leaf reads a loose date as the date it is** (OCT over a large 28), and on the glass the date in words stands
+   beside the leaf, not under it, so the board keeps its 2x words with its source.
+4. **The set below rendered 8 rows higher and drawn from the Stage frame's last row** (`OVERLAP`): no join shows.
+5. **The figure drawn at its size** (any scale), and **MONEY MINUTE's paper the whole glass**, the rows centred on it.
+6. **On the glass a long team name takes two lines at 2x** (PIXELBURG / UNITED), and the scores go to 4x.
+7. **A correspondent's name super on their link** (the place's shot and the two-way), as the speaker's on a single,
+   for 4.5 s from their first frame.
+
+### The disclosure desk's rounds, merged
+
+The compliance desk's rounds landed during this one (4b26c65, then its final form, bf78a78): the yellow AI plate is
+gone from the bug, nothing stands over a clip, and a clip says it on its end card in the channel ident's words, in its
+caption's first line and with the platform's own AI label. The rounds touched the same end card, lab and test; the
+merge keeps both: the end card on the programme's set behind glass, with its accent rules and the programme's plate
+at 2x, the ident's emblem over the wordmark's plate, where to watch only when there is a stream (`airmode.js`
+`streamOf`), and the ident's three rows of notice at the foot of the safe area. The lane this round had kept free
+for a first-seconds line is gone with the line.
+
+### The owner's sheet
+
+`para-el-dueno/verticales-nuevos/` (scratchpad): a first page in Spanish (what changed and why, and the feeds'
+covered zones on a separate small diagram beside one clean frame: never a tint over a frame), then one sheet per
+programme: before and after at the same instant of the same edition, clean frames at 2x with the clip's own hook laid
+over as the factory does it, the end cards as the beta makes them (no stream), and a line in Spanish under each.
+The before frames come from the code as merged before this round (e0c53e9) with PAY ATTENTION's new host, so only the
+design differs. The misleading 4x sheet with red tints is not used.
+
+### Third pass: the final frames, the clips' first frames
+
+The third pass took every edition again with the merged code, and each board's first frame in the lab (the frame a
+feed may show before the clip plays). Five findings, all fixed:
+
+1. **HOW MANY? with a question of five lines** (the X Subscription question of the beta's edition) left a 19-row
+   strip empty under the guesses, too short for the compact module, and at the reveal of the TSMC question the before
+   frame's THE ANSWER box was larger than the after's. Now the strip keeps the module's words (YOUR GUESS? at 2x; at
+   the reveal THE ANSWER over the figure at 3x when the strip has 32 rows, the figure alone at 2x when it has less), the
+   guesses give it 4 more rows, and on the glass the module is settled from the board's first frame like its header.
+2. **First frames of story boards and of FULL TIME's result.** A story board's first frame showed its kicker and first
+   rows, with a hole where MONEY MINUTE's figure lands half a second later; the RESULT card's first frame showed RESULT
+   and its source, neither side named. Now a board's cascade is pre-rolled 1.6 s on the glass (four rows whole on the
+   first frame; a fifth and on pops in at its beat), and the RESULT card, which is all entrance, is settled from its
+   first frame. The SCORE CENTRE's rows and COMING UP's leaves still arrive as the presenter reads them, as on air.
+3. **The two-player table set PENNY STERLING as PENNY S. at 2x.** At 3x a long name now goes by its first name, as the
+   host calls the players: UNIT-8 and PENNY at 3x.
+4. **FULL TIME's two-line names stood 2 px apart** (PIXELBURG over UNITED, 16 px a line): now 18 px, as every 2x
+   block on the glass.
+5. **MONEY MINUTE's ECONOMY UP 0.1% was a 2x line in a large cream sheet**: a fact that ends on its figure was read as
+   words. Now the figure goes to 4x over its label, as £1.6BN does.
+
+### The final table
+
+Each programme judged on its final frames at air size (a phone's 1080 × 1920 at arm's length) and at 4x, by the
+platform-growth designer (does it stop the thumb, read with the sound off, look like one show on every clip?) and the
+broadcast graphics designer (is it the programme's own look, built and finished like the channel's horizontal
+graphics?). The round passes only if every score is above 9.7.
+
+| Programme | Platform growth | Broadcast graphics | What keeps it from 10 |
+|---|---|---|---|
+| WORLD NOW | 9.8 | 9.8 | The montage's headline frame is the horizontal card set again on the set, the one shot not redrawn for the tall frame |
+| TECH BYTES | 9.8 | 9.8 | At 4x the circuit wall is busy beside the hook's plate; at air size it reads as texture |
+| COSMOS DESK | 9.8 | 9.8 | The darkest set: above the head the window is near black at air size (the stars and the Moon's phases carry it) |
+| MONEY MINUTE | 9.8 | 9.8 | The cream sheet is the glass's whole height, so a lone figure and its label stand in a lot of cream |
+| NEWS IN 60 | 9.8 | 9.75 | The plainest room: behind the centred single the control room is a dark wall and its minute rule; its dial shows in the open only |
+| SEVEN DAYS | 9.8 | 9.8 | The two-way's boxes are crops of the horizontal frame's own (82 rows each), smaller than a single |
+| FULL TIME | 9.8 | 9.8 | Proven on the demo edition only; its first real edition is still to be judged in vertical (item 10 below) |
+| PAY ATTENTION | 9.85 | 9.8 | LETTER BY LETTER falls to 1x tiles for a headline whose words will not fit 13 px tiles; under a five-line HOW MANY? question the strip holds YOUR GUESS? and the figure at 2x, not the answer box |
+| WORLD WEATHER | 9.8 | 9.8 | Its tall backdrop is drawn in the weather centre's terms by this desk, not by the studio's renderer; the presenter's standing wide stays the horizontal frame's height |
+
+| Category | Score | What keeps it from 10 |
+|---|---|---|
+| Vertical design | 9.75 | The table above: its lowest score, NEWS IN 60's room |
+
+The other categories are unchanged from round 9. **Round 10: 9.75**, every programme above 9.7.
+
+The owner's sheet: `para-el-dueno/verticales-nuevos/` (scratchpad), `00-resumen.png` and one sheet per programme.
+
+---
+
 ## Notes for the compliance desk (integration)
 
 The publishing desk calls the compliance desk only through `server/publish/compliance.js`. The two branches met on
@@ -1324,3 +1621,6 @@ the last two were added in round 5:
     launch blocker (the compliance desk's check reads only that the variable is set).
 16. ~~The beta's news clips~~ (round 8: the AI writer's news day, `newsday.js`; round 9: its pictures); a real day on
     the owner's server with his key.
+17. The vertical look's last tenths (round 10's final table): NEWS IN 60's room behind its single (its wall at rest is
+    a plain field; its dial stands off the head's column), the montage's headline frame redrawn for the tall frame,
+    and the owner's eye on the new sheets (`para-el-dueno/verticales-nuevos/`) before the beta's next clips.

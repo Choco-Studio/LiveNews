@@ -7,6 +7,19 @@
 // vertical frame from it.
 import { VW, VH, HW, HH } from './layout.js';
 
+/**
+ * The studio's own renderer, for the vertical picture's backdrop (clip/vset.js): the set, its desk, the shared frame and
+ * the programme styles. Null when the v2 studio is not in the build (the backdrop is then the programme's colours).
+ */
+export async function setKit() {
+  try {
+    const [set, scene, styles] = await Promise.all([import('../v2/canvas25d/studio/set.js'), import('../v2/canvas25d/scene.js'), import('../v2/canvas25d/studio/styles.js')]);
+    return { drawBackground: set.drawBackground, drawDesk: set.drawDesk, invalidateSet: set.invalidateSet, wallRect: set.wallRect, frame: scene.frame, drawActors: scene.drawActors, styleFor: styles.styleFor };
+  } catch {
+    return null;
+  }
+}
+
 /** What the URL asks for: { on, vertical }. */
 export function clipOptions(params) {
   const fmt = String(params?.get?.('format') || '').toLowerCase();
@@ -38,12 +51,14 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
     return { vertical: false, frame() {} };
   }
   renderer.graphics = new g.VerticalGraphics({ audio });
-  const [{ VerticalCompositor }, stageMod, quizMod, weatherMod, sportMod] = await Promise.all([
+  const [{ VerticalCompositor }, stageMod, quizMod, weatherMod, sportMod, vsetMod, kit] = await Promise.all([
     import('./vertical.js'),
     import('../v2/canvas25d/runtime/stage.js').catch(() => null),
     import('./vquiz.js').catch(() => null),
     import('./vweather.js').catch(() => null),
     import('./vsport.js').catch(() => null),
+    import('./vset.js'),
+    setKit(),
   ]);
   const comp = new VerticalCompositor({
     canvas,
@@ -52,6 +67,7 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
     audio,
     channel,
     makeStage: stageMod ? (o) => new stageMod.Stage({ ...o, idle: null }) : null,
+    vset: new vsetMod.VerticalSet(kit),
   });
   if (quizMod?.installQuiz) quizMod.installQuiz(comp);
   if (weatherMod?.installWeather) weatherMod.installWeather(comp);

@@ -5,9 +5,10 @@
 // picture under them.
 //
 //   drawHook(ctx, { format, lines, programme, accent, profile })   transparent everywhere but the title's own pixels
-//   drawEndCard(ctx, t, { format, programme, accent, stream })   t: seconds since the card's first frame; it carries the
-//                                                                channel ident's AI notice (graphics/disclosure.js)
+//   drawEndCard(ctx, t, { format, programme, accent, stream, backdrop })   t: seconds since the card's first frame; it
+//                                                                carries the channel ident's AI notice (graphics/disclosure.js)
 //   endCardText({ format, programme, stream })   the words it shows, in order
+//   END_CARD_SECONDS, END_CARD_NOTICE
 //   END_CARD_SECONDS, END_CARD_NOTICE
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
@@ -27,8 +28,6 @@ const S = {
   white2: { color: P.white, scale: 2 },
   silver: { color: P.silver },
   fog: { color: P.fog },
-  microFog: { color: P.fog, font: 'micro' },
-  microSilver: { color: P.silver, font: 'micro' },
 };
 const DARK_INK = new Set([P.yellow, P.cyan, P.green, P.cream, P.white, P.silver, P.orange, P.pink]);
 
@@ -49,9 +48,8 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
   const lineH = 7 * sc;
   if (format === 'vertical' && profile === 'tall') {
     // the quiz's tall stage owns the title band (its boards say the question): the hook takes the mast, the bug at its
-    // left and one line at 2x at its right, in place of the programme's tag
-    ctx.fillStyle = P.black;
-    ctx.fillRect(0, 0, VW, V.title.y);
+    // left and one line at 2x at its right on a black plate, in place of the programme's tag (the plate covers the
+    // master's tag); everywhere else the card is clear, so the set shows round it
     const bw = drawBugOnly(ctx, t, 0, 8, 10);
     const line = ls.join(' ');
     // 2x when it fits beside the bug, else the body face (never over the bug); at 2x the type's image runs 2 px past
@@ -59,14 +57,19 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     const big = measureText(line, 2) <= SAFE.right - 2 - 6 - (8 + bw + 4);
     const w = measureText(line, big ? 2 : 1);
     const right = SAFE.right - (big ? 2 : 0);
+    // on a black plate that covers the master's programme tag (the set shows round it)
+    const tagW = programme ? measureText(programme) + 8 : 0;
+    const x0 = Math.max(8 + bw + 2, Math.min(right - w - 9, SAFE.right - tagW - 1));
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x0, 6, SAFE.right + 3 - x0, 21);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
     ctx.fillRect(right - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
     drawText(ctx, line, right - w, big ? 9 : 13, big ? S.white2 : S.white);
     return;
   }
   if (format === 'vertical') {
-    ctx.fillStyle = P.black;
-    ctx.fillRect(0, 0, VW, V.stage.y);
+    // the mast as the master draws it (the bug, the programme's tag), and the hook on a black plate in the title band,
+    // the accent bar down its left edge; the rest of the card is clear: the programme's set shows round the plate
     drawBugOnly(ctx, t, 0, 8, 10);
     if (programme) {
       const w = measureText(programme) + 8;
@@ -75,8 +78,11 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     const n = ls.length;
     const h = n * pitch - (pitch - lineH);
     const y = V.title.y + Math.round((V.title.h - h) / 2);
+    const w = Math.max(0, ...ls.map((l) => measureText(l, sc)));
+    ctx.fillStyle = P.black;
+    ctx.fillRect(8, y - 5, w + 15, h + 10);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
-    ctx.fillRect(8, y, 2, h);
+    ctx.fillRect(8, y - 5, 2, h + 10);
     ls.forEach((l, i) => drawText(ctx, l, 15, y + i * pitch, big ? S.white2 : S.white));
     return;
   }
@@ -139,19 +145,34 @@ export function endCardText({ format = 'vertical', programme = '', stream = 'non
 }
 
 /**
- * The end card: the channel's logo landing and glinting on its ground, the slogan, the programme it came from in its
- * accent, where to watch (only when there is a stream: endCardText), and the AI notice in the channel ident's design
- * (AI-PRODUCED NEWS in white, then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES in silver, the body face
- * with its shadow: graphics/disclosure.js; three rows on the vertical card, whose safe column is narrower). No URL is
- * drawn (the post carries the links), so a card never goes stale.
+ * The end card: the channel's logo landing and glinting, the slogan, the programme it came from, where to watch (only
+ * when there is a stream: endCardText), and the AI notice in the channel ident's design (AI-PRODUCED NEWS in white,
+ * then PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES in silver, the body face with its shadow:
+ * graphics/disclosure.js). Vertical (round 10): on the programme's own set behind tinted glass (`backdrop`:
+ * clip/vset.js, the set the clip stood in), framed by its accent rules, the programme on its accent plate at 2x, where
+ * to watch at 2x when it fits, the notice in three rows at the foot of the safe area. No URL is drawn (the post carries
+ * the links), so a card never goes stale.
  */
-export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, stream = 'none' } = {}) {
+export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, stream = 'none', backdrop = null } = {}) {
   const text = endCardText({ format, programme, stream });
   const { w, h } = sizeOf(format);
-  ctx.drawImage(groundOf(w, h, { cy: h * 0.42 }), 0, 0);
   const vertical = format === 'vertical';
+  if (vertical && backdrop?.glass) ctx.drawImage(backdrop.glass, 0, 0);
+  else ctx.drawImage(groundOf(w, h, { cy: h * 0.42 }), 0, 0);
   // vertical: centred on the safe column (the feed's buttons cover the right edge)
   const cx = vertical ? SAFE.cx : Math.round(w / 2);
+  const acc = accent === P.purple ? P.fog : accent;
+  if (vertical) {
+    // the programme's accent rules opening from the column's middle, over the mast and over the feeds' band
+    const half = Math.round((VW / 2 + Math.abs(VW / 2 - cx)) * easeOutQuint(seg(t, 0, 0.5)));
+    const x0 = Math.max(0, cx - half);
+    const x1 = Math.min(VW, cx + half);
+    ctx.fillStyle = acc;
+    if (x1 > x0) {
+      ctx.fillRect(x0, 30, x1 - x0, 2);
+      ctx.fillRect(x0, 304, x1 - x0, 2);
+    }
+  }
   // the logo: horizontal, the full lock-up at 3x; vertical (216 wide: the lock-up at 2x is 250), the emblem at 4x over
   // the wordmark's plate at 2x (the bug without its own small globe: one globe on the card)
   const parts = vertical
@@ -173,28 +194,71 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
       ctx.restore();
     }
   }
-  const L = { h: bottom - parts[0].y };
-  const ly = parts[0].y;
-  let y = ly + L.h + (vertical ? 12 : 10);
+  let y = bottom + (vertical ? 6 : 10);
   rise(ctx, text.slogan, cx, y, seg(t, 0.45, 0.35), S.silver, 'center');
-  y += vertical ? 22 : 18;
-  const rw = Math.round(40 * easeOutQuint(seg(t, 0.65, 0.3)));
-  if (rw > 0) {
-    ctx.fillStyle = accent;
-    ctx.fillRect(cx - (rw >> 1), y, rw, 2);
+  if (!vertical) {
+    y += 18;
+    const rw = Math.round(40 * easeOutQuint(seg(t, 0.65, 0.3)));
+    if (rw > 0) {
+      ctx.fillStyle = accent;
+      ctx.fillRect(cx - (rw >> 1), y, rw, 2);
+    }
+    y += 10;
+    if (text.from) {
+      rise(ctx, text.from, cx, y, seg(t, 0.8, 0.35), S.white, 'center');
+      y += 14;
+    }
+    // where to watch, only when the channel streams (airmode.js watchLine: WATCH LIVE for a live stream alone)
+    if (text.watch) rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
+    // the AI notice, in the ident's type, at the frame's foot: the ident's two rows
+    text.rows.forEach((row, i) => rise(ctx, row, cx, h - 30 + 11 * i, seg(t, 1.1 + 0.1 * i, 0.3), IDENT_STYLES[i === 0 ? 0 : 1], 'center'));
+    if (seg(t, 1.1, 0.3) > 0) NOTICE_DRAWS.n++;
+    return;
   }
-  y += vertical ? 12 : 10;
-  if (text.from) {
-    rise(ctx, text.from, cx, y, seg(t, 0.8, 0.35), S.white, 'center');
-    y += 14;
+  // FROM, the programme on its accent plate at 2x (as its tag beside the bug, made large)
+  y += 13;
+  if (programme) {
+    const name = String(programme).toUpperCase();
+    rise(ctx, 'FROM', cx, y, seg(t, 0.7, 0.3), S.fog, 'center');
+    y += 10;
+    const big = measureText(name, 2) <= SAFE.w - 12;
+    const tw = measureText(name, big ? 2 : 1);
+    const pw = tw + 12;
+    const ph = big ? 22 : 13;
+    const pp = easeOutQuint(seg(t, 0.8, 0.3));
+    const vis = Math.round(pw * pp);
+    if (vis > 0) {
+      ctx.save();
+      try {
+        ctx.beginPath();
+        ctx.rect(cx - (pw >> 1), y, vis, ph);
+        ctx.clip();
+        if (accent === P.purple) {
+          ctx.fillStyle = P.fog;
+          ctx.fillRect(cx - (pw >> 1), y, pw, ph);
+          ctx.fillStyle = P.purple;
+          ctx.fillRect(cx - (pw >> 1) + 1, y + 1, pw - 2, ph - 2);
+        } else {
+          ctx.fillStyle = accent;
+          ctx.fillRect(cx - (pw >> 1), y, pw, ph);
+        }
+        drawText(ctx, name, cx - (pw >> 1) + 6, y + 4, { color: inkOn(accent), scale: big ? 2 : 1 });
+      } finally {
+        ctx.restore();
+      }
+    }
+    y += ph + 5;
   }
-  // where to watch, only when the channel streams (airmode.js watchLine: WATCH LIVE for a live stream alone)
-  if (text.watch) rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
-  // the AI notice, in the ident's type, at the foot of the safe area (vertical: three rows, 35 px capitals on 1920) or
-  // of the frame (horizontal: the ident's two rows)
+  // where to watch, only when the channel streams (NEWS 24/7 at 2x; with WATCH LIVE, too wide for 2x, the body face)
+  if (text.watch) {
+    const big = measureText(text.watch, 2) <= SAFE.w - 12;
+    rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), big ? S.white2 : S.white, 'center');
+    y += big ? 20 : 12;
+  } else y += 8;
+  // the AI notice in the ident's type, three rows at the foot of the safe area (never under the feeds' band)
   const rows = text.rows;
-  const dy = vertical ? Math.max(270, y + 20) : h - 30;
-  rows.forEach((row, i) => rise(ctx, row, cx, dy + 11 * i, seg(t, 1.1 + 0.1 * i, 0.3), i === 0 ? IDENT_STYLES[0] : IDENT_STYLES[1], 'center'));
+  const dy = Math.min(V.caps.y + V.caps.h - 1 - rows.length * 11 + 3, y);
+  rows.forEach((row, i) => rise(ctx, row, cx, dy + 11 * i, seg(t, 1.1 + 0.1 * i, 0.3), IDENT_STYLES[i === 0 ? 0 : 1], 'center'));
   if (seg(t, 1.1, 0.3) > 0) NOTICE_DRAWS.n++;
 }
 
