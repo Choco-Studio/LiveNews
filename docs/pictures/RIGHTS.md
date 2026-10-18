@@ -267,11 +267,20 @@ Wikimedia's limits (mediawiki.org "Wikimedia APIs/Rate limits", read 17 Oct 2026
 **10 requests a minute without an identifying User-Agent, 200 with a compliant one** (a name and contact information),
 3 at once at most, Retry-After obeyed. `server/wikimedia.js`:
 
-- one queue for all Wikimedia hosts, one request at a time, 1.1 s apart; a compliant User-Agent with the operator's
-  contact (`WIKIMEDIA_CONTACT`); pictures from `upload.`/`thumb.wikimedia.org` are fetched with the same agent (the
-  generic one is refused: "Your request does not comply with our robot policy");
-- a 429 or 503 pauses the whole queue for what Retry-After asks (5 s at least, 15 min at most); while paused, every
-  request fails at once (never waits): the episode airs with what is known, the rest is asked next time;
+- **one queue for every Wikimedia request of the station** (round 10): the picture desk, the footage desk (its Commons
+  searches), the guests' identity desk (Wikidata) and the election calendar (the Query Service) all ask through it, one
+  request at a time, 1.1 s apart, with one compliant User-Agent carrying the operator's contact (`WIKIMEDIA_CONTACT`);
+  pictures from `upload.`/`thumb.wikimedia.org` are fetched with the same agent (the generic one is refused: "Your
+  request does not comply with our robot policy");
+- the queue takes the most urgent request first: 0, the episode being made (its footage, its speakers, its undecided
+  pictures); 1, the next programmes' pictures; 2, the rest of the news desk; 3, background work (the archive's
+  pictures, the election calendar); then in the order asked;
+- a 429 or 503 pauses the whole queue, every desk, for what Retry-After asks (5 s at least, 15 min at most); while
+  paused, a request of the episode being made is refused at once (the episode airs with what is known), and background
+  work waits the pause out in the queue; a media file (a footage clip) has a pause of its own, as
+  `upload.wikimedia.org` limits media apart from the API;
+- every request is counted by host and by desk (`/api/wikimedia`, operator; also in `/api/pictures/ahead`): who
+  spends the allowance, who was refused during a pause;
 - batches: 50 titles a Wikipedia request, 40 items a Wikidata query, 50 files a Commons request; every answer kept on
   disk (`data/pictures/answers.json`: titles, items and files 7 days, searches and NASA a day, decisions 12 h, "nothing"
   3 h) and written at most every 30 s; a decision missing an answer is never kept as "nothing", and one that found a
@@ -297,7 +306,7 @@ decided in time. Now:
 - the order is what airs next: the stories of the episode in production (urgent), the candidates of the next
   programmes (the rotation's next three and the clock's pinned NEWS IN 60, as `select()` would choose them now), the
   stories of the last three hours (the newest first), the rest of the news desk, and last the week's archived stories
-  without a cleared picture, PAY ATTENTION's own candidates first, four at a time in a batch of their own (an urgent
+  without a cleared picture, the most told first, four at a time in a batch of their own (an urgent
   story waits behind one such batch at most);
 - production reads only what is ready: the picture stage and the assets stage apply the kept decisions and put the
   undecided stories at the front of the queue; the assets stage waits for a batch already in flight that holds one of
@@ -332,6 +341,16 @@ details: `docs/roadmap/critique/cleared-pictures.md`, round 9.
 in" 70–120 s, Wikimedia's answers arriving after their 8 s timeout). It now counts the week's stories and days first
 and groups only a small week (`Producer.weeklyReady`); the Query Service has 30 s (it answered a two-line query in 10 s
 through the proxy).
+
+**SEVEN DAYS's grouping** (round 10) held the station 88–212 s each time it was made. It now runs in a thread of its own
+(`server/weekgrouper.js`, `server/weekworker.js`) that keeps the week's airings and its answers from one edition to the
+next, and gives the same groups in the same order (`server/weekgroups.js`: each answer of sameStory asked once for each
+pair of word sets in each reading state, and given again to every other telling with the same words;
+`test/week-grouping.test.js` and `tools/pictures/weekdiff.mjs` compare it with the old grouping). On the 5,881
+airings of 18 Oct: 460,049 calls of sameStory instead of 1,099,151, and 5,268 for the next edition; the station's thread
+held at most a few tens of milliseconds. Should the thread fail, the week is grouped on the station's thread in slices
+of 20 ms. `/api/wikimedia` gives the event loop's longest hold since the start (and its own processor time then: on a
+machine shared with other work the thread also waits for the processor).
 
 **The face reader** is run by the station itself (`server/facereader.js`): a child process, `tools/pictures/faces.mjs
 --dir data/pictures --watch 60`, which reads the queue the desk writes, again every minute, and never writes over it.

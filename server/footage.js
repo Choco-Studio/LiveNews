@@ -161,10 +161,14 @@ export class FootageDesk {
    * @param o.dir        where clips are kept (data/footage)
    * @param o.enabled    false: find() answers null at once (offline demo, FOOTAGE=off)
    * @param o.maxCacheBytes  clips beyond this are pruned, oldest first
+   * @param o.wikimedia  the station's one Wikimedia client (server/wikimedia.js): Commons is searched through its
+   *                     queue (one pacing and one pause for every desk, the episode being made first) and clips are
+   *                     fetched with its agent and its media pause; without it (tests, tools) the desk paces itself
    */
-  constructor({ dir, fetchImpl = fetch, enabled = true, timeoutMs = 8000, gapMs = 2000, pauseMs = 15 * 60_000, maxCacheBytes = 400 * 1024 * 1024, log = console, now = Date.now } = {}) {
+  constructor({ dir, fetchImpl = fetch, enabled = true, timeoutMs = 8000, gapMs = 2000, pauseMs = 15 * 60_000, maxCacheBytes = 400 * 1024 * 1024, log = console, now = Date.now, wikimedia = null } = {}) {
     this.dir = dir;
     this.fetch = fetchImpl;
+    this.wikimedia = wikimedia;
     this.enabled = !!enabled && !!dir;
     this.timeoutMs = timeoutMs;
     this.gapMs = gapMs;
@@ -198,8 +202,10 @@ export class FootageDesk {
     return fs.existsSync(f) ? f : null;
   }
 
-  /** One Commons request at a time, `gapMs` apart; a 429 pauses the desk. */
+  /** One Commons request at a time, `gapMs` apart; a 429 pauses the desk. (Through the station's client when given.) */
   call(url) {
+    // (footage is looked for while its episode is being made: the first priority)
+    if (this.wikimedia) return this.wikimedia.json(url, { desk: 'footage', priority: 0 });
     const run = async () => {
       if (this.now() < this.pausedUntil) throw new Error('paused after a 429');
       const wait = this.lastCall + this.gapMs - this.now();
@@ -270,7 +276,14 @@ export class FootageDesk {
     };
     if (this.file(id)) return this.meta.get(id);
     if (this.now() < this.pausedUntil) throw new Error('paused after a 429');
-    const { res } = await guardedFetch(this.fetch, c.src, { timeoutMs: 30_000, headers: { 'user-agent': UA } });
+    const get = async (headers) => (await guardedFetch(this.fetch, c.src, { timeoutMs: 30_000, headers })).res;
+    const res = this.wikimedia ? await this.wikimedia.media(c.src, get, { desk: 'footage' }) : await get({ 'user-agent': UA });
+    if (this.wikimedia && (res.status === 429 || res.status === 503)) {
+      try {
+        await res.body?.cancel?.();
+      } catch {}
+      throw new Error(`HTTP ${res.status}`); // (the client paused media for what Retry-After asks)
+    }
     if (res.status === 429) {
       this.pauseAfter429(res);
       throw new Error('HTTP 429');

@@ -1,5 +1,6 @@
-// One polite client for every Wikimedia service the picture desk reads (Wikipedia's and Commons' Action API, the
-// Wikidata Query Service), and a small kept store of their answers.
+// One polite client for every Wikimedia service the station reads (Wikipedia's, Commons' and Wikidata's Action API, the
+// Wikidata Query Service): the picture desk, the footage desk, the guests' identity desk and the election calendar
+// all ask through it (round 10), and a small kept store of their answers.
 //
 // Wikimedia's API rate limits (mediawiki.org Wikimedia_APIs/Rate_limits, read 17 Oct 2026) are per client across ALL
 // its sites: 10 requests a minute with no identifying User-Agent, 200 with a compliant one (a name and contact
@@ -9,11 +10,18 @@
 // answer is kept on disk (data/pictures/answers.json) so the same question is never asked twice in its lifetime.
 //
 //   wikimediaAgent(contact)                       the User-Agent
-//   new WikimediaClient({ fetchImpl, contact, gapMs }).json(url) -> parsed JSON (throws on HTTP errors, 'paused')
-//   client.resumeIn()                             ms until a 429's pause ends (0: not paused); client.stats, .hosts
+//   new WikimediaClient({ fetchImpl, contact, gapMs }).json(url, { desk, priority, waits }) -> parsed JSON (throws on
+//                                                 HTTP errors, 'paused'); priority 0 (the episode being made) to 3
+//   client.within({ desk, priority }, fn)         the defaults of every request fn makes, however deep
+//   client.media(url, get, { desk })              a media file, same agent, counted, its own pause
+//   client.resumeIn()                             ms until a 429's pause ends (0: not paused); client.status()
 //   new KeptAnswers({ file, now }).get(key) / .set(key, value, ttlMs) / .save()
 import fs from 'node:fs';
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+// the desk and the priority of the requests made inside WikimediaClient.within()
+const CONTEXT = new AsyncLocalStorage();
 
 export const DEFAULT_CONTACT = 'https://github.com/choco-studio/livenews';
 export const wikimediaAgent = (contact = DEFAULT_CONTACT) => `GLOBIT24-picturedesk/1.0 (${String(contact || DEFAULT_CONTACT).replace(/[()\r\n]/g, ' ').trim()}) node/${process.versions?.node || '22'}`;
@@ -32,22 +40,15 @@ export class WikimediaClient {
     this.now = now;
     this.sleep = sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.log = log;
-    this.queue = Promise.resolve();
+    this.jobs = []; // the requests waiting, taken by priority, then in the order asked
+    this.seq = 0;
+    this.pumping = false;
     this.lastAt = 0;
     this.pausedUntil = 0;
+    this.mediaPausedUntil = 0; // (media files: upload.wikimedia.org has limits of its own, see media())
     this.stats = { requests: 0, ok: 0, limited: 0, failed: 0 };
     this.hosts = {}; // host -> the same counts (which service answered what)
-  }
-
-  /** Milliseconds until a 429/503 pause ends (0: not paused). A background caller waits this out, then asks again. */
-  resumeIn() {
-    return Math.max(0, this.pausedUntil - this.now());
-  }
-
-  count(host, k) {
-    this.stats[k]++;
-    const h = (this.hosts[host] ||= { requests: 0, ok: 0, limited: 0, failed: 0 });
-    h[k]++;
+    this.desks = {}; // desk -> the same counts, and `refused`: asked while paused (who spends the allowance)
   }
 
   /** True while a 429/503 pause runs (callers then answer from what is kept, or not at all). */
@@ -55,64 +56,186 @@ export class WikimediaClient {
     return this.now() < this.pausedUntil;
   }
 
-  pauseFor(res) {
+  /** Milliseconds until a 429/503 pause ends (0: not paused). A background caller waits this out, then asks again. */
+  resumeIn() {
+    return Math.max(0, this.pausedUntil - this.now());
+  }
+
+  /**
+   * Run `fn` with these defaults for every request it makes, however deep (AsyncLocalStorage): { desk, priority }.
+   * The picture desk's batches carry their tier's priority down to its searches this way.
+   */
+  within(ctx, fn) {
+    return CONTEXT.run({ ...(CONTEXT.getStore() || {}), ...ctx }, fn);
+  }
+
+  count(host, k, desk = null) {
+    this.stats[k]++;
+    const h = (this.hosts[host] ||= { requests: 0, ok: 0, limited: 0, failed: 0 });
+    h[k]++;
+    if (desk) {
+      const d = (this.desks[desk] ||= { requests: 0, ok: 0, limited: 0, failed: 0, refused: 0 });
+      d[k]++;
+    }
+  }
+
+  refuse(desk) {
+    const d = (this.desks[desk] ||= { requests: 0, ok: 0, limited: 0, failed: 0, refused: 0 });
+    d.refused++;
+    return Object.assign(new Error('wikimedia paused after a rate limit'), { paused: true });
+  }
+
+  pauseFor(res, field = 'pausedUntil') {
     const ask = Number(res?.headers?.get?.('retry-after')) * 1000;
     const wait = Number.isFinite(ask) && ask > 0 ? Math.min(this.maxPauseMs, Math.max(this.minPauseMs, ask)) : this.minPauseMs * 4;
-    this.pausedUntil = Math.max(this.pausedUntil, this.now() + wait);
+    this[field] = Math.max(this[field], this.now() + wait);
     return wait;
   }
 
-  /** GET a JSON answer through the queue. Throws 'paused' at once while paused (never waits a pause out). */
-  json(url, { accept = 'application/json', timeoutMs = null } = {}) {
+  /**
+   * GET a JSON answer through the one queue every desk shares: one request at a time, `gapMs` apart, the highest
+   * priority first (0: the episode being made; 1: the next programmes; 2: the rest; 3: background), then in the order
+   * asked. While a 429's pause runs a request is refused at once (the episode airs with what is known), unless it is
+   * one that `waits` (background work): it stays in the queue until the pause is over. `desk` names who asks, in the
+   * counts (`desks`). Throws on HTTP errors and 'paused'.
+   */
+  json(url, { accept = 'application/json', timeoutMs = null, priority = null, desk = null, waits = null } = {}) {
+    const ctx = CONTEXT.getStore() || {};
     let host = 'other';
     try {
       host = new URL(url).host;
     } catch {}
-    const run = async () => {
-      if (this.paused) throw Object.assign(new Error('wikimedia paused after a rate limit'), { paused: true });
-      const wait = this.lastAt + this.gapMs - this.now();
-      if (wait > 0) await this.sleep(wait);
-      this.lastAt = this.now();
-      this.count(host, 'requests');
-      const ms = timeoutMs || (host === 'query.wikidata.org' ? this.sparqlTimeoutMs : this.timeoutMs);
-      const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
-      let res;
-      try {
-        res = await this.fetch(url, { signal, headers: { 'user-agent': this.agent, 'api-user-agent': this.agent, accept } });
-      } catch (err) {
-        this.count(host, 'failed');
-        throw err;
-      }
-      if (res.status === 429 || res.status === 503) {
-        this.count(host, 'limited');
-        this.limitedHost = host; // (which service asked for the pause: the ahead queue's next batch then needs it least)
-        this.limitedAt = this.now();
-        const waited = this.pauseFor(res);
+    const job = { url, host, accept, timeoutMs, priority: priority ?? ctx.priority ?? 2, desk: desk || ctx.desk || 'other', waits: waits ?? ctx.waits ?? false, seq: this.seq++ };
+    // (during a pause, what cannot wait is refused now: never left behind background work the queue sleeps on)
+    if (this.paused && !job.waits) return Promise.reject(this.refuse(job.desk));
+    const done = new Promise((resolve, reject) => Object.assign(job, { resolve, reject }));
+    this.jobs.push(job);
+    this.pump();
+    return done;
+  }
+
+  /** The next job: the highest priority (the lowest number), then the first asked. */
+  take() {
+    let k = 0;
+    for (let i = 1; i < this.jobs.length; i++) {
+      const a = this.jobs[i];
+      const b = this.jobs[k];
+      if (a.priority < b.priority || (a.priority === b.priority && a.seq < b.seq)) k = i;
+    }
+    return this.jobs.splice(k, 1)[0];
+  }
+
+  async pump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    try {
+      while (this.jobs.length) {
+        if (this.paused) {
+          // a pause: what cannot wait is refused now; what waits stays queued, and the queue sleeps the pause out
+          for (const j of this.jobs.filter((x) => !x.waits)) {
+            this.jobs.splice(this.jobs.indexOf(j), 1);
+            j.reject(this.refuse(j.desk));
+          }
+          if (!this.jobs.length) break;
+          await this.sleep(this.resumeIn() + 50);
+          continue;
+        }
+        const wait = this.lastAt + this.gapMs - this.now();
+        if (wait > 0) await this.sleep(wait);
+        // (taken after the gap: a request of the episode being made, asked meanwhile, goes first)
+        const job = this.take();
+        if (!job) break;
+        if (this.paused && !job.waits) {
+          job.reject(this.refuse(job.desk));
+          continue;
+        }
+        if (this.paused) {
+          this.jobs.push(job);
+          continue;
+        }
         try {
-          await res.body?.cancel?.();
-        } catch {}
-        throw Object.assign(new Error(`wikimedia HTTP ${res.status} (pausing ${Math.round(waited / 1000)} s)`), { status: res.status, paused: true });
+          job.resolve(await this.request(job));
+        } catch (err) {
+          job.reject(err);
+        }
       }
-      if (!res.ok) {
-        this.count(host, 'failed');
-        try {
-          await res.body?.cancel?.();
-        } catch {}
-        throw Object.assign(new Error(`wikimedia HTTP ${res.status}`), { status: res.status });
-      }
-      const text = await res.text();
+    } finally {
+      this.pumping = false;
+    }
+  }
+
+  async request({ url, host, accept, timeoutMs, desk }) {
+    this.lastAt = this.now();
+    this.count(host, 'requests', desk);
+    const ms = timeoutMs || (host === 'query.wikidata.org' ? this.sparqlTimeoutMs : this.timeoutMs);
+    const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
+    let res;
+    try {
+      res = await this.fetch(url, { signal, headers: { 'user-agent': this.agent, 'api-user-agent': this.agent, accept } });
+    } catch (err) {
+      this.count(host, 'failed', desk);
+      throw err;
+    }
+    if (res.status === 429 || res.status === 503) {
+      this.count(host, 'limited', desk);
+      this.limitedHost = host; // (which service asked for the pause: the ahead queue's next batch then needs it least)
+      this.limitedAt = this.now();
+      const waited = this.pauseFor(res);
       try {
-        const data = JSON.parse(text);
-        this.count(host, 'ok');
-        return data;
-      } catch {
-        this.count(host, 'failed');
-        throw new Error('wikimedia answer is not JSON');
-      }
-    };
-    const job = this.queue.then(run, run);
-    this.queue = job.catch(() => {});
-    return job;
+        await res.body?.cancel?.();
+      } catch {}
+      throw Object.assign(new Error(`wikimedia HTTP ${res.status} (pausing ${Math.round(waited / 1000)} s)`), { status: res.status, paused: true });
+    }
+    if (!res.ok) {
+      this.count(host, 'failed', desk);
+      try {
+        await res.body?.cancel?.();
+      } catch {}
+      throw Object.assign(new Error(`wikimedia HTTP ${res.status}`), { status: res.status });
+    }
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      this.count(host, 'ok', desk);
+      return data;
+    } catch {
+      this.count(host, 'failed', desk);
+      throw new Error('wikimedia answer is not JSON');
+    }
+  }
+
+  /**
+   * A media file (a footage clip on upload.wikimedia.org): fetched by `get(headers)` with the same User-Agent, counted
+   * for its desk, refused while a 429 on media pauses it; a 429 or 503 pauses media for what Retry-After asks. Media
+   * keep a pause of their own: upload.wikimedia.org limits them apart from the API (a media 429 answers nothing about
+   * the API's allowance, and pausing the API for it would cost the desk its decisions). -> the response
+   */
+  async media(url, get, { desk = null } = {}) {
+    const ctx = CONTEXT.getStore() || {};
+    const who = desk || ctx.desk || 'other';
+    let host = 'other';
+    try {
+      host = new URL(url).host;
+    } catch {}
+    if (this.now() < this.mediaPausedUntil) throw this.refuse(who);
+    this.count(host, 'requests', who);
+    let res;
+    try {
+      res = await get({ 'user-agent': this.agent });
+    } catch (err) {
+      this.count(host, 'failed', who);
+      throw err;
+    }
+    if (res.status === 429 || res.status === 503) {
+      this.count(host, 'limited', who);
+      this.pauseFor(res, 'mediaPausedUntil');
+    } else this.count(host, res.ok ? 'ok' : 'failed', who);
+    return res;
+  }
+
+  /** The counts, by host and by desk, and the pause (for /api/pictures/ahead and /api/wikimedia). */
+  status() {
+    return { ...this.stats, queued: this.jobs.length, pausedFor: this.resumeIn(), hosts: this.hosts, desks: this.desks };
   }
 }
 
@@ -217,6 +340,43 @@ export class KeptAnswers {
       this.dirty = false;
     } catch (err) {
       this.log.warn?.(`[pictures] could not keep answers: ${err.message}`);
+    }
+  }
+
+  /**
+   * save(), without holding the station: the answers written out a few hundred at a time, the event loop handed back
+   * every `sliceMs`, the file written asynchronously (round 10: the 5 MB file held the station 240 ms each time it was
+   * written at once). One at a time; an answer kept meanwhile is written next time.
+   */
+  async saveAsync({ force = false, sliceMs = 15, breathe = () => new Promise((resolve) => setImmediate(resolve)) } = {}) {
+    if (!this.file || !this.dirty || this.saving) return false;
+    if (!force && this.now() - this.savedAt < this.minSaveMs) return false;
+    this.saving = true;
+    this.savedAt = this.now();
+    this.dirty = false;
+    try {
+      const parts = [];
+      let t0 = performance.now();
+      for (const [k, e] of this.map) {
+        parts.push(`${JSON.stringify(k)}:${JSON.stringify(e)}`);
+        if (performance.now() - t0 > sliceMs) {
+          await breathe();
+          t0 = performance.now();
+        }
+      }
+      await breathe();
+      const text = `{"v":1,"answers":{${parts.join(',')}}}`;
+      await fs.promises.mkdir(path.dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.${process.pid}.tmp`;
+      await fs.promises.writeFile(tmp, text);
+      await fs.promises.rename(tmp, this.file);
+      return true;
+    } catch (err) {
+      this.dirty = true;
+      this.log.warn?.(`[pictures] could not keep answers: ${err.message}`);
+      return false;
+    } finally {
+      this.saving = false;
     }
   }
 }
