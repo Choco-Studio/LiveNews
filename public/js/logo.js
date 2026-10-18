@@ -270,9 +270,27 @@ function buildBug() {
   return { s, bit };
 }
 
+function buildWordmarkPlate() {
+  // the bug's plate without its globe: the bold wordmark and the red "24" tag, for a card whose emblem already stands
+  // above it (a clip's vertical end card: one globe, not two)
+  const letters = word(WORD_S, 'GLOBIT', 1, 'W');
+  const digits = word(DIGITS_S, '24', 1, 'W');
+  const H = 13;
+  const textX = 4;
+  const tagX = textX + letters.w + 3;
+  const tagW = digits.w + 6;
+  const s = sprite(tagX + tagW + 1, H);
+  fill(s, 0, 0, s.w, H, 'Q');
+  fill(s, tagX, 1, tagW, H - 2, 'R');
+  fill(s, tagX, H - 2, tagW, 1, 'D');
+  blit(s, letters, textX, 3);
+  blit(s, digits, tagX + 3, 3);
+  return { s, bit: null };
+}
+
 // ---------------------------------------------------------------------------
 // Caches: one 1x layout per variant, one canvas per (variant, scale).
-const VARIANTS = ['full', 'bug', 'mark'];
+const VARIANTS = ['full', 'bug', 'mark', 'wordmark'];
 const layouts = new Map();
 const canvases = new Map();
 
@@ -281,7 +299,7 @@ function layout(variant, slogan) {
   const key = `${v}|${v === 'full' && slogan ? 1 : 0}`;
   let L = layouts.get(key);
   if (L) return L;
-  const built = v === 'bug' ? buildBug() : v === 'mark' ? buildMark() : buildFull(!!slogan);
+  const built = v === 'bug' ? buildBug() : v === 'mark' ? buildMark() : v === 'wordmark' ? buildWordmarkPlate() : buildFull(!!slogan);
   const { s } = built;
   // glint candidates, keyed by diagonal (x + y) so a sweep is a cheap lookup
   const diag = new Map();
@@ -346,6 +364,7 @@ function drawGlint(ctx, L, ox, oy, scale, t) {
 
 function drawBitPulse(ctx, L, ox, oy, scale, t) {
   // The bit "beats" twice per glint cycle: cream, white, cream.
+  if (!L.bit) return; // (the wordmark plate has no bit)
   const phase = ((t % (GLINT_PERIOD / 2)) + GLINT_PERIOD / 2) % (GLINT_PERIOD / 2);
   const start = 1.1;
   if (phase < start || phase >= start + 0.36) return;

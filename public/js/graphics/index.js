@@ -1,9 +1,6 @@
 // GLOBIT 24 on-screen graphics package: one brand red plus neutrals and the
 // programme accent, calm motion, everything eased in and out.
 //   top row  bug (top-left) + LIVE/REPLAY + programme name, London clock (top-right)
-//   notice   the AI disclosure under the bug (graphics/disclosure.js): AI-PRODUCED NEWS · PRESENTERS ARE AI
-//            CHARACTERS · FACTS FROM CREDITED SOURCES, for a few seconds at the programme's start, after every break
-//            and every ten minutes (never over a re-staged guest, a picture's credit or a headline frame)
 //   strap    lower third with kicker/category, source or presenter name, headline
 //            (two lines when needed); turns red for breaking news; never scrolls
 //   captions white-on-black subtitles, never dropping lines, clear of strap and ticker
@@ -28,8 +25,8 @@ import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } 
 import { CHANNEL } from '../pace.js';
 import { drawLinkGraphics, drawFileCredit, TWO_WAY_CLEAR } from './remote.js';
 import { drawRecreation, recreationTop } from './recreation.js';
-import { FRAME, NOTICE_TIMING, NOTICE_SHOTS, NOTICE_SEP, nounOf, noticeParts, noticeLayout, drawNotice } from './disclosure.js';
-import { drawPictureCredits, headlineTagRight, CREDITS, picturesOnScreen, pictureCreditOf } from './picture.js';
+import { FRAME } from './disclosure.js';
+import { drawPictureCredits, headlineTagRight, CREDITS } from './picture.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -149,19 +146,10 @@ const countryOf = (place) => {
 };
 
 export class Graphics {
-  /** This package draws the AI notice itself (the vertical picture's does not: a vertical clip carries its own card). */
-  get drawsNotice() {
-    return true;
-  }
-
-  /**
-   * `audio` (optional) may expose speechFrame(); `now()` gives the wall clock in ms; `report: false` keeps a second
-   * package drawn from the same scene (the playout's clip-mode twin) from reporting the notice to the recorder twice.
-   */
-  constructor({ audio = null, now = () => Date.now(), report = true } = {}) {
+  /** `audio` (optional) may expose speechFrame(); `now()` gives the wall clock in ms. */
+  constructor({ audio = null, now = () => Date.now() } = {}) {
     this.audio = audio;
     this.now = now;
-    this.reports = report !== false;
     this.strap = new StrapState();
     this.captions = new CaptionState();
     this.ticker = new TickerState();
@@ -199,9 +187,6 @@ export class Graphics {
     this.dupTag = '';
     this.dupSkip = false;
     this.recOn = false; // a re-staged guest's label on screen (scene.recreation)
-    // the AI notice (graphics/disclosure.js): due at `due`, on screen from `at` for `hold` s; `shown` counts showings
-    this.notice = { due: null, at: null, hold: NOTICE_TIMING.hold, shown: 0 };
-    this.noticeReported = false;
     this.errors = new Set();
   }
 
@@ -221,11 +206,6 @@ export class Graphics {
         this.onAt = t; // everything wipes in, the bug glints once...
         // ...unless we cut from a programme open, which ends on these very pixels (opens/kit.js drawBug)
         this.topAt = this.lastShot === 'open' ? t - 3 : t;
-        // the notice: at the start, and again after every interruption (a break, a full-screen card)
-        if (this.notice.at === null) {
-          this.notice.due = t + NOTICE_TIMING.delay;
-          this.notice.hold = NOTICE_TIMING.hold;
-        }
       }
       if (mode === 'ad' && this.mode !== 'ad') this.adAt = t;
       if (!ON.has(mode)) {
@@ -239,8 +219,6 @@ export class Graphics {
     this.pg = programGraphics(scene.program);
     this.trackEpisode(scene);
     this.trackBreaking(t, scene, mode);
-    this.updateNotice(t, scene, mode);
-    this.reportNotice(t, scene, mode);
     if (!ON.has(mode)) return;
 
     // programme name: from just after the open for tagHold seconds (or the whole episode)
@@ -302,69 +280,6 @@ export class Graphics {
 
   strapUp() {
     return !!this.strap.cur && this.strap.outAt === null;
-  }
-
-  /**
-   * The AI notice's clock (graphics/disclosure.js NOTICE_TIMING). Due as the graphics come on and every `every` s
-   * after its last showing; it starts on the first frame that can carry it (noticeFits) and holds `hold` s. A
-   * notice on screen when the graphics go off (a break) ends there; the return starts a new one. One cut short by a
-   * re-staged guest or a full-screen card before it was up NOTICE_TIMING.least s is due again at once, at full length.
-   */
-  updateNotice(t, scene, mode) {
-    const n = this.notice;
-    if (n.at !== null) {
-      const end = n.at + n.hold + NOTICE_TIMING.wipeOut;
-      if (t >= end || mode !== 'news' || scene.recreation) {
-        const short = t < end && t - n.at < NOTICE_TIMING.least;
-        n.due = short ? t : (t >= end ? n.at : t) + NOTICE_TIMING.every;
-        n.at = null;
-        if (!short) n.hold = NOTICE_TIMING.again;
-      }
-      return;
-    }
-    if (n.due === null || t < n.due || mode !== 'news') return;
-    if (!this.noticeFits(scene)) return;
-    n.at = t;
-    n.shown++;
-  }
-
-  /**
-   * Can the notice stand on this frame? Only on a presenter's shot (graphics/disclosure.js NOTICE_SHOTS), never over a
-   * re-staged guest (the RECREATION label owns the top right), a correspondent's link, a picture's credit under the
-   * clock (the studio wall's picture) or a breaking item in the strap. (Boards, maps, pictures and the headline frame
-   * put their own title or credit just under the top row.)
-   */
-  noticeFits(scene) {
-    if (scene.recreation || scene.remote || !NOTICE_SHOTS.has(scene.shot)) return false;
-    if (picturesOnScreen(scene).some((id) => pictureCreditOf(scene, id)?.credit)) return false;
-    return !(this.brAir !== null && this.strapUp() && this.strap.cur === this.brContent);
-  }
-
-  /**
-   * Tell the recorder when the notice comes on and goes off (tools/recorder/page.mjs collects window.__rec events; the
-   * publish gate reads them from the recording's report: server/compliance/clips.js noticeRuns). Only a package that
-   * draws the notice reports it, and only once per page (`report: false` on the playout's twin).
-   */
-  reportNotice(t, scene, mode) {
-    if (!this.drawsNotice || !this.reports) return;
-    const on = mode === 'news' && this.noticeShown(t) > 0;
-    if (on === this.noticeReported) return;
-    this.noticeReported = on;
-    try {
-      globalThis.__rec?.ev?.({ type: 'notice', on, text: on ? noticeParts(nounOf(scene.program?.id)).join(NOTICE_SEP) : null, programme: scene.program?.id || null });
-    } catch {
-      /* no recorder */
-    }
-  }
-
-  /** How far the notice is wiped in at t (0..1). */
-  noticeShown(t) {
-    const n = this.notice;
-    if (n.at === null || t < n.at) return 0;
-    const s = t - n.at;
-    if (s < NOTICE_TIMING.wipeIn) return easeInOut(s / NOTICE_TIMING.wipeIn);
-    if (s < n.hold) return 1;
-    return 1 - easeInOut(clamp01((s - n.hold) / NOTICE_TIMING.wipeOut));
   }
 
   /** New episode (a new rundown): progress and the aired-story count start again. */
@@ -645,12 +560,6 @@ export class Graphics {
     TOP_ROW.programOut = this.tagOut;
     TOP_ROW.clock = zoneTime(STUDIO_TZ, this.now()).label;
     drawTopRow(ctx, t, TOP_ROW);
-    // the AI notice under the bug (graphics/disclosure.js)
-    const np = mode === 'news' ? this.noticeShown(t) : 0;
-    if (np > 0) {
-      const L = noticeLayout(FRAME, nounOf(scene.program?.id));
-      drawNotice(ctx, L, np, this.accentOf(scene));
-    }
     if (mode === 'news' && scene.remote) drawLinkGraphics(ctx, t, scene, this.accentOf(scene));
     // a montage frame over its place's footage (studio.js decides card.vid): FILE and the clip's credit
     if (scene.shot === 'montage' && scene.card?.vid) {
@@ -684,8 +593,8 @@ export class Graphics {
 }
 
 // Reused per frame (no allocations in steady state).
+// (no AI mark in the row since 18 Oct: the channel's ident before every programme carries the disclosure, compliance.md §3)
 const TOP_ROW = { onAt: 0, replay: false, recorded: false, program: null, programIn: null, programOut: null, clock: '' };
-
 const TOP_PLACE = Object.freeze({ top: CAPTION.top });
 const LOW_PLACE = { top: CAPTION.top };
 const BOTTOM_PLACE = { bottom: CAPTION.bottomFree };

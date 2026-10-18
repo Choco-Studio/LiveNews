@@ -27,6 +27,7 @@ import { airVideoArgs, scaleFilter, AIR_DEFAULTS, parseSize } from '../../server
 import { airGate, gateOptionsFromEnv } from '../../server/playout/gate.js';
 import { diskPlan, diskPolicyFromEnv } from '../../server/playout/disk.js';
 import { voicedAir } from '../../server/airtime.js';
+import { IDENT_AIR } from '../../public/js/pace.js';
 import * as compliance from '../../server/publish/compliance.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -257,11 +258,11 @@ function runFfmpeg(argv, { input = null } = {}) {
   return { p, done };
 }
 
-/** Expected air of an item in seconds (the director's own timeline in closed form; a break from its parts). */
+/** Expected air of an item in seconds (the director's own timeline in closed form, the channel's ident before it; a break from its parts). */
 function estimateSeconds(item) {
   if (item.kind === 'break') return 20 + 30 * (Number(item.ads) || 2) + (Number(item.hold) || 0) + 12;
   try {
-    return voicedAir(item) || 600;
+    return (voicedAir(item) || 600) + IDENT_AIR;
   } catch {
     return 600;
   }

@@ -41,31 +41,39 @@ const CHECK = {
   file: { id: 'file', text: 'Subes el vídeo descargado de aquí (lleva dentro la firma de procedencia C2PA), no otro.' },
   ytTexts: { id: 'texts', text: 'Pegas el título, la descripción y los hashtags tal cual.' },
   capTexts: { id: 'texts', text: 'Pegas la descripción y los hashtags tal cual.' },
-  synthetic: { id: 'synthetic', text: 'Contenido alterado o sintético («altered or synthetic content»): marcas Sí.' },
+  // the network's own AI label (since 18 Oct what a clip's viewer sees first, beside the player: compliance.md §3.2): required
+  synthetic: { id: 'synthetic', ai: true, text: 'Obligatorio: contenido alterado o sintético («altered or synthetic content»): marcas Sí.' },
   kids: { id: 'kids', text: 'Público («made for kids»): marcas que no es contenido para niños.' },
   thumb: { id: 'thumb', text: 'Miniatura: subes la portada descargada.' },
-  aigc: { id: 'aigc', text: 'Activas la etiqueta de contenido generado por IA («AI-generated content»).' },
+  aigc: { id: 'aigc', ai: true, text: 'Obligatorio: activas la etiqueta de contenido generado por IA («AI-generated content»).' },
   privacy: { id: 'privacy', text: 'Privacidad (quién puede verlo): la eliges tú. Para la beta, todo el mundo.' },
   branded: { id: 'branded', text: 'Contenido de marca o promocional: desactivado (el canal no publica contenido pagado).' },
-  aiinfo: { id: 'aiinfo', text: 'Activas la etiqueta de IA («AI info»): la opción que dice que el contenido está hecho con IA.' },
-  fbLabel: { id: 'aiinfo', text: 'Pones a mano la etiqueta de IA («AI info»): Facebook no la pone sola.' },
+  aiinfo: { id: 'aiinfo', ai: true, text: 'Obligatorio: activas la etiqueta de IA («AI info»), la opción que dice que el contenido está hecho con IA.' },
+  fbLabel: { id: 'aiinfo', ai: true, text: 'Obligatorio: pones a mano la etiqueta de IA («AI info»): Facebook y Threads no la ponen solos.' },
   postText: { id: 'texts', text: 'Pegas el texto tal cual: empieza por «AI-generated:», y eso no se quita.' },
   linkIn: { id: 'link', text: 'El enlace al artículo del medio va en el texto: compruebas que sale.' },
   linkCard: { id: 'link', text: 'Pegas también el enlace del artículo, para que salga su tarjeta.' },
   linkBelow: { id: 'link', text: 'Pegas también el enlace del artículo, debajo del texto.' },
 };
 
-/** The switches to set by hand for an item on its network (all of them ticked before it is recorded as published). */
+/**
+ * The switches to set by hand for an item on its network (all of them ticked before it is recorded as published). A
+ * video's first after the file is the network's own AI label (`ai: true`): the platform shows it beside the player
+ * from the clip's first second, and the gate holds a video without it.
+ */
 export function checklistFor(item) {
   const net = item?.platform;
   if (item?.kind === 'text') return [CHECK.postText, net === 'bluesky' || net === 'threads' ? CHECK.linkCard : net === 'telegram' ? CHECK.linkBelow : CHECK.linkIn];
-  const list = [CHECK.file, net === 'youtube' ? CHECK.ytTexts : CHECK.capTexts];
-  if (net === 'youtube') list.push(CHECK.synthetic, CHECK.kids, ...(item.kind === 'episode' && item.media?.thumb ? [CHECK.thumb] : []));
-  else if (net === 'tiktok') list.push(CHECK.aigc, CHECK.privacy, CHECK.branded);
-  else if (net === 'instagram') list.push(CHECK.aiinfo);
-  else if (net === 'facebook') list.push(CHECK.fbLabel);
+  const label = AI_LABEL[net] || null;
+  const list = [CHECK.file, ...(label ? [label] : []), net === 'youtube' ? CHECK.ytTexts : CHECK.capTexts];
+  if (net === 'youtube') list.push(CHECK.kids, ...(item.kind === 'episode' && item.media?.thumb ? [CHECK.thumb] : []));
+  else if (net === 'tiktok') list.push(CHECK.privacy, CHECK.branded);
   return list;
 }
+/** Each network's own AI label, as the owner sets it (the gate holds a video without it: compliance.md §3.2). */
+export const AI_LABEL = Object.freeze({ youtube: CHECK.synthetic, tiktok: CHECK.aigc, instagram: CHECK.aiinfo, facebook: CHECK.fbLabel, threads: CHECK.fbLabel });
+/** The networks whose AI label has no API field: the owner sets it by hand, and its tick is required to record it. */
+const HAND_LABEL = new Set(['facebook', 'threads']);
 
 // a clip's caption (clipmeta.js): its disclosure sentence, which goes first (compliance.md §1: "the caption's first line");
 // a caption written before 18 Oct carries the older sentence, which gives way to it
@@ -223,6 +231,9 @@ export async function prepareManual(queue, id, { dataDir = null, now = Date.now(
   }
   const sources = getStory || compliance.sourcesForItem(it, compliance.archiveGetStory({ dataDir }));
   const view = { ...gateView(it, { now }), text: texts.gateText, files: Object.values(files) };
+  // a network with no API field for the AI label: the owner sets Meta's "AI info" by hand, and the publication cannot be
+  // recorded until he has ticked it (recordManual: the checklist), so the gate counts it as set
+  if (it.kind !== 'text' && HAND_LABEL.has(it.platform)) view.flags = { ...view.flags, [it.platform]: { ...(view.flags?.[it.platform] || {}), manualLabel: true } };
   const g = gate(view, { now, register: register === undefined ? compliance.register(dataDir) : register, getStory: compliance.clipGetStory(it.source?.storyIds, sources), env });
   const violations = [...(g.violations || [])];
   for (const [kind, m] of Object.entries(marks)) if (!m.ok && !violations.some((v) => v.rule === 'unmarked' || v.rule === 'file-missing')) violations.push({ rule: 'unmarked', message: `the ${kind} could not be signed: ${m.reason || 'no answer'}` });

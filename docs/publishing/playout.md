@@ -68,15 +68,15 @@ a few minutes before it airs; the writer's "hello" near a boundary covers that, 
 
 Every programme passes the compliance desk's `preflight` (`server/compliance/`, through `server/publish/compliance.js`)
 as the stream's own output (`kind: 'live'`, compliance.md §1's first column): **rights** (a picture without its rights
-record, demo or fixture material), **verbatim** (the outlet's sentences copied), **disclosure** (the AI notice at the programme's start and every ten minutes, the ident)
+record, demo or fixture material), **verbatim** (the outlet's sentences copied), **disclosure** (the channel's ident before the programme, compliance.md §3.1)
 and **recreations** (the label in frame, the owner's review, election holds), plus the register (a story withdrawn, a
 person who asked to be left out) and the **no-LIVE rule** (§5). Twice:
 
 1. **When the station makes it**, on the finished words and before the voices (`Producer` stage `gate`): a programme
    that fails costs no voice time, is never queued, and the station makes the next one in its place.
 2. **When the renderer has rendered it**, with the recording's report (the timeline of what aired): the recreation
-   labels and the AI notice checked against it (compliance.md §3.1: a programme whose recording shows no notice in its
-   first 30 s, or goes 12 minutes without one, is held). A unit that fails is held and the renderer renders the **next unit for
+   labels and the channel's ident checked against it (compliance.md §3.1: a programme whose recording does not open with
+   the ident, or that with the break after it would leave the stream more than 15 minutes without one, is held). A unit that fails is held and the renderer renders the **next unit for
    the same air time**: the hole is filled by programming, and no clock on screen is wrong.
 
 What fails is kept in `data/playout/held/<airtime>-<id>.json` with its reasons, logged in `events.jsonl`, and shown on
@@ -132,16 +132,19 @@ would have held (`strict-would-hold` in `events.jsonl`).
 ## 5. No false LIVE
 
 Anything pre-recorded never says LIVE. In PLAYOUT mode the station tells the page (`/api/channel` → `airMode:
-'recorded'`), and `public/js/airmode.js` decides every label:
+'recorded'`), and `public/js/airmode.js` decides every label. A clip's end card points to a stream only when the
+stream's address is set (`CHANNEL_LIVE_URL`, the one the descriptions link): without it (the manual beta has no stream)
+the card says nothing about where to watch, in either column.
 
 | Where | Live channel | Pre-rendered playout |
 | --- | --- | --- |
 | Top row tag (`graphics/bug.js`; the opens' lock-up, `opens/kit.js`) | LIVE, red pip | **24/7**, silver, no pip (REPLAY stays REPLAY) |
 | End card (`director.js`, `quizdirector.js`) | GLOBIT 24 · LIVE 24 HOURS | GLOBIT 24 · 24 HOURS A DAY |
 | Start screen (`scenes/cards.js`) | LIVE • 24 HOURS | NEWS • 24 HOURS |
+| A clip's end card (`clip/cards.js`, `airmode.js` `streamOf`, `watchLine`) | NEWS 24 HOURS A DAY · WATCH LIVE | NEWS 24 HOURS A DAY |
 | Old renderer's idle wall (`set.js`) | LIVE pill | 24/7 pill |
 | Browser tab | GLOBIT 24 · Live | GLOBIT 24 · 24/7 |
-| YouTube live title (`server/publish/live.js`) | GLOBIT 24 LIVE · Now: … | GLOBIT 24 · Now: … · pixel-art news 24/7 |
+| YouTube live title (`server/publish/live.js`) | GLOBIT 24 LIVE · Now: … · AI-produced news 24/7 | GLOBIT 24 · Now: … · AI-produced news 24/7 |
 | YouTube live description | — | adds "Each programme is produced and checked ahead of time and aired from a recording…" |
 
 The words: the writers' banks, the continuity voice and the ads make no live claim (tested); the correspondents were
@@ -159,7 +162,7 @@ air: the gate is automated).
 ## 6. Reuse: the clip factory and the whole-programme uploads read the masters
 
 Every programme's page also draws its **twin picture** (`?twin=1`, `studio.js`): the same shot under the clip graphics
-(`clip/graphics.js`: no clock, no ticker, the AI notice under the bug as on air, clip captions), on a second canvas, captured with
+(`clip/graphics.js`: no clock, no ticker, the bug alone, clip captions), on a second canvas, captured with
 the air picture in the same frame grab. The renderer writes it as the publishing desk's own master format (384x216,
 lossless RGB H.264 + FLAC) with its report and the episode as aired, into `data/playout/masters/<episode id>/`, as the
 publishing desk's rendered-master hook reads it (`server/publish/masters.js`, `pipeline.md` §8):

@@ -67,12 +67,14 @@ export function fakeClock() {
 }
 
 /**
- * Play `ep` on the default path (no v2) on the fake clock: { shots, says, sfx, lookups }. `voiceLookup` (s): each
- * recorded-voice lookup (voices.audioFor) takes that long on the clock, as a late clip's server lookup does.
+ * Play `ep` on the default path (no v2) on the fake clock: { shots, says, sfx, lookups, ident }. `voiceLookup` (s): each
+ * recorded-voice lookup (voices.audioFor) takes that long on the clock, as a late clip's server lookup does. The
+ * channel's ident before the programme (director.playIdent) is logged apart in `ident` ({ shots, says }): the
+ * programme's own shots and voice start at its open.
  */
 export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLookup = 0, marks = false } = {}) {
   const clock = fakeClock();
-  const log = { shots: [], says: [], sfx: [], lookups: [] };
+  const log = { shots: [], says: [], sfx: [], lookups: [], ident: { shots: [], says: [] } };
   try {
     const audio = {
       mode,
@@ -84,7 +86,7 @@ export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLoo
         return new Promise((resolve) => {
           const lines = splitSentences(text);
           const say = { text, slot, on: clock.now(), off: null };
-          log.says.push(say);
+          (slot === 'ad' ? log.ident.says : log.says).push(say); // the continuity voice over the ident
           // (opt-in: each mark fires when the voice reaches its character, inside its sentence at the same rate)
           if (marks && typeof onMark === 'function') speechMarks(text, lines, at).forEach((t, k) => setTimeout(() => onMark(k), t * 1000));
           let i = 0;
@@ -115,7 +117,9 @@ export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLoo
     d.setShot = (shot, extra = {}) => {
       const before = d.scene.shotSince;
       setShot(shot, extra);
-      if (d.scene.shotSince !== before) log.shots.push({ shot, focus: d.scene.focus, storyId: d.scene.storyId, t: clock.now() });
+      if (d.scene.shotSince === before) return;
+      const x = { shot, focus: d.scene.focus, storyId: d.scene.storyId, t: clock.now() };
+      (shot === 'ident' && !extra.card && !log.shots.length ? log.ident.shots : log.shots).push(x);
     };
     await clock.run(d.playEpisode(structuredClone(ep)));
     log.end = clock.now();

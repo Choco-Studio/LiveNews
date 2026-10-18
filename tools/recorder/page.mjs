@@ -521,7 +521,9 @@ export function pageInit(CFG) {
         director.setShot = (shot, extra) => {
           const before = director.scene?.shotSince;
           const r = setShot(shot, extra);
-          if (director.scene?.shotSince !== before) ev({ type: 'shot', shot });
+          // (the card's kind tells the channel's ident from the break bumper, which shares its shot: the publish gate
+          // reads the ident before every programme from these events, server/compliance/clips.js)
+          if (director.scene?.shotSince !== before) ev({ type: 'shot', shot, ...(extra?.card?.kind ? { card: extra.card.kind } : {}) });
           return r;
         };
       }

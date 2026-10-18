@@ -2,7 +2,7 @@
 // stays exactly as it is; docs/publishing/compliance.md §3.4, §5). IN THEIR WORDS re-stages a real public figure's words:
 // the deep-fake case of the AI Act (Art. 50(4), first subparagraph), labelled in every frame of the piece, top right,
 // with the yellow plate and its double-struck AI. Nothing a booking, a scene, an item or an option says can take it off,
-// the AI notice never stands over it, and the publish check refuses a clip that loses it.
+// nothing else is drawn over it, and the publish check refuses a clip that loses it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -76,23 +76,22 @@ test('drawRecreation has no switch: no option, environment or flag can skip a pl
   assert.ok(markPlate(ctx), 'an extra argument changes nothing');
 });
 
-test('on air and in a clip the label is drawn in every frame of the piece; the AI notice never stands over it', () => {
+test('on air and in a clip the label is drawn in every frame of the piece, and no notice with it', () => {
   D.setFrame(null);
   const rec = recreationOf({ strap: { name: 'ANA SILVA', role: 'MAYOR OF LISBON' }, label: { line: LINE, credit: 'SOURCE: HARBOUR HERALD' } });
   // the scene says everything it could to hide it: none of it is a switch the graphics read
   const scene = (k) => ({ shot: k < 0.2 ? 'open' : k < 15 ? 'wide' : 'location', ticker: [], program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' }, recreation: rec, labels: false, recreationLabel: false, disclosure: 'off', subtitles: false });
   for (const make of [() => new Graphics({ now: () => 0 }), () => new ClipGraphics({ now: () => 0 })]) {
     const g = make();
+    const drawn = D.NOTICE_DRAWS.n;
     for (let k = 0; k <= 30; k += 0.1) {
       g.update(k, scene(k));
       if (k < 0.3) continue;
       const ctx = fakeCtx();
       g.render(ctx, k, scene(k));
       assert.ok(markPlate(ctx), `${g.constructor.name}: the label at ${k.toFixed(1)} s`);
-      const L = D.noticeLayout(D.FRAME);
-      assert.ok(!ctx.fills.some((f) => f.c === P.black && f.x === L.x && f.y === L.y && f.w === L.w), `${g.constructor.name}: no notice over the guest at ${k.toFixed(1)} s`);
     }
-    assert.equal(g.notice.shown, 0, 'the notice waited the whole piece');
+    assert.equal(D.NOTICE_DRAWS.n, drawn, `${g.constructor.name}: no notice over the guest`);
   }
 });
 
@@ -126,7 +125,7 @@ test('the server keeps the label and the platforms\' flags whatever an item asks
     { start: 4, end: 6, text: hand, segIndex: 0, kind: 'provenance', recreationId: booking.id, quote: false },
     { start: 6.5, end: 10, text: words, segIndex: 1, kind: 'recreation', recreationId: booking.id, quote: true },
   ];
-  const clip = { id: 'c1', kind: 'short', cards: clipCards(), episode: ep, range: { start: 4, end: 10.4 }, timeline: tl, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, frame: { crop: { x: 132, y: 0, w: 121, h: 216 }, output: { w: 1080, h: 1920 }, window: null }, label: false, recreationLabel: false };
+  const clip = { id: 'c1', kind: 'short', cards: clipCards(), text: 'AI-produced news: presenters are AI characters.', episode: ep, range: { start: 4, end: 10.4 }, timeline: tl, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, frame: { crop: { x: 132, y: 0, w: 121, h: 216 }, output: { w: 1080, h: 1920 }, window: null }, label: false, recreationLabel: false };
   for (const opts of [{}, { label: false }, { recreationLabel: false, skipLabel: true }, { requireReview: false }]) {
     const r = checkClip(clip, { now: Date.parse('2026-10-17T12:00:00Z'), calendar: { generatedAt: '2026-10-17T12:00:00Z', elections: [] }, register: reg, ...opts });
     assert.ok(r.violations.some((v) => v.rule === 'label-out-of-frame'), JSON.stringify(opts));

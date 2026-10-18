@@ -6,14 +6,14 @@ import { pictureCreditsOf } from './graphics/picture.js';
 import { prepareLocator } from './graphics/locator.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION, TEASE_TILE, boardTitle } from './scenes/cards.js';
-import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
+import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine, IDENT_VOICE } from './ads/index.js';
 import { endCardLine } from './airmode.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard, plainFact } from './pace.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, storyBoard, pickBoard, plainFact, identBefore } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 import { recreationOf } from './graphics/recreation.js';
@@ -348,10 +348,41 @@ export class Director {
     }
   }
 
+  // --- the channel's ident ----------------------------------------------------
+
+  /**
+   * The channel's ident (pace.js CHANNEL.ident; scenes/opens/ident.js; docs/publishing/compliance.md §3): GLOBIT 24, its
+   * slogan, and under them AI-PRODUCED NEWS / PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES, with the
+   * continuity voice saying "This is GLOBIT 24, AI-produced news." It airs before every programme, when the channel
+   * comes back from its break (identBefore), and before a filler break that comes long after the last one. It is the
+   * channel's own card: never inside a break, never over a programme (owner, 18 Oct).
+   */
+  async playIdent() {
+    const s = this.scene;
+    const hold = CHANNEL.ident.hold;
+    await this.stinger(() => {
+      s.lowerThird = null;
+      s.subtitle = null;
+      s.adBreak = null;
+      this.setShot('ident', { storyId: null, card: null });
+    }, (cut) => this.audio.sfx('jingle', { startAt: cut }));
+    this.identAt = now();
+    const said = Promise.resolve(this.audio.speak?.(IDENT_VOICE, 'ad', { audio: this.voices?.adLine?.(CONTINUITY, IDENT_VOICE) ?? null })).catch(() => {});
+    // the card holds its time, and the line is never cut off (at most 2 s past the hold)
+    await Promise.all([sleep(hold * 1000 - STINGER_DURATION * 500), Promise.race([said, sleep(hold * 1000 + 2000)])]);
+  }
+
+  /** Seconds since the channel's ident last aired (Infinity before the first). */
+  sinceIdent() {
+    return Number.isFinite(this.identAt) ? now() - this.identAt : Infinity;
+  }
+
   // --- commercial breaks ---------------------------------------------------
 
   async playBreak(item) {
     const s = this.scene;
+    // (a filler break long after the last ident: the channel's ident first, at the boundary, never inside the break)
+    if (identBefore(item, this.sinceIdent())) await this.playIdent();
     this.musicInStory = false;
     this.music.cue('silence', { programId: 'channel' }); // the bumper's jingle and the spots carry their own music
     this.voices.refreshAds(); // advert voice-overs (fetched while the ident runs)
@@ -937,6 +968,8 @@ export class Director {
     prepareQuiz(this, episode);
     const imagesReady = this.prepareImages(episode);
     this.prepareFootage(episode);
+    // the channel's ident before the programme (the pictures and the first voices keep loading under it)
+    if (identBefore(episode, this.sinceIdent())) await this.playIdent();
     // Each programme has its own opening titles and theme tune. The tune starts
     // on the open's own clock (the shot change, dt = 0), so its final chord
     // lands on the title lock-up and its button on the cut, `duration` later.
