@@ -75,6 +75,11 @@ export const config = {
   },
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
+  // Pre-rendered playout (docs/publishing/playout.md; tools/playout/station.mjs sets PLAYOUT=1): the station lives on the
+  // air clock, a renderer plays the viewer's part an hour ahead, every episode passes the check before air, and
+  // nothing on screen or in the words says LIVE. Unset: the live channel as ever.
+  playout: /^(1|true|yes|on)$/i.test(env('PLAYOUT', '0').trim()),
+  playoutDir: path.resolve(ROOT, env('PLAYOUT_DIR', path.join('data', 'playout'))),
   rotationStart,
   draftsOnAir,
   quizView,

@@ -22,7 +22,10 @@ import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
 
 const { opt, flag } = argsOf();
-const epFile = opt('episode');
+// --from-playout <dir>: a programme the pre-rendered playout rendered (docs/publishing/playout.md §6): its episode, its
+// horizontal clip-mode master and its report, so the whole programme is never recorded again
+const fromPlayout = opt('from-playout') ? path.resolve(opt('from-playout')) : null;
+const epFile = fromPlayout ? path.join(fromPlayout, 'episode.json') : opt('episode');
 if (!epFile || !opt('out')) {
   console.error('usage: node tools/publish/upload.mjs --episode ep.json --out <dir> [--master m.mkv --report r.json]');
   process.exit(1);
@@ -40,6 +43,7 @@ const pb = createPlaybackServer({ root });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 let master = opt('master') ? { file: path.resolve(opt('master')), report: path.resolve(opt('report')) } : null;
+if (!master && fromPlayout) master = { file: path.join(fromPlayout, `${prog}-horizontal.mkv`), report: path.join(fromPlayout, `${prog}-horizontal.report.json`) };
 // (the metadata and the thumbnail need only the recording's report: --report with --no-video records no master)
 if (!master && opt('report') && (flag('no-video') || opt('video'))) master = { file: null, report: path.resolve(opt('report')) };
 if (!master) master = await recordMaster({ base, epFile, fmt: 'horizontal', file: path.join(tmpDir, `${prog}-horizontal.mkv`), report: path.join(out, `${prog}.report.json`), seconds: Number(opt('seconds', recordSeconds(episode))), airedAt, tmpDir, say });
@@ -58,7 +62,9 @@ try {
 } catch {
   /* no archive: no article links */
 }
-const meta = uploadMeta(episode, { timeline, stories, airedAt, url: process.env.CHANNEL_LIVE_URL || null });
+// (pre-rendered playout: a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded: the description never says live)
+const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
+const meta = uploadMeta(episode, { timeline, stories, airedAt, url: process.env.CHANNEL_LIVE_URL || null, recorded });
 say(`"${meta.title}" · ${meta.chapters.length} chapters · ${meta.sources.length} sources · ${meta.worthy ? 'worth a full upload' : `not for upload: ${meta.why.join('; ')}`}`);
 
 // ---------------------------------------------------------------- the thumbnail: the programme's own frame
@@ -119,7 +125,7 @@ if (video) {
   fs.writeFileSync(path.join(out, `${prog}.srt`), srtFor(timeline, { start: 0, end: D, duration: D }));
 } else if (!flag('no-video')) {
   const endcard = path.join(tmpDir, 'endcard.mkv');
-  await run('node', ['tools/record.mjs', '--url', `${base}/lab/clip.html?run=end&format=horizontal&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${THEME}&sting=1`, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', endcard], { env: { TMPDIR: tmpDir }, quiet: true });
+  await run('node', ['tools/record.mjs', '--url', `${base}/lab/clip.html?run=end&format=horizontal&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${THEME}&sting=1${recorded ? '&live=0' : ''}`, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', endcard], { env: { TMPDIR: tmpDir }, quiet: true });
   video = path.join(out, `${prog}.mp4`);
   say(`video: ${D.toFixed(1)} s + end card`);
   await run('ffmpeg', composeArgs({ master: master.file, hook: null, endcard, window: { start: 0, duration: D }, format: 'horizontal', out: video }), { quiet: true });

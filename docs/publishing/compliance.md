@@ -109,7 +109,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 
 **Our case, output by output.**
 
-- **Live stream: no.** Bulletins are written and aired 24 hours a day with nobody reading them first.
+- **Live stream: no.** Bulletins are written and aired 24 hours a day with nobody reading them first. Under pre-rendered playout (`playout.md`) each programme is checked before air, but by the automated gate (§5.5), not by a person: still no.
 - **Full programmes and clips: only if the owner's review is substantive.** The publishing plan has an owner review step, but it qualifies only if it is a substantive check of each item's facts and quotes against its sources, made before publication and with nothing regenerated afterwards. The owner reviews in English, which is not his first language, and the volume is many clips a day. A click to approve would be "cursory approval".
 - **Text posts and descriptions: only with the same substantive review**, and only if no AI rewording happens after it.
 
@@ -278,7 +278,7 @@ Why not "AI GENERATED" over the whole picture? Our photos and footage are real. 
   - Without `C2PA_CERT` and `C2PA_KEY` the channel makes a **development** certificate chain once in `data/compliance/c2pa/`. The key is readable only by its owner and never enters the repository.
   - Validators then show "signing certificate untrusted", which is expected.
   - For launch we need a certificate from a CA on the C2PA trust list (launch blocker).
-- **The live stream.** RTMP ingest re-encodes and carries no C2PA. On air the disclosure is the burned-in mark. The recordings the publisher exports are marked.
+- **The live stream.** RTMP ingest re-encodes and carries no C2PA. On air the disclosure is the burned-in mark. The recordings the publisher exports are marked. Under pre-rendered playout the programmes air from files, but the stream is still re-encoded at ingest: the playout's check before air does not require C2PA (rule `unmarked` is reported as skipped there), and the masters the publishing desk cuts from are marked by its own gate when exported.
 - **What could not be installed.**
   - `c2patool`, the C2PA command-line tool, is not installed. GitHub release downloads answer **403** through this environment's proxy. Building it from crates.io needs more disk than the machine has free (96 % full), so the build was stopped.
   - The SDK's Python binding from PyPI is the same open-source C2PA implementation, and it is what we use.
@@ -568,6 +568,6 @@ All in `server/compliance/index.js`. Nothing in it uploads. Every function is pu
 - `EDITORIAL_CONTACT` is not set;
 - `RIGHTS_GATE` is not strict;
 - the Open-Meteo commercial plan;
-- **the verbatim rule on what aired.** The report reads the last 300 real stories of `data/archive` and blocks while more than 5 % of them break the rule. On today's archive it is **80.3 %** (241 of 300) against the outlets' titles and summaries alone. That is a floor: with the articles, which the audit tool caches in `data/compliance/articles`, the same 300 stories give **99 %**. The live stream has no publish check of its own, so this is the check that holds it back. It clears when the writer team's composed sentences are on air, measured with the same code.
+- **the verbatim rule on what aired.** The report reads the last 300 real stories of `data/archive` and blocks while more than 5 % of them break the rule. On today's archive it is **80.3 %** (241 of 300) against the outlets' titles and summaries alone. That is a floor: with the articles, which the audit tool caches in `data/compliance/articles`, the same 300 stories give **99 %**. Live, the stream has no publish check of its own, so this is the check that holds it back; under pre-rendered playout (`playout.md` §3) every programme passes `preflight` before air, verbatim included, and with `PLAYOUT_VERBATIM=block` (the default) a programme that copies is held, never aired. It clears when the writer team's composed sentences are on air, measured with the same code.
 
 The audio watermark is a warning.

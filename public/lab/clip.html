@@ -54,7 +54,8 @@ window.__clipLab = {
 const run = qs.get('run');
 if (run === 'end') {
   // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
-  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '' };
+  // (&live=0: the channel airs pre-rendered, docs/publishing/playout.md §5: the end card never says WATCH LIVE)
+  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', live: qs.get('live') !== '0' };
   const { w, h } = sizeOf(spec.format);
   const screen = mk(w, h);
   screen.id = 'screen';
@@ -64,7 +65,7 @@ if (run === 'end') {
   const t0 = performance.now();
   const frame = () => {
     requestAnimationFrame(frame);
-    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec) });
+    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), live: spec.live });
   };
   frame();
   if (qs.get('sting') === '1') {

@@ -165,7 +165,12 @@ export class Renderer {
     const program = scene.program;
     switch (scene.shot) {
       case 'start':
-        return cards.drawStartScreen(ctx, t, { channel: scene.channel.name, prompt: card.prompt || 'CLICK TO TUNE IN' });
+        return cards.drawStartScreen(ctx, t, { channel: scene.channel.name, prompt: card.prompt || 'CLICK TO TUNE IN', recorded: !!scene.recorded });
+      case 'hold':
+        // pre-rendered playout: the last frame of the programme before, held under the next one's stinger, so a join
+        // between two files looks as a cut between two programmes does on air (tools/playout/render.mjs)
+        if (scene.holdImage?.complete && scene.holdImage.naturalWidth) return ctx.drawImage(scene.holdImage, 0, 0, W, H);
+        return cards.drawIdentCard(ctx, t, dt);
       case 'standby':
         return cards.drawStandby(ctx, t, { channel: scene.channel.name, message: card.message || 'PREPARING THE NEXT PROGRAMME' });
       case 'open':
@@ -176,6 +181,7 @@ export class Renderer {
           date: longDate().toUpperCase(),
           channel: scene.channel.name,
           replay: !!scene.replay,
+          recorded: !!scene.recorded,
         });
       case 'title':
         return cards.drawTitleCard(ctx, t, dt, { channel: program?.title || scene.channel.name, subtitle: program?.tagline || scene.channel.slogan, date: longDate().toUpperCase() });
@@ -362,11 +368,24 @@ export class Renderer {
     this.guard.shot(this, t, scene); // drawShot, isolated: overlays and stinger always draw
     // PAY ATTENTION's scores strip over the studio (the half-time scores and the banter after them)
     if (scene.quizStrip && (scene.shot === 'wide' || scene.shot === 'close')) drawQuizStrip(this.ctx, t, scene.quizStrip);
+    // the twin picture (pre-rendered playout's ?twin=1): the same shot under the clip graphics, for the publishing desk
+    const tw = this.twin;
+    if (tw) tw.ctx.drawImage(this.canvas, 0, 0);
     this.drawOverlays(t, scene);
+    if (tw) {
+      try {
+        tw.graphics.draw(tw.ctx, t, scene);
+      } catch {
+        /* the twin is a by-product: the air picture never waits on it */
+      }
+    }
     if (scene.stinger) {
       const p = (t - scene.stinger.start) / cards.STINGER_DURATION;
       if (p >= 1) scene.stinger = null;
-      else if (p > 0) cards.drawStinger(this.ctx, t, p, { channel: scene.channel.name });
+      else if (p > 0) {
+        cards.drawStinger(this.ctx, t, p, { channel: scene.channel.name });
+        if (tw) cards.drawStinger(tw.ctx, t, p, { channel: scene.channel.name });
+      }
     }
   }
 }

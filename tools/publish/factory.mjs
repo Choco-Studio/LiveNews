@@ -7,6 +7,12 @@
 //   node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6]
 //        [--moments <id,id>] [--all] [--queue data/publish] [--masters <dir>] [--keep-masters] [--parallel]
 //        [--pictures <dir>]
+//   node tools/publish/factory.mjs --from-playout data/playout/masters/<slot> --out <dir>
+//
+// --from-playout: a programme the pre-rendered playout already rendered (docs/publishing/playout.md §6): its episode as
+// aired, its horizontal clip-mode master and its report, made from the very frames that aired; the horizontal clips are
+// cut from that master and nothing is recorded again (the vertical picture is its own composition: recorded here).
+// When done the folder gets factory.json, and the playout's disk policy may let the master go.
 //
 // --pictures: a folder with the episode's pictures (<storyId>.jpg|png|webp), so the clips show them as they aired, with
 // their credits; without it the stories show their maps and boards.
@@ -38,7 +44,10 @@ const opt = (name, def = null) => {
   return i >= 0 && args[i + 1] !== undefined && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const flag = (name) => args.includes(`--${name}`);
-const epFile = opt('episode');
+const fromPlayout = opt('from-playout') ? path.resolve(opt('from-playout')) : null;
+// the channel airs pre-rendered (a playout master, or PLAYOUT=1 / CHANNEL_AIR=recorded): no "watch live" anywhere
+const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT || '') || /^recorded$/i.test(process.env.CHANNEL_AIR || '');
+const epFile = fromPlayout ? path.join(fromPlayout, 'episode.json') : opt('episode');
 const out = path.resolve(opt('out', ''));
 if (!epFile || !opt('out')) {
   console.error('usage: node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6] [--all]');
@@ -47,7 +56,7 @@ if (!epFile || !opt('out')) {
 const formats = String(opt('formats', 'vertical,horizontal')).split(',').filter((f) => ['vertical', 'horizontal'].includes(f));
 const maxClips = Number(opt('max', 6));
 const wanted = opt('moments') ? new Set(opt('moments').split(',')) : null;
-const mastersDir = path.resolve(opt('masters', path.join(out, 'masters')));
+const mastersDir = fromPlayout || path.resolve(opt('masters', path.join(out, 'masters')));
 const queueDir = path.resolve(opt('queue', path.join(root, 'data', 'publish')));
 const tmpDir = path.join(out, 'tmp');
 fs.mkdirSync(out, { recursive: true });
@@ -91,7 +100,15 @@ function recordSeconds(ep) {
 const pb = createPlaybackServer({ root, pictureDir: opt('pictures') ? path.resolve(opt('pictures')) : null });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
-const seconds = Number(opt('seconds', recordSeconds(episode)));
+// (a playout master is exactly the programme as it aired: its own length, from its report)
+const playoutSeconds = (() => {
+  try {
+    return fromPlayout ? Number(JSON.parse(fs.readFileSync(path.join(fromPlayout, `${prog}-horizontal.report.json`), 'utf8')).seconds) || null : null;
+  } catch {
+    return null;
+  }
+})();
+const seconds = Number(opt('seconds', playoutSeconds || recordSeconds(episode)));
 const masters = {};
 async function recordMaster(fmt) {
   const file = path.join(mastersDir, `${prog}-${fmt}.mkv`);
@@ -197,7 +214,7 @@ async function endCard(fmt) {
   if (endcards[fmt]) return endcards[fmt];
   const f = path.join(cardsDir, `endcard-${prog}-${fmt}.mkv`);
   if (!fs.existsSync(f)) {
-    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1`;
+    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1${recorded ? '&live=0' : ''}`;
     await run('node', ['tools/record.mjs', '--url', url, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', f], { env: { TMPDIR: tmpDir }, quiet: true });
   }
   endcards[fmt] = f;
@@ -287,7 +304,7 @@ for (const m of chosen) {
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
       const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, labelFrames, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
-        const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null });
+        const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded });
         meta.texts[p] = t;
         const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, storyIds: m.storyIds, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.clipGetStory(m.storyIds, sourcesOf) });
         meta.compliance[p] = { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub };
@@ -345,7 +362,9 @@ const summary = {
   clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
 };
 fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 1));
-if (!flag('keep-masters') && !opt('masters')) for (const m of Object.values(masters)) fs.rmSync(m.file, { force: true });
+if (!flag('keep-masters') && !opt('masters') && !fromPlayout) for (const m of Object.values(masters)) fs.rmSync(m.file, { force: true });
+// the playout's master folder: cut (its disk policy keeps it an hour more, then lets it go)
+if (fromPlayout) fs.writeFileSync(path.join(fromPlayout, 'factory.json'), JSON.stringify({ at: new Date().toISOString(), out, clips: made.length, failed: failed.length, formats }, null, 1));
 fs.rmSync(tmpDir, { recursive: true, force: true });
 say(`${made.length} clips -> ${clipsDir}${failed.length ? ` (${failed.length} FAILED: see summary.json)` : ''}`);
 if (failed.length) process.exitCode = 2;

@@ -55,8 +55,14 @@ export function localTime(t, timeZone) {
  * extended with more ads, so the channel never goes to a blank screen.
  */
 export class Station {
-  constructor({ config, newsDesk, producer, chain, channel = () => loadChannel(), log = console }) {
+  constructor({ config, newsDesk, producer, chain, channel = () => loadChannel(), log = console, gate = null, onHeld = null }) {
     this.config = config;
+    // pre-rendered playout (docs/publishing/playout.md): every episode passes the check before air when it is made
+    // (`gate(episode)` -> { ok, violations }); one that fails is held, never queued, and the station makes the next
+    this.gate = typeof gate === 'function' ? gate : null;
+    this.onHeld = typeof onHeld === 'function' ? onHeld : null;
+    this.held = []; // the last episodes the gate held: { id, programId, title, at, violations }
+    this.playout = config?.playout === true;
     this.news = newsDesk;
     this.producer = producer;
     this.chain = chain;
@@ -348,6 +354,29 @@ export class Station {
           misses++;
           continue;
         }
+        // the check before air (playout): a held episode never reaches the queue; the rotation has moved on, so the
+        // next programme is made in its place (its stories stay told: they failed the rules, they do not come back)
+        if (this.gate) {
+          let verdict;
+          try {
+            verdict = this.gate(episode);
+          } catch (err) {
+            verdict = { ok: false, violations: [{ rule: 'gate-error', message: String(err?.message || err) }] };
+          }
+          if (!verdict?.ok) {
+            const h = { id: episode.id, programId, title: episode.program?.title || programId, at: this.now(), violations: (verdict?.violations || []).map((v) => ({ rule: v.rule, message: v.message })) };
+            this.held.push(h);
+            if (this.held.length > 50) this.held.shift();
+            this.log.warn?.(`[gate] ${h.title} ${episode.id} held: ${h.violations.map((v) => v.rule).join(', ')}`);
+            try {
+              this.onHeld?.(episode, verdict);
+            } catch {
+              /* the record is a convenience */
+            }
+            misses++;
+            continue;
+          }
+        }
         misses = 0;
         this.lastError = null;
         this.lastMade = programId;
@@ -492,8 +521,26 @@ export class Station {
     return item;
   }
 
+  /**
+   * Playout (the renderer asks, not a viewer): the next item once an episode is ready, so a break always promotes a
+   * finished programme and production time never airs as extra adverts. Waits (real time) up to `timeoutMs`, then
+   * goes on as the live channel would (filler ads, a replay). A client behind in the history gets it at once.
+   */
+  async nextReady(afterId, { timeoutMs = 15 * 60_000, poll = 500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+    const idx = this.history.findIndex((h) => h.id === afterId);
+    if (idx >= 0 && idx < this.history.length - 1) return this.history[idx + 1];
+    // (real time: the air clock stands still, near enough, while the renderer waits for a programme)
+    const real = typeof globalThis.__airClock?.realNow === 'function' ? globalThis.__airClock.realNow : () => Date.now();
+    const realUntil = real() + timeoutMs;
+    while (!this.queue.length && real() < realUntil) {
+      if (!this.producing) this.fill().catch(() => {});
+      await sleep(poll);
+    }
+    return this.next(afterId);
+  }
+
   publicChannel() {
-    return publicChannel(this.channel());
+    return { ...publicChannel(this.channel()), ...(this.playout ? { airMode: 'recorded' } : {}) };
   }
 
   status() {
@@ -503,6 +550,7 @@ export class Station {
       aired: this.history.length,
       airedTotal: this.airedTotal || 0,
       lastError: this.lastError ? publicError(this.lastError) : null,
+      ...(this.gate ? { held: this.held.length } : {}),
       stories: this.news.stories.size,
       uncovered: this.news.uncovered().length,
       feeds: publicFeedStatus(this.news.feedStatus),

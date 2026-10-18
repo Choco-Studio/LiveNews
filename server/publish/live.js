@@ -38,16 +38,19 @@ export const LIVE_POLICY = Object.freeze({
 
 const RATE = /(\d+(?:\.\d+)?)\s*KB\/s from the page/;
 
-/** The live title for the programme on air (≤ 100 characters). */
-export function liveTitle(now, { channel = 'GLOBIT 24' } = {}) {
+/**
+ * The live title for the programme on air (≤ 100 characters). `recorded` (pre-rendered playout, docs/publishing/
+ * playout.md §5): the programmes were made ahead and air from files, so the title never says LIVE.
+ */
+export function liveTitle(now, { channel = 'GLOBIT 24', recorded = false } = {}) {
   const prog = now?.title ? String(now.title).toUpperCase() : null;
-  const base = `${channel} LIVE: pixel-art world news, 24 hours a day`;
-  const t = prog ? `${channel} LIVE · Now: ${prog} · pixel-art news 24/7` : base;
+  const base = recorded ? `${channel}: pixel-art world news, 24 hours a day` : `${channel} LIVE: pixel-art world news, 24 hours a day`;
+  const t = prog ? (recorded ? `${channel} · Now: ${prog} · pixel-art news 24/7` : `${channel} LIVE · Now: ${prog} · pixel-art news 24/7`) : base;
   return t.length <= 100 ? t : base.slice(0, 100);
 }
 
 /** The live description: what is on, what comes next, how the channel is made, where the facts come from. */
-export function liveDescription(schedule, { disclosure = [], links = [] } = {}) {
+export function liveDescription(schedule, { disclosure = [], links = [], recorded = false } = {}) {
   const now = schedule?.now?.kind === 'episode' ? schedule.now : null;
   const next = (schedule?.upcoming || []).map((p) => p.title).filter(Boolean).slice(0, 3);
   const lines = [];
@@ -55,6 +58,8 @@ export function liveDescription(schedule, { disclosure = [], links = [] } = {}) 
   if (next.length) lines.push(`Coming up: ${next.join(', ')}.`);
   lines.push('');
   lines.push(...(disclosure.length ? disclosure : ['The presenters are AI-generated characters with synthetic voices. Every story is written from reporting by credited news outlets, named on screen and in each programme.']));
+  // pre-rendered playout: say how it airs (each programme is made and checked about an hour before it goes out)
+  if (recorded) lines.push('Each programme is produced and checked ahead of time and aired from a recording, about an hour after it is made.');
   if (links.length) lines.push('', ...links);
   return lines.join('\n').slice(0, 4900);
 }
@@ -67,6 +72,7 @@ export class LiveSupervisor {
     outFile = null, // a test run's file: its growth is part of health
     youtube = null, // a YouTubeAdapter (dry run unless live)
     live = false, // every live switch on (publisher.js liveBlockers): titles really update
+    recorded = false, // pre-rendered playout: the titles never say LIVE (docs/publishing/playout.md §5)
     videoId = null,
     disclosure = [],
     policy = {},
@@ -80,7 +86,7 @@ export class LiveSupervisor {
     nodeBin = process.execPath,
     cwd = process.cwd(),
   } = {}) {
-    Object.assign(this, { streamArgs, channelUrl: channelUrl.replace(/\/$/, ''), statusFile, outFile, youtube, live, videoId, disclosure, spawn, fetchImpl, now, setTimer, clearTimer, log, outbox, nodeBin, cwd });
+    Object.assign(this, { streamArgs, channelUrl: channelUrl.replace(/\/$/, ''), statusFile, outFile, youtube, live, recorded, videoId, disclosure, spawn, fetchImpl, now, setTimer, clearTimer, log, outbox, nodeBin, cwd });
     this.policy = { ...LIVE_POLICY, ...policy };
     this.child = null;
     this.state = 'idle';
@@ -350,7 +356,7 @@ export class LiveSupervisor {
     if (this.titleAt && t - this.titleAt < this.policy.titleEvery * 1000) return null; // (the next change will carry it)
     if (this.titleCount >= this.policy.titlesPerDay) return null;
     this.onAir = now;
-    const meta = { title: liveTitle(now), description: liveDescription(sched, { disclosure: this.disclosure }) };
+    const meta = { title: liveTitle(now, { recorded: this.recorded }), description: liveDescription(sched, { disclosure: this.disclosure, recorded: this.recorded }) };
     this.title = meta.title;
     this.titleAt = t;
     this.titleCount++;

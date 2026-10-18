@@ -139,8 +139,11 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, log = console, gate = null }) {
     this.config = config;
+    // pre-rendered playout (docs/publishing/playout.md §3): the check before air on the words, before the voices are
+    // made (an episode the station will hold costs no voice time); `gate(episode)` -> { ok, violations }
+    this.gate = typeof gate === 'function' ? gate : null;
     // the rights-aware picture desk (server/picturedesk.js): every picture on air is one the channel may publish, with
     // its rights record; without it (tests, older callers) the news desk's own pictures air as before
     this.pictureDesk = pictureDesk;
@@ -208,9 +211,24 @@ export class Producer {
       { name: 'assets', run: (ctx) => this.assets(ctx) },
       // Footage of each correspondent link's place (FILE clips the client pixelates); never fails the episode.
       { name: 'footage', run: (ctx) => this.footage(ctx), enabled: (ctx) => !!this.footageDesk?.enabled && !!ctx.episode?.segments?.some((s) => s.type === 'cross') },
+      // Playout: the check before air on the finished words (the station holds an episode that fails it: no voices for it)
+      { name: 'gate', run: (ctx) => this.pregate(ctx), enabled: (ctx) => !!this.gate && !!ctx.episode?.segments },
       // Presenter voices synthesised ahead of air; never fails the episode (late or missing clips air with browser voices).
-      { name: 'voice', run: (ctx) => this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message })), enabled: () => !!this.voice?.enabled },
+      { name: 'voice', run: (ctx) => this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message })), enabled: (ctx) => !!this.voice?.enabled && !ctx.held },
     ];
+  }
+
+  /** The check before air on the words (playout): a failing episode is marked held and gets no voices. */
+  pregate(ctx) {
+    let v;
+    try {
+      v = this.gate({ kind: 'episode', program: { id: ctx.program.id, title: ctx.program.title }, cast: ctx.cast, ...ctx.episode });
+    } catch (err) {
+      v = { ok: false, violations: [{ rule: 'gate-error', message: String(err?.message || err) }] };
+    }
+    if (v?.ok) return { ok: true };
+    ctx.held = v;
+    return { ok: false, held: (v?.violations || []).map((x) => x.rule).filter((r, i, a) => a.indexOf(r) === i) };
   }
 
   /**

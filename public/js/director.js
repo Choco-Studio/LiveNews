@@ -7,6 +7,7 @@ import { prepareLocator } from './graphics/locator.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION, TEASE_TILE, boardTitle } from './scenes/cards.js';
 import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
+import { endCardLine } from './airmode.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
@@ -995,7 +996,7 @@ export class Director {
           await sleep(pace(s).holds.signoff * 1000);
           await this.stinger(() => {
             s.weather = null;
-            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
+            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(this.channel.name, this.channel.airMode) } });
           });
           await sleep(pace(s).holds.endcard * 1000);
           continue;
@@ -1032,7 +1033,7 @@ export class Director {
           if (this.music.signoffAllowed?.(s.program?.id) !== false) this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() + 150 });
           await sleep(pace(s).holds.signoff * 1000); // the sign-off's hold on the wide (world-now.md 1.5 s)
           await this.stinger(() => {
-            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
+            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: endCardLine(this.channel.name, this.channel.airMode) } });
           });
           await sleep(pace(s).holds.endcard * 1000);
           continue;

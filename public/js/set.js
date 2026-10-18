@@ -836,12 +836,14 @@ function titleLine(c, text, x, y, color) {
   else tiny(c, text, x, y + 1, color);
 }
 
-function livePill(c, x, y, t) {
-  const lw = measureText('LIVE') + 13;
+function livePill(c, x, y, t, recorded = false) {
+  // pre-rendered playout never says LIVE (airmode.js): the channel's 24/7 mark on the same plate, no blinking pip
+  const word = recorded ? '24/7' : 'LIVE';
+  const lw = measureText(word) + (recorded ? 7 : 13);
   fill(c, x, y, lw, 11, P.red);
   fill(c, x, y + 10, lw, 1, P.darkRed);
-  fill(c, x + 3, y + 4, 3, 3, Math.floor(t * 1.5) % 2 ? P.white : P.pink);
-  drawText(c, 'LIVE', x + 9, y + 2, { color: P.white });
+  if (!recorded) fill(c, x + 3, y + 4, 3, 3, Math.floor(t * 1.5) % 2 ? P.white : P.pink);
+  drawText(c, word, x + (recorded ? 4 : 9), y + 2, { color: P.white });
 }
 
 const BINARY = (() => {
@@ -939,8 +941,8 @@ function wallIdle(c, scene, t, th) {
   titleLine(c, l1, tx, ty, P.white);
   titleLine(c, l2, tx, ty + 10, hasProgram ? th.text : P.red);
   if (glitch) c.drawImage(wallState.cv, tx, ty + 2, 50, 2, tx + 2, ty + 2, 50, 2);
-  if (th.idle === 'chart' && hasProgram) livePill(c, WALL.w - measureText('LIVE') - 18, 6, t);
-  else livePill(c, tx, ty + 22, t);
+  if (th.idle === 'chart' && hasProgram) livePill(c, WALL.w - measureText(scene.recorded ? '24/7' : 'LIVE') - (scene.recorded ? 12 : 18), 6, t, !!scene.recorded);
+  else livePill(c, tx, ty + 22, t, !!scene.recorded);
 }
 
 function wallRundown(c, scene, t, th, solo) {

@@ -84,10 +84,57 @@ node tools/publish/live.mjs --url "http://127.0.0.1:8080/?autostart=1&voice=tts"
   frames, stalls and restarts by the supervisor, and whether the voices stay ahead of what airs.
 - **Watch by eye:** pull three short pieces (start, middle, end) and check picture, sound and lip timing.
 
+### 4b. The 24-hour test of pre-rendered playout (files only)
+
+The owner's decision of 17 Oct: everything made about an hour ahead and aired from files (`docs/publishing/playout.md`).
+This test measures whether the server keeps the buffer full. Stop the live test first (one station per machine).
+
+1. **Before it starts:** `npm test` passes; Kokoro speaks (§3); at least 10 GB free (`df -h ~`). Make the folder:
+   `mkdir -p data/test24/air`.
+2. **Run it** under systemd or tmux (one command starts the station, the renderer and the playout, and restarts any
+   of them that stops):
+   ```
+   PORT=8080 VOICE_ENGINE=kokoro VOICE_PYTHON=$HOME/globit/venv/bin/python \
+   PLAYOUT_VERBATIM=warn PLAYOUT_REVIEW=0 PLAYOUT_KEEP_AIRED_H=2 \
+     node tools/playout/run.mjs --out data/test24/air/air-%03d.ts --segment 3600 --buffer 60 --size 1280x720 --bitrate 3000k
+   ```
+   - `PLAYOUT_VERBATIM=warn` and `PLAYOUT_REVIEW=0` only for this test: with the strict rules almost every news
+     programme is held today (the writer copies, playout.md §3), and the test would measure filler. Every verdict
+     the strict rules would give is still logged (`strict-would-hold` in `data/playout/events.jsonl`); count them for
+     the report. Never set them on the real channel without the owner's word.
+   - Nothing leaves the machine: no `--rtmp`, `PUBLISH_LIVE` unset.
+3. **Measure every minute** into `data/test24/`:
+   `node tools/playout/measure.mjs --pid <the run.mjs PID> --dir data/playout --out data/test24/playout.csv --every 60`
+   (CPU in cores and memory per part: station, voices, renderer, browser, encoders, playout; load, memory, swap; the
+   buffer in minutes; what is on air; filler seconds, underruns, dropped files).
+4. **What to watch:**
+   - **The buffer** (`data/playout/render-status.json`, `bufferMinutes`): after the first hour it should reach the
+     target (60) and stay near it; the renderer then waits (`waiting (buffer full)`). If it never grows, the machine
+     renders and voices slower than real time: note the render speed (`speed`) and the CPU per air second the
+     renderer logs for every item (`cpuPerAirSecond` in `events.jsonl`, type `rendered`).
+   - **Underruns and gaps** (`events.jsonl`, types `underrun`, `filler`, `gap`, `late`, `drop`): each is filler on
+     air. A cold start airs about 15 minutes of filler (`--start-lead 900`), then none should follow.
+   - **Held programmes** (`held`, and the approval page's tab "Retenidos del aire"): the reasons.
+   - **Memory:** the renderer's browser holds a programme's sound while it renders (about 400 MB for WORLD NOW);
+     with Kokoro and the station, about 2.5 GB in all. Swap use above a few hundred MB is worth reporting.
+   - **Disk:** `du -sh data/playout data/test24` every few hours. The playout keeps the buffer, two hours of aired
+     files and the masters for 48 hours (playout.md §8). The test's recording (`data/test24/air`) is about 1.4 GB an
+     hour: keep the first and last hour and one every three hours, delete the rest as you go.
+5. **Check by eye** (three times: start, middle, end): `node tools/playout/joins.mjs --dir data/playout --out
+   data/test24/joins` writes a strip of frames around each recent join and the sound's level across it (look for a
+   frame that does not belong, black, or a hole in the level); open one hour file and check the on-screen clock
+   against the file's air time, the top row (24/7, never LIVE), picture and lip sync.
+6. **Afterwards:** stop `run.mjs` (Ctrl+C or `systemctl stop`); `node tools/playout/report.mjs --dir data/playout --csv
+   data/test24/playout.csv --log <run.mjs's log>` sums it up. Report as §5 says, plus: the buffer over the day,
+   underruns (how many, how long), render speed and CPU per air second, peak memory and swap, how many programmes the
+   strict rules would have held and why.
+
 ## 5. Report to the owner (in Spanish, plainly)
 
 - Did it hold for 24 hours? CPU, memory and swap at their peaks; any restart or stall, and why.
 - 720p or 1080p on this machine, and what that means for the monthly traffic.
 - If it does not hold: the cheapest real fix (voices generated further ahead, a lower encoder preset, or a bigger
   plan: 4 cores and 8 GB). No workaround that lowers what viewers see without saying so.
+- For the pre-rendered playout test (§4b): did the buffer reach an hour and stay there; how much filler aired and
+  when; what the strict rules would have kept off air.
 - Then add the result to `docs/roadmap/LISTA.md` (section H), commit (full suite first) and push.

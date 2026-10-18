@@ -104,7 +104,7 @@ export function worthUploading(episode, timeline) {
  * Everything YouTube needs for a whole programme. `stories`: the archive's stories by id (for the outlets' article
  * links); `airedAt`: when it aired (ms); `timeZone`: the channel's (London).
  */
-export function uploadMeta(episode, { timeline = null, stories = new Map(), airedAt = null, timeZone = 'Europe/London', url = null } = {}) {
+export function uploadMeta(episode, { timeline = null, stories = new Map(), airedAt = null, timeZone = 'Europe/London', url = null, recorded = false } = {}) {
   const prog = episode.program?.title || 'GLOBIT 24';
   const when = airedAt ? new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short' }).format(new Date(airedAt)) : '';
   // the stories in the channel's own words (wording.js): never an outlet's headline as ours
@@ -138,7 +138,8 @@ export function uploadMeta(episode, { timeline = null, stories = new Map(), aire
   }
   const summary = [
     episode.quiz ? 'Two GLOBIT 24 presenters play a quiz on the stories the channel told this week.' : episode.weather ? 'The world\'s weather, zone by zone, from the forecast data.' : heads.length ? `In this edition: ${heads.slice(0, 5).join('; ')}.` : '',
-    url ? `Watch GLOBIT 24 live: ${url}` : '',
+    // (pre-rendered playout, docs/publishing/playout.md §5: the channel is not live, the invitation says so)
+    url ? (recorded ? `Watch GLOBIT 24, news 24 hours a day: ${url}` : `Watch GLOBIT 24 live: ${url}`) : '',
   ].filter(Boolean).join('\n');
   const credits = creditsFor({ kind: 'episode', episode });
   const lines = [describe({ kind: 'episode', episode }, { credits: [], summary })];

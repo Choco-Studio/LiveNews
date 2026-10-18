@@ -1,12 +1,13 @@
 // Top row of the graphics package: the channel bug (top-left, 13 px high,
 // 48 px wide: the doc's limit), the LIVE / REPLAY tag with its static red
-// square, the programme name for a few seconds after the open, and the London
+// square (pre-rendered playout: the channel's 24/7 mark, never LIVE: airmode.js), the programme name for a few seconds after the open, and the London
 // clock (top-right, HH:MM, static colon). Everything wipes in when the
 // graphics come on and the bug's glint plays only then.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipStart, clipEnd } from './layout.js';
 import { FRAME, MARK_TIMING, markOpen, markWidth, drawMark } from './disclosure.js';
+import { onAirTag } from '../airmode.js';
 
 // The 11x11 brand globe (logo.js GLOBE_S) redrawn for 1x on air: at this size
 // two straight white seams read as crosshairs, so the seams are one meridian
@@ -108,6 +109,10 @@ function drawGlint(ctx, x0, y0, p) {
 const TAG_TEXT_X = 10;
 const LIVE_W = TAG_TEXT_X + measureText('LIVE', 1, 'micro') + 4;
 const REPLAY_W = TAG_TEXT_X + measureText('REPLAY', 1, 'micro') + 4;
+// the 24/7 mark (pre-rendered playout): no pip, the text from the plate's edge
+const MARK_TEXT_X = 4;
+const MARK_W = MARK_TEXT_X + measureText('24/7', 1, 'micro') + 4;
+const MARK_STYLE = Object.freeze({ color: P.silver, font: 'micro' });
 const CLOCK_LABEL = 'LONDON';
 const LIVE_STYLE = Object.freeze({ color: P.white, font: 'micro' });
 const REPLAY_STYLE = Object.freeze({ color: P.yellow, font: 'micro' });
@@ -121,7 +126,7 @@ const inkStyle = (color) => {
 };
 
 /**
- * Draw the top row. `v` = { onAt, replay, program: {title, color} | null,
+ * Draw the top row. `v` = { onAt, replay, recorded, program: {title, color} | null,
  * programIn, programOut, clock: 'HH:MM', mark?, markFrom?, noun? } where onAt is when the graphics came
  * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times; the AI mark
  * (graphics/disclosure.js) is on unless `mark === false`, first opening at `markFrom` with the programme's `noun`.
@@ -173,16 +178,21 @@ export function drawTopRow(ctx, t, v) {
   if (FRAME.active) return;
 
   // LIVE (black plate, static red square) or REPLAY (black plate, yellow text and
-  // square: yellow on black, so it never merges with a yellow programme tag)
-  const tagW = v.replay ? REPLAY_W : LIVE_W;
+  // square: yellow on black, so it never merges with a yellow programme tag); a programme made ahead and aired from
+  // a file (`recorded`) never says LIVE: the channel's 24/7 mark, silver on black, no pip
+  const mark247 = !v.replay && !onAirTag(v.recorded ? 'recorded' : 'live').pip;
+  const tagW = v.replay ? REPLAY_W : mark247 ? MARK_W : LIVE_W;
   const tagP = easeOut((since - 0.08) / 0.3);
   const shown = Math.round(tagW * tagP);
   if (shown > 0) {
     clipStart(ctx, x, y, shown, h);
     try {
       rect(ctx, x, y, tagW, h, P.black);
-      rect(ctx, x + 4, y + 5, 3, 3, v.replay ? P.yellow : P.red);
-      drawText(ctx, v.replay ? 'REPLAY' : 'LIVE', x + TAG_TEXT_X, y + 4, v.replay ? REPLAY_STYLE : LIVE_STYLE);
+      if (mark247) drawText(ctx, '24/7', x + MARK_TEXT_X, y + 4, MARK_STYLE);
+      else {
+        rect(ctx, x + 4, y + 5, 3, 3, v.replay ? P.yellow : P.red);
+        drawText(ctx, v.replay ? 'REPLAY' : 'LIVE', x + TAG_TEXT_X, y + 4, v.replay ? REPLAY_STYLE : LIVE_STYLE);
+      }
     } finally {
       clipEnd(ctx);
     }

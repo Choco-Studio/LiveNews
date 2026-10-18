@@ -15,6 +15,7 @@
 // y >= 136 free for captions, strap and ticker (the montage owns the bottom:
 // its captions move to the top, y 46-72). Static layers are baked once.
 import { P } from '../palette.js';
+import { startTag } from '../airmode.js';
 import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import {
@@ -1648,7 +1649,7 @@ function testCardLayer(channel) {
 }
 
 const STANDBY_STYLE = { white2C: { color: P.white, scale: 2, align: 'center' }, silverC: { color: P.silver, align: 'center' } };
-export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '' } = {}) {
+export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '', clock: withClock = true, title = "WE'LL BE RIGHT BACK" } = {}) {
   ctx.drawImage(testCardLayer(String(channel ?? 'GLOBIT 24')), 0, 0);
   const { cx } = TC;
   const bx = 64;
@@ -1663,8 +1664,10 @@ export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '' } = {}
   ctx.fillRect(bx + 8, by + 10, 4, 4); // a steady standby lamp
   ctx.fillStyle = P.darkRed;
   ctx.fillRect(bx, by + bh, bw, 1);
-  drawText(ctx, "WE'LL BE RIGHT BACK", cx, by + 9, STANDBY_STYLE.white2C);
+  drawText(ctx, title, cx, by + 9, STANDBY_STYLE.white2C);
   for (let i = 0; i < lines.length; i++) drawText(ctx, lines[i], cx, by + 30 + i * 11, STANDBY_STYLE.silverC);
+  // (the playout's filler card, tools/playout/render.mjs, has no clock: it is looped for as long as it is needed)
+  if (!withClock) return;
   // the studio clock is the only thing that moves
   const clk = clockIn();
   const clock = `${clk.time}:${clk.sec}`;
@@ -1681,13 +1684,13 @@ export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '' } = {}
 // (the one moving thing), a steady prompt and the studio date and time.
 
 const START_FIELD = lazyBackdrop({ key: 'start', colors: [P.black, P.ink], cx: 300, cy: 96, reach: 220 });
-export function drawStartScreen(ctx, t, { channel = 'GLOBIT 24', prompt = 'CLICK TO TUNE IN' } = {}) {
+export function drawStartScreen(ctx, t, { channel = 'GLOBIT 24', prompt = 'CLICK TO TUNE IN', recorded = false } = {}) {
   const ch = String(channel ?? '');
   ctx.drawImage(START_FIELD(), 0, 0);
   drawEarth(ctx, 300, 96, 58, -10 + ((t * 4) % 360));
   const LX = 20;
-  // live tag with a steady red square
-  const live = 'LIVE • 24 HOURS';
+  // live tag with a steady red square (pre-rendered playout: never LIVE, airmode.js)
+  const live = startTag(recorded ? 'recorded' : 'live');
   const lw = textW(live) + 18;
   plate(ctx, LX, 44, lw, 11, P.black);
   ctx.fillStyle = P.red;
