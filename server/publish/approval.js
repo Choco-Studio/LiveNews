@@ -80,7 +80,46 @@ export const RULE_ES = Object.freeze({
   'timeline-missing': 'Falta el registro de tiempos del clip: no se puede comprobar qué sale en pantalla.',
   'provenance-missing': 'Falta la información de procedencia de la recreación.',
   'mark-out-of-frame': 'La marca de IA no se ve entera en este formato.',
+  'false-live': 'Dice «en directo» y es un programa grabado antes: así no se emite.',
+  'render-overrun': 'El programa no terminó cuando debía: no se emite sin revisarlo.',
+  'gate-error': 'El control no pudo comprobarlo, y nada sale sin comprobar.',
 });
+
+/**
+ * The programmes the pre-rendered playout held from air (docs/publishing/playout.md §3: data/playout/held), newest first,
+ * with the reasons in the owner's words; and what the renderer and the playout say about the buffer. Read only: a held
+ * programme never airs, nothing on this page can put it on air.
+ */
+export function playoutView(dir, { max = 40, tz = 'Europe/London' } = {}) {
+  if (!dir) return null;
+  const read = (f) => {
+    try {
+      return JSON.parse(fs.readFileSync(f, 'utf8'));
+    } catch {
+      return null;
+    }
+  };
+  let names = [];
+  try {
+    names = fs.readdirSync(path.join(dir, 'held')).filter((n) => n.endsWith('.json')).sort().reverse().slice(0, max);
+  } catch {
+    return null;
+  }
+  const held = names.map((n) => read(path.join(dir, 'held', n))).filter(Boolean).map((h) => {
+    const lp = Number.isFinite(h.airAt) ? localParts(h.airAt, tz) : null;
+    return {
+      id: h.id,
+      title: h.title || h.programId || '',
+      stage: h.stage === 'air' ? 'air' : 'production',
+      airAt: h.airAt || null,
+      time: lp ? `${lp.day} ${String(lp.h).padStart(2, '0')}:${String(lp.m).padStart(2, '0')}` : null,
+      violations: (h.violations || []).slice(0, 12).map((v) => ({ rule: v.rule, message: String(v.message || '').slice(0, 300), es: RULE_ES[v.rule] || null })),
+    };
+  });
+  const render = read(path.join(dir, 'render-status.json'));
+  const air = read(path.join(dir, 'air-status.json'));
+  return { held, buffer: render ? { minutes: render.bufferMinutes, target: render.targetMinutes, speed: render.speed } : null, onAir: air?.onAir?.title || null };
+}
 
 /** TikTok's privacy levels (creator_info's privacy_level_options name them; the owner picks one, no default). */
 export const TIKTOK_PRIVACY = Object.freeze(['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'SELF_ONLY']);
@@ -123,7 +162,7 @@ export function itemView(it, { tz = 'Europe/London', now = Date.now() } = {}) {
   };
 }
 
-export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now(), env = process.env, manualOpts = {} } = {}) {
+export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, log = () => {}, now = () => Date.now(), env = process.env, manualOpts = {}, playoutDir = null } = {}) {
   if (!queue) throw new Error('the approval page needs the queue');
   // hand publishing (the beta): the owner publishes every approved item himself (manual.js)
   const manual = isManual(env);
@@ -188,6 +227,7 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
       items,
       counts,
       usingStub: compliance.usingStub,
+      playout: playoutView(playoutDir, { tz: s.timezone || 'Europe/London' }),
       publishLive: !manual && process.env.PUBLISH_LIVE === '1',
       at: t,
     };
@@ -500,15 +540,22 @@ function render() {
   const tabs = $('tabs');
   const today = S.manual ? [el('button', { class: tab === 'today' ? 'on' : '', text: 'Para hoy (' + pick.size + ')', onclick: () => { tab = 'today'; render(); } })] : [];
   tabs.replaceChildren(...today, ...ORDER.filter((s) => S.counts[s] || s === 'pending').map((s) => el('button', { class: s === tab ? 'on' : '', text: STATUS[s] + ' (' + (S.counts[s] || 0) + ')', onclick: () => { tab = s; render(); } })));
-  const items = tab === 'today' ? S.items.filter((i) => pick.has(i.id)) : S.items.filter((i) => i.status === tab);
+  // the pre-rendered playout's held programmes (read only: nothing here puts them on air)
+  if (S.playout) tabs.append(el('button', { class: tab === 'air' ? 'on' : '', text: 'Retenidos del aire (' + S.playout.held.length + ')', onclick: () => { tab = 'air'; render(); } }));
   $('caps').hidden = tab !== 'today';
-  if (tab === 'today' && S.pick) {
-    const parts = [];
-    for (const [net, kinds] of Object.entries(S.pick.caps)) for (const [k, c] of Object.entries(kinds)) parts.push((NET[net] || net) + ' (' + KIND[k] + '): ' + c.done + ' de ' + c.cap + ' publicados');
-    $('caps').textContent = 'Hoy: ' + (parts.join(' · ') || 'nada esperando') + '. Lo demás sigue en «Por aprobar» para otro día.';
+  if (tab === 'air' && S.playout) {
+    $('empty').hidden = S.playout.held.length > 0;
+    $('grid').replaceChildren(airInfo(), ...S.playout.held.map(airCard));
+  } else {
+    const items = tab === 'today' ? S.items.filter((i) => pick.has(i.id)) : S.items.filter((i) => i.status === tab);
+    if (tab === 'today' && S.pick) {
+      const parts = [];
+      for (const [net, kinds] of Object.entries(S.pick.caps)) for (const [k, c] of Object.entries(kinds)) parts.push((NET[net] || net) + ' (' + KIND[k] + '): ' + c.done + ' de ' + c.cap + ' publicados');
+      $('caps').textContent = 'Hoy: ' + (parts.join(' · ') || 'nada esperando') + '. Lo demás sigue en «Por aprobar» para otro día.';
+    }
+    $('empty').hidden = items.length > 0;
+    $('grid').replaceChildren(...items.map(card));
   }
-  $('empty').hidden = items.length > 0;
-  $('grid').replaceChildren(...items.map(card));
   const modes = $('modes');
   modes.replaceChildren(...Object.entries(S.platforms).map(([k, p]) => {
     const sel = el('select', { 'data-platform': k });
@@ -521,6 +568,21 @@ function render() {
     return el('tr', {}, el('td', { text: p.label }), el('td', {}, sel));
   }));
   $('tz').value = S.settings.timezone;
+}
+// the pre-rendered playout: programmes held from air (never aired; nothing here puts them on air)
+function airInfo() {
+  const b = S.playout.buffer;
+  return el('div', { class: 'card' },
+    el('b', { text: 'Emisión pregrabada' }),
+    el('span', { class: 'dim', text: 'Cada programa se prepara y se comprueba con antelación. Lo que no pasa el control se queda aquí y no se emite nunca: en su lugar sale el programa siguiente.' }),
+    b ? el('span', { text: 'Preparado por adelantado: ' + b.minutes + ' de ' + b.target + ' minutos' }) : null,
+    S.playout.onAir ? el('span', { class: 'dim', text: 'En antena: ' + S.playout.onAir }) : null);
+}
+function airCard(h) {
+  return el('div', { class: 'card held' },
+    el('div', { class: 'row' }, el('span', { class: 'badge', text: h.title }), h.time ? el('span', { class: 'dim', text: 'iba a salir ' + h.time }) : null,
+      el('span', { class: 'dim', text: h.stage === 'air' ? '(retenido tras grabarlo)' : '(retenido al prepararlo)' })),
+    ...h.violations.map((v) => el('div', { class: 'comp bad' }, el('div', { text: v.es || v.rule }), el('details', {}, el('summary', { text: 'Mensaje del control' }), el('div', { text: v.message })))));
 }
 function counter(input, max) {
   const c = el('span', { class: 'count' });

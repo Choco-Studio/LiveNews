@@ -200,6 +200,11 @@ by hand to fake a page crash: the streamer exited with code 2, the supervisor st
 title went to the outbox, and both runs' files played (1920 × 1080 H.264 + AAC). Streaming to a server is refused
 unless `PUBLISH_LIVE=1`.
 
+Under pre-rendered playout (`playout.md`) the stream is `tools/playout/air.mjs`, not `tools/stream.mjs`: it uses the
+same supervisor class in `recorded` mode for the title and description (no LIVE: "GLOBIT 24 · Now: … · pixel-art news
+24/7"), with the same rate limits and dry-run rules, fed by what the playout has on air rather than by the station's
+schedule (which runs an hour ahead).
+
 ## 7. Files in `data/publish/`
 
 | File | What it is |

@@ -57,9 +57,10 @@ export function fitTitle(head, room) {
 
 /**
  * The texts of a clip for one network. `stories`: archive stories by id (their links); `presenters`: the channel's
- * (for the players' names); `channelUrl`: the live stream's page when there is one.
+ * (for the players' names); `channelUrl`: the live stream's page when there is one; `recorded`: the channel airs
+ * pre-rendered (docs/publishing/playout.md §5), so the invitation to watch it never says live.
  */
-export function clipTexts(moment, episode, { platform = 'youtube', stories = new Map(), presenters = {}, channelUrl = null } = {}) {
+export function clipTexts(moment, episode, { platform = 'youtube', stories = new Map(), presenters = {}, channelUrl = null, recorded = false } = {}) {
   const prog = moment.programme || episode.program?.title || 'GLOBIT 24';
   const grave = !!moment.grave;
   const hook = (moment.hook || []).join(' ');
@@ -119,7 +120,7 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
   const item = { kind: 'clip', episode, platforms: [platform] };
   const credits = creditsFor({ ...item, credits: (moment.credits || []) });
   const sourceLines = links.map((l) => `Source: ${l.label} — ${l.url}`);
-  const summary = [lead, ...sourceLines, channelUrl ? `GLOBIT 24 live, 24 hours a day: ${channelUrl}` : ''].filter(Boolean).join('\n');
+  const summary = [lead, ...sourceLines, channelUrl ? (recorded ? `GLOBIT 24, 24 hours a day: ${channelUrl}` : `GLOBIT 24 live, 24 hours a day: ${channelUrl}`) : ''].filter(Boolean).join('\n');
   const description = describe(item, { credits, summary });
   const hashtags = tags;
   let caption;

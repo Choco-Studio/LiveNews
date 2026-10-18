@@ -198,6 +198,18 @@ sola si se cae o se congela. Además pone en el título del directo el programa 
 
 Su estado (si emite, cuántas veces se ha reiniciado, el título puesto) se guarda en `data/publish/live-status.json`.
 
+**Emisión pregrabada (tu decisión del 17 de octubre).** El canal también puede preparar cada programa con una hora de
+antelación y emitir lo ya hecho: el ordenador trabaja con calma, los programas se comprueban antes de salir, y la imagen
+y el sonido van siempre sincronizados. Las noticias llegan con una hora de retraso. Como no es en directo, en pantalla
+y en el título del directo nunca pone «LIVE» (pone «24/7»). Lo que no pasa el control no se emite: lo verás en la página
+de aprobación, en la pestaña «Retenidos del aire». Si algún momento no hay nada preparado, sale una cortinilla
+(«BACK SHORTLY»), nunca negro. Se arranca con:
+
+    PORT=8080 node tools/playout/run.mjs --out data/prueba/air-%03d.ts --segment 3600
+
+(prueba en archivos; para emitir de verdad hace falta lo mismo que arriba: `PUBLISH_LIVE=1` y la clave). Los detalles,
+para quien te ayude: `docs/publishing/playout.md`.
+
 ## 9. Si algo va mal
 
 - **Un clip tiene un error** (una palabra mal en los subtítulos, un corte raro): recházalo. Dime qué clip era y qué

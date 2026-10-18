@@ -2,11 +2,13 @@
 // The approval page (server/publish/approval.js; the owner's guide: docs/publishing/setup.md §6, and for the beta,
 // published by hand, docs/publishing/beta.md).
 //
-//   node tools/publish/approve.mjs [--queue data/publish] [--media <dir>]... [--port 8740] [--manual]
+//   node tools/publish/approve.mjs [--queue data/publish] [--media <dir>]... [--port 8740] [--manual] [--playout data/playout]
 //
 // Then open http://127.0.0.1:8740/ in a browser on the same computer. It listens on this computer only. Ctrl+C stops it.
 // --manual (or PUBLISH_MODE=manual): hand publishing, the beta: everything waiting is re-checked first (recheck.js),
 // then the page offers the day's pick, the files to download and the texts to copy; nothing is ever sent.
+// --playout: the pre-rendered playout's folder (docs/publishing/playout.md §3): the programmes it held from air.
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,7 +38,9 @@ if (isManual()) {
   const pick = dailyPick(queue);
   console.log(`Para hoy: ${pick.ids.length} publicaciones (modo manual: publicas tú, el sistema no sube nada).`);
 }
-const server = createApprovalServer({ queue, mediaRoots: media, dataDir, log: (m) => console.log(m) });
+// (pre-rendered playout: the programmes it held from air, docs/publishing/playout.md §3; --playout <dir>)
+const playoutDir = path.resolve(opt('playout', path.join(root, 'data', 'playout')));
+const server = createApprovalServer({ queue, mediaRoots: media, dataDir, log: (m) => console.log(m), playoutDir: fs.existsSync(playoutDir) ? playoutDir : null });
 const port = await server.listen(Number(opt('port', 8740)));
 console.log(`Página de aprobación: http://127.0.0.1:${port}/  (cola: ${queue.dir})`);
 console.log('Solo se abre en este ordenador. Ctrl+C para cerrarla.');

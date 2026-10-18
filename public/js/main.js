@@ -2,6 +2,7 @@ import { AudioEngine } from './audio.js';
 import { Renderer, W, H } from './studio.js';
 import { Director } from './director.js';
 import { clipOptions, clipSizes, installClip } from './clip/index.js';
+import { isRecorded } from './airmode.js';
 
 const params = new URLSearchParams(location.search);
 // ?clip=1 / ?format=vertical: the publishing desk's recordings (clip/index.js); nothing changes on air without them
@@ -22,12 +23,32 @@ const renderer = new Renderer(source, audio, { v2, perf: params.get('perf') === 
 const channel = await fetch('/api/channel')
   .then((r) => r.json())
   .catch(() => ({ name: 'GLOBIT 24', slogan: '', presenters: {}, programs: {}, rotation: [] }));
-document.title = `${channel.name} · Live`;
+// pre-rendered playout (the station's PLAYOUT mode, docs/publishing/playout.md): nothing says LIVE, not even the tab
+const recorded = isRecorded(channel.airMode);
+document.title = `${channel.name} · ${recorded ? '24/7' : 'Live'}`;
 // ?beds=0: no live music beds (a recorder that renders its own beds passes it)
 const player = new Director({ audio, channel, v2, music: params.get('beds') !== '0' });
 const scene = player.scene;
 scene.subtitles = params.get('subs') !== '0';
+scene.recorded = recorded;
 const clip = clipOpts.on ? await installClip({ canvas, renderer, audio, channel, opts: clipOpts }) : null;
+// the playout renderer (tools/playout/render.mjs) hands over the last frame of the programme before, held under this
+// one's opening stinger, and may ask for the twin picture: the publishing desk's clip-mode master (clip/graphics.js)
+// drawn from the same frames on a second canvas, so the programme is never rendered twice
+if (typeof window.__playoutHold === 'string' && window.__playoutHold) {
+  const img = new Image();
+  img.src = window.__playoutHold;
+  scene.holdImage = img;
+  scene.shot = 'hold';
+}
+if (params.get('twin') === '1' && !clipOpts.on) {
+  const g = await import('./clip/graphics.js');
+  await (await import('./clip/mark.js')).markReady;
+  const tw = Object.assign(document.createElement('canvas'), { width: canvas.width, height: canvas.height, id: 'twin' });
+  renderer.twin = { canvas: tw, ctx: tw.getContext('2d'), graphics: new g.ClipGraphics({ audio }) };
+  renderer.twin.ctx.imageSmoothingEnabled = false;
+  window.__twin = tw;
+}
 
 // --- integer scaling so pixels stay square and sharp -----------------------
 function fit() {

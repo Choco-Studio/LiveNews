@@ -346,7 +346,7 @@ export function drawHopBit(ctx, dt, ex, ey, L, shoulder = 30, popAt = TL.pop) {
 // The on-air top row (bug, LIVE or REPLAY, London clock) from the graphics package, so the lock-up
 // ends on exactly the pixels the programme continues with. It comes on at 1.7 s so its single glint
 // is over by TL.still. Falls back to the logo's bug if the graphics module is unavailable.
-const TOP_V = { onAt: 1.7, replay: false, program: null, programIn: null, programOut: null, clock: '' };
+const TOP_V = { onAt: 1.7, replay: false, recorded: false, program: null, programIn: null, programOut: null, clock: '' };
 let BUG_W = 0;
 export function drawBug(ctx, dt, info = null) {
   if (info && info.bug === false) return;
@@ -354,6 +354,7 @@ export function drawBug(ctx, dt, info = null) {
     if (dt < TOP_V.onAt) return;
     TOP_V.clock = clockIn().time;
     TOP_V.replay = !!info?.replay;
+    TOP_V.recorded = !!info?.recorded; // pre-rendered playout: the 24/7 mark, never LIVE
     ctx.save();
     try {
       topRow.drawTopRow(ctx, dt, TOP_V);
@@ -426,14 +427,16 @@ export function normInfo(info) {
   const tagline = String(i.tagline || '');
   const pres = Array.isArray(i.presenters) ? i.presenters : [];
   const replay = !!i.replay;
+  const recorded = !!i.recorded;
   const bug = i.bug !== false;
-  if (LAST && LAST.title === title && LAST.tagline === tagline && LAST.replay === replay && LAST.bug === bug && samePresenters(LAST.presenters, pres)) return LAST;
+  if (LAST && LAST.title === title && LAST.tagline === tagline && LAST.replay === replay && LAST.recorded === recorded && LAST.bug === bug && samePresenters(LAST.presenters, pres)) return LAST;
   const presenters = pres.map((n) => String(n ?? ''));
   LAST = {
     title,
     tagline,
     presenters,
     replay,
+    recorded,
     bug,
     date: String(i.date || ''),
     channel: String(i.channel || 'GLOBIT 24'),

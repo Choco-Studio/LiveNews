@@ -117,9 +117,41 @@ newsDesk.archive = archive;
 // the picture desk ahead of air: stories decided in the background as they come in, the next programmes' first; each
 // episode reads the decisions that are ready (server/pictureahead.js)
 const pictureAhead = config.pictures.desk && config.pictures.ahead ? new PictureAhead({ desk: pictureDesk }) : null;
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, pictureAhead });
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, pictureAhead, gate: config.playout ? (episode) => playoutGate(episode) : null });
+// Pre-rendered playout (PLAYOUT=1, tools/playout/station.mjs): every episode passes the check before air when it is
+// made (server/playout/gate.js: the compliance desk's preflight for the stream); what fails is held, recorded in
+// data/playout/held/ (the approval page lists it) and never queued. Loaded only in playout mode: the live channel's
+// server loads exactly what it always did.
+const { airGate, gateOptionsFromEnv } = config.playout ? await import('./playout/gate.js') : {};
+const { PlayoutStore } = config.playout ? await import('./playout/queue.js') : {};
+const publishCompliance = config.playout ? await import('./publish/compliance.js') : null;
+const playoutStore = config.playout ? new PlayoutStore(config.playoutDir) : null;
+const gateOpts = config.playout ? gateOptionsFromEnv() : {};
+// (the verbatim rule's sources: the desk's own story, its title and summary, and the article the desk read for it)
+const gateStory = (id) => {
+  const s = newsDesk.get(id);
+  return s ? { title: s.title || '', summary: s.summary || '', body: articles?.text?.(s.link) || null } : null;
+};
+const playoutGate = config.playout
+  ? (episode) => airGate(episode, { ...gateOpts, getStory: gateStory, register: publishCompliance.register(config.dataDir), dataDir: config.dataDir, now: Date.now() })
+  : null;
+// (with a rule relaxed for a test, PLAYOUT_VERBATIM=warn or PLAYOUT_REVIEW=0: what the strict check would have held is
+// logged all the same, so a test says how much of the day the full rules keep off air)
+const strictGate = (episode) => {
+  const v = playoutGate(episode);
+  if (v.ok && (gateOpts.verbatim !== 'block' || !gateOpts.requireReview)) {
+    const strict = airGate(episode, { verbatim: 'block', requireReview: true, getStory: gateStory, register: publishCompliance.register(config.dataDir), dataDir: config.dataDir, now: Date.now() });
+    if (!strict.ok) playoutStore?.event('strict-would-hold', { id: episode.id, programme: episode.program?.title, rules: [...new Set(strict.violations.map((x) => x.rule))] });
+  }
+  return v;
+};
+const onHeld = (episode, verdict) => {
+  playoutStore?.hold({ id: episode.id, stage: 'production', airAt: Date.now(), programId: episode.program?.id, title: episode.program?.title, violations: verdict.violations, warnings: verdict.warnings, skipped: verdict.skipped, files: [] });
+  playoutStore?.event('held', { stage: 'production', id: episode.id, programme: episode.program?.title, rules: (verdict.violations || []).map((v) => v.rule) });
+};
 // (DRAFTS_ON_AIR: a draft programme on air for a test or a recording, never the official line-up)
-const station = new Station({ config, newsDesk, producer, chain, ...(config.draftsOnAir.length ? { channel: () => withDraftsOnAir(loadChannel(), config.draftsOnAir) } : {}) });
+const station = new Station({ config, newsDesk, producer, chain, gate: config.playout ? strictGate : null, onHeld, ...(config.draftsOnAir.length ? { channel: () => withDraftsOnAir(loadChannel(), config.draftsOnAir) } : {}) });
+if (config.playout) console.warn(`[playout] pre-rendered playout: the station runs on the air clock; check before air (verbatim ${gateOpts.verbatim}, recreation review ${gateOpts.requireReview ? 'required' : 'not required'})`);
 if (config.draftsOnAir.length) console.warn(`[channel] test mode: drafts on air: ${config.draftsOnAir.join(', ')}`);
 
 function sendJson(res, status, body) {
@@ -222,8 +254,16 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (req.method === 'GET' && url.pathname === '/api/next') {
-      const item = station.next(url.searchParams.get('after'));
+      // playout: the renderer says what time it is on air (`air`, ms) and waits for a finished programme
+      if (config.playout && globalThis.__airClock && devAllowed(req) && url.searchParams.has('air')) globalThis.__airClock.set(Number(url.searchParams.get('air')));
+      const item = config.playout && devAllowed(req) ? await station.nextReady(url.searchParams.get('after'), { timeoutMs: Math.max(0, Number(process.env.PLAYOUT_WAIT_S ?? 900)) * 1000 }) : station.next(url.searchParams.get('after'));
       return item ? sendJson(res, 200, item) : sendJson(res, 202, { standby: true, status: station.status() });
+    }
+    // playout: the renderer moves the air clock on as it renders (loopback only)
+    if (req.method === 'POST' && url.pathname === '/api/playout/clock') {
+      if (!config.playout || !globalThis.__airClock || !devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      if (url.searchParams.has('t')) globalThis.__airClock.set(Number(url.searchParams.get('t')));
+      return sendJson(res, 200, globalThis.__airClock.state());
     }
     if (req.method === 'GET' && url.pathname === '/api/events') return serveEvents(req, res);
     if (req.method === 'GET' && url.pathname === '/api/status') {

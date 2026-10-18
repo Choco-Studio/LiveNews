@@ -554,6 +554,7 @@ export class Graphics {
     const program = mode === 'news' && scene.program?.title ? this.programTag(scene) : null;
     TOP_ROW.onAt = this.topAt;
     TOP_ROW.replay = !!scene.replay;
+    TOP_ROW.recorded = !!scene.recorded; // pre-rendered playout: the 24/7 mark, never LIVE
     TOP_ROW.program = program;
     TOP_ROW.programIn = this.tagIn;
     TOP_ROW.programOut = this.tagOut;
@@ -597,7 +598,7 @@ export class Graphics {
 }
 
 // Reused per frame (no allocations in steady state).
-const TOP_ROW = { onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '', markFrom: 0, noun: 'NEWS' };
+const TOP_ROW = { onAt: 0, replay: false, recorded: false, program: null, programIn: null, programOut: null, clock: '', markFrom: 0, noun: 'NEWS' };
 const TOP_PLACE = Object.freeze({ top: CAPTION.top });
 const LOW_PLACE = { top: CAPTION.top };
 const BOTTOM_PLACE = { bottom: CAPTION.bottomFree };
