@@ -97,15 +97,19 @@ format this audit already uses:
 The cache fetches nothing, and no page is read that the channel did not already read. The archive writes the cache
 as it records each story an episode tells (`Archive({ articles })`, when the episode is made), so only the stories
 the channel tells are kept. It stores text only, at
-most 6,000 characters, cut at a sentence. An article kept is never replaced by a feed's text. A story told again
+most 6,000 characters, cut at a sentence. An article kept is never replaced by a feed's text, unless the outlet's
+robots.txt now keeps the page from us (below). A story told again
 refreshes its file. A file not written or refreshed for 14 days (the archive's own span) is removed, checked at most
 once an hour. `archiveGetStory` reads the cache, so the factory, the upload, the publisher, its re-check and the posts
 writer all measure against it. With it, a post can carry an aired line that the article proves is the channel's own
 words (`posts.js` `newsLine`).
 
-`ARTICLE_CACHE=off` keeps nothing, and a feed marked `"cache": false` in the feeds file is never kept. The news desk's
-reader does not consult robots.txt or terms before it reads a page, and the cache keeps only what that reader read, so
-it adds no reading of its own. Keeping the extracts is item 11 of the lawyer's list (`compliance.md` §9).
+`ARTICLE_CACHE=off` keeps nothing, and a feed marked `"cache": false` in the feeds file is never kept. Since round 6
+the news desk's reader obeys each outlet's robots.txt (`server/robots.js`, RFC 9309; `compliance.md` §6.1): a page the file keeps from us is never opened, the story keeps its feed's text and pictures
+(`story.pageRefused = 'robots'`), and the cache keeps only the feed's text for it, replacing or removing an article
+text kept for that link before. The audit below (`tools/compliance/verbatim-audit.mjs`) opens pages under the same
+rules and drops a cached article text whose page robots.txt now keeps from us. The cache still adds no reading of its
+own. Keeping the extracts is item 11 of the lawyer's list, the outlets' terms item 12 (`compliance.md` §9).
 
 **The live stream's net: the launch report.** The stream has no publish step, so `launchReport()` (`node tools/compliance/cli.mjs launch`) measures what aired. `archiveSample()` reads the last 300 real stories of `data/archive` and checks each one's reading and analysis against its title and summary, and against its article when this audit has cached it in `data/compliance/articles`. Launch is blocked while more than 5 % of those stories break the rule. On 17 Oct 2026 the rate is 80.3 % against title and summary alone (241 of 300), and 99 % with the articles (297 of 300, 280 articles cached). It takes about a third of a second.
 
@@ -125,3 +129,21 @@ NODE_USE_ENV_PROXY=1 node tools/compliance/verbatim-audit.mjs --archive data/arc
 ```
 
 The report holds per-programme and per-edition figures, the cost grid and the 12 worst runs. The 17 October run's report is summarised above.
+
+## 7. The AI writer in its own words (writer team, 17 Oct)
+
+The AI writer path is what makes the channel comply. The fallback writer stays as it is (its own improvement loop is paused by the owner), and the publish gate holds what it writes.
+
+**The prompt** (`server/writer.js` `OWN_WORDS`, in every programme's writer prompt). The writer composes every sentence from the facts and never reads out, stitches or lightly edits the outlet's sentences. It keeps the source's plain names for things, every figure with its unit and qualifier, who said what, and the source's certainty ("may", "plans to", "allegedly"). The outlet's words appear only as a quotation, exact, with its speaker in the same sentence. The standards editor's prompt checks the same paraphrase traps, and its corrections must be in the channel's own words too. No accuracy, attribution or tone rule was loosened.
+
+**The check after the writer, and again after the editor** (`server/producer.js` `ownWords`, `server/ownwords.js`).
+
+- **What is measured.** Each story's aired words (the reading, the correspondent's and the expert's pieces) are measured with `storyReport` against the story's title, summary, article and feed text. These are the texts the writer saw, and the ones the gate measures through the article cache.
+- **Paraphrase traps.** The aired sentences are checked for the traps the writer's validator cannot see: a hedge dropped ("may close" told as "will close", "allegedly stole" as "stole", "may have been caused" as "was caused"), one person's words given to another (in reported speech or in a quotation), and a rise told as a fall. A figure, a name or a place the source does not state is still dropped by the validator (`writer.js` `groundedText`).
+- **Rewrites.** A story that breaks the rule or has a trap goes back to the model (stage `rewrite`), at most twice. The request names its copied passages and its faults: "rewrite these in your own words". A rewrite that gives a figure another value or turns it around is refused, and so is one that adds a fault. The offline writer is never asked.
+- **Cuts and drops.** A story still failing is cut to its compliant sentences (never losing its opening or more than half of them). Otherwise it is dropped from the episode, and it sinks in the desk's ranking. An episode left below its programme's floor is not made: the slot is skipped.
+- **Logs.** Every rewrite, refusal, cut and drop is logged (`[own words] …`) and noted in the episode's pipeline (`write.own`, `review.own`). The pipeline also notes what the editor changed (`review.changes`).
+
+**The offline writer.** When no AI writer answers (no key, the provider down or out of quota), the chain falls back to the fallback writer, as before. Its episodes air on the stream unchanged and are measured only (`write.own.offline`). The publish gate holds every item from them (`preflight` rule `offline-writer`), and the approval page says why in Spanish: «Escrito sin IA: copia demasiado de la fuente».
+
+**On the owner's server.** `tools/writer/try.mjs` makes real episodes with the key and reports each story's copied share and longest run, the rewrites and drops, the editor's faults, tokens and time by stage, and the month of 24/7 air (`server-setup.md` §6).

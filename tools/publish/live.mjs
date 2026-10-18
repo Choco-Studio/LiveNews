@@ -15,6 +15,7 @@ import { LiveSupervisor } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import { usingStub } from '../../server/publish/compliance.js';
+import { isManual } from '../../server/publish/mode.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -29,13 +30,18 @@ if (!url || (!out && !rtmp)) {
   console.error('usage: node tools/publish/live.mjs --url <channel page> (--out <file-{n}.flv> | --rtmp <server> --key-env <VAR>) [--for s]');
   process.exit(1);
 }
+// the beta (PUBLISH_MODE=manual) has no live stream: the supervisor never streams to a server (a test into files only)
+if (rtmp && isManual()) {
+  console.error('refused: PUBLISH_MODE=manual (the beta, published by hand) has no live stream (docs/publishing/beta.md). A test into files (--out) is allowed.');
+  process.exit(1);
+}
 if (rtmp && process.env.PUBLISH_LIVE !== '1') {
   console.error('refused: streaming to a server needs PUBLISH_LIVE=1 (docs/publishing/setup.md §8). Test with --out first.');
   process.exit(1);
 }
 const queue = new PublishQueue({ dir: path.join(root, 'data', 'publish') });
 const s = queue.settings();
-const live = !!rtmp && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
+const live = !!rtmp && !isManual() && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
 const youtube = new YouTubeAdapter({ env: process.env, dryRun: !live });
 const streamArgs = [path.join(root, 'tools', 'stream.mjs'), '--url', url];
 if (out) streamArgs.push('--out', path.resolve(out));

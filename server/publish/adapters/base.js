@@ -10,6 +10,7 @@
 // Credentials: environment variables only (docs/publishing/setup.md lists them). Every request, response and error
 // that is logged or returned goes through redact(), which replaces each credential's value wherever it appears.
 import fs from 'node:fs';
+import { manualAnywhere } from '../mode.js';
 
 export class PublishError extends Error {
   constructor(message, { status = null, retryable = false, retryAfter = null, body = null } = {}) {
@@ -180,10 +181,18 @@ export class Adapter {
     }
   }
 
-  /** Describe (dry run) or make (live) the item's requests. Never throws: the result says what happened. */
+  /** Hand publishing (PUBLISH_MODE=manual, the beta: mode.js): this adapter never reaches its network. */
+  get manual() {
+    return manualAnywhere(this.env);
+  }
+
+  /**
+   * Describe (dry run) or make (live) the item's requests. Never throws: the result says what happened. In hand
+   * publishing (PUBLISH_MODE=manual) it only ever describes them, whatever the switches.
+   */
   async publish(item) {
     const requests = redact(this.plan(item), this.secrets());
-    if (this.dryRun) return { ok: true, dryRun: true, requests, remoteId: null, url: null, configured: this.configured(), missing: this.missing() };
+    if (this.dryRun || this.manual) return { ok: true, dryRun: true, requests, remoteId: null, url: null, configured: this.configured(), missing: this.missing(), ...(this.manual ? { manual: true } : {}) };
     if (!this.configured()) return { ok: false, dryRun: false, requests, error: `not configured: set ${this.missing().join(', ')} in the environment`, retryable: false };
     if (!this.limiter.canPost()) return { ok: false, dryRun: false, requests, error: 'daily cap reached', retryable: true };
     try {
@@ -195,8 +204,9 @@ export class Adapter {
     }
   }
 
-  /** One HTTP request within the rate limit (live only). */
+  /** One HTTP request within the rate limit (live only; never in hand publishing). */
   async request(method, url, { headers = {}, body = undefined } = {}) {
+    if (this.manual) throw new PublishError('PUBLISH_MODE is manual: the owner publishes by hand, no request goes to the network', { retryable: false });
     for (;;) {
       const wait = this.limiter.waitForRequest();
       if (!wait) break;

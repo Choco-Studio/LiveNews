@@ -1,0 +1,12 @@
+# Al Jazeera-like: the tagged copies of every page are kept from crawlers, the articles are open
+User-agent: *
+Disallow: /api
+Allow: /search/$
+Disallow: /search/
+Disallow: /*?traffic_source=
+Disallow: /*&traffic_source=
+Disallow: /*?fbclid=
+Disallow: /*&fbclid=
+
+User-agent: AmazonAdBot
+Allow: /

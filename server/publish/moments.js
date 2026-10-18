@@ -491,8 +491,15 @@ export function detectMoments(episode, { timeline = null } = {}) {
 }
 
 /** Moments a phase may publish: light, not demo, sense at least `minSense` (Phase 1: the light programmes only). */
-export function publishable(moments, { phase = 1, minSense = 7 } = {}) {
-  return moments.filter((m) => !m.demo && !m.copied && !m.uncleared && m.scores.sense >= minSense && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
+/**
+ * The floor of a published clip, in seconds of the moment itself (the end card comes on top): YouTube's and TikTok's own
+ * minimum. A shorter moment is not worth a viewer's swipe nor the owner's minute (round 7: a 3-second story passed every
+ * other rule, a 6.5 s Reel with its end card).
+ */
+export const CLIP_MIN_SECONDS = 10;
+
+export function publishable(moments, { phase = 1, minSense = 7, minSeconds = CLIP_MIN_SECONDS } = {}) {
+  return moments.filter((m) => !m.demo && !m.copied && !m.uncleared && m.scores.sense >= minSense && !(Number(m.duration) < minSeconds) && (phase <= 1 ? m.light : phase === 2 ? !m.grave : true));
 }
 
 /**
@@ -549,12 +556,18 @@ export function markUncleared(moments, episode, { audit = null } = {}) {
  * The verbatim rule (docs/publishing/verbatim.md): a moment that tells a story whose aired words copy its source is not
  * publishable in any phase (the compliance gate would hold its clip). `copied`: the story ids the lint flagged.
  */
-export function markCopied(moments, copied) {
+export function markCopied(moments, copied, { unverified = [] } = {}) {
   const ids = copied instanceof Set ? copied : new Set(copied || []);
+  const blind = unverified instanceof Set ? unverified : new Set(unverified || []);
   for (const m of moments) {
     if ((m.storyIds || []).some((id) => ids.has(id))) {
       m.copied = true;
       m.refused = m.refused || 'verbatim: its aired words copy the source';
+    } else if ((m.storyIds || []).some((id) => blind.has(id))) {
+      // (publishing round 6) the sources are not at hand: its words cannot be shown not to copy them, so the gate
+      // refuses its clip (sources-missing) and it is not chosen either
+      m.copied = true;
+      m.refused = m.refused || 'verbatim: its sources are not at hand, its words cannot be checked';
     }
   }
   return moments;

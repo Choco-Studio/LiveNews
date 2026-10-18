@@ -14,6 +14,7 @@ import { PublishQueue } from '../../server/publish/queue.js';
 import { Publisher, liveBlockers } from '../../server/publish/publisher.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { usingStub } from '../../server/publish/compliance.js';
+import { isManual } from '../../server/publish/mode.js';
 import { root, argsOf } from './lib.mjs';
 
 const { opt, flag } = argsOf();
@@ -26,6 +27,11 @@ const publisher = new Publisher({ queue, now, dataDir: path.join(root, 'data'), 
 const re = publisher.recheck();
 console.log(`re-check: ${re.checked} waiting · ${re.held.length} held now${re.released.length ? ` · ${re.released.length} back to the owner` : ''}`);
 for (const it of re.held) console.log(`  held  ${it.platform.padEnd(9)} ${it.title} · ${(it.compliance?.violations || []).map((v) => v.rule).join(', ')}`);
+// hand publishing (PUBLISH_MODE=manual, the beta): the round stops at the re-check; the owner publishes from the page
+if (isManual()) {
+  console.log('PUBLISH_MODE=manual: nothing is scheduled or published from here (not even a dry run); the owner publishes by hand from the approval page (docs/publishing/beta.md)');
+  process.exit(0);
+}
 const scheduled = queue.schedule(now());
 console.log(`${scheduled.length} newly scheduled · compliance: ${usingStub ? 'the stub (dry run only)' : 'the real module'}`);
 let due = queue.due(now());

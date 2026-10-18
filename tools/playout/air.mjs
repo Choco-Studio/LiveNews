@@ -25,6 +25,7 @@ import { LiveSupervisor } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import { usingStub } from '../../server/publish/compliance.js';
+import { isManual } from '../../server/publish/mode.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -41,6 +42,11 @@ const FPS = AIR_DEFAULTS.fps;
 const RATE = AIR_DEFAULTS.audioRate;
 if (!out && !rtmp) {
   console.error('usage: node tools/playout/air.mjs (--out <file> [--segment <s>] | --rtmp <server> --key-env <VAR>) [--dir data/playout] [--for s]');
+  process.exit(1);
+}
+// the beta (PUBLISH_MODE=manual) has no live stream, as tools/publish/live.mjs: a test into files only
+if (rtmp && isManual()) {
+  console.error('refused: PUBLISH_MODE=manual (the beta, published by hand) has no live stream (docs/publishing/beta.md). A test into files (--out) is allowed.');
   process.exit(1);
 }
 if (rtmp && process.env.PUBLISH_LIVE !== '1') {
@@ -64,7 +70,7 @@ const frameMs = 1000 / FPS;
 
 const pq = new PublishQueue({ dir: path.join(root, 'data', 'publish') });
 const s = pq.settings();
-const live = !!rtmp && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
+const live = !!rtmp && !isManual() && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
 const titles = new LiveSupervisor({ youtube: new YouTubeAdapter({ env: process.env, dryRun: !live }), live, recorded: true, videoId: process.env.YOUTUBE_LIVE_VIDEO_ID || null, outbox: path.join(root, 'data', 'publish', 'outbox-live.jsonl'), log: (m) => say(m) });
 
 // ---------------------------------------------------------------- the filler (encoded with the programmes' settings)

@@ -5,6 +5,7 @@ import { config, configWarnings, ROOT } from './config.js';
 import { findPlaces } from './gazetteer.js';
 import { NewsDesk } from './news.js';
 import { ArticleCache } from './articlecache.js';
+import { Robots } from './robots.js';
 import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
@@ -25,6 +26,7 @@ import { PictureDesk } from './picturedesk.js';
 import { FaceStore } from './faces.js';
 import { FaceReader } from './facereader.js';
 import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
+import { PictureAhead } from './pictureahead.js';
 import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
 
@@ -40,7 +42,8 @@ const MIME = {
 };
 
 const usage = new UsageTracker(config.dataDir);
-const newsDesk = new NewsDesk();
+// the outlets' robots.txt, read before any of their pages is opened, kept a day in memory and in data/robots
+const newsDesk = new NewsDesk({ robots: new Robots({ dir: path.join(config.dataDir, 'robots') }) });
 // Real photos for stories still without one: a FILE photo of the story's place (Wikimedia Commons by default)
 // One polite queue for every Wikimedia service the picture desks ask (server/wikimedia.js: its limits are per client)
 const wikimedia = new WikimediaClient({ contact: config.pictures.contact });
@@ -111,7 +114,10 @@ const uncachedFeeds = (() => {
 const articles = config.articleCache ? new ArticleCache({ dir: path.join(config.dataDir, 'compliance', 'articles'), skip: (s) => uncachedFeeds.has(s?.source) }) : null;
 const archive = new Archive({ dir: path.join(config.dataDir, 'archive'), pictures: config.pictures.rights, articles });
 newsDesk.archive = archive;
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, gate: config.playout ? (episode) => playoutGate(episode) : null });
+// the picture desk ahead of air: stories decided in the background as they come in, the next programmes' first; each
+// episode reads the decisions that are ready (server/pictureahead.js)
+const pictureAhead = config.pictures.desk && config.pictures.ahead ? new PictureAhead({ desk: pictureDesk }) : null;
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, pictureAhead, gate: config.playout ? (episode) => playoutGate(episode) : null });
 // Pre-rendered playout (PLAYOUT=1, tools/playout/station.mjs): every episode passes the check before air when it is
 // made (server/playout/gate.js: the compliance desk's preflight for the stream); what fails is held, recorded in
 // data/playout/held/ (the approval page lists it) and never queued. Loaded only in playout mode: the live channel's
@@ -272,6 +278,11 @@ const server = http.createServer(async (req, res) => {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
       return sendJson(res, 200, url.pathname === '/api/desk' ? newsDesk.deskView() : station.queue);
     }
+    // the picture desk ahead of air: what it decided, the requests a story, a fresh story's wait, what is left (operator)
+    if (req.method === 'GET' && url.pathname === '/api/pictures/ahead') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      return sendJson(res, 200, pictureAhead ? pictureAhead.status() : { running: false });
+    }
     // Recorded voices: /api/voice/<id>.ogg|.json (content-addressed clips), /api/voice/ads, /api/voice/status.
     if (req.method === 'GET' && url.pathname.startsWith('/api/voice/') && voice.handle(req, res, url.pathname)) return;
     // The orchestrator's picture tool: free-licensed file photos for a query (operator / orchestrator only)
@@ -325,6 +336,7 @@ findPlaces('Warm-up in London');
 
 server.listen(config.port, config.host, () => {
   faceReader.start();
+  pictureAhead?.start();
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
   // The mock writes but never reviews: say so rather than promise an editor that is not there.
   const editor = chain.providers.some((p) => p.reviews !== false);

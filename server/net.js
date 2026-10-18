@@ -124,10 +124,11 @@ function defaultLookup(host) {
 
 /**
  * fetch() for feed-supplied URLs: redirects are followed by hand (at most
- * `maxRedirects`), every hop through assertPublicUrl unless `allowPrivate`.
+ * `maxRedirects`), every hop through assertPublicUrl unless `allowPrivate`,
+ * then through `beforeHop(url, hop)` when given (it throws to refuse a hop).
  * Returns the final Response (status not checked) and its URL.
  */
-export async function guardedFetch(fetchImpl, url, { timeoutMs = 10000, headers = {}, allowPrivate = false, maxRedirects = 4, lookup, proxied = null } = {}) {
+export async function guardedFetch(fetchImpl, url, { timeoutMs = 10000, headers = {}, allowPrivate = false, maxRedirects = 4, lookup, proxied = null, beforeHop = null } = {}) {
   const signal = AbortSignal.timeout(timeoutMs);
   let current = url;
   const firstHost = (() => {
@@ -148,6 +149,8 @@ export async function guardedFetch(fetchImpl, url, { timeoutMs = 10000, headers 
     const trusted = allowPrivate && (hop === 0 || sameHost);
     if (!trusted) await assertPublicUrl(current, { ...(lookup ? { lookup } : {}), ...(proxied !== null ? { proxied } : {}) });
     else if (!/^https?:\/\//i.test(current)) throw new Error('not an http(s) URL');
+    // the caller's own check of each hop (the news desk: the outlet's robots.txt); throwing stops the request
+    if (beforeHop) await beforeHop(current, hop);
     const res = await fetchImpl(current, { headers, signal, redirect: 'manual' });
     if (!REDIRECTS.has(res.status)) return { res, url: current };
     const location = res.headers?.get?.('location');

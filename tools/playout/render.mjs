@@ -12,8 +12,9 @@
 //        [--bitrate 3000k] [--start-lead 900] [--no-twin] [--capture png|raw] [--for <s>]
 //
 // Every programme's twin picture is drawn from the same frames: the publishing desk's clip-mode master (384x216,
-// lossless, the factory's own format) with its report and the episode, in <dir>/masters/<slot>/, so the clip factory
-// and the whole-programme upload cut from it and nothing is rendered twice (--no-twin: the air file only).
+// lossless, the factory's own format) with its report and the episode, in <dir>/masters/<episode id>/ as the rendered-
+// master hook reads it (server/publish/masters.js: horizontal.mkv, horizontal.report.json), so the clip factory and the
+// whole-programme upload cut from it and nothing is rendered twice (--no-twin: the air file only).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -559,15 +560,18 @@ function queueUnit(unit, gate) {
   for (const [i, seg] of unit.segments.entries()) {
     const { item, r } = unit.items[i];
     seg.gate = gate.verdicts.find((v) => v.id === item.id) ? { ok: true, warnings: gate.verdicts.find((v) => v.id === item.id).warnings.slice(0, 10), skipped: gate.verdicts.find((v) => v.id === item.id).skipped.map((x) => x.rule) } : null;
-    if (item.kind === 'episode' && r.master) {
-      // the publishing desk's master: <prog>-horizontal.mkv and its report, the episode as aired (factory.mjs --masters)
-      const prog = item.program?.id || 'programme';
-      const dir = path.join(DIR, 'masters', seg.id);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.renameSync(r.master, path.join(dir, `${prog}-horizontal.mkv`));
-      fs.writeFileSync(path.join(dir, `${prog}-horizontal.report.json`), JSON.stringify(r.report, null, 1));
-      fs.writeFileSync(path.join(dir, 'episode.json'), JSON.stringify({ ...item, airedAt: new Date(seg.airAt).toISOString() }, null, 1));
-      fs.writeFileSync(path.join(dir, 'unit.json'), JSON.stringify({ unit: unit.id, segment: seg.id, airAt: new Date(seg.airAt).toISOString(), airEnd: new Date(endOf(seg)).toISOString() }, null, 1));
+    if (item.kind === 'episode' && r.master && /^[a-z0-9_-]{1,80}$/i.test(String(item.id))) {
+      // the publishing desk's master, as the rendered-master hook reads it (server/publish/masters.js): masters/<episode
+      // id>/horizontal.mkv and its report, the episode as aired. An episode aired again whose clips were cut already
+      // (factory.json there) keeps its first master: nothing is cut twice.
+      const dir = path.join(DIR, 'masters', String(item.id));
+      if (!fs.existsSync(path.join(dir, 'factory.json'))) {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.renameSync(r.master, path.join(dir, 'horizontal.mkv'));
+        fs.writeFileSync(path.join(dir, 'horizontal.report.json'), JSON.stringify(r.report, null, 1));
+        fs.writeFileSync(path.join(dir, 'episode.json'), JSON.stringify({ ...item, airedAt: new Date(seg.airAt).toISOString() }, null, 1));
+        fs.writeFileSync(path.join(dir, 'unit.json'), JSON.stringify({ unit: unit.id, segment: seg.id, airAt: new Date(seg.airAt).toISOString(), airEnd: new Date(endOf(seg)).toISOString() }, null, 1));
+      }
       seg.master = dir;
     }
     store.enqueue(seg);

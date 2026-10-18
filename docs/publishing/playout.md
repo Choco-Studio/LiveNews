@@ -31,7 +31,7 @@ station, the page and the live supervisor behave exactly as before.
  queue (2 ready) ◄──────┘       render every frame + sound → segment.mkv
                                 GATE again, with the recording ──► held: next unit, same air time
                                 queue/<airtime>-<id>.json ─────────────────► at its time: video copied,
-                                masters/<slot>/ (clip-mode master)                      sound → AAC once
+                                masters/<ep id>/ (clip master)                          sound → AAC once
                                                                             nothing at its time: filler card
 ```
 
@@ -90,12 +90,15 @@ is set once on the broadcast, compliance.md §2.5) and `unmarked` (C2PA cannot s
 owner's review before air: `register.recordReview`). Relaxed for a test, the station still logs what the strict check
 would have held (`strict-would-hold` in `events.jsonl`).
 
-> **What this means today.** The writer still copies: 95 % of the last 300 aired stories break the verbatim rule
-> (`archiveSample`, 17 Oct). Under the strict gate almost every news programme is held, and the channel airs WORLD
-> WEATHER, SEVEN DAYS and filler. That is the rule doing its job; it clears when the writer's composed sentences are on
-> air. Until then the owner chooses: `PLAYOUT_VERBATIM=warn` airs them as the live channel does today, with every
-> verdict logged. The same for recreations: with nobody reviewing an hour ahead, `PLAYOUT_REVIEW=1` holds every
-> programme with an IN THEIR WORDS piece; `RESTAGE=0` makes programmes without them.
+> **What this means today.** The offline fallback writer copies: 95 % of the last 300 aired stories break the verbatim
+> rule (`archiveSample`, 17 Oct), and the compliance desk now refuses anything it wrote outright (rule `offline-writer`,
+> verbatim.md §7). Under the strict gate, with no AI writer answering, every news programme is held and the channel
+> airs WORLD WEATHER, SEVEN DAYS and filler. That is the rule doing its job; with the AI writer that composes in the
+> channel's own words (the beta's writer, `server/ownwords.js`) news programmes can pass it. For a test without an AI
+> key, `PLAYOUT_VERBATIM=warn` airs them as the live channel does today, with every verdict logged (the offline-writer
+> and verbatim rules both become warnings). The same for recreations: with nobody reviewing an hour ahead,
+> `PLAYOUT_REVIEW=1` holds every programme with an IN THEIR WORDS piece; `RESTAGE=0` makes programmes without them.
+> The beta's `PUBLISH_MODE=manual` keeps the stream off: the playout refuses `--rtmp` then, as the live supervisor does.
 
 ## 4. The playout (`tools/playout/air.mjs`, `server/playout/queue.js`, `server/playout/encode.js`)
 
@@ -157,17 +160,20 @@ air: the gate is automated).
 Every programme's page also draws its **twin picture** (`?twin=1`, `studio.js`): the same shot under the clip graphics
 (`clip/graphics.js`: no clock, no ticker, the AI mark beside the bug, clip captions), on a second canvas, captured with
 the air picture in the same frame grab. The renderer writes it as the publishing desk's own master format (384x216,
-lossless RGB H.264 + FLAC) with its report and the episode as aired, into `data/playout/masters/<slot>/`:
+lossless RGB H.264 + FLAC) with its report and the episode as aired, into `data/playout/masters/<episode id>/`, as the
+publishing desk's rendered-master hook reads it (`server/publish/masters.js`, `pipeline.md` §8):
 
 ```
-<prog>-horizontal.mkv   <prog>-horizontal.report.json   episode.json (airedAt = its air time)   unit.json
+horizontal.mkv   horizontal.report.json   episode.json (airedAt = its air time)   unit.json
 ```
 
-- `node tools/publish/factory.mjs --from-playout data/playout/masters/<slot> --out <dir>` cuts the horizontal clips
-  from that master: nothing is recorded again. The vertical picture (9:16) is a different composition (the stage
-  framed again, the vertical graphics), so the factory records it as before. When done, the folder gets `factory.json`.
-- `node tools/publish/upload.mjs --from-playout data/playout/masters/<slot> --out <dir>`: the whole programme for
-  YouTube, from the same master and report.
+- `node tools/publish/factory.mjs --from-playout data/playout/masters/<episode id> --out <dir>` cuts the horizontal
+  clips from that master: nothing is recorded again (with `--episode`, `RENDERED_MASTERS=data/playout/masters` does
+  the same). The vertical picture (9:16) is a different composition (the stage framed again, the vertical graphics),
+  so the factory records it as before; the beta's clips are vertical only (`beta.mjs`), so today they are still
+  recorded. When done, the folder gets `factory.json`. An episode aired again keeps its first master once it is cut.
+- `node tools/publish/upload.mjs --from-playout data/playout/masters/<episode id> --out <dir>`: the whole programme
+  for YouTube, from the same master and report.
 - `--no-twin` on the renderer: the air file only (about a tenth less rendering work: 1.09 against 1.19 CPU-s per air
   second on the same programme, §10).
 

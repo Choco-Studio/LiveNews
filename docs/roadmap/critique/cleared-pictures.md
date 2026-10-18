@@ -583,17 +583,122 @@ the pips (2 px apart): **the credit moved**: beside the tag it runs on two lines
 clear of the tag, and the captions start 6 px under it (`graphics/picture.js` `headlineTagRight`, `CREDITS`;
 `graphics/index.js` `captionPlace`). The full-frame shot keeps its one line.
 
+## Round 9 — deciding ahead of air, measured live
+
+The coordinator's brief: **on the live station the desk gave zero pictures** (59 stories aired since its 20:09 restart,
+`[faces] 0 pictures to read`). Decide ahead, not at air time; measure it live for an hour against the offline 34 %;
+make aired stories archive their cleared decision and give PICTURE THIS candidates; draw the picture's licence credit
+on PICTURE THIS's board; confirm the face reader reads once it is fed.
+
+**1. Why the live station aired no picture.** Four causes, each seen in its log or measured:
+
+- the desk decided inside the producer's 6 s picture budget, and nothing ever finished in it;
+- Wikimedia rate-limits this machine's address, which other agents share: Wikipedia's API answered 429 to every
+  request, one a minute for seven minutes (Retry-After 17–28 s), and to one more sent with a different User-Agent
+  (so not this station's own traffic); Commons and the Query Service still answered. A 429 pauses the desk's whole queue
+  (Wikimedia's limits apply across its sites), so every decision stopped at its first request;
+- the station's event loop was held 60 % of the time (a CPU profile of the running station): SEVEN DAYS's readiness
+  check grouped the 5,600 airings of the week with `sameStory` at every `/api/next`. Every programme was "ready in"
+  70–120 s, and Wikimedia's answers sat unread past their 8 s timeout: the log's "The operation was aborted due to
+  timeout";
+- five warnings a lifetime: after them the log said nothing more about pictures.
+
+**2. Deciding ahead** (`server/pictureahead.js`). Stories are decided in the background as they come in, through the
+same paced queue, in the order they air: the stories of the episode in production, the next programmes' candidates
+(the rotation's next three and the pinned NEWS IN 60, as `select()` would choose them), the last three hours, the rest
+of the news desk, then the week's archived stories without a cleared picture (PAY ATTENTION's own candidates first,
+four at a time, alone in their batch). Decisions are kept in `data/pictures/answers.json` by story and headline with
+their lifetimes, and a restart finds them (run 2 started on run 1's 363). Production reads only what is ready: the
+picture stage and the assets stage apply kept decisions and put the rest first in the queue; the assets stage waits for
+a batch in flight holding one of its stories, within the budget, and never asks Wikimedia itself. A 429 is waited out
+to its end; the batch it cut is asked again right after; other failures back off 1, 2, 4… minutes. After a 429 from
+Wikipedia the stories that need nothing from it go first. Each story keeps the picture it airs with (a decision made
+again never changes it under the episode's credit), and a story whose file an earlier one shows takes its own next
+cleared picture. `/api/pictures/ahead` and a log line every 15 minutes say what it did. The event loop: the weekly's
+readiness now counts the week's stories and days and groups only a small week; the Query Service gets 30 s; warnings
+come once in ten minutes by kind, with a count.
+
+**3. Fewer requests a story.** A person's Commons category and a country's capitals come in the Wikidata query that
+brings their facts (two queries a batch fewer); a public figure's rotation (their category and up to three searches,
+most of a decision's cost) is looked for once they recur, aired in the last day or twice in a batch, their Wikidata
+portrait airing meanwhile (a portrait that will not do: their category and searches at the next try); titles 50 a
+request, items 40 a query, files 50 a request, and every answer shared by every story that needs it, across restarts.
+
+**4. Measured live** (`PORT=8733`, the real station path and real feeds, a headless playout recording each episode:
+run 1 21:44–22:07, stopped for the event loop's fix; **run 2 22:10–23:40**, 13 news programmes and a weather; files
+in the measuring session's `scratchpad/pictures/r9/`). The desk's store started from the answers earlier measurements
+had kept (entities, files, searches; no decisions), as a station that has run before would; the live station's store
+was empty.
+
+| programme | episodes | stories aired | aired with a cleared picture | the desk found one (the same stories) | decision ready when made | offline, round 7 (sample 1) |
+| --- | --- | --- | --- | --- | --- | --- |
+| WORLD NOW | 5 | 89 | 18 (20.2 %) | 23.6 % | 87 / 89 | 32.2 % |
+| TECH BYTES | 2 | 30 | 10 (33.3 %) | 36.7 % | 30 / 30 | 38.9 % |
+| NEWS IN 60 | 3 | 16 | 6 (37.5 %) | 43.8 % | 16 / 16 | 35.0 % |
+| COSMOS DESK | 2 | 15 | 6 (40.0 %) | 46.7 % | 15 / 15 | 41.4 % |
+| SEVEN DAYS | 1 | 16 | 8 (50.0 %) | (archived stories) | 16 / 16 | — |
+| **all** | **13** | **166** | **48 (28.9 %)** | **31.0 %** | **164 / 166** | **35.7 % (34 % over three samples)** |
+
+Run 1 (before the event loop's fix): 2 episodes, 9 of 29 stories (31 %), production 71–108 s an episode.
+
+- **On air, the desk's own coverage**: 28.9 % of the aired stories had a cleared picture, against 31.0 % for the
+  decisions the desk made for those very stories (the offline measure, on tonight's news). The two points between:
+  three stories shared a file with an earlier story of their episode (51 had a cleared picture at the assets stage, 48
+  aired with one: such a story now takes its own next picture), and a few were decided only after their episode was
+  made, during a pause. **Against the offline 34 %**: tonight's news ran grave (WORLD NOW's police charges, drone
+  strikes, a crush at a festival, Ebola, wildfires: no picture there by the brief's own rules); on these stories the
+  desk itself found one for 31 %, and the air carried 28.9 %.
+- **Ready ahead**: 164 of the 166 aired stories had their decision ready when their episode was made.
+- **A fresh story's wait** for its decision: median 3 s, 90 % within 99 s, the longest 159 s (the 23 stories new to
+  the news desk after the start, a Saturday evening).
+- **Drain**: 1,571 stories tried and 1,283 decided in 90 minutes (848 an hour, 361 with a picture), against 3–8 new
+  stories every 15 minutes; the news desk's 397 stories were all decided 31 minutes after the start, the week's archive
+  (1,218 stories) by the end. 0.26 Wikimedia requests a story tried (0.46 on the news desk's tiers, 0.77 a story decided
+  there: most entities were already kept).
+- **Wikimedia**: 401 requests in 90 minutes, 79 answered 429 (Wikipedia 36 of 127, Commons 43 of 163, the Query
+  Service none of 111), each waited out: the queue stood paused 2,732 s, half the run.
+- The programmes were "ready in" 2.7–13 s (70–120 s before the event loop's fix); SEVEN DAYS still took 121.5 s once
+  (its own grouping, when it is made).
+
+**5. The archive and PICTURE THIS.** Aired stories archive their cleared record and what it shows (`imageRights`,
+`imageSubject`, since the PAY ATTENTION round; 58 as they aired in the runs); a story that aired without one and is decided later has it
+put on its entries (`archive.amendPicture`, `data/archive/pictures.json`). On a copy of the live archive (5,700
+airings, none with a rights record, 0 PICTURE THIS candidates), after the runs: 1,873 entries carry a cleared picture
+(1,802 put on after they aired, 464 stories), and **PICTURE THIS has 63 candidates** among the week's 135 events (48
+organisations, 4 products, 3 people, 3 sky objects, 3 animals or plants, 2 structures).
+
+**6. PICTURE THIS's credit** (`quizplay.js` `quizPictureCredit`, `cards-quiz.js`): the cleared record's own credit
+under the board's right edge for as long as the picture is on, drawn by the montage's own function (the FILE tag, micro
+type on ink, a long credit on two lines), rows 137–157, clear of the board (to 134) and of the captions (from 172);
+`PREVIEW · NOT CLEARED` in yellow under it in a private preview; nothing for the operator's own picture. The board
+itself is unchanged. Sheet: `scratchpad/pictures/sheets-r9/` (the lab's `?credits=1`: a one-line and a two-line credit
+and a preview, at air size and at 4x, at the countdown and at the reveal).
+
+**7. The face reader** reads what the desk queues: 140 pictures in run 2 (35 would not download at first,
+upload.wikimedia.org's own 429s, tried again half an hour later), the sober portraits of grave stories and the rotation
+of the public figures who recur.
+
+**What is still open.** Wikipedia's API rate-limits this machine's shared address (the owner's server has its own);
+SEVEN DAYS's own grouping blocks the station about two minutes when it is made; the footage desk, the guests' identity
+desk and the election calendar ask Wikimedia with clients of their own, outside this queue and its pauses; the live
+station runs the round-8 code with an empty store until it is merged and restarted (its store can start from this
+worktree's `data/pictures/answers.json`).
+
 ## Final table
 
-| category | r1 | r2 | r3 | r4 | r5 | r6 | r7 | **round 8** | why |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | 8.5 | **8.5** | round 8: unchanged; a rotation's portraits pass every check the first one does (cleared terms read from the source, credited, full name, one person read by the face reader); the boards draw no picture, only the story's own words, the writer's figures, an attributed quote and a Wikipedia description. Round 7: every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
-| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | 8.5 | **8.5** | round 8: the cleared picks as round 7 (judged on the picks: 0 wrong person, 0 misleading, 17 % weak); the board's place is scored on its own (0 wrong in 248, below). Round 7: 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
-| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | 3.5 | **3.5** | round 8: as measured in round 7 and not chased (the owner's decision: a wire licence, or the free-licence ceiling of 67 %). Round 7: 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
-| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | 8.0 | **8.5** | round 8: the floor for two stories in three is now the story's own element (topic board 9.0) or its right place (locator 8.5), and a public figure's portraits rotate; still a board, not a picture, for most of the news. Round 7: the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
-| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | 8.5 | **9.0** | round 8: the station runs the face reader and starts it again (backoff, off with `FACE_READER`, never outliving the station); a rotation never changes a picture under a story already on air; one file never under two stories of an episode. Round 7: every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
-| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | 9.0 | **9.0** | round 8: every place of the hand check that went wrong, every board kind and its box, the board's words from real headlines, the actor rules, the rotation and the producer's one-file rule, the supervisor with a fake child and a real one, the credit beside the tag. Round 7: the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
-| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | **3.5** | coverage |
+| category | r1 | r2 | r3 | r4 | r5 | r6 | r7 | r8 | **round 9** | why |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| legal clearance | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | 9.0 | 8.5 | 8.5 | **8.5** | round 9: unchanged; PICTURE THIS now draws its picture's licence credit while it shows (it showed none), and a picture put on an archived story afterwards is a cleared record for that very picture. round 8: unchanged; a rotation's portraits pass every check the first one does (cleared terms read from the source, credited, full name, one person read by the face reader); the boards draw no picture, only the story's own words, the writer's figures, an attributed quote and a Wikipedia description. Round 7: every aired picture still cleared under terms read from its source and recorded; Openverse used only for institutions' accounts, Flickr's robots.txt respected (its pages never read), the source page kept. Lower than round 6: three new open questions for the lawyer (the face reader under the EU AI Act and the GDPR; identifiable people in FILE pictures of events; Openverse's "made with Openverse" notice and fee clause), on top of ShareAlike (51 % of the picks) |
+| relevance | 4.0 | 7.0 | 3.0 | 6.5 | 9.0 | 8.5 | 8.5 | 8.5 | **8.5** | round 9: the same desk and rules; the archive's pictures are the desk's decisions for those very stories. round 8: the cleared picks as round 7 (judged on the picks: 0 wrong person, 0 misleading, 17 % weak); the board's place is scored on its own (0 wrong in 248, below). Round 7: 0 wrong person in 63 portraits (19 under grave stories, each read sober and looked at), 0 misleading in 247 picks of three samples after five fixes in the round; 43 weak (17 %): more than round 6, from seats and surnames that are true but generic, and secondary subjects |
+| coverage | 3.0 | 2.5 | 4.0 | 4.0 | 3.0 | 3.0 | 3.5 | 3.5 | **3.5** | round 9: on air live, 28.9 % of 166 stories (0 % on the live station before), the desk's own coverage of the same stories 31.0 %, 164 of 166 decided before their episode was made; tonight's grave news is below the samples' 34 %, and the 75 % target is the owner's decision. round 8: as measured in round 7 and not chased (the owner's decision: a wire licence, or the free-licence ceiling of 67 %). Round 7: 35.7 %, 32.7 % and 29.7 % (fresh) against a 75 % target; at most 67 % with a picture on every story that is not grave; the other stories now air on a designed board instead of a flat field |
+| visual quality | 6.5 | 7.5 | 8.0 | 8.0 | 8.5 | 8.5 | 8.0 | 8.5 | **8.5** | round 9: unchanged. round 8: the floor for two stories in three is now the story's own element (topic board 9.0) or its right place (locator 8.5), and a public figure's portraits rotate; still a board, not a picture, for most of the news. Round 7: the picks as round 6 (whole portraits, none upscaled, credits with the FILE year); the floor is designed now (locator 8.0, topic 7.0) but it is a board, not a picture, for two stories in three; Trump's one official portrait airs under 20 stories of the three samples |
+| robustness | 8.0 | 7.5 | 8.5 | 8.0 | 9.0 | 9.0 | 8.5 | 9.0 | **9.5** | round 9: production never waits for Wikimedia; decisions are made ahead, kept across restarts, in the order things air; a 429 is waited out in the background; the station's event loop is no longer held by the weekly's check; a story keeps the picture it airs with. Not higher: Wikipedia rate-limits this shared address, and SEVEN DAYS still blocks two minutes when it is made. round 8: the station runs the face reader and starts it again (backoff, off with `FACE_READER`, never outliving the station); a rotation never changes a picture under a story already on air; one file never under two stories of an episode. Round 7: every new source fails safe (an unread face is never aired; Openverse paced, budgeted and paused on 429; a restart keeps the day's count), but the face reader runs beside the station and must be scheduled: until it reads, grave stories stay on their boards |
+| tests | 8.0 | 8.5 | 8.5 | 9.0 | 9.0 | 9.0 | 9.0 | 9.0 | **9.0** | round 9: the queue's order, pauses, back-off and Wikipedia rule, the producer reading only ready decisions, the archive's pictures, the lean rotation, the merged query, the pin and the spread, the weekly's count, PICTURE THIS's credit. round 8: every place of the hand check that went wrong, every board kind and its box, the board's words from real headlines, the actor rules, the rotation and the producer's one-file rule, the supervisor with a fake child and a real one, the credit beside the tag. Round 7: the face verdicts and the store, Openverse (results, trust, pacing, 429), FILE events and seats (every finding of the round), the year in the credit on server, producer and screen, the topic and locator boards, the desk end to end with the face reader and Openverse faked |
+| **round score** | **3.0** | **2.5** | **3.0** | **4.0** | **3.0** | **3.0** | **3.5** | 3.5 | **3.5** | coverage |
+
+**Round 9: the gate is not met (3.5: coverage). The desk's coverage now reaches the air: 28.9 % of the stories aired
+live with a cleared picture, against 0 % on the live station before and 31.0 % for the desk's own decisions on the same
+stories; PICTURE THIS has 63 candidates instead of none, and credits its picture.**
 
 **Scored on their own (round 8)**: the board's place **0 wrong in 248** locator boards of three samples (round 7: 4
 wrong in 135 checked); the topic board **9.0**, the locator board **8.5**; portrait variety **7.5** (Trump on five files instead of one, the most-aired file six times in twenty, 0 twice in an episode, 0 wrong person in 49; held back by how few recent cleared portraits Commons has).
@@ -642,7 +747,7 @@ search results) and the outlet photos the 440 stories aired with:
 
 Rendered by `tools/pictures/sheet.mjs` with the channel's own client code (`public/lab/pictures.html`: the headline
 board as the montage airs it, `pixelate.js` at 416×234 and 24 colours with the desk's focus, the credit overlay, the
-locator and topic boards), into the measuring session's scratch directory. Round 8 (`…/scratchpad/pictures/sheets-r8/`,
+locator and topic boards), into the measuring session's scratch directory. Round 9 (`…/scratchpad/pictures/sheets-r9/`): PICTURE THIS with its picture's credit (`credit1`, `credit2`, `creditpreview`, each at the countdown and the reveal, at air size and at 4x), from the lab's `public/lab/quiz.html?credits=1`. Round 8 (`…/scratchpad/pictures/sheets-r8/`,
 round 7's board sheets deleted): `s1-boards-01..09.png`, `s2-boards-01..03.png`, `s3-boards-01..03.png` (every topic
 board of the three samples at air size, 1×, each with a caption over it as the narration puts one),
 `s1-boards-big-01..03.png` (each kind at 4×, under an ordinary and a grave story), `plates-01.png` (the AI plate and

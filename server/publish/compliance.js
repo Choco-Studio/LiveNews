@@ -6,8 +6,12 @@
 //   disclosureFor(item), describe(item, o), textPost(item, o), creditsFor(item), auditItem(item), checkClip(clip, opts),
 //   preflight(item, opts), buildManifest(item, o), markFile(path, manifest) (async, never throws: { ok, ... })
 //   register(dataDir) the compliance register (takedowns, reviews) or null; recordReview(itemId, review, o)
+//   recordPublication(publication, o) one publication in the register (the owner's own, by hand: manual.js)
+//   editorialLine(env) who answers for the channel, as the descriptions name it (null while it is not set)
 //   storyReport(text, sources) the verbatim measure; archiveGetStory({ dataDir }) a story's sources with its article;
 //   clipGetStory(storyIds, getStory) that, for the stories one clip tells only
+//   sourcesForItem(item, fallback, cache) an item's own sources folder's getStory (gate.sourcesDir), else the fallback
+//   storiesWithoutSources(item, getStory) the stories the verbatim rule cannot measure (preflight refuses the item)
 //   usingStub   true while the stub stands in
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +48,20 @@ export const archiveGetStory = (o = {}) => (mod.archiveGetStory ? mod.archiveGet
 /** The verbatim lint of an episode's stories (the stub has none: everything passes there, as before). */
 export const lintEpisode = (episode, o = {}) => (mod.lintEpisode ? mod.lintEpisode(episode, o) : { ok: true, stories: [], violations: [] });
 /**
+ * The stories' sources for one queued item: its own folder's when it has one (`item.gate.sourcesDir`: the beta's news
+ * day keeps the stories the AI writer told, with their articles, in a folder of its own, server/publish/newsday.js),
+ * else `fallback` (the station's archive). `cache` keeps one reader a folder for a round.
+ */
+export function sourcesForItem(item, fallback, cache = null) {
+  const dir = item?.gate?.sourcesDir;
+  if (!dir || typeof dir !== 'string') return fallback;
+  if (cache?.has(dir)) return cache.get(dir);
+  const getStory = archiveGetStory({ dataDir: dir });
+  cache?.set(dir, getStory);
+  return getStory;
+}
+
+/**
  * The gate's getStory for one clip or post: the sources of the stories it tells only (a clip's episode tells others it
  * does not carry). preflight's verbatim lint then measures the clip's own aired words against their sources.
  */
@@ -52,13 +70,39 @@ export function clipGetStory(storyIds, getStory) {
   return (id) => (ids.has(id) && typeof getStory === 'function' ? getStory(id) : null);
 }
 
+/**
+ * The stories an item tells as stories whose sources are not at hand (getStory gives no title or summary): the verbatim
+ * rule cannot measure their words, so the item is not published (publishing round 6: a FULL TIME edition replayed from
+ * a sport snapshot told stories the archive never kept, and the lint let them through as "unverified"). A text post
+ * carries its own sources (sourceTexts) and is not concerned.
+ */
+export function storiesWithoutSources(item, getStory) {
+  if (!item?.episode || typeof getStory !== 'function') return [];
+  const told = new Set((item.episode.segments || []).filter((s) => s.type === 'story' && s.storyId).map((s) => s.storyId));
+  // a clip: the stories it tells (none listed, none checked here); a whole programme: every story it tells
+  const listed = Array.isArray(item.storyIds) ? item.storyIds.filter(Boolean) : [];
+  const ids = listed.length || item.kind === 'clip' || item.kind === 'short' ? listed : [...told];
+  return [...new Set(ids)].filter((id) => told.has(id)).filter((id) => {
+    const s = getStory(id);
+    return !s || !(String(s.title || '').trim() || String(s.summary || '').trim());
+  });
+}
+
 /** The publish-time gate: preflight when the module has it, else checkClip (video) or the text prefix rule. */
 export function preflight(item, opts = {}) {
-  if (mod.preflight) return mod.preflight(item, opts);
   const kind = item.kind || (item.episode ? 'episode' : 'text');
-  if (['live', 'episode', 'clip', 'short'].includes(kind)) return mod.checkClip({ ...item, kind }, opts);
-  const ok = /^AI-generated:/.test(String(item.text || '').trim());
-  return { ok, violations: ok ? [] : [{ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' }], warnings: [] };
+  let r;
+  if (mod.preflight) r = mod.preflight(item, opts);
+  else if (['live', 'episode', 'clip', 'short'].includes(kind)) r = mod.checkClip({ ...item, kind }, opts);
+  else {
+    const ok = /^AI-generated:/.test(String(item.text || '').trim());
+    r = { ok, violations: ok ? [] : [{ rule: 'text-disclosure-missing', message: 'a text post starts with "AI-generated:"' }], warnings: [] };
+  }
+  // the verbatim rule fails closed: a story whose sources are not at hand cannot be shown not to copy them
+  const blind = kind === 'text' || kind === 'live' ? [] : storiesWithoutSources(item, opts.getStory);
+  if (!blind.length) return r;
+  const extra = blind.map((id) => ({ rule: 'sources-missing', message: `story ${id}: its sources are not at hand, so its words cannot be checked against them`, storyId: id }));
+  return { ...r, ok: false, violations: [...(r?.violations || []), ...extra] };
 }
 
 /** C2PA marking; never throws (the real module throws when a file cannot be marked: an unmarked file is not published). */
@@ -93,4 +137,26 @@ export function recordReview(itemId, review = {}, { dataDir = null } = {}) {
   } catch (err) {
     return { ok: false, stub: false, reason: String(err?.message || err) };
   }
+}
+
+/**
+ * One publication in the register (where everything was published: the takedown workflow finds it there, compliance.md
+ * §7). { itemId, parentId, kind, platform, remoteId, url, programId, storyIds, outlets, recreations, flags, manifest }
+ * -> { ok, stub, reason }
+ */
+export function recordPublication(publication = {}, { dataDir = null } = {}) {
+  const reg = register(dataDir);
+  if (!reg?.recordPublication) return { ok: false, stub: true, reason: 'no compliance register (the stub stands in)' };
+  try {
+    reg.recordPublication(publication);
+    return { ok: true, stub: false };
+  } catch (err) {
+    return { ok: false, stub: false, reason: String(err?.message || err) };
+  }
+}
+
+/** "Editorial responsibility and complaints: …", as describe() writes it, or null while EDITORIAL_CONTACT is not set. */
+export function editorialLine(env = process.env) {
+  const who = mod.editorialContact ? mod.editorialContact(env) : String(env.EDITORIAL_CONTACT || '').trim() ? { name: String(env.EDITORIAL_RESPONSIBLE || '').trim() || null, contact: String(env.EDITORIAL_CONTACT).trim() } : null;
+  return who ? `Editorial responsibility and complaints: ${who.name ? `${who.name}, ` : ''}${who.contact}` : null;
 }

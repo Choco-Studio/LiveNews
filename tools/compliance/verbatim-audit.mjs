@@ -14,6 +14,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { storyReport, tokens, articleKey, MAX_RUN, MAX_SHARE, PHRASE } from '../../server/compliance/verbatim.js';
 import { extractArticle } from '../../server/article.js';
+import { Robots, RobotsRefusal, USER_AGENT } from '../../server/robots.js';
+import { guardedFetch, readCapped } from '../../server/net.js';
+import { pageUrl } from '../../server/news.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -43,30 +46,54 @@ const real = entries.filter((e) => /^https?:\/\//.test(e.link || '') && !/\.inva
 console.log(`${entries.length} archived story tellings, ${real.length} with a real article link`);
 
 // ---- the articles (cached)
+// Each page is opened as the news desk opens one (server/robots.js): the channel's user-agent, the article's own
+// address without the feed's tracking tags, and only when the outlet's robots.txt lets us, on every redirect hop. A page
+// it keeps from us is never read, and an article text cached for it before is dropped (a feed's text the desk kept,
+// via "feed", stays). With --no-fetch nothing is asked of any outlet, robots.txt included: the cache is read as it is.
 const keyOf = articleKey; // the launch report reads the same cache (verbatim.js archiveSample)
+const robots = fetchOn ? new Robots({ log: { info() {}, warn() {} } }) : null;
 async function article(link) {
   const f = path.join(cacheDir, `${keyOf(link)}.json`);
   if (fs.existsSync(f)) {
     try {
-      return JSON.parse(fs.readFileSync(f, 'utf8'));
+      const old = JSON.parse(fs.readFileSync(f, 'utf8'));
+      if (robots && old?.text && !/^feed/.test(old.via || '') && (await robots.check(pageUrl(link))).reason === 'disallowed') {
+        const doc = { link, status: null, text: null, via: null, robots: 'disallowed' };
+        fs.writeFileSync(f, JSON.stringify(doc));
+        return doc;
+      }
+      return old;
     } catch { /* fetch again */ }
   }
   if (!fetchOn) return null;
   let doc = { link, status: null, text: null, via: null };
+  const page = pageUrl(link);
   try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 20_000);
-    const res = await fetch(link, { signal: ctl.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (compatible; GLOBIT24-compliance-audit/1.0)', accept: 'text/html' } });
+    await robots.gate(page);
+    const { res } = await guardedFetch(fetch, page, {
+      timeoutMs: 20_000,
+      headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
+      beforeHop: (u, hop) => (hop > 0 ? robots.gate(u) : null),
+    });
+    robots.serverRefused(page, res.status);
     doc.status = res.status;
     if (res.ok) {
-      const buf = Buffer.from(await res.arrayBuffer()).subarray(0, 1_500_000);
+      const buf = await readCapped(res, 1_500_000, { truncate: true });
       const a = extractArticle(buf.toString('utf8'), { max: 20_000 });
       doc.text = a?.text || null;
       doc.via = a?.via || null;
+    } else {
+      try {
+        await res.body?.cancel?.();
+      } catch {}
     }
-    clearTimeout(timer);
   } catch (err) {
-    doc.error = String(err.message || err).slice(0, 120);
+    if (err instanceof RobotsRefusal) {
+      // a page robots.txt keeps from us is remembered; one that only has to wait (robots.txt unreachable, a server
+      // that refused us) is asked again at the next run
+      if (err.reason !== 'disallowed') return { ...doc, robots: err.reason };
+      doc.robots = 'disallowed';
+    } else doc.error = String(err.message || err).slice(0, 120);
   }
   fs.writeFileSync(f, JSON.stringify(doc));
   return doc;

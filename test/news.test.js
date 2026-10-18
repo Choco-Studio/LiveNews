@@ -87,7 +87,12 @@ const close = (actual, expected, message) => assert.ok(Math.abs(actual - expecte
  */
 function routedFetch(routes) {
   const requested = [];
+  const robotsRead = []; // the outlets' robots.txt (server/robots.js), read before a page; not counted as pages
   const fetchImpl = async (url) => {
+    if (/^https?:\/\/[^/]+\/robots\.txt$/.test(url) && !(url in routes)) {
+      robotsRead.push(url);
+      return new Response('not found', { status: 404 });
+    }
     requested.push(url);
     const spec = routes[url];
     if (spec instanceof Error) throw spec;
@@ -96,6 +101,7 @@ function routedFetch(routes) {
     return new Response('not found', { status: 404 });
   };
   fetchImpl.requested = requested;
+  fetchImpl.robotsRead = robotsRead;
   return fetchImpl;
 }
 
@@ -1270,7 +1276,8 @@ describe('NewsDesk.refresh', () => {
     assert.equal(desk.stories.size, 2);
     assert.deepEqual(Object.keys(desk.feedStatus).sort(), feeds.map((f) => f.name).sort());
     assert.deepEqual(calls.map((c) => c.url).sort(), feeds.map((f) => f.url).sort());
-    assert.ok(calls.every((c) => /LiveNewsBot/.test(c.init.headers['user-agent'])));
+    // the channel's own user-agent (server/robots.js); the feeds are read without robots.txt
+    assert.ok(calls.every((c) => /GLOBIT24\//.test(c.init.headers['user-agent'])));
     // the first feed wins the duplicates, and its category and weight are carried over
     assert.ok([...desk.stories.values()].every((s) => s.source === feeds[0].name && s.category === feeds[0].category && s.weight === feeds[0].weight));
   });

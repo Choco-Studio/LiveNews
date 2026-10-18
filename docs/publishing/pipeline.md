@@ -15,9 +15,10 @@ which is never in git.
 | Command | What it does |
 |---|---|
 | `tools/publish/factory.mjs` | One episode's clips, both formats, into the queue (`clips.md`) |
-| `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4) |
+| `tools/publish/posts.mjs --day` | A day of text posts, written to a file and optionally into the queue (`plan.md` §4); `--data` another data folder's archive and articles (the beta's news day) |
 | `tools/publish/upload.mjs` | A whole programme for YouTube: video, thumbnail, title, description, chapters (`plan.md` §5); `--video` queues one made earlier |
-| `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3) |
+| `tools/publish/approve.mjs` | The owner's approval page on http://127.0.0.1:8740/ (§3); `--manual` for hand publishing (§8) |
+| `tools/publish/beta.mjs` | The beta, published by hand (§8, `beta.md`): `hacer` makes the day's pieces, `estado` says what the day offers, no argument opens the page |
 | `tools/publish/run.mjs` | The publisher's round: re-check what waits, schedule what is approved, publish what is due (§4) |
 | `tools/publish/recheck.mjs` | The re-check alone: the gate again on everything waiting; what no longer passes is held (§4.1) |
 | `tools/publish/live.mjs` | The 24/7 stream kept up, and its title (§6) |
@@ -169,6 +170,11 @@ The publishing desk's only door to the compliance desk (`server/compliance/`, co
 - **The contract tests** (`test/publish-compliance.test.js`) run the same assertions against whichever module is
   loaded, and against the stub. On 17 Oct 2026 they also passed against the compliance desk's module in its own
   branch.
+- **The verbatim rule fails closed** (round 6). The door's `preflight` adds `sources-missing` for every story an item
+  tells (a clip's own stories; every story of a whole programme) whose sources the archive does not hold: its words
+  cannot be shown not to copy them. The compliance desk's lint counts such a story as "unverified" and lets it pass
+  unless asked to be strict; the publishing desk never publishes it. The factory, the upload, the publisher and its
+  re-check all go through this door.
 
 ## 6. The live supervisor (`live.js`)
 
@@ -212,3 +218,80 @@ schedule (which runs an hour ahead).
 | `live-status.json` | The supervisor's status |
 | `publisher.lock` | The running publisher's process id, while a round runs |
 | `posts/` | The day's posts (the `posts.mjs` default) |
+| `factory/<day>/` | The beta's pieces of the day (`beta.mjs hacer`): its episodes, clips, cards and posts, inside the page's media root |
+
+## 8. Hand publishing: the beta (`PUBLISH_MODE=manual`; `mode.js`, `manual.js`; the owner's guide: `beta.md`)
+
+The networks' API audits take days or weeks: an unaudited YouTube API project's uploads are locked private, and
+TikTok's Content Posting API posts privately until the app is audited (`platforms.md`). So the beta is published by
+hand, from the approval page, with every rule of the pipeline still in force.
+
+**What the mode changes.**
+
+- **No adapter reaches a network.** `Adapter.publish()` only describes the requests, whatever the switches and the
+  credentials, and `Adapter.request()`, the one door every live call goes through (the live title's `videos.update`
+  too), refuses. `liveBlockers` names the mode first.
+- **The publisher's round only re-checks** (`Publisher.run()`, `tools/publish/run.mjs`): nothing is scheduled, and
+  nothing is published or dry-run (a dry run would mark an item published and take it off the owner's page).
+- **The live supervisor never streams** (`tools/publish/live.mjs` refuses `--rtmp`; a test into files is allowed).
+- **The page offers the day's pick** (`dailyPick`): per network, its best waiting items, up to the lower end of the
+  phase's daily range less what was published there today (Phase 1: 3 YouTube Shorts, 3 TikToks, 2 Reels; a text post
+  network 2), never a compliance refusal, never anything grave in Phase 1, never what the ledger holds. About 15
+  minutes of review (`plan.md` §2), plus the uploads by hand. The rest waits in *Por aprobar*. "Programar lo aprobado"
+  is gone.
+
+**For each approved item** (`manual.js`):
+
+1. **Preparar para publicar** (`POST /api/prepare`). The item's files are signed into copies beside them
+   (`<name>.<item id>.c2pa.mp4`, and its cover `.c2pa.jpg`: `compliance.markFile`), and the gate runs again on what
+   will go out: the signed files (read back: `unmarked` otherwise), the words the owner will paste, the flags he will
+   set, the register and the stories' sources as they are now. What fails is **held**, by `recheck`, with its reasons
+   in Spanish, and goes back to *Por aprobar* if it passes again later; its copies are removed. What passes is handed
+   out for six hours (`PREPARED_TTL`); after that, or after an edit, it is prepared again.
+2. **Descargar**: the signed video (vertical for Shorts, TikTok and Reels; horizontal for a whole programme) and the
+   signed cover, as attachments (`GET /download/<id>/video|cover`), only while the package is fresh.
+3. **Copiar** (`manualTexts`), exactly the words the gate measured:
+   - YouTube: the title, the description (the disclosure first, the programme, the sources, the credits, the channel
+     statement and who answers for the channel as `EDITORIAL_CONTACT` says now) and the hashtags;
+   - TikTok, Instagram: the caption, its first line the AI disclosure, then the lead, the source and a line of credits;
+     and the hashtags;
+   - a text post: its text as the network shows it ("AI-generated:" first), and the article's link (Telegram's message
+     shows its links as labels, so by hand the address goes under the text).
+4. **The network's own switches** (`checklistFor`), ticked one by one: YouTube "altered or synthetic content" yes and
+   "made for kids" no; TikTok's "AI-generated content" label on, the privacy, no branded content; Instagram's "AI info"
+   label; Facebook's label by hand. The wording quoted is the networks' own as read for `compliance.md` §2.5–2.7; the
+   apps' Spanish labels were not read, so each switch is described by what it does.
+5. **Ya lo he publicado** (`POST /api/published`, `recordManual`), with the post's address if he has it (https, on the
+   network's own host), once every switch is ticked. The item becomes `published` (`result.manual`), the real ledger
+   records it (nothing twice: the same moment, the same video bytes or the same story there within a day is refused
+   from then on), and the compliance register records the publication (`recordPublication`: the network, the address,
+   the stories, the outlets, the switches ticked, the C2PA files), so a takedown finds it (`compliance.md` §7).
+
+**The beta's day** (`tools/publish/beta.mjs hacer`, at low priority, each step timed):
+
+1. **The news, with the AI writer** (`server/publish/newsday.js`), when the provider chain has one (the owner's key:
+   `PROVIDERS=openai,mock` and `OPENAI_API_KEY`; the Codex CLI counts only when installed). The day's news programmes
+   are made fresh from the live feeds through the channel's own producer (the write, the own-words check and its
+   rewrites, the standards editor, the fit, the voices), as `tools/writer/try.mjs` makes them. Which and how many:
+   `--noticias` or `BETA_NEWS` (Phase 1's light news by default: COSMOS DESK, TECH BYTES, FULL TIME when the day has
+   results) and `--ediciones` (1 each). No pictures yet (maps and boards). Each told story is recorded, with the article
+   the desk read, in the day's own sources folder (`factory/<day>/sources/archive`, `…/compliance/articles`), never in
+   the station's archive. An edition the AI did not write (it fell back to the offline writer) is reported and not
+   recorded. Without an AI writer, `hacer` says plainly, in Spanish, that the news needs the key, and goes on with the
+   quiz.
+2. **PAY ATTENTION**, remade from the archive with its voices (`material.mjs`: at the day's hours it airs, latest first,
+   until the quiz desk plans an edition).
+3. **The clips** in vertical (`factory.mjs`, under `factory/<day>/`; the news with `--sources` that folder). A
+   programme the offline writer wrote is skipped (`offline-writer`, `verbatim.md` §7). **A rendered master** (the
+   pre-rendered playout another desk is building) is used when one exists (`server/publish/masters.js`:
+   `<root>/<episode id>/vertical.mkv` and `vertical.report.json`, the recorder's report at 30 fps, under
+   `RENDERED_MASTERS` or `--masters-from`): it is linked where the factory keeps a master, and cut instead of recorded.
+   An item made with `--sources` keeps that folder (`gate.sourcesDir`), and every later check measures it there too:
+   the re-check, the publisher and the page's "Preparar" (`compliance.sourcesForItem`).
+   **Nothing under 10 seconds** is published (`moments.js` `CLIP_MIN_SECONDS`, YouTube's and TikTok's minimum; the
+   day's pick leaves out a shorter clip queued before the floor).
+4. **The posts** for the networks set to *Manual* (`posts.mjs --data` the day's sources folder when the AI wrote the
+   news): a post carries an aired line only when the line passes the verbatim rule against the article.
+
+Then what the day offers and why the rest is held. `estado` prints only that. With no argument `beta.mjs` re-checks
+everything waiting and opens the page in hand publishing.

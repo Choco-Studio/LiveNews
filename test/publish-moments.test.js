@@ -3,7 +3,7 @@
 // own measures, and only the light ones publishable in Phase 1.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook } from '../server/publish/moments.js';
+import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook, CLIP_MIN_SECONDS } from '../server/publish/moments.js';
 import { estimateTimeline } from '../server/publish/timeline.js';
 import { dangling, backReference, endsClean, quotesBalanced } from '../server/publish/text.js';
 
@@ -142,6 +142,13 @@ test('a moment whose story copies its source is not publishable in any phase (th
   assert.equal(all[0].copied, undefined);
 });
 
+test('a moment whose story has no sources at hand is not publishable either (its words cannot be checked)', () => {
+  const m = (id, storyIds) => ({ id, kind: 'story', storyIds, light: true, grave: false, scores: { sense: 9 } });
+  const all = markCopied([m('a', ['s1']), m('b', ['s2'])], new Set(), { unverified: new Set(['s2']) });
+  assert.deepEqual(publishable(all, { phase: 1 }).map((x) => x.id), ['a']);
+  assert.equal(all[1].refused, 'verbatim: its sources are not at hand, its words cannot be checked');
+});
+
 test('a moment that shows a picture not cleared is never chosen nor queued, in any phase; nor any moment of a private preview', async () => {
   const { markUncleared, picturesShown } = await import('../server/publish/moments.js');
   const { auditItem } = await import('../server/compliance/credits.js');
@@ -196,4 +203,11 @@ test('a clip\'s burned-in title is never the outlet\'s headline passed off as th
   assert.deepEqual(ownHook(copied, story, []), copied.hook);
   // no label the story bears out: the programme's name
   assert.deepEqual(ownHook(copied, { kicker: 'VOLCANO' }, sources), ['COSMOS DESK']);
+});
+
+test('the 10-second floor: a moment shorter than YouTube\'s and TikTok\'s minimum is never published (round 7: a 3-second story)', () => {
+  const m = (id, duration) => ({ id, kind: 'story', storyIds: [id], light: true, grave: false, duration, scores: { sense: 8 } });
+  const all = [m('short', 3.22), m('edge', 10), m('long', 24.8), m('unknown', undefined)];
+  assert.equal(CLIP_MIN_SECONDS, 10);
+  for (const phase of [1, 2, 3]) assert.deepEqual(publishable(all, { phase }).map((x) => x.id), ['edge', 'long', 'unknown'], `phase ${phase}`);
 });

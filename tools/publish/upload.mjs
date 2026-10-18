@@ -19,6 +19,7 @@ import { composeArgs, srtFor } from '../../server/publish/render.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
+import { renderedMaster } from '../../server/publish/masters.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
 
 const { opt, flag } = argsOf();
@@ -43,7 +44,13 @@ const pb = createPlaybackServer({ root });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 let master = opt('master') ? { file: path.resolve(opt('master')), report: path.resolve(opt('report')) } : null;
-if (!master && fromPlayout) master = { file: path.join(fromPlayout, `${prog}-horizontal.mkv`), report: path.join(fromPlayout, `${prog}-horizontal.report.json`) };
+if (!master && fromPlayout) {
+  master = renderedMaster(episode, 'horizontal', [path.dirname(fromPlayout)]);
+  if (!master) {
+    console.error(`[upload] no rendered master in ${fromPlayout} (horizontal.mkv and its report, the folder named for the episode)`);
+    process.exit(1);
+  }
+}
 // (the metadata and the thumbnail need only the recording's report: --report with --no-video records no master)
 if (!master && opt('report') && (flag('no-video') || opt('video'))) master = { file: null, report: path.resolve(opt('report')) };
 if (!master) master = await recordMaster({ base, epFile, fmt: 'horizontal', file: path.join(tmpDir, `${prog}-horizontal.mkv`), report: path.join(out, `${prog}.report.json`), seconds: Number(opt('seconds', recordSeconds(episode))), airedAt, tmpDir, say });

@@ -12,6 +12,7 @@ import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazette
 import { askLine, deskOf, followLine, missesQuestion, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 import { EXPERT_DESKS, expertFor, introLine as expertIntro, questionLine as expertQuestion, followLine as expertFollow, thanksLine as expertThanks, expertKicker } from './experts.js';
 import { NEXT_LIMITS, SHARE_LIMITS, WHO_LIMITS, normalizeNext, normalizeShare, normalizeWho, saysPerson, saysShare, saysWhen } from './boards.js';
+import { MAX_RUN, PHRASE } from './compliance/verbatim.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -43,7 +44,7 @@ function featureRules(program) {
         ? 'Make it the second story.'
         : 'Make it the second or third story.';
   return {
-    number: `"number" (NUMBER OF THE DAY): one story whose summary states a striking figure. Open with the figure ("Our number of the day: 40,000.") and explain it in the words of the summary. Fill "numbers" for it. Only one per episode, never the lead story, never a grave or breaking story, never an age or a date. ${slot}`,
+    number: `"number" (NUMBER OF THE DAY): one story whose summary states a striking figure. Open with the figure ("Our number of the day: 40,000.") and explain it from the summary's facts, in your own words. Fill "numbers" for it. Only one per episode, never the lead story, never a grave or breaking story, never an age or a date. ${slot}`,
     roundup:
       r.kind === 'pictures'
         ? `"roundup" (${r.kicker || 'QUICK BYTES'}): ${r.min || 2} to ${r.max || MAX_ROUNDUP} brief items, exactly one sentence each${r.words ? ` of ${r.words} words` : ''}, for smaller stories that have a picture of their own, none grave or breaking. Write them as consecutive story segments with "feature": "roundup" and "shot": "full", all read by the same presenter. The first item opens the round-up ("${opener}"). No chat inside it, no fact cards.`
@@ -147,10 +148,13 @@ function sportRule(program, solo, a = 'A', b = 'B') {
   if (program.kind !== 'sport') return '';
   return `
 - Results: say a score only as the candidate states it as final, in figures ("4-1"), with both teams named as the candidate names them; never a half-time, aggregate, series or live score as a result, never a score the candidate does not give.
+- A story about a match says who won (or that it was drawn) and, when the candidate gives one, the final score; never a match report that only tells the moments around it.
+- A person's first mention is the whole name the candidate gives ("Billy Loughnane", not "Loughnane"); a description ("the Spaniard", "the Everton defender", "the 24-year-old") or a "both", "later", "however" only after what it points back to has been said.
+- A headline is a whole thought, never cut mid-phrase; rugby league and rugby union are named as such, never just "rugby".
 - Nobody is judged: no praise or blame of a player, a manager, a referee or a team ("brilliant", "poor", "wasteful", "deserved", "should have"); facts, and the words of the people involved inside quotation marks with their speaker.
 - Never betting, odds, gossip, rumours or transfer talk.
 - Time words are as the candidates give them: never "tonight" or "tomorrow" for a game the candidate dates otherwise.${solo ? '' : `
-- THE BREAKDOWN: directly after the lead (and after at most one more main story), a chat in which ${a} asks one short question that names ${b} and fits what the story's own words can answer: how long it has been coming (a record, a first since, a run), where it leaves them (the table), what comes next (a dated step), or what they are saying (an attributed quotation); ${b} answers with one or two of that story's sentences ${a} has not read. No such sentence, no question.`}
+- THE BREAKDOWN: directly after the lead (and after at most one more main story), a chat in which ${a} asks one short question that names ${b} and fits what the story's own words can answer: how long it has been coming (a record, a first since, a run), where it leaves them (the table), what comes next (a dated step), or what they are saying (an attributed quotation); ${b} answers with one or two of that story's facts ${a} has not read, in ${b}'s own words. No such fact, no question.`}
 - The lighter story is the moment of the day: a record, a milestone, an auction, a farewell, a remarkable catch; never grave, never a story about a person's misfortune.`;
 }
 
@@ -226,6 +230,17 @@ const ACCURACY = `ACCURACY RULES (mandatory)
 - No political opinions and no judgements about real people.`;
 
 /**
+ * The channel's own words (docs/publishing/verbatim.md §3, §5): facts are free, the outlet's sentences are not. The
+ * producer measures every story after the writer and the editor (server/ownwords.js) and sends a copy back once or twice
+ * with its copied passages named; one still copied is cut to its own sentences or dropped, never aired.
+ */
+export const OWN_WORDS = `IN OUR OWN WORDS (mandatory)
+- Compose every sentence yourself from the facts. Never read out, stitch together or lightly edit the outlet's sentences: no run of more than ${MAX_RUN} words, and no more than a fifth of a story's words in runs of ${PHRASE} or more, may match its headline, summary or article word for word. Short stretches count too, a figure with its unit and the words around it among them: put each figure in a sentence of your own.
+- Rebuild each sentence: your own structure, order and linking words. Keep the source's plain names for things (people, places, bodies, products, what happened) so every fact stays checkable; never swap them for words that shift the meaning.
+- A paraphrase keeps every fact exactly: each figure with its unit and qualifier, each name, place and date, who said what, and the source's certainty ("may", "could", "plans to", "is expected to", "allegedly" stay as uncertain as the source; never turn them into "will" or a plain fact).
+- The outlet's own words appear only as a quotation: inside quotation marks, copied exactly from a quotation in the source, with its speaker named in the same sentence ("…," the mayor said). The correspondents' and experts' lines follow the same rules.`;
+
+/**
  * @param program     programme definition from config/channel.json
  * @param presenters  { A: presenter, B?: presenter } with name + personality
  */
@@ -280,7 +295,9 @@ TASK
 3. Write the script in English, to be read aloud by a synthetic voice.
 
 ${ACCURACY}
-- A "why it matters" line is welcome only when the summary itself says what follows from the news (a purpose, a consequence, who is affected); say it in the summary's terms with a clear subject ("The city says the line will cut traffic."), never as a label such as "Why it matters:". Otherwise leave it out.
+- A "why it matters" line is welcome only when the summary itself says what follows from the news (a purpose, a consequence, who is affected); say it from the summary's facts, in your own words, with a clear subject ("The city says the line will cut traffic."), never as a label such as "Why it matters:". Otherwise leave it out.
+
+${OWN_WORDS}
 
 TONE
 - This is a channel for adults: credible, calm and confident, like a good public broadcaster. Humour is dry and understated (deadpan, a raised eyebrow, the odd wry aside), never childish, gushing or cute. No exclamation marks, no puns for the sake of it, no "wow".
@@ -363,6 +380,8 @@ Check every story segment against its SOURCE (matched by storyId):
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
 - A story's "analysis" (an expert's answers to the presenter's questions) follows the same rules: every sentence supported by that story's source, explained and attributed, never a claim to have seen or spoken to anyone, no opinion or prediction the source does not make; remove a sentence that breaks them.
+- Paraphrase traps: a figure, a name, a place, who said what and the source's certainty must stay the source's ("may" or "could" is never "will"; "allegedly" is never dropped; words one person said are never given to another). Correct any sentence that changed them.
+- Keep the script's own wording. Where you correct a sentence, write the correction in your own words from the source's facts: never paste the source's sentence (no run of more than ${MAX_RUN} words copied from the source outside an attributed quotation).
 - Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis", "known", "timeline", "change", "share", "next" or "who"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
@@ -1103,6 +1122,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // (nor on a time that needs what it is the time of: "He met Keir Starmer at Downing Street the day[ after Trump…
     // berated the Ukrainian president…]", Guardian 13 Oct, round 6)
     if (/\bthe\s+(?:day|week|month|year|morning|night|evening|weekend|time|moment)$/i.test(head)) continue;
+    // nor before the rest of a counted list: "…fit for Chelsea's next three matches - they face Tottenham and Manchester
+    // United in the Premier League[, with a Carabao Cup tie at Liverpool in between]" named two of three (BBC Sport 17 Oct)
+    if (/\b(?:two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:[a-z]+\s+)?(?:matches|games|fixtures|ties|races|events|tests|rounds|tournaments)\b/i.test(head) && /\p{Lu}/u.test(t.slice(end))) continue;
     // nor on a clause after a dash that has no verb yet: "Bedbugs causing travel chaos is not unusual - less than two weeks
     // ago[, several Southeastern train services… were cancelled…]" (BBC 12 Oct, round 5)
     const dashTail = head.split(/\s[-–—]\s/).at(-1);

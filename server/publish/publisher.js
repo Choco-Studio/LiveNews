@@ -11,17 +11,22 @@
 // A live publish needs ALL of: PUBLISH_LIVE=1 in the environment, settings.dryRun false, the network switched on in
 // settings.live, the real compliance module (never the stub), the item approved by the owner (or by its automatic
 // mode in Phase 3), and the network's credentials. Missing any one: a dry run, and the outbox says which was missing.
+// In hand publishing (PUBLISH_MODE=manual, the beta: mode.js, docs/publishing/beta.md) the round only re-checks what
+// waits: nothing is scheduled, nothing is published or dry-run (a dry run would mark an item published and take it off
+// the owner's page), and no adapter reaches a network. The owner publishes from the approval page (manual.js).
 import fs from 'node:fs';
 import path from 'node:path';
 import { makeAdapter } from './adapters/index.js';
 import { redact } from './adapters/base.js';
 import * as compliance from './compliance.js';
 import { recheckQueue } from './recheck.js';
+import { isManual } from './mode.js';
 
 /** Why an item would not go out live (empty: it may). */
 export function liveBlockers(queue, item, { env = process.env, usingStub = compliance.usingStub, adapter = null } = {}) {
   const s = queue.settings();
   const why = [];
+  if (isManual(env) || isManual(process.env)) why.push('PUBLISH_MODE is manual: the owner publishes by hand, no adapter reaches a network');
   if (env.PUBLISH_LIVE !== '1') why.push('PUBLISH_LIVE is not 1');
   if (s.dryRun !== false) why.push('the desk is in dry-run mode (settings.dryRun)');
   if (!s.live?.[item.platform]) why.push(`${item.platform} is not switched on (settings.live.${item.platform})`);
@@ -87,9 +92,18 @@ export class Publisher {
     fs.appendFileSync(this.outbox, `${JSON.stringify(redact(entry, Object.values(this.env).filter((v) => typeof v === 'string' && v.length >= 12)))}\n`);
   }
 
-  /** Publish (or dry-run) one item now. Returns the item as saved. */
+  /** Hand publishing (PUBLISH_MODE=manual): the publisher never publishes, never dry-runs, never schedules. */
+  get manual() {
+    return isManual(this.env) || isManual(process.env);
+  }
+
+  /** Publish (or dry-run) one item now. Returns the item as saved. In hand publishing, the item untouched. */
   async publishOne(item) {
     const q = this.queue;
+    if (this.manual) {
+      this.log(`[publisher] ${item.id}: PUBLISH_MODE is manual, the owner publishes it by hand (the approval page)`);
+      return item;
+    }
     const probe = makeAdapter(item.platform, { env: this.env, dryRun: true });
     const blockers = liveBlockers(q, item, { env: this.env, usingStub: this.usingStub, adapter: probe });
     const dry = blockers.length > 0;
@@ -101,7 +115,7 @@ export class Publisher {
     // 2. the compliance gate, again, at the moment of publishing
     // (the verbatim lint: the item's own stories against their sources in the archive)
     this.sourcesOf ||= compliance.archiveGetStory({ dataDir: this.dataDir });
-    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir), getStory: compliance.clipGetStory(item.source?.storyIds, this.sourcesOf) });
+    const gate = this.gate(this.gateItem(item), { now: this.now(), register: compliance.register(this.dataDir), getStory: compliance.clipGetStory(item.source?.storyIds, compliance.sourcesForItem(item, this.sourcesOf, (this.sourcesCache ||= new Map()))) });
     item.compliance = { ok: !!gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: !!this.usingStub, checkedAt: this.now() };
     if (!gate.ok) {
       item.status = 'held';
@@ -190,6 +204,7 @@ export class Publisher {
   recheck() {
     // (the archive and its articles as they are now: a long-running publisher never measures against a stale copy)
     this.sourcesOf = compliance.archiveGetStory({ dataDir: this.dataDir });
+    this.sourcesCache = new Map();
     return recheckQueue({ queue: this.queue, view: (it) => this.gateItem(it), dataDir: this.dataDir, gate: this.gate, now: this.now, getStory: this.sourcesOf, usingStub: this.usingStub });
   }
 
@@ -202,6 +217,7 @@ export class Publisher {
     if (!release) throw new Error('another publisher is running (data/publish/publisher.lock)');
     try {
       this.lastRecheck = this.recheck();
+      if (this.manual) return [];
       this.queue.schedule(this.now());
       const out = [];
       for (const it of this.queue.due(this.now())) out.push(await this.publishOne(it));

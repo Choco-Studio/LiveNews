@@ -12,7 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const UA = 'Mozilla/5.0 (compatible; LiveNewsBot/0.1; +https://github.com/choco-studio/livenews)';
+// the channel's user-agent (server/robots.js): its name and the repository, never an e-mail
+const { USER_AGENT: UA } = await import('../../server/robots.js');
 const args = process.argv.slice(2);
 const OUT = path.resolve(ROOT, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'data/play-measure');
 const feedsOnly = args.includes('--feeds-only');

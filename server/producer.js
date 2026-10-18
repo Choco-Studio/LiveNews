@@ -13,13 +13,15 @@ import { rightsGate } from './compliance/credits.js';
 import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
-import { pictureCleared } from './quiz/desk.js';
+import { pictureCleared, quizEvents } from './quiz/desk.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
 import { airable, compactRights, currentRights, pictureMode } from './rights.js';
 import { locate, lookupPlace, placeSupported, institutionPlace } from './gazetteer.js';
 import { boardSpec } from '../public/js/boardspec.js';
+import { airedText } from './compliance/verbatim.js';
+import { MAX_REWRITES, checkScore, copiedPassages, currentLines, dropStory, editorChanges, mergeRewrite, parseRewrite, rewriteFaults, rewritePrompt, storyCheck, storySources, trimStory } from './ownwords.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -139,7 +141,7 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, log = console, gate = null }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, pictureDesk = null, pictureAhead = null, log = console, gate = null }) {
     this.config = config;
     // pre-rendered playout (docs/publishing/playout.md §3): the check before air on the words, before the voices are
     // made (an episode the station will hold costs no voice time); `gate(episode)` -> { ok, violations }
@@ -148,6 +150,16 @@ export class Producer {
     // its rights record; without it (tests, older callers) the news desk's own pictures air as before
     this.pictureDesk = pictureDesk;
     this.pictureMode = pictureMode(config?.pictures?.rights);
+    // ...deciding ahead of air (server/pictureahead.js; round 9): stories are decided in the background as they come in,
+    // the next programmes' first; production only reads the decisions that are ready. Without it (tests, older callers)
+    // the desk decides within the picture budget, as before
+    this.pictureAhead = pictureDesk ? pictureAhead : null;
+    this.lookAheadAt = null; // { channel, ids }: the programmes the station makes next (their candidates decided first)
+    if (this.pictureAhead) {
+      this.pictureAhead.tiers = () => this.pictureTiers();
+      this.pictureAhead.watch = () => this.liveStories();
+      this.pictureAhead.onDecided = (s, tier) => this.pictureDecided(s, tier);
+    }
     // the channel's memory of what it aired (server/archive.js): every news episode is recorded, SEVEN DAYS is
     // written from it
     this.archive = archive;
@@ -317,6 +329,8 @@ export class Producer {
     if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
     if (program.kind === 'quiz') return this.produceQuiz(channel, program);
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    // (the programmes after this one, and the clock's pinned bulletin: their candidates are the picture desk's next work)
+    this.lookAhead(channel, [...upcoming, ...(channel.clock?.pins || []).map((p) => p.program)]);
     if (candidates.length < this.floorOf(program)) return null;
 
     // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
@@ -327,6 +341,8 @@ export class Producer {
     const started = Date.now();
     try {
       for (const stage of this.stages) {
+        // (an episode the own-words check left below its floor is not finished: server/ownwords.js)
+        if (ctx.skip) break;
         if (stage.enabled && !stage.enabled(ctx)) continue;
         const t0 = Date.now();
         const note = await stage.run(ctx);
@@ -335,6 +351,13 @@ export class Producer {
     } catch (err) {
       this.log.error?.(`[producer] ${program.title}: ${err.message}`);
       throw err;
+    }
+    if (ctx.skip) {
+      // the slot is skipped (the station moves on); the stories that could not be told in our own words sink in the
+      // ranking, then drop out (NewsDesk.markOffered), so the next episode does not meet them first
+      if (ctx.dropped?.length) this.news.markOffered(ctx.dropped);
+      this.log.warn?.(`[producer] ${program.title}: ${ctx.skip}; slot skipped`);
+      return null;
     }
 
     this.newsSinceWeather++;
@@ -402,7 +425,8 @@ export class Producer {
     const list = balance(prepareStories(ctx.candidates, { now, tz }), { count: ctx.program.stories || 10, ledLately: (id) => led.has(id), now });
     // the writer tells the edition (football at most half of it); the shape reads results and dates from all of them
     ctx.sportPool = list;
-    ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program)));
+    // (never a one-line report kept only for its result: server/sport/prepare.js resultOnly)
+    ctx.candidates = list.slice(0, Math.max(list.edition ?? list.length, this.floorOf(ctx.program))).filter((s) => !s.resultOnly);
     return { stories: ctx.candidates.length, pool: list.length, dropped: before - list.length };
   }
 
@@ -426,6 +450,16 @@ export class Producer {
   weeklyReady(program) {
     if (!this.archive) return false;
     if (Date.now() - this.lastWeeklyAt < (program.minGapHours ?? 3) * 3600_000) return false;
+    // a count first: grouping the week by sameStory is quadratic, and canProduce runs at every /api/next. On the
+    // 5,600 airings of 17 Oct it held the station's event loop 60 % of the time (every programme "ready in" 70-120 s,
+    // Wikimedia's answers timing out unread). The days told are the entries' own days; thirty stories or more are six
+    // events or more however they group (fewer are grouped as before)
+    const now = typeof this.archive.now === 'function' ? this.archive.now() : Date.now(); // (the archive's clock, as week())
+    const entries = (this.archive.entries || []).filter((e) => e.at >= now - 7 * 86400_000 && e.at <= now);
+    const days = new Set(entries.map((e) => new Date(e.at).toISOString().slice(0, 10)));
+    const ids = new Set(entries.map((e) => e.id));
+    if (days.size < 3 || ids.size < 6) return false;
+    if (ids.size >= 30) return true;
     const week = this.weekStories();
     return week.length >= 6 && new Set(week.flatMap((c) => c.days)).size >= 3;
   }
@@ -758,8 +792,184 @@ export class Producer {
     ctx.episode = value;
     ctx.provider = provider;
     const deeper = await this.deepen(ctx, request, provider);
+    const own = await this.ownWords(ctx, 'write');
     this.castCorrespondents(ctx);
-    return { provider, ...(deeper ? { depth: deeper.depth, air: Math.round(deeper.air), ...(deeper.fewer ? { fewer: deeper.fewer } : {}) } : {}) };
+    return { provider, ...(deeper ? { depth: deeper.depth, air: Math.round(deeper.air), ...(deeper.fewer ? { fewer: deeper.fewer } : {}) } : {}), ...(own ? { own } : {}) };
+  }
+
+  /** The script as a writer gives it: links folded back into their stories, stage directions back in the text. */
+  scriptOf(episode) {
+    return {
+      title: episode.title,
+      // a correspondent link reads as its story's `cross`, as the writer gave it (the validator rebuilds the link)
+      segments: collapseCrosses(episode.segments).map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues || []) })),
+    };
+  }
+
+  /** Was this episode written by a writer that copies its sources (the offline fallback writer, which never reviews)? */
+  offlineWriter(name) {
+    const p = this.chain?.providers?.find?.((x) => x.name === name);
+    return p ? p.reviews === false : name === 'mock';
+  }
+
+  /**
+   * The channel's own words (server/ownwords.js; docs/publishing/verbatim.md): every story of an AI-written episode is
+   * measured against its sources (the verbatim rule: no run over 12 words, at most 20 % copied, attributed quotations
+   * exempt) and checked for the paraphrase traps (a hedge dropped, words given to another speaker, a rise told as a
+   * fall). A story that fails goes back to the model, at most MAX_REWRITES times, with its copied passages and faults
+   * named; a rewrite that gives a figure another value is refused. One still failing is cut to its compliant sentences, else
+   * dropped from the episode: a copy never airs. Below the programme's floor the slot is skipped (ctx.skip). Every
+   * rewrite, cut and drop is logged. The offline fallback writer is measured only (the publish gate holds it). Runs after
+   * the writer and again after the standards editor (`phase`). -> the pipeline note, or null
+   */
+  async ownWords(ctx, phase) {
+    if (!ctx.episode?.storyIds?.length) return null;
+    const title = ctx.program.title;
+    const storyOf = (id) => this.news.get(id) || ctx.candidates?.find((s) => s.id === id) || null;
+    const ignore = [ctx.channelName, title, ...Object.values(ctx.presenters || {}).map((p) => p?.name), ...(ctx.correspondents || []).map((c) => c.name), ...(ctx.experts || []).map((e) => e.name)].filter(Boolean);
+    const check = (episode, id) => storyCheck(episode, id, storySources(storyOf(id)), { ignore: [...ignore, storyOf(id)?.source].filter(Boolean) });
+    const checkAll = (episode) => new Map(episode.storyIds.map((id) => [id, check(episode, id)]));
+    const sum = (checks) => {
+      let words = 0;
+      let copied = 0;
+      let longest = 0;
+      let violating = 0;
+      let faults = 0;
+      for (const c of checks.values()) {
+        words += c.report.words;
+        copied += c.report.copied;
+        longest = Math.max(longest, c.report.longest);
+        violating += c.report.violations.length ? 1 : 0;
+        faults += c.faults.length;
+      }
+      return { stories: checks.size, share: words ? Math.round((copied / words) * 1000) / 1000 : 0, longest, violating, faults };
+    };
+    let checks = checkAll(ctx.episode);
+    if (this.offlineWriter(ctx.provider)) {
+      // (the offline writer reads its sources out by design: never rewritten or cut here; the publish gate holds it)
+      const s = sum(checks);
+      if (s.violating) this.log.info?.(`[own words] ${title}: written offline (${ctx.provider}): ${s.violating} of ${s.stories} stories copy their sources (${Math.round(s.share * 100)} % of the words); never published (publish gate: offline-writer)`);
+      return { offline: true, ...s };
+    }
+    const normalize = (script) => this.normalizer(ctx, ctx.candidates?.length ? ctx.candidates : ctx.episode.storyIds.map(storyOf).filter(Boolean))(JSON.stringify(script));
+    const pct = (c) => `${Math.round(c.report.share * 100)} %`;
+    const why = (c) => [...c.report.violations.map((v) => (v.rule === 'run' ? `a run of ${v.length} words copied` : `${Math.round(v.share * 100)} % copied`)), ...c.faults.map((f) => f.message)].join('; ');
+    let script = this.scriptOf(ctx.episode);
+    const note = { rounds: 0, rewritten: [], refused: 0, trimmed: [], dropped: [] };
+    for (let round = 1; round <= MAX_REWRITES; round++) {
+      const failing = [...checks].filter(([, c]) => c.failing).map(([id]) => id);
+      if (!failing.length) break;
+      note.rounds = round;
+      const items = failing.map((id) => {
+        const seg = script.segments.find((x) => x.type === 'story' && x.storyId === id);
+        const c = checks.get(id);
+        return { storyId: id, story: storyOf(id), current: currentLines(seg), copied: copiedPassages(c.report), faults: c.faults.map((f) => `"${f.sentence}" ${f.message}`) };
+      });
+      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
+      let reply;
+      let provider;
+      try {
+        // (an unreadable reply is no reason to pause the provider: the editor still needs it for the review)
+        ({ provider, value: reply } = await this.chain.generate(request, (text) => {
+          try {
+            return parseRewrite(text, failing);
+          } catch (err) {
+            return Object.assign(new Map(), { error: err.message });
+          }
+        }));
+      } catch (err) {
+        note.error = err.message;
+        this.log.warn?.(`[own words] ${title}: no rewrite (${err.message})`);
+        break;
+      }
+      if (!reply.size) {
+        note.error = reply.error || 'empty rewrite';
+        this.log.warn?.(`[own words] ${title}: the rewrite reply holds none of the stories (${note.error})`);
+        continue;
+      }
+      for (const [id, fields] of reply) {
+        const before = checks.get(id);
+        const refuse = (reason) => {
+          note.refused++;
+          this.log.warn?.(`[own words] ${title}: rewrite of story ${id} refused (round ${round}): ${reason}`);
+        };
+        const candidate = mergeRewrite(script, id, fields);
+        let episode = null;
+        try {
+          episode = normalize(candidate);
+        } catch {
+          /* refused below */
+        }
+        if (!episode?.storyIds?.includes(id)) {
+          refuse('the story did not survive the checks');
+          continue;
+        }
+        const changed = rewriteFaults(airedText(ctx.episode, id), airedText(episode, id));
+        if (changed.length) {
+          refuse(changed.join('; '));
+          continue;
+        }
+        const after = check(episode, id);
+        if (after.faults.length > before.faults.length) {
+          refuse(after.faults.map((f) => f.message).join('; '));
+          continue;
+        }
+        if (after.failing && checkScore(after) >= checkScore(before)) {
+          refuse(`no better (${why(after)})`);
+          continue;
+        }
+        script = candidate;
+        ctx.episode = episode;
+        checks = checkAll(episode);
+        if (!note.rewritten.includes(id)) note.rewritten.push(id);
+        this.log.info?.(`[own words] ${title}: story ${id} rewritten (round ${round}, ${provider}): copied ${pct(before)} -> ${pct(after)}, longest run ${before.report.longest} -> ${after.report.longest}${after.failing ? `; still ${why(after)}` : ''}`);
+      }
+    }
+    // Still failing: the shorter compliant version, else out of the episode. (Checked again once the whole script is
+    // normalised: dropping a story re-cuts the intro and the chats.)
+    for (let pass = 0; pass < 3; pass++) {
+      const failing = [...checks].filter(([, c]) => c.failing);
+      if (!failing.length) break;
+      for (const [id, c] of failing) {
+        const trimmed = trimStory(script, id, storySources(storyOf(id)), c.faults.map((f) => f.sentence));
+        let kept = false;
+        if (trimmed) {
+          try {
+            const episode = normalize(trimmed);
+            if (episode.storyIds.includes(id) && !check(episode, id).failing) {
+              script = trimmed;
+              kept = true;
+              if (!note.trimmed.includes(id)) note.trimmed.push(id);
+              this.log.warn?.(`[own words] ${title}: story ${id} cut to its own sentences (${why(c)})`);
+            }
+          } catch {
+            /* not a version we air */
+          }
+        }
+        if (!kept) {
+          script = dropStory(script, id);
+          note.dropped.push(id);
+          this.log.warn?.(`[own words] ${title}: story ${id} dropped: ${why(c)}`);
+        }
+      }
+      try {
+        ctx.episode = normalize(script);
+      } catch (err) {
+        ctx.skip = `no story left in the channel's own words (${err.message})`;
+        break;
+      }
+      checks = checkAll(ctx.episode);
+    }
+    if (!ctx.skip && [...checks.values()].some((c) => c.failing)) ctx.skip = 'a story still copies its source after the rewrites';
+    // (a programme's floor counts only against what this check took out: a writer's own shorter choice is its own)
+    const floor = Math.min(this.floorOf(ctx.program), ctx.episode.storyIds.length + note.dropped.length);
+    if (!ctx.skip && note.dropped.length && ctx.episode.storyIds.length < floor) ctx.skip = `only ${ctx.episode.storyIds.length} stories left in the channel's own words (the floor is ${floor})`;
+    if (note.dropped.length) ctx.dropped = [...new Set([...(ctx.dropped || []), ...note.dropped])];
+    const out = { ...sum(checks), ...(note.rounds ? { rounds: note.rounds } : {}) };
+    for (const k of ['rewritten', 'trimmed', 'dropped']) if (note[k].length) out[k] = note[k];
+    if (note.refused) out.refused = note.refused;
+    if (note.error) out.error = note.error;
+    return out;
   }
 
   /**
@@ -851,11 +1061,7 @@ export class Producer {
   /** Standards editor: checks the script against the sources. Never blocks the show. */
   async review(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
-    const script = {
-      title: ctx.episode.title,
-      // a correspondent link reads as its story's `cross`, as the writer gave it (the validator rebuilds the link)
-      segments: collapseCrosses(ctx.episode.segments).map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues || []) })),
-    };
+    const script = this.scriptOf(ctx.episode);
     const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
     try {
       const { provider, value } = await this.chain.generate(
@@ -863,9 +1069,14 @@ export class Producer {
         this.normalizer(ctx, stories)
       );
       // The editor may drop a story it cannot stand behind, never add one.
+      const before = ctx.episode;
       ctx.episode = value;
+      // what the editor found and put right (the review's faults: stories taken out, sentences and graphics fields changed)
+      const changes = editorChanges(before, value);
+      // ...and the editor's corrections are in our own words too (a correction that pastes the source goes back once more)
+      const own = await this.ownWords(ctx, 'review');
       this.castCorrespondents(ctx);
-      return { provider, reviewed: true };
+      return { provider, reviewed: true, ...(changes.stories || changes.dropped.length ? { changes } : {}), ...(own ? { own } : {}) };
     } catch (err) {
       // Without an AI editor (offline demo: the mock only writes) nothing is checked, and the pipeline says so.
       if (err.code === 'NO_REVIEWER') this.log.info?.(`[producer] review skipped: ${err.message}`);
@@ -962,13 +1173,110 @@ export class Producer {
    * a few stories at a time (decisions are kept, so the next episodes find theirs ready and Wikimedia is asked little).
    */
   async clearPictures(stories) {
+    // ahead of air: the decisions that are ready (the rest go to the front of the queue, for the assets stage)
+    if (this.pictureAhead) {
+      this.pictureAhead.urgent(stories);
+      return this.pictureDesk.assign(stories, { ready: true });
+    }
     const stats = await this.pictureDesk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
     this.warmPictures();
     return stats;
   }
 
+  // ---------------------------------------------------------------- the picture desk ahead of air
+
+  /** The programmes the station makes next (produce: the rotation's next three and the clock's pins). */
+  lookAhead(channel, ids) {
+    if (!channel?.programs) return;
+    this.lookAheadAt = { channel, ids: [...new Set((ids || []).filter((id) => channel.programs[id]))] };
+    this.nextStories = null;
+  }
+
+  /** The news desk's own stories (never the operator's local feed: its pictures are its own). */
+  liveStories() {
+    return typeof this.news?.stories?.values === 'function' ? [...this.news.stories.values()].filter((s) => s && !s.local) : [];
+  }
+
+  /**
+   * The picture desk's queue in the order things air: the next programmes' candidates (as select() would choose them
+   * now), the stories new in the last three hours (the newest first), the rest of the news desk (the last in first),
+   * then the week's archived stories without a cleared picture (PICTURE THIS), in small batches of their own.
+   */
+  pictureTiers() {
+    const t = Date.now();
+    const tiers = [
+      { name: 'next', stories: () => this.upcomingStories() },
+      { name: 'fresh', stories: () => this.liveStories().filter((s) => t - (s.published || 0) < 3 * 3600_000).sort((a, b) => (b.published || 0) - (a.published || 0)) },
+      { name: 'pool', stories: () => this.liveStories().reverse() },
+    ];
+    if (this.archive?.entries && this.config?.pictures?.archiveAhead !== false) tiers.push({ name: 'archive', alone: true, batch: 4, stories: () => this.archivedWithoutPicture() });
+    return tiers;
+  }
+
+  /** The candidates of the programmes the station makes next (kept half a minute: select() ranks the whole desk). */
+  upcomingStories() {
+    const at = this.lookAheadAt;
+    if (!at) return [];
+    if (this.nextStories && Date.now() - this.nextStories.at < 30_000) return this.nextStories.list;
+    const list = [];
+    for (const id of at.ids) {
+      const program = { id, ...at.channel.programs[id] };
+      if (['weather', 'weekly', 'quiz'].includes(program.kind)) continue;
+      try {
+        const upcoming = at.ids.filter((x) => x !== id).map((x) => at.channel.programs[x]).filter(Boolean);
+        list.push(...this.select(program, { upcoming }).slice(0, Math.ceil((program.stories || 8) * 1.5)));
+      } catch {
+        /* a programme that cannot select now */
+      }
+    }
+    this.nextStories = { at: Date.now(), list };
+    return list;
+  }
+
+  /** The week's archived stories without a picture the channel may show (the latest telling of each), newest first. */
+  archivedWithoutPicture() {
+    if (this.archivedCache && Date.now() - this.archivedCache.at < 10 * 60_000) return this.archivedCache.list;
+    const since = Date.now() - 7 * 86400_000;
+    const latest = new Map();
+    const shown = new Set();
+    for (const e of this.archive.entries || []) {
+      if (!e?.id || e.at < since) continue;
+      if (e.image && ((e.imageRights?.cleared && e.imageRights.url === e.image) || /^file:/i.test(e.image))) shown.add(e.id);
+      latest.set(e.id, e);
+    }
+    // (the stories PAY ATTENTION could ask about first: its PICTURE THIS needs a cleared picture of the latest telling)
+    let quiz = new Set();
+    try {
+      quiz = new Set(quizEvents(this.archive, { pictures: this.pictureMode }).events.filter((ev) => !ev.image).map((ev) => ev.latest?.id));
+    } catch {
+      /* the order by time alone */
+    }
+    const list = [...latest.values()]
+      .filter((e) => !shown.has(e.id) && !this.news?.stories?.has?.(e.id))
+      .sort((a, b) => (quiz.has(b.id) ? 1 : 0) - (quiz.has(a.id) ? 1 : 0) || b.at - a.at)
+      .map((e) => ({ id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, link: e.link, grave: !!e.grave, published: e.at, archived: true }));
+    this.archivedCache = { at: Date.now(), list };
+    return list;
+  }
+
+  /**
+   * A decision is ready for this story: on the news desk's own story it is applied at once (NEWS IN 60 picks the stories
+   * that have a picture); a story that already aired without one has the cleared picture put on its archive entries
+   * (SEVEN DAYS, PICTURE THIS).
+   */
+  pictureDecided(s, tier) {
+    const desk = this.pictureDesk;
+    if (!desk || !s) return;
+    if (tier !== 'archive' && this.news?.stories?.get?.(s.id) === s) desk.apply(s);
+    if (!this.archive?.amendPicture) return;
+    const pick = desk.pickFor(s);
+    if (!pick?.rights?.cleared) return;
+    const n = this.archive.amendPicture(s.id, { image: pick.url, imageRights: compactRights(pick.rights), imageSubject: pick.subject?.kind ? { kind: pick.subject.kind, label: pick.subject.label || null } : null });
+    if (n) this.archivedCache = null;
+  }
+
   warmPictures() {
-    if (this.pictureWarm || typeof this.news?.stories?.values !== 'function') return;
+    if (this.pictureAhead || this.pictureWarm || typeof this.news?.stories?.values !== 'function') return;
     const pool = [...this.news.stories.values()].filter((s) => s && !s.local).slice(-300);
     const step = async (i) => {
       if (i >= pool.length) return;
@@ -992,8 +1300,21 @@ export class Producer {
       if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
       else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
     }
-    const cleared = desk ? await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 }) : null;
+    // ahead of air: only the decisions that are ready; a batch in flight that holds one of these stories is waited for,
+    // within the picture budget (never a request of its own here)
+    let cleared = null;
+    if (desk && this.pictureAhead) {
+      this.pictureAhead.urgent(stories);
+      await this.pictureAhead.settle(stories, { maxMs: this.config.pictureBudgetMs ?? 6000 });
+      cleared = await desk.assign(stories, { ready: true });
+    } else if (desk) cleared = await desk.assign(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    // (one file a story: a story whose picture an earlier one shows takes its own next cleared picture, before the
+    // downloads are checked)
+    if (desk && typeof desk.spread === 'function') desk.spread(stories.filter((s) => !s.local));
     const verified = this.images ? await this.verifyPictures(stories) : null;
+    // (each story keeps the picture it airs with, once it downloaded: a decision the queue makes again later never
+    // changes it under the episode's credit)
+    if (desk && typeof desk.pin === 'function') desk.pin(stories);
     // (an archived story is a fresh object at every look: the desk's kept decision is put on it each time)
     const story = (id) => {
       const s = this.news.get(id);
@@ -1096,6 +1417,8 @@ export class Producer {
       ...(borrowed ? { borrowed } : {}),
       ...(verified || {}),
       ...(cleared ? { cleared: cleared.cleared, uncleared: stories.filter((s) => s.image && !currentRights(s)?.cleared).length } : {}),
+      // (ahead of air: how many of the episode's stories had their decision ready when it was made)
+      ...(desk && this.pictureAhead ? { decidedAhead: stories.filter((s) => !s.local && desk.ready(s)).length, decidable: stories.filter((s) => !s.local).length } : {}),
       ...(rights.missing ? { unlicensed: rights.missing, ...(rights.dropped ? { offAir: rights.dropped } : {}) } : {}),
     };
   }

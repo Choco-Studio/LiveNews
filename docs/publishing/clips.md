@@ -13,10 +13,15 @@ The publishable clips go to the queue, waiting for the owner. Everything is a dr
 
     node tools/publish/factory.mjs --episode <episode.json> --out <dir> [--formats vertical,horizontal] [--max 6]
          [--moments <id,id>] [--all] [--queue data/publish] [--keep-masters] [--parallel] [--seconds n]
-         [--pictures <dir>]
+         [--pictures <dir>] [--sources <dataDir>]
 
 `--pictures` serves the episode's pictures (`<storyId>.jpg|png|webp`) to the recorder, so its clips show them as they
 aired, with their credits.
+
+`--sources` reads the stories' sources (the archive and its article cache) from another data folder, for an edition
+the station's own archive never kept, such as one replayed from a sport snapshot. Without its sources a story's words
+cannot be measured under the verbatim rule: its moments are not chosen, and the gate refuses its clips
+(`sources-missing`, since round 6; before, such a story passed as "unverified").
 
 `tools/publish/material.mjs` makes episodes from the archive offline, with recorded voices, for measuring and
 rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the recorder.
@@ -29,7 +34,9 @@ rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the 
        tools/record.mjs --lossless --progressive --seed 1 --time <aired> --report
 
    The same seed, item and clock give both formats the same timeline. The factory checks the drift between them; it
-   measured 0.000 s on every episode.
+   measured 0.000 s on every episode. A master already in the masters folder (`<prog>-<format>.mkv` with its
+   `.report.json`) is kept, not recorded again: that is where `beta.mjs` puts a programme the pre-rendered playout has
+   already rendered (`server/publish/masters.js`).
 2. **The timeline** (§3) from the report.
 3. **The moments** (§2), found and scored. In Phase 1 only the light, sensible ones are chosen. Choosing takes the
    best of each kind first, so a programme yields variety; it never takes two clips of the same words, and a moment
@@ -93,7 +100,9 @@ when that fits, else the whole headline in the body face. A running-order label 
   weather, which choose their own stories) no story is of a kind the quiz desk refuses as a game (`quiz/desk.js`
   `excludedKind`).
 - `publishable(moments, { phase })`: in Phase 1 only light moments, in Phase 2 nothing grave, in Phase 3 all. In
-  every phase the sense must be at least 7, and demo data is never published.
+  every phase the sense must be at least 7, the moment must last at least 10 s (`CLIP_MIN_SECONDS`, YouTube's and
+  TikTok's own minimum, the end card on top; round 7: a 3-second story passed every other rule), and demo data is
+  never published.
 - **Never a story that copies its source** (`markCopied`). The factory runs the compliance desk's verbatim lint over
   the episode first (`lintEpisode` against the archive's titles and summaries, and the articles when cached): a moment
   that tells a story whose aired words copy their source is refused (`verbatim`) and not chosen, because the gate
@@ -181,8 +190,10 @@ own words or a credited citation, never an outlet's headline passed off as ours:
   it out ("WILDFIRE: / CALIFORNIA, USA"), else the programme's name. A burned-in title cannot carry a citation.
 
 Every link is cleaned of tracking parameters (`cleanLink`: `utm_*`, `at_*`, `fbclid`, `gclid` and the like; every other
-parameter and the fragment kept). A light clip's caption may open with one emoji naming its
-programme, on every network but YouTube. A grave clip never has one.
+parameter and the fragment kept). A caption's first line is the AI disclosure ("Presenters are AI-generated characters
+with synthetic voices; every fact is from the named source."), what a viewer reads before "more" (`compliance.md` §1,
+§3.5); YouTube's description opens with the compliance desk's own. A light clip's lead, after it, may open with one
+emoji naming its programme, on every network but YouTube. A grave clip never has one.
 
 **A quiz clip never gives its answer away** (`moments.js` `quizWords`). The question's headline is often the answer:
 WHERE's place, HOW MANY?'s figure, or the whole headline in LETTER BY LETTER. So a quiz clip's texts carry only what

@@ -99,8 +99,11 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
   // a quiz question's own title (two questions never share one); within the limit at a whole word
   // a quiz question's own title (two questions never share one); a story's hook when it is the channel's own words,
   // else the outlet's headline cited (the verbatim rule: wording.js); within the limit at a whole word
-  const storyHook = moment.headline && sentence(hook).toLowerCase().replace(/[^a-z0-9]+/g, '') === norm(moment.headline).toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const head = moment.kind === 'quiz-question' && moment.quiz?.title ? norm(moment.quiz.title) : storyHook ? ownHead || citation(outlet || 'Source', norm(moment.headline)) : sentence(hook);
+  const flat = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const storyHook = moment.headline && flat(sentence(hook)) === flat(moment.headline);
+  // (a hook that fell back to the programme's name, ownHook: the title names the story, never the programme twice)
+  const progHook = moment.headline && flat(sentence(hook)) === flat(prog);
+  const head = moment.kind === 'quiz-question' && moment.quiz?.title ? norm(moment.quiz.title) : storyHook || progHook ? ownHead || citation(outlet || 'Source', norm(moment.headline)) : sentence(hook);
   const max = PLATFORMS.youtube.text.title;
   let title;
   if (/^.+: “.*”$/.test(head)) {
@@ -108,6 +111,8 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
     const fit = [` | ${prog} | GLOBIT 24`, ' | GLOBIT 24', ''].find((t) => head.length + t.length <= max);
     const label = storyLabel({ kicker: moment.kicker, place: moment.place, category: moment.category }, sources.filter(Boolean));
     title = fit !== undefined ? `${head}${fit}` : `${fitTitle(label || prog, max - 12)} | GLOBIT 24`;
+  } else if (flat(head) === flat(prog)) {
+    title = `${prog} | GLOBIT 24`;
   } else {
     const tail = ` | ${prog} | GLOBIT 24`;
     title = `${fitTitle(head, max - tail.length)}${tail}`;
@@ -120,7 +125,8 @@ export function clipTexts(moment, episode, { platform = 'youtube', stories = new
   const hashtags = tags;
   let caption;
   if (platform === 'youtube') caption = description;
-  else caption = [`${emoji}${lead}`, sourceLines[0] || (outlet ? `Source: ${outlet}` : ''), disclosure].filter(Boolean).join('\n\n');
+  // the disclosure first: the caption's first line is what a viewer reads before "more" (compliance.md §1, §3.5)
+  else caption = [disclosure, `${emoji}${lead}`, sourceLines[0] || (outlet ? `Source: ${outlet}` : '')].filter(Boolean).join('\n\n');
   const disc = disclosureFor({ kind: 'clip', episode, platforms: [platform] }).platforms[platform] || {};
   return { title, text: caption, description, hashtags, links, disclosure: { [platform]: disc }, lead };
 }

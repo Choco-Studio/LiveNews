@@ -135,7 +135,7 @@ const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\
  *   queue/<airAt>-<id>.json   segments passed by the gate, waiting to air (the renderer writes, the playout reads)
  *   aired/<airAt>-<id>.json   segments the playout has aired (moved there by the playout, with airedAt)
  *   held/<airAt>-<id>.json    units the gate held, with the reasons (never aired; the approval page lists them)
- *   segments/                 the air files; masters/<slot>/ the clip-mode masters for the publishing desk
+ *   segments/                 the air files; masters/<episode id>/ the clip-mode masters for the publishing desk
  *   events.jsonl              one line per event (render, gate, air, filler, underrun, drop, delete)
  */
 export class PlayoutStore {

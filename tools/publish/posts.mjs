@@ -8,7 +8,10 @@
 // spacing.
 //
 //   node tools/publish/posts.mjs --day 2026-10-16 [--tz Europe/London] [--limit 8] [--out <dir>]
-//        [--enqueue] [--queue data/publish] [--phase 3] [--clips <factory summary.json>...]
+//        [--enqueue] [--queue data/publish] [--phase 3] [--clips <factory summary.json>...] [--data <dataDir>]
+//
+// --data: the archive and the article cache of another data folder (the beta's news day, server/publish/newsday.js:
+// what the AI writer told, with the articles it was checked against); the compliance register stays the station's.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,9 +41,10 @@ const NETS = ['x', 'threads', 'bluesky', 'facebook', 'telegram'];
 const capOf = (net) => DAILY[phase]?.[net]?.posts?.[1] || 0;
 const limit = Number(opt('limit', Math.max(...NETS.map(capOf), 6)));
 
-const archiveDir = path.join(root, 'data', 'archive');
+const dataDir = path.resolve(opt('data', path.join(root, 'data')));
+const archiveDir = path.join(dataDir, 'archive');
 const entries = [];
-for (const f of fs.readdirSync(archiveDir).filter((x) => x.endsWith('.jsonl'))) {
+for (const f of (fs.existsSync(archiveDir) ? fs.readdirSync(archiveDir) : []).filter((x) => x.endsWith('.jsonl'))) {
   for (const l of fs.readFileSync(path.join(archiveDir, f), 'utf8').split('\n')) {
     if (!l.trim()) continue;
     try {
@@ -53,7 +57,7 @@ for (const f of fs.readdirSync(archiveDir).filter((x) => x.endsWith('.jsonl'))) 
 const stories = dayStories(entries, { day, timeZone: tz, limit });
 // the article cache (server/articlecache.js: the article the news desk read for each aired story, else its feed's full
 // text; the compliance audit writes the same files): the only proof an aired sentence is not the outlet's own
-const getStory = archiveGetStory({ dataDir: path.join(root, 'data') });
+const getStory = archiveGetStory({ dataDir });
 for (const s of stories) s.articles = [...new Set((s.ids || [s.id]).map((id) => getStory(id)?.body).filter(Boolean))];
 // our clip on a story, when the factory made one (its URL exists only once published: a dry run has none)
 const clipsByStory = new Map();

@@ -6,13 +6,14 @@
 //
 //   node tools/publish/factory.mjs --episode ep.json --out <dir> [--formats vertical,horizontal] [--max 6]
 //        [--moments <id,id>] [--all] [--queue data/publish] [--masters <dir>] [--keep-masters] [--parallel]
-//        [--pictures <dir>]
-//   node tools/publish/factory.mjs --from-playout data/playout/masters/<slot> --out <dir>
+//        [--pictures <dir>] [--sources <dataDir>]
+//   node tools/publish/factory.mjs --from-playout data/playout/masters/<episode id> --out <dir>
 //
 // --from-playout: a programme the pre-rendered playout already rendered (docs/publishing/playout.md §6): its episode as
 // aired, its horizontal clip-mode master and its report, made from the very frames that aired; the horizontal clips are
 // cut from that master and nothing is recorded again (the vertical picture is its own composition: recorded here).
-// When done the folder gets factory.json, and the playout's disk policy may let the master go.
+// When done the folder gets factory.json, and the playout's disk policy may let the master go. With --episode, a
+// rendered master under RENDERED_MASTERS (server/publish/masters.js) is used the same way when there is one.
 //
 // --pictures: a folder with the episode's pictures (<storyId>.jpg|png|webp), so the clips show them as they aired, with
 // their credits; without it the stories show their maps and boards.
@@ -36,6 +37,7 @@ import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/p
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
+import { masterRoots, renderedMaster, useRenderedMaster } from '../../server/publish/masters.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -56,7 +58,10 @@ if (!epFile || !opt('out')) {
 const formats = String(opt('formats', 'vertical,horizontal')).split(',').filter((f) => ['vertical', 'horizontal'].includes(f));
 const maxClips = Number(opt('max', 6));
 const wanted = opt('moments') ? new Set(opt('moments').split(',')) : null;
-const mastersDir = fromPlayout || path.resolve(opt('masters', path.join(out, 'masters')));
+const mastersDir = path.resolve(opt('masters', path.join(out, 'masters')));
+// the playout's rendered masters (the folder given, else RENDERED_MASTERS): linked where a kept master is looked for
+const renderedRoots = fromPlayout ? [path.dirname(fromPlayout)] : masterRoots(process.env);
+const renderedUsed = new Set();
 const queueDir = path.resolve(opt('queue', path.join(root, 'data', 'publish')));
 const tmpDir = path.join(out, 'tmp');
 fs.mkdirSync(out, { recursive: true });
@@ -102,8 +107,13 @@ const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 // (a playout master is exactly the programme as it aired: its own length, from its report)
 const playoutSeconds = (() => {
+  const found = renderedMaster(episode, 'horizontal', renderedRoots);
+  if (fromPlayout && !found) {
+    console.error(`[factory] no rendered master in ${fromPlayout} (horizontal.mkv and its report, the folder named for the episode)`);
+    process.exit(1);
+  }
   try {
-    return fromPlayout ? Number(JSON.parse(fs.readFileSync(path.join(fromPlayout, `${prog}-horizontal.report.json`), 'utf8')).seconds) || null : null;
+    return found ? Number(JSON.parse(fs.readFileSync(found.report, 'utf8')).seconds) || null : null;
   } catch {
     return null;
   }
@@ -113,6 +123,12 @@ const masters = {};
 async function recordMaster(fmt) {
   const file = path.join(mastersDir, `${prog}-${fmt}.mkv`);
   const report = path.join(mastersDir, `${prog}-${fmt}.report.json`);
+  const rendered = flag('rerecord') ? null : useRenderedMaster(episode, fmt, renderedRoots, mastersDir, prog);
+  if (rendered) {
+    renderedUsed.add(path.dirname(rendered.file));
+    say(`${fmt} master: kept, the playout's (${path.dirname(rendered.file)})`);
+    return { file, report };
+  }
   if (fs.existsSync(file) && fs.existsSync(report) && !flag('rerecord')) {
     say(`${fmt} master: kept (${path.basename(file)})`);
     return { file, report };
@@ -143,12 +159,17 @@ say(`timeline: ${timeline.segments.length}/${episode.segments.filter((s) => Stri
 
 // the verbatim rule's sources (the archive's title and summary, the article when the compliance desk cached it): the
 // gate measures each clip's own stories' aired words against them, and holds a clip that copies (verbatim.md)
-const sourcesOf = compliance.archiveGetStory({ dataDir: path.join(root, 'data') });
+// (--sources <dataDir>: the archive and article cache of another data folder, for an edition the station's own archive
+// never kept: a replay from a sport snapshot)
+const sourcesOf = compliance.archiveGetStory({ dataDir: path.resolve(opt('sources', path.join(root, 'data'))) });
 const all = detectMoments(episode, { timeline });
 // a moment that tells a story whose aired words copy its source is never chosen (the gate would hold its clip): the
-// summary lists it as refused (`--all` or `--moments` still make it, to look at)
-const copied = new Set((compliance.lintEpisode(episode, { getStory: sourcesOf }).violations || []).map((v) => v.storyId));
-markCopied(all, copied);
+// summary lists it as refused (`--all` or `--moments` still make it, to look at); so is one whose story's sources are
+// not at hand (the gate refuses it: sources-missing)
+const lint = compliance.lintEpisode(episode, { getStory: sourcesOf });
+const copied = new Set((lint.violations || []).map((v) => v.storyId));
+const blind = new Set(compliance.storiesWithoutSources({ episode, kind: 'episode' }, sourcesOf));
+markCopied(all, copied, { unverified: blind });
 // a moment that shows a picture not cleared for publication (or any moment of a private preview) is never chosen and
 // never queued, whatever the flags: the summary lists it as refused
 markUncleared(all, episode, { audit: compliance.auditItem });
@@ -161,6 +182,7 @@ for (const m of all) {
   m.hook = ownHook(m, { kicker: seg.kicker, location: seg.location, category: seg.category }, sources);
 }
 if (copied.size) say(`verbatim: ${copied.size} of the episode's stories copy their sources; their moments are not chosen`);
+if (blind.size) say(`verbatim: ${blind.size} of the episode's stories have no sources at hand (not in the archive: --sources); their moments are not chosen and the gate refuses them`);
 const pub = new Set(publishable(all, { phase: 1 }).map((m) => m.id));
 // the choice: the best of each kind first (variety), then by score; a moment must have aired whole in the recording
 const chosen = [];
@@ -263,7 +285,11 @@ const settings = queue.settings();
 const storiesById = new Map();
 try {
   const { readArchive } = await import('../lengths/archive.mjs');
-  for (const [id, s] of readArchive(path.join(root, 'data', 'archive')).stories) storiesById.set(id, s);
+  // (the station's archive, and the --sources folder's: the beta's news day keeps its stories there, server/publish/newsday.js)
+  for (const dir of [...new Set([path.join(root, 'data'), path.resolve(opt('sources', path.join(root, 'data')))])]) {
+    if (!fs.existsSync(path.join(dir, 'archive'))) continue;
+    for (const [id, s] of readArchive(path.join(dir, 'archive')).stories) storiesById.set(id, s);
+  }
 } catch {
   /* no archive: no article links */
 }
@@ -333,7 +359,8 @@ for (const m of chosen) {
             compliance: meta.compliance[p],
             score: m.scores.total,
             priority: m.kind.startsWith('quiz') ? 2 : 1,
-            gate: { episodeFile: path.resolve(epFile), reportFile: masters[fmt].report, range: { start: window.start, end: window.end }, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null },
+            // (--sources: the item's stories are measured against that folder at every later check too: the re-check, the page)
+            gate: { episodeFile: path.resolve(epFile), reportFile: masters[fmt].report, range: { start: window.start, end: window.end }, labelFrames, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null, ...(opt('sources') ? { sourcesDir: path.resolve(opt('sources')) } : {}) },
             dryRun: true,
           });
           if (it) meta.queued.push({ platform: p, id: it.id, status: it.status });
@@ -362,9 +389,10 @@ const summary = {
   clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
 };
 fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 1));
-if (!flag('keep-masters') && !opt('masters') && !fromPlayout) for (const m of Object.values(masters)) fs.rmSync(m.file, { force: true });
+// (a rendered master is a link here: only the link goes)
+if (!flag('keep-masters') && !opt('masters')) for (const m of Object.values(masters)) fs.rmSync(m.file, { force: true });
 // the playout's master folder: cut (its disk policy keeps it an hour more, then lets it go)
-if (fromPlayout) fs.writeFileSync(path.join(fromPlayout, 'factory.json'), JSON.stringify({ at: new Date().toISOString(), out, clips: made.length, failed: failed.length, formats }, null, 1));
+for (const dir of renderedUsed) if (fs.existsSync(path.join(dir, 'unit.json'))) fs.writeFileSync(path.join(dir, 'factory.json'), JSON.stringify({ at: new Date().toISOString(), out, clips: made.length, failed: failed.length, formats }, null, 1));
 fs.rmSync(tmpDir, { recursive: true, force: true });
 say(`${made.length} clips -> ${clipsDir}${failed.length ? ` (${failed.length} FAILED: see summary.json)` : ''}`);
 if (failed.length) process.exitCode = 2;

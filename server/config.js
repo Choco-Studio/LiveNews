@@ -178,5 +178,11 @@ export const config = {
     // the face reader (tools/pictures/faces.mjs), run and watched by the station (server/facereader.js): FACE_READER=off
     // never starts it (a grave story's portrait then never airs: unread is unknown)
     faceReader: !/^(0|false|no|off)$/i.test(env('FACE_READER', '1')),
+    // the desk decides ahead of air (server/pictureahead.js): stories as they come in, the next programmes' first, and
+    // production reads what is ready. PICTURES_AHEAD=off decides within each episode's picture budget instead (the
+    // round-8 way, which a rate limit leaves with no picture at all); PICTURES_ARCHIVE=off leaves the week's archived
+    // stories (PICTURE THIS) without one
+    ahead: !/^(0|false|no|off)$/i.test(env('PICTURES_AHEAD', '1')),
+    archiveAhead: !/^(0|false|no|off)$/i.test(env('PICTURES_ARCHIVE', '1')),
   },
 };

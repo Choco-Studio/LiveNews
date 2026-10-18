@@ -51,6 +51,10 @@ cd ~/globit/livenews
   ~/globit/venv/bin/pip install kokoro-onnx==0.6.1 onnxruntime==1.30.0 numpy soundfile
   ```
   Then the station runs with `VOICE_ENGINE=kokoro VOICE_PYTHON=$HOME/globit/venv/bin/python`.
+- **C2PA signing** (every file published, by hand too, is signed as AI-made: `compliance.md` §4):
+  `~/globit/venv/bin/pip install -r tools/c2pa/requirements.txt` and `C2PA_PYTHON=$HOME/globit/venv/bin/python` in
+  `/etc/globit24.env`. `node tools/compliance/cli.mjs launch` must not say "C2PA SDK missing". The beta, published by
+  hand (`docs/publishing/beta.md`), cannot prepare anything without it.
 - **Models** (into `data/models/`, git-ignored): `tools/voice/fetch-models.sh` (Kokoro, about 350 MB, from GitHub
   releases, checked by SHA-256); the face reader fetches its own two models on first run (`tools/pictures/faces.mjs`).
 - **Swap:** a 4 GB swap file (`fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`,
@@ -99,7 +103,8 @@ This test measures whether the server keeps the buffer full. Stop the live test 
      node tools/playout/run.mjs --out data/test24/air/air-%03d.ts --segment 3600 --buffer 60 --size 1280x720 --bitrate 3000k
    ```
    - `PLAYOUT_VERBATIM=warn` and `PLAYOUT_REVIEW=0` only for this test: with the strict rules almost every news
-     programme is held today (the writer copies, playout.md §3), and the test would measure filler. Every verdict
+     programme is held today (without the AI key the offline writer's news is never aired, `offline-writer`, and it
+     copies its sources: playout.md §3), and the test would measure filler. Every verdict
      the strict rules would give is still logged (`strict-would-hold` in `data/playout/events.jsonl`); count them for
      the report. Never set them on the real channel without the owner's word.
    - Nothing leaves the machine: no `--rtmp`, `PUBLISH_LIVE` unset.
@@ -138,3 +143,66 @@ This test measures whether the server keeps the buffer full. Stop the live test 
 - For the pre-rendered playout test (§4b): did the buffer reach an hour and stay there; how much filler aired and
   when; what the strict rules would have kept off air.
 - Then add the result to `docs/roadmap/LISTA.md` (section H), commit (full suite first) and push.
+
+## 6. The AI writer trial (with the owner's key)
+
+Without an AI key the channel airs the offline writer, which copies its sources, and none of its episodes can be
+published (`verbatim.md` §7). The AI writer tells the stories in the channel's own words. This trial shows whether it
+does, on this server, with the owner's key.
+
+- **The key: the owner puts it in, never in the chat.** They add these lines to `/etc/globit24.env` on their own screen:
+  ```
+  OPENAI_API_KEY=<typed by the owner>
+  PROVIDERS=openai,mock
+  ```
+  The second line is there because the Codex CLI is not installed on this server. Then run
+  `chown root:root /etc/globit24.env && chmod 600 /etc/globit24.env`. Never `cat`, print or commit the file. The
+  station reads it through its systemd unit (`EnvironmentFile=/etc/globit24.env`), or when started by hand with
+  `node --env-file=/etc/globit24.env server/index.js`.
+- **The trial.** It writes files only and takes about 10–20 minutes:
+  ```
+  node --env-file=/etc/globit24.env tools/writer/try.mjs --episodes 2
+  ```
+  - It makes 2 real episodes of each AI-written programme from the live feeds: NEWS IN 60, WORLD NOW, TECH BYTES,
+    COSMOS and MONEY MINUTE (`--programmes full-time` adds the draft).
+  - The episodes go through the real pipeline: the write, the own-words check and its rewrites, the editor and the fit.
+  - It writes `data/writer-trial/<time>/report.txt`, `report.json`, `log.txt` and `episodes/`. Nothing is published,
+    streamed, archived or voiced.
+- **Reading the report.**
+  - `breaking the verbatim rule as aired` must be 0. Each story's copied share (at most 20 %) and longest copied run
+    (at most 12 words) are listed.
+  - `own words` gives the stories rewritten, cut and dropped, and the rewrites refused. Many drops mean the prompt
+    needs work: keep the `[own words]` lines of `log.txt`.
+  - `editor (review faults)` is what the standards editor changed: sentences, fields, stories taken out.
+  - `by mock (OFFLINE…)` means the AI did not answer (the key, the quota, the network). `calls[].error` in
+    `report.json` says why.
+  - Tokens and time are given per stage (write, rewrite, review). `A MONTH OF 24/7 AIR` gives the month's tokens on the
+    channel's clock and `cost a month = A × P_in + B × P_cached + C × P_out`. Put in the provider's prices per million
+    tokens.
+- **A manual run without a key** (to read the prompts and answer them by hand):
+  `PROVIDERS=inbox,mock AI_INBOX_TIMEOUT_MS=900000 node tools/writer/try.mjs --programmes news-60 --episodes 1`, then
+  answer the files in `data/ai-inbox/` (its README says how).
+- **A dry run of the tool itself:** `PROVIDERS=mock FEEDS_FILE=config/feeds.fixture.json node tools/writer/try.mjs --episodes 1`.
+- **Report it to the owner in Spanish** (section 5): the zero, the drops, and the month's tokens with the formula.
+
+## 7. The beta, published by hand (`docs/publishing/beta.md`)
+
+No live stream; the owner publishes every piece himself from the approval page. On this server:
+
+- In `/etc/globit24.env`: `PUBLISH_MODE=manual`, the owner's `EDITORIAL_CONTACT` and `EDITORIAL_RESPONSIBLE` (he types
+  them himself), `C2PA_PYTHON` (§2), and the voices' `VOICE_ENGINE`/`VOICE_PYTHON`. In this mode no adapter calls a
+  network, `tools/publish/run.mjs` only re-checks, and `tools/publish/live.mjs` refuses to stream.
+- The station keeps running (it reads the news and archives what it airs); the live supervisor does not.
+- Each evening, a systemd timer (`OnCalendar=*-*-* 21:30 Europe/London`, `EnvironmentFile=/etc/globit24.env`,
+  `WorkingDirectory=` the checkout) runs `node tools/publish/beta.mjs hacer`: the day's light programmes remade from
+  the archive with their voices, their clips in vertical, all into `data/publish`. It takes a while (each programme is
+  recorded once); its last lines say what the day offers, why the rest is held, and how long each step took. With the
+  owner's key (§6) it first writes the day's news programmes fresh from the live feeds with the AI writer, with their
+  voices (`BETA_NEWS`: COSMOS DESK, TECH BYTES and FULL TIME by default; `--noticias`, `--ediciones`); without it,
+  only PAY ATTENTION gives clips, and it says so. It runs at nice 10. If the pre-rendered playout has rendered a
+  programme (`RENDERED_MASTERS`, `docs/publishing/pipeline.md` §8), its master is cut instead of recorded (the
+  playout renders the horizontal master, `RENDERED_MASTERS=data/playout/masters`, playout.md §6; the beta's clips are
+  vertical, so they are still recorded).
+- The approval page as a service, `node tools/publish/beta.mjs` (127.0.0.1:8740), reached through the SSH tunnel.
+- `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the
+  launch check (for the beta only `EDITORIAL_CONTACT` and a working C2PA SDK must be in place: `beta.md`).

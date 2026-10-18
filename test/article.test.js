@@ -60,6 +60,13 @@ describe('the news desk reads the article text once, within its budget', () => {
     await desk.readArticles([canal], { budgetMs: 1000 });
     assert.equal(canal.body, 'changed', 'read once');
   });
+  test("the page's own headline is kept when it is not the feed's (a match report's page gives the score, BBC Sport 17 Oct)", async () => {
+    const html = '<html><head><meta data-rh="true" property="og:title" content="Champions Cup: Connacht 45-36 Saracens - Hosts score seven tries in pool victory"/></head><body><article><p>Captain Cian Prendergast and fly-half Ciaran Frawley scored two tries apiece as Connacht crossed seven times against the three-time winners.</p><p>Saracens had the chance to leave with a losing bonus point, but the conversion attempt after a late try went wide.</p></article></body></html>';
+    const desk = new NewsDesk({ fetchImpl: async () => new Response(html, { headers: { 'content-type': 'text/html' } }), log: { warn() {}, info() {} } });
+    const s = { id: 'd', title: 'Seven-try Connacht beat Saracens in Champions Cup', summary: 'S.', source: 'BBC Sport', link: 'https://www.bbc.co.uk/sport/rugby-union/articles/x' };
+    await desk.readArticles([s], { budgetMs: 2000 });
+    assert.equal(s.pageTitle, 'Champions Cup: Connacht 45-36 Saracens - Hosts score seven tries in pool victory');
+  });
   test('a remote page that fails leaves the story without a body, never throws', async () => {
     const desk = new NewsDesk({ fetchImpl: async () => { throw new Error('ENOTFOUND'); }, log: { warn() {}, info() {} } });
     const s = { id: 'c', title: 'T', summary: 'S.', source: 'X', link: 'https://news.example/x' };

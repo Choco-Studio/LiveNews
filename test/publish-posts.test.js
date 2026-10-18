@@ -245,6 +245,8 @@ test('clip texts: titles within limits, the disclosure, the outlet credited, no 
     if (platform === 'youtube') assert.ok(t.title.length <= 100);
     assert.match(`${t.text}\n${t.description || ''}`, /NPR/);
     assert.ok(t.disclosure, platform);
+    // the AI disclosure is the caption's first line, what a viewer reads before "more" (compliance.md §1, §3.5)
+    assert.match(t.text.split('\n')[0], platform === 'youtube' ? /^AI-produced/ : /^Presenters are AI-generated characters/, `${platform}: ${t.text.split('\n')[0]}`);
     const g = clipTexts({ ...m, grave: true, light: false }, ep, { platform, stories });
     assert.ok(!EMOJI.test(`${g.title} ${g.text}`), `${platform}: an emoji on a grave clip`);
   }
@@ -289,4 +291,17 @@ test('uploads: chapters from 0:00, three or more, ten seconds each; title and de
   assert.ok(worthUploading(ep, tl).worthy);
   assert.ok(!worthUploading({ ...ep, demo: true }, tl).worthy);
   assert.equal(chaptersFor(ep, { segments: tl.segments.slice(0, 1), duration: 20 }).length, 0, 'fewer than three: none');
+});
+
+test('clip texts: a hook that fell back to the programme\'s name never names the programme twice in the title', () => {
+  const ep = { id: 'e', program: { id: 'cosmos', title: 'COSMOS DESK' }, cast: { A: 'nova' }, segments: [{ type: 'story', anchor: 'A', text: 'From next month, readers in Oslo can use the main public library on Sundays too.', storyId: 'osl', headline: 'Oslo library to open on Sundays', source: 'Circuit Weekly' }] };
+  // the aired headline is the outlet's own (ownHook gave the programme's name): the title cites it
+  const m = { id: 'e:story:0-0', kind: 'story', from: 0, to: 0, light: true, grave: false, hook: ['COSMOS DESK'], headline: 'Oslo library to open on Sundays', storyIds: ['osl'], sources: ['Circuit Weekly'], credits: [], programme: 'COSMOS DESK', programId: 'cosmos' };
+  const stories = new Map([['osl', { title: 'Oslo library to open on Sundays', summary: 'The main public library in Oslo will open on Sundays from next month.', source: 'Circuit Weekly', link: 'https://example.test/osl' }]]);
+  const t = clipTexts(m, ep, { platform: 'youtube', stories });
+  assert.ok(!/COSMOS DESK \| COSMOS DESK/.test(t.title), t.title);
+  assert.match(t.title, /^Circuit Weekly: “Oslo library to open on Sundays”/);
+  // and with no headline at all: the programme once
+  const bare = clipTexts({ ...m, headline: null, storyIds: [] }, ep, { platform: 'youtube', stories });
+  assert.equal(bare.title, 'COSMOS DESK | GLOBIT 24');
 });

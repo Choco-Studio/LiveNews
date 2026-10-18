@@ -8,6 +8,7 @@ import { config, ROOT } from './config.js';
 import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pictures.js';
 import { extractArticle } from './article.js';
 import { guardedFetch, readCapped } from './net.js';
+import { Robots, RobotsRefusal, USER_AGENT } from './robots.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
 import { sentencesIn, sameWord } from './facts.js';
@@ -15,7 +16,8 @@ import { notSport, sportApart } from './sport/desk.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
-const UA = 'Mozilla/5.0 (compatible; LiveNewsBot/0.1; +https://github.com/choco-studio/livenews)';
+// the channel's name and the repository, never an e-mail (server/robots.js); the token outlets name in robots.txt is GLOBIT24
+const UA = USER_AGENT;
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
@@ -950,11 +952,35 @@ function forgetPicture(s) {
   for (const k of ['images', 'imageWidth', 'imageVia', 'imageCredit', 'imageCreditVia', 'imageCredits', 'imageLender', 'imageFrom']) delete s[k];
 }
 
+// The tags an outlet's feed adds to its article links to count the visits it sends (utm_*, the BBC's at_medium and
+// at_campaign, Al Jazeera's traffic_source, DW's maca, click ids). They are not part of the page: the desk opens the
+// article at its own address without them, and the outlet's robots.txt is checked for that address. (Al Jazeera's
+// robots.txt keeps the tagged copies of its pages from crawlers, "Disallow: /*?traffic_source=", and leaves the
+// articles themselves open.)
+const TRACKING_PARAM = /^(utm_[a-z_]+|traffic_source|at_medium|at_campaign|at_custom\d*|at_link\w*|maca|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|ns_mchannel|ns_source|ns_campaign|ns_linkname|ns_fee|ito|xtor|ocid|smid|cmp)$/i;
+
+/** An article link as the desk opens it: without the feed's tracking tags and without a fragment. */
+export function pageUrl(link) {
+  let u;
+  try {
+    u = new URL(link);
+  } catch {
+    return link;
+  }
+  if (!/^https?:$/.test(u.protocol)) return link;
+  u.hash = '';
+  for (const k of [...u.searchParams.keys()]) if (TRACKING_PARAM.test(k)) u.searchParams.delete(k);
+  return u.href.replace(/\?$/, '');
+}
+
 export class NewsDesk {
-  constructor({ fetchImpl = fetch, log = console, lookup = null } = {}) {
+  constructor({ fetchImpl = fetch, log = console, lookup = null, robots = null } = {}) {
     this.fetch = fetchImpl;
     this.log = log;
     this.lookup = lookup; // DNS for the private-address guard (tests inject one)
+    // the outlets' robots.txt, read before any page of theirs is opened (server/robots.js); the server passes one with
+    // a disk cache, every other desk (the tools) keeps its own in memory
+    this.robots = robots || new Robots({ fetchImpl: (...a) => this.fetch(...a), log, ...(lookup ? { lookup } : {}) });
     this.stories = new Map(); // id -> story
     this.covered = new Map(); // id -> timestamp when it was used in a bulletin
     // Recycling (a closed desk: the offline slate, or a quiet night with `recycle: 'all'`) brings back the
@@ -985,23 +1011,34 @@ export class NewsDesk {
   async readFeed(url) {
     const file = localFeedPath(url);
     if (file) return (await fs.promises.readFile(file)).subarray(0, 3_000_000).toString('utf8');
-    // The operator chose this URL: it may live on a private host (a local feed server).
-    return this.fetchText(url, { allowPrivate: true });
+    // The operator chose this URL: it may live on a private host (a local feed server). A feed is not a page the
+    // desk crawls: the outlet publishes it to be read, so robots.txt is not consulted for it.
+    return this.fetchText(url, { allowPrivate: true, robots: false });
   }
 
   /**
    * Text behind a URL, read as a stream and cut at `maxBytes`. Links found in
    * feeds (article pages) never reach the machine itself or its private
-   * network, on any redirect hop; only the operator's feed list may.
+   * network, on any redirect hop; only the operator's feed list may. A page
+   * (anything but the operator's feeds) is opened only if the outlet's
+   * robots.txt lets us, on every redirect hop too, and in its Crawl-delay
+   * turn; otherwise a RobotsRefusal is thrown and nothing is requested. A
+   * page is opened without the feed's tracking tags (pageUrl).
    */
-  async fetchText(url, { timeoutMs = 10000, maxBytes = 3_000_000, allowPrivate = false } = {}) {
-    if (!/^https?:\/\//i.test(url)) throw new Error(`not an http(s) URL: ${String(url).slice(0, 80)}`);
-    const { res } = await guardedFetch(this.fetch, url, {
+  async fetchText(link, { timeoutMs = 10000, maxBytes = 3_000_000, allowPrivate = false, robots = true } = {}) {
+    if (!/^https?:\/\//i.test(link)) throw new Error(`not an http(s) URL: ${String(link).slice(0, 80)}`);
+    // a page is opened at its own address, without the feed's tracking tags (pageUrl)
+    const url = robots ? pageUrl(link) : link;
+    const gate = robots && this.robots ? (u) => this.robots.gate(u) : null;
+    if (gate) await gate(url);
+    const { res, url: answered } = await guardedFetch(this.fetch, url, {
       timeoutMs,
       allowPrivate,
       headers: { 'user-agent': UA, accept: '*/*' },
       ...(this.lookup ? { lookup: this.lookup } : {}),
+      ...(gate ? { beforeHop: (u, hop) => (hop > 0 ? gate(u) : null) } : {}),
     });
+    if (gate) this.robots.serverRefused?.(answered || url, res.status);
     if (!res.ok) {
       try {
         await res.body?.cancel?.();
@@ -1054,6 +1091,10 @@ export class NewsDesk {
           continue;
         }
         titleKeys.set(key, s);
+        // (an undated item keeps when the desk first saw it, beside the age of each reading: FULL TIME dates a story's time
+        // words and its results by it, server/sport/prepare.js; a Sunday-morning edition once called Saturday evening's
+        // undated Sky Sports reports "Today's results", 17 Oct)
+        if (s.undated) s.firstSeen = s.published;
         this.stories.set(s.id, s);
         added++;
       }
@@ -1551,6 +1592,8 @@ export class NewsDesk {
         live: !!s.live,
         ...(s.undated ? { undated: true } : {}),
         ...(s.brokenDate ? { brokenDate: true } : {}),
+        // the outlet's robots.txt keeps its page from us: the story is told from its feed's text and pictures
+        ...(s.pageRefused ? { pageRefused: s.pageRefused } : {}),
         score: Math.round(score * 1000) / 1000,
       }));
   }
@@ -1558,9 +1601,15 @@ export class NewsDesk {
   /** Pictures an article page declares (og:image, twitter:image, JSON-LD, image_src; its AMP page if needed). */
   async pagePictures(link) {
     const html = await this.fetchText(link, { timeoutMs: 8000, maxBytes: 600_000 });
-    const { candidates, amp } = pageCandidates(html, link);
+    const { candidates, amp } = pageCandidates(html, pageUrl(link));
     if (candidates.length || !amp) return candidates;
-    return pageCandidates(await this.fetchText(amp, { timeoutMs: 6000, maxBytes: 600_000 }), amp).candidates;
+    try {
+      return pageCandidates(await this.fetchText(amp, { timeoutMs: 6000, maxBytes: 600_000 }), amp).candidates;
+    } catch (err) {
+      // the AMP page has a path of its own: robots.txt may keep it while the article page is open to us
+      if (err instanceof RobotsRefusal) return [];
+      throw err;
+    }
   }
 
   /** The same, for an offline fixture page: a local file inside the folder of one of the operator's local feeds. */
@@ -1599,11 +1648,14 @@ export class NewsDesk {
     };
     const left = deadline - Date.now();
     if (todo.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(left)]);
-    return { articles: stories.filter((s) => s?.body).length, read: todo.filter((s) => s.body).length, of: todo.length };
+    // (refused: pages the outlet's robots.txt keeps from us, told from their feed's text: the pipeline log shows them)
+    const refused = stories.filter((s) => s?.pageRefused === 'robots').length;
+    return { articles: stories.filter((s) => s?.body).length, read: todo.filter((s) => s.body).length, of: todo.length, ...(refused ? { refused } : {}) };
   }
 
   async readArticle(s) {
     s.bodyChecked = true;
+    if (s.pageRefused === 'robots') return;
     try {
       const html = s.local ? (await this.localPageHtml(s)).html : await this.fetchText(s.link, { timeoutMs: 8000, maxBytes: 600_000 });
       const a = extractArticle(html);
@@ -1611,10 +1663,33 @@ export class NewsDesk {
         s.body = a.text;
         s.bodyVia = a.via;
       }
+      // the page's own headline when it is not the feed's: a match report's page often gives the score its feed title
+      // says in words ("Champions Cup: Connacht 45-36 Saracens - …" under "Seven-try Connacht beat Saracens…", BBC Sport
+      // 17 Oct; the sport desk reads it only when the two agree, server/sport/prepare.js)
+      const og = String(html || '').match(/<meta\b[^>]*\bproperty="og:title"[^>]*\bcontent="([^"]{8,200})"/i) || String(html || '').match(/<meta\b[^>]*\bcontent="([^"]{8,200})"[^>]*\bproperty="og:title"/i);
+      const page = og && decodeEntities(og[1]).replace(/\s+/g, ' ').trim();
+      if (page && page !== s.title) s.pageTitle = page;
     } catch (err) {
+      if (this.pageRefused(s, err, 'bodyChecked')) return;
       if (!this.articleWarned) this.log.warn?.(`[news] article text ${s.source}: ${err.message}`);
       this.articleWarned = true;
     }
+  }
+
+  /**
+   * A page the outlet's robots.txt keeps from us: the story keeps its feed's text and pictures, and is marked so that
+   * no reader opens that page again and the article cache keeps only the feed's text for it. A robots.txt that could
+   * not be read (or a Crawl-delay turn too far off) only defers the page to the reader's next pass. Returns true when
+   * the error was robots.txt's.
+   */
+  pageRefused(s, err, flag) {
+    if (!(err instanceof RobotsRefusal)) return false;
+    if (err.reason === 'disallowed') {
+      s.pageRefused = 'robots';
+      delete s.body;
+      delete s.bodyVia;
+    } else s[flag] = false;
+    return true;
   }
 
   /**
@@ -1630,6 +1705,7 @@ export class NewsDesk {
     if (story.local && !story.page) return story.image;
     if (!story.local && !/^https?:\/\//i.test(story.link || '')) return story.image;
     story.imageChecked = true;
+    if (story.pageRefused === 'robots') return story.image;
     try {
       const found = story.local ? await this.localPagePictures(story) : await this.pagePictures(story.link);
       const ownCredits = story.imageCredits || {};
@@ -1651,7 +1727,7 @@ export class NewsDesk {
         this.notePagePicture(story, best.url);
       }
     } catch (err) {
-      this.log.warn?.(`[news] page picture ${story.source}: ${err.message}`);
+      if (!this.pageRefused(story, err, 'imageChecked')) this.log.warn?.(`[news] page picture ${story.source}: ${err.message}`);
     }
     return story.image;
   }

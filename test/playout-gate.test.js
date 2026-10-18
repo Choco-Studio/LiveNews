@@ -32,7 +32,7 @@ function episode(extra = {}) {
   return {
     kind: 'episode',
     id: 'e1',
-    provider: 'mock',
+    provider: 'ai-writer',
     program: { id: 'world-now', title: 'WORLD NOW' },
     storyIds: ['s1', 's2'],
     segments: [
@@ -77,6 +77,14 @@ test('verbatim: a story that copies its source is held (block), or passes with a
 test('demo data (the offline forecast) never airs from playout', () => {
   const v = airGate(episode({ weather: { demo: true, source: 'DEMO DATA' } }), opts());
   assert.ok(rules(v).includes('demo'));
+});
+
+test('the offline fallback writer\'s news never airs from playout (block); PLAYOUT_VERBATIM=warn, a test switch, airs it with a warning', () => {
+  const ep = episode({ provider: 'mock' });
+  assert.deepEqual(rules(airGate(ep, opts())), ['offline-writer']);
+  const warned = airGate(ep, opts({ verbatim: 'warn' }));
+  assert.equal(warned.ok, true);
+  assert.ok(warned.warnings.some((w) => /offline fallback writer/.test(w)));
 });
 
 test('a recreation waits for the owner\'s review (strict default); PLAYOUT_REVIEW=0 airs it unreviewed', () => {
