@@ -222,7 +222,7 @@ export function levelOf(label, types = []) {
 }
 
 /** Read the calendar from Wikidata: votes from `back` days ago to `days` ahead, deduplicated by country, day and level. */
-export async function fetchCalendar({ fetchImpl = globalThis.fetch, now = Date.now(), days = 75, back = 3, timeoutMs = 60_000 } = {}) {
+export async function fetchCalendar({ fetchImpl = globalThis.fetch, now = Date.now(), days = 75, back = 3, timeoutMs = 60_000, wikimedia = null } = {}) {
   const from = new Date(now - back * DAY).toISOString().slice(0, 10);
   const to = new Date(now + days * DAY).toISOString().slice(0, 10);
   const query = `SELECT ?e ?eLabel ?date ?country ?countryLabel (GROUP_CONCAT(DISTINCT ?typeLabel; separator="|") AS ?types) (GROUP_CONCAT(DISTINCT ?candLabel; separator="|") AS ?cands) WHERE {
@@ -232,6 +232,12 @@ export async function fetchCalendar({ fetchImpl = globalThis.fetch, now = Date.n
   OPTIONAL { ?e wdt:P726 ?cand. ?cand rdfs:label ?candLabel. FILTER(LANG(?candLabel) = "en") }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } GROUP BY ?e ?eLabel ?date ?country ?countryLabel LIMIT 2000`;
+  // through the station's one Wikimedia client (server/wikimedia.js): background work, the last priority, waiting out a
+  // 429's pause in its queue rather than refused by it
+  if (wikimedia) {
+    const json = await wikimedia.json(`${SPARQL}?${new URLSearchParams({ query, format: 'json' })}`, { accept: 'application/sparql-results+json', timeoutMs, desk: 'elections', priority: 3, waits: true });
+    return calendarFromRows(json?.results?.bindings || [], { now });
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let json;
@@ -289,14 +295,14 @@ export function saveCalendar(calendar, file) {
  * Keep the server's calendar fresh: read it at start (when older than a day) and every day after. Never throws;
  * a failed read keeps the old one (and an old one fails closed for politicians after ELECTION_RULE.staleDays).
  */
-export function startElectionCalendar({ dataDir, fetchImpl = globalThis.fetch, log = console, everyMs = DAY } = {}) {
+export function startElectionCalendar({ dataDir, fetchImpl = globalThis.fetch, log = console, everyMs = DAY, wikimedia = null } = {}) {
   if (!dataDir) return null;
   const file = path.join(dataDir, 'compliance', 'elections.json');
   const run = async () => {
     try {
       const have = readJson(file);
       if (have && Date.now() - (Date.parse(have.generatedAt || '') || 0) < everyMs * 0.9) return;
-      const cal = await fetchCalendar({ fetchImpl });
+      const cal = await fetchCalendar({ fetchImpl, wikimedia });
       if (cal.elections.length) saveCalendar(cal, file);
       log.info?.(`[compliance] election calendar: ${cal.elections.length} votes in the next 75 days`);
     } catch (err) {

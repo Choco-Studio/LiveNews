@@ -27,6 +27,7 @@ import { FaceStore } from './faces.js';
 import { FaceReader } from './facereader.js';
 import { WikimediaClient, wikimediaAgent } from './wikimedia.js';
 import { PictureAhead } from './pictureahead.js';
+import { LoopWatch } from './loopwatch.js';
 import { OpenverseClient } from './openverse.js';
 import { airable } from './rights.js';
 
@@ -83,13 +84,17 @@ const footage = new FootageDesk({
   dir: config.footage.dir,
   maxCacheBytes: config.footage.cacheMb * 1024 * 1024,
   enabled: config.footage.mode === 'on' || (config.footage.mode === 'auto' && !/feeds\.fixture\.json$/.test(config.feedsFile)),
+  // (Commons searched through the one Wikimedia queue; its clips fetched with its agent: round 10)
+  wikimedia,
 });
-// IN THEIR WORDS, re-staged: who a named speaker is (Wikidata, cached), and the audit of every re-staged line
-const identity = new IdentityDesk({ dir: path.join(config.dataDir, 'guests', 'identity') });
+// IN THEIR WORDS, re-staged: who a named speaker is (Wikidata, cached, through the one Wikimedia queue), and the audit
+// of every re-staged line
+const identity = new IdentityDesk({ dir: path.join(config.dataDir, 'guests', 'identity'), wikimedia });
 // ...and the compliance holds (docs/publishing/compliance.md §5): the election calendar (read from Wikidata every
-// day) and the register of takedowns and of people who asked not to be re-staged
+// day, through the one Wikimedia queue, last in it) and the register of takedowns and of people who asked not to be
+// re-staged
 const compliance = sharedRegister(config.dataDir);
-startElectionCalendar({ dataDir: config.dataDir });
+startElectionCalendar({ dataDir: config.dataDir, wikimedia });
 configureRestage({ calendar: () => loadCalendar({ dataDir: config.dataDir }), blocked: (who) => compliance.isBlocked(who) });
 const audit = (entry) => {
   try {
@@ -117,6 +122,8 @@ newsDesk.archive = archive;
 // the picture desk ahead of air: stories decided in the background as they come in, the next programmes' first; each
 // episode reads the decisions that are ready (server/pictureahead.js)
 const pictureAhead = config.pictures.desk && config.pictures.ahead ? new PictureAhead({ desk: pictureDesk }) : null;
+// how long the event loop is held, at most (a programme waits for nothing that holds it: /api/wikimedia)
+const loopWatch = new LoopWatch();
 const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive, pictureDesk, pictureAhead, gate: config.playout ? (episode) => playoutGate(episode) : null });
 // Pre-rendered playout (PLAYOUT=1, tools/playout/station.mjs): every episode passes the check before air when it is
 // made (server/playout/gate.js: the compliance desk's preflight for the stream); what fails is held, recorded in
@@ -281,7 +288,13 @@ const server = http.createServer(async (req, res) => {
     // the picture desk ahead of air: what it decided, the requests a story, a fresh story's wait, what is left (operator)
     if (req.method === 'GET' && url.pathname === '/api/pictures/ahead') {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
-      return sendJson(res, 200, pictureAhead ? pictureAhead.status() : { running: false });
+      return sendJson(res, 200, { ...(pictureAhead ? pictureAhead.status() : { running: false }), eventLoop: loopWatch.status() });
+    }
+    // every Wikimedia request of the station (by host and by desk: who spends the allowance), the event loop's longest
+    // hold, and the week's grouping thread (operator)
+    if (req.method === 'GET' && url.pathname === '/api/wikimedia') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      return sendJson(res, 200, { wikimedia: wikimedia.status(), eventLoop: loopWatch.status(), week: producer.weekGrouper?.status() || null });
     }
     // Recorded voices: /api/voice/<id>.ogg|.json (content-addressed clips), /api/voice/ads, /api/voice/status.
     if (req.method === 'GET' && url.pathname.startsWith('/api/voice/') && voice.handle(req, res, url.pathname)) return;
@@ -337,6 +350,18 @@ findPlaces('Warm-up in London');
 server.listen(config.port, config.host, () => {
   faceReader.start();
   pictureAhead?.start();
+  loopWatch.start();
+  // SEVEN DAYS's week grouped once in the background, two minutes in: its thread keeps its answers, and the first
+  // edition after a restart then takes seconds, not the first grouping's minute (server/weekgrouper.js)
+  let weekly = false;
+  try {
+    weekly = Object.values(station.channel().programs || {}).some((p) => p?.kind === 'weekly');
+  } catch {
+    /* no channel: no week to group */
+  }
+  if (weekly) {
+    setTimeout(() => producer.weekStoriesAsync().catch((err) => console.warn(`[weekly] ${err.message}`)), 120_000).unref();
+  }
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
   // The mock writes but never reviews: say so rather than promise an editor that is not there.
   const editor = chain.providers.some((p) => p.reviews !== false);

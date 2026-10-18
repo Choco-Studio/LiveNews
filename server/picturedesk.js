@@ -982,10 +982,12 @@ export class PictureDesk {
   /**
    * Decide the pictures of these stories (kept, so a story is decided once in its lifetime unless a source was down).
    * Returns Map(id -> decision). Never throws; a step that could not be asked leaves its stories undecided. Decisions
-   * run one at a time (a second call finds what the first kept and asks nothing twice).
+   * run one at a time (a second call finds what the first kept and asks nothing twice). `priority` (0 the episode
+   * being made … 3 background) goes with every request the decision makes, in the station's one Wikimedia queue.
    */
   decide(stories, opts = {}) {
-    const job = this.busy.then(() => this.decideNow(stories, opts));
+    const run = () => this.decideNow(stories, opts);
+    const job = this.busy.then(() => (typeof this.wm?.within === 'function' ? this.wm.within({ desk: 'pictures', priority: opts.priority ?? 1 }, run) : run()));
     this.busy = job.catch(() => {});
     return job;
   }
@@ -1253,7 +1255,9 @@ export class PictureDesk {
       // (a portrait rotation the face reader has still to read: decided again within the hour, its first portrait airing)
       this.kept.set(`d:${keyOf(s)}`, d, !d.complete ? TTL.partial : d.altsPending && d.picks.length ? HOUR : d.picks.length ? TTL.decided : TTL.none);
     }
-    this.kept.save();
+    // (written out in slices: the file is megabytes, and writing it at once held the station a quarter of a second)
+    if (typeof this.kept.saveAsync === 'function') this.kept.saveAsync().catch(() => {});
+    else this.kept.save();
     return result;
   }
 

@@ -17,6 +17,8 @@
 //   ahead.step()                           one turn of the loop (tests): 'paused' | 'idle' | 'worked'
 //   ahead.status()                         decided, requests a story, the wait of a fresh story, the queue by tier
 const MIN = 60_000;
+// a batch's priority in the Wikimedia queue (server/wikimedia.js) by its most urgent story's tier
+const TIER_PRIORITY = { urgent: 0, next: 1, fresh: 2, pool: 2, archive: 3 };
 
 export class PictureAhead {
   /**
@@ -144,7 +146,9 @@ export class PictureAhead {
     const job = this.next();
     if (!job) {
       this.stats.idleTurns++;
-      this.desk.kept?.save?.({ force: true });
+      // (the desk's answers written to disk while it rests, in slices: the file is megabytes)
+      if (typeof this.desk.kept?.saveAsync === 'function') this.desk.kept.saveAsync({ force: true }).catch(() => {});
+      else this.desk.kept?.save?.({ force: true });
       return { kind: 'idle' };
     }
     await this.work(job);
@@ -259,19 +263,24 @@ export class PictureAhead {
 
   async work({ stories, tiers }) {
     const wm = this.desk.wm || {};
-    const r0 = wm.stats?.requests || 0;
+    // (the desk's own requests: the footage, the guests and the calendar ask through the same client)
+    const mine = () => wm.desks?.pictures || wm.stats || {};
+    const r0 = mine().requests || 0;
     const l0 = wm.stats?.limited || 0;
+    // the batch's place in the station's one Wikimedia queue: its most urgent story's (the episode being made first,
+    // the next programmes, the rest, the archive last)
+    const priority = Math.min(...[...tiers.values()].map((t) => TIER_PRIORITY[t] ?? 2));
     let done;
     this.current = { ids: new Set(stories.map((s) => s.id)), done: new Promise((r) => (done = r)) };
     try {
-      await this.desk.decide(stories, { budgetMs: this.budgetMs, lean: this.lean });
+      await this.desk.decide(stories, { budgetMs: this.budgetMs, lean: this.lean, priority });
     } catch (err) {
       this.log.warn?.(`[pictures] ahead: ${err.message}`);
     } finally {
       this.current = null;
       done();
     }
-    const requests = (wm.stats?.requests || 0) - r0;
+    const requests = (mine().requests || 0) - r0;
     const limited = (wm.stats?.limited || 0) - l0 > 0;
     const t = this.now();
     let ready = 0;
@@ -358,7 +367,8 @@ export class PictureAhead {
       readyPerHour: Math.round(this.stats.ready / hours),
       freshWait: { n: ms.length, medianS: q(0.5), p90S: q(0.9), maxS: ms.length ? Math.round(ms.at(-1) / 1000) : null },
       waiting: this.waiting(),
-      wikimedia: this.desk.wm?.stats ? { ...this.desk.wm.stats, ...(this.desk.wm.hosts ? { hosts: this.desk.wm.hosts } : {}) } : null,
+      // (every desk's requests: by host, by desk, the queue and the pause)
+      wikimedia: typeof this.desk.wm?.status === 'function' ? this.desk.wm.status() : this.desk.wm?.stats ? { ...this.desk.wm.stats, ...(this.desk.wm.hosts ? { hosts: this.desk.wm.hosts } : {}) } : null,
     };
   }
 

@@ -51,9 +51,12 @@ export function pickIdentity(entities, { role = null, now = Date.now() } = {}) {
 }
 
 export class IdentityDesk {
-  constructor({ dir, fetchImpl = globalThis.fetch, timeoutMs = 4000, ttlDays = 30, now = () => Date.now(), log = console } = {}) {
+  // `wikimedia`: the station's one Wikimedia client (server/wikimedia.js): Wikidata is asked through its queue, one
+  // pacing and one pause on a 429 for every desk, the episode being made first; without it (tests) the desk asks itself
+  constructor({ dir, fetchImpl = globalThis.fetch, timeoutMs = 4000, ttlDays = 30, now = () => Date.now(), log = console, wikimedia = null } = {}) {
     this.dir = dir;
     this.fetchImpl = fetchImpl;
+    this.wikimedia = wikimedia;
     this.timeoutMs = timeoutMs;
     this.ttl = ttlDays * DAY;
     this.now = now;
@@ -66,6 +69,8 @@ export class IdentityDesk {
   }
 
   async getJson(params) {
+    // (a speaker is checked while their episode is being made: the first priority; a pause refuses at once)
+    if (this.wikimedia) return this.wikimedia.json(`${API}?${new URLSearchParams({ format: 'json', ...params })}`, { desk: 'guests', priority: 0, timeoutMs: this.timeoutMs });
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
     try {
@@ -99,8 +104,10 @@ export class IdentityDesk {
       const identity = pickIdentity(ids.map((id) => got.entities?.[id]).filter(Boolean), { role, now: this.now() });
       return this.keep(f, identity);
     } catch (err) {
-      if (err.status === 429 || err.status === 403) this.pausedUntil = this.now() + 30 * 60_000;
-      this.log.warn?.(`[guests] identity of a speaker: ${err.message}`);
+      // (through the station's client a 429 pauses every desk for what Retry-After asks, and a request made while it
+      // runs is refused at once: nothing more to rest; a refusal by policy, 403, still rests this desk)
+      if (err.status === 403 || (err.status === 429 && !this.wikimedia)) this.pausedUntil = this.now() + 30 * 60_000;
+      if (!err.paused || err.status) this.log.warn?.(`[guests] identity of a speaker: ${err.message}`);
       return null;
     }
   }

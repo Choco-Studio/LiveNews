@@ -10,6 +10,7 @@ The week on GLOBIT 24, retold by Paco Pixel and Lola Lumen at the weekend. Owner
   - its picture, place, figures (BY THE NUMBERS), points (WHAT WE KNOW) and quote;
   - the expert's first answer, when an expert analysed it.
 - **The week** (`archive.week()`) groups a story's tellings across days with the news desk's `sameStory`. Each story is scored by how much the channel told it: tellings, programmes, days, and twice for a lead.
+  - The station groups it in a thread of its own (`server/weekgrouper.js`, `server/weekworker.js`), which keeps the week's airings and its answers from one edition to the next. On the 5,881 airings of 18 Oct the first grouping called `sameStory` 460,049 times instead of 1,099,151 and the next edition 5,268 times; meanwhile the station's own thread does at most about 45 ms of its own work at a time (the grouping held it 88-212 s before, 18 Oct), and SEVEN DAYS was ready in 6.2 s live. The groups and their order are the old ones (`server/weekgroups.js`; `test/week-grouping.test.js`, and `tools/pictures/weekdiff.mjs` on a real archive). Whether it can air is a count of the week's stories and days, not a grouping.
 - **The script** (`server/weeklywriter.js`) needs no AI. It retells the aired words, and nothing new can be invented.
   - "Today" becomes the day it aired ("on Tuesday"); "yesterday" becomes "the day before"; "tomorrow" becomes "the next day".
   - The programmes' furniture is never retold: the number of the day's opener, "And finally", round-up openers, hand-overs and thanks, an expert's introduction, and questions.

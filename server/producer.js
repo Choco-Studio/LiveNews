@@ -13,7 +13,8 @@ import { rightsGate } from './compliance/credits.js';
 import path from 'node:path';
 import { writeWeekly } from './weeklywriter.js';
 import { QuizDesk } from './quiz/edition.js';
-import { pictureCleared, quizEvents } from './quiz/desk.js';
+import { pictureCleared } from './quiz/desk.js';
+import { WeekGrouper } from './weekgrouper.js';
 import { balance, prepareStories } from './sport/prepare.js';
 import { shapeEpisode } from './sport/shape.js';
 import { voicedAir } from './airtime.js';
@@ -404,6 +405,17 @@ export class Producer {
   }
 
   /**
+   * The same week without holding the station (round 10: 88-212 s at once on 5,900 airings): grouped in a thread of
+   * its own that keeps its answers from one edition to the next (server/weekgrouper.js), else here in slices.
+   */
+  async weekStoriesAsync() {
+    if (!this.archive) return [];
+    if (typeof this.archive.weekAsync !== 'function') return this.weekStories();
+    this.weekGrouper ||= new WeekGrouper({ archive: this.archive, desk: this.news, log: this.log, thread: this.config?.weekThread !== false });
+    return this.weekGrouper.week();
+  }
+
+  /**
    * FULL TIME can air: not again within `minGapHours`, its floor of stories, and at least 40 % of the stories it would
    * tell new since its last edition (overnight in UK time, when the sport desk barely moves, the slot is skipped).
    */
@@ -470,7 +482,7 @@ export class Producer {
    */
   async produceWeekly(channel, program, cast, presenters) {
     const t0 = Date.now();
-    const body = writeWeekly(this.weekStories(), { presenters, people: channel.presenters, channelName: channel.name, title: program.title, seed: `${this.seq}`, timeZone: channel.clock?.timezone || 'UTC' });
+    const body = writeWeekly(await this.weekStoriesAsync(), { presenters, people: channel.presenters, channelName: channel.name, title: program.title, seed: `${this.seq}`, timeZone: channel.clock?.timezone || 'UTC' });
     if (!body) return null;
     const candidates = body.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: body, provider: 'weekly', pipeline: [{ stage: 'weekly', ms: Date.now() - t0, stories: body.weekly.stories, days: body.weekly.days }], correspondents: [], experts: [], channelPresenters: channel.presenters };
@@ -1213,11 +1225,12 @@ export class Producer {
     return tiers;
   }
 
-  /** The candidates of the programmes the station makes next (kept half a minute: select() ranks the whole desk). */
+  /** The candidates of the programmes the station makes next (kept three minutes: select() ranks the whole desk). */
   upcomingStories() {
     const at = this.lookAheadAt;
     if (!at) return [];
-    if (this.nextStories && Date.now() - this.nextStories.at < 30_000) return this.nextStories.list;
+    // (kept three minutes: ranking the desk for each programme takes a quarter of a second of the station's thread)
+    if (this.nextStories && Date.now() - this.nextStories.at < 3 * 60_000) return this.nextStories.list;
     const list = [];
     for (const id of at.ids) {
       const program = { id, ...at.channel.programs[id] };
@@ -1239,21 +1252,18 @@ export class Producer {
     const since = Date.now() - 7 * 86400_000;
     const latest = new Map();
     const shown = new Set();
+    const told = new Map();
     for (const e of this.archive.entries || []) {
       if (!e?.id || e.at < since) continue;
       if (e.image && ((e.imageRights?.cleared && e.imageRights.url === e.image) || /^file:/i.test(e.image))) shown.add(e.id);
       latest.set(e.id, e);
+      told.set(e.id, (told.get(e.id) || 0) + 1);
     }
-    // (the stories PAY ATTENTION could ask about first: its PICTURE THIS needs a cleared picture of the latest telling)
-    let quiz = new Set();
-    try {
-      quiz = new Set(quizEvents(this.archive, { pictures: this.pictureMode }).events.filter((ev) => !ev.image).map((ev) => ev.latest?.id));
-    } catch {
-      /* the order by time alone */
-    }
+    // the stories told most first (PAY ATTENTION asks about the week the channel told), then the newest. (Round 10: not
+    // the quiz desk's own reading of the week, which held the station 8.4 s the first time and 0.8 s every ten minutes)
     const list = [...latest.values()]
       .filter((e) => !shown.has(e.id) && !this.news?.stories?.has?.(e.id))
-      .sort((a, b) => (quiz.has(b.id) ? 1 : 0) - (quiz.has(a.id) ? 1 : 0) || b.at - a.at)
+      .sort((a, b) => told.get(b.id) - told.get(a.id) || b.at - a.at)
       .map((e) => ({ id: e.id, title: e.title, summary: e.summary, source: e.source, category: e.category, link: e.link, grave: !!e.grave, published: e.at, archived: true }));
     this.archivedCache = { at: Date.now(), list };
     return list;

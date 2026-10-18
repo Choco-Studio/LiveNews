@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { compactRights, currentRights } from './rights.js';
+import { groupWeek, groupWeekAsync } from './weekgroups.js';
 
 const DAY = 86400_000;
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -54,7 +55,10 @@ export class Archive {
     if (!file || !fs.existsSync(file)) return;
     try {
       const since = this.now() - this.days * DAY;
-      for (const [id, a] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8'))?.pictures || {})) if (a?.at >= since) this.amendPicture(id, a, { at: a.at, save: false });
+      // (each story's entries looked up once, in archive order, not a scan of the whole archive per amend: 0.1 s at start)
+      const told = new Map();
+      for (const e of this.entries) told.get(e.id)?.push(e) ?? told.set(e.id, [e]);
+      for (const [id, a] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8'))?.pictures || {})) if (a?.at >= since) this.amendPicture(id, a, { at: a.at, save: false, among: told.get(id) || [] });
     } catch (err) {
       this.log.warn?.(`[archive] pictures.json: ${err.message}`);
     }
@@ -65,10 +69,10 @@ export class Archive {
    * its entries, so SEVEN DAYS and PAY ATTENTION's PICTURE THIS can show it. It must be a cleared record for that very
    * picture. An entry that already has a picture the channel may show keeps it. -> the number of entries amended
    */
-  amendPicture(id, { image, imageRights, imageSubject = null } = {}, { at = this.now(), save = true } = {}) {
+  amendPicture(id, { image, imageRights, imageSubject = null } = {}, { at = this.now(), save = true, among = null } = {}) {
     if (!id || !image || !imageRights?.cleared || imageRights.url !== image) return 0;
     const shows = (e) => !!e.image && (!!(e.imageRights?.cleared && e.imageRights.url === e.image) || /^file:/i.test(e.image));
-    const entries = this.entries.filter((e) => e.id === id && !shows(e));
+    const entries = (among || this.entries).filter((e) => e.id === id && !shows(e));
     if (!entries.length) return 0;
     for (const e of entries) {
       e.image = image;
@@ -218,41 +222,15 @@ export class Archive {
    * The week's stories grouped by event (`same(a, b)`: the news desk's sameStory, else the same id), each with its
    * entries oldest first, when it was first and last told, how often, in how many programmes and on how many days,
    * the fullest telling (`best`) and the latest; scored by how much the channel told it (the lead counts double).
+   * server/weekgroups.js groups them (`memo`: the answers kept for the next edition); weekAsync() hands the event loop
+   * back every `sliceMs` (round 10: grouping 5,900 airings held the station 88 s).
    */
-  week({ days = 7, now = this.now(), same = null } = {}) {
-    const since = now - days * DAY;
-    const groups = [];
-    for (const e of this.entries) {
-      if (e.at < since || e.at > now) continue;
-      let g = groups.find((x) => x.ids.has(e.id));
-      if (!g && same) g = groups.find((x) => x.entries.some((o) => o.category === e.category && same(o, e)));
-      if (!g) groups.push((g = { ids: new Set(), entries: [] }));
-      g.ids.add(e.id);
-      g.entries.push(e);
-    }
-    return groups
-      .map((g) => {
-        const es = g.entries;
-        const dayKey = (t) => new Date(t).toISOString().slice(0, 10);
-        const best = [...es].sort((a, b) => (b.text?.length || 0) - (a.text?.length || 0) || (a.roundup ? 1 : 0) - (b.roundup ? 1 : 0))[0];
-        const programmes = new Set(es.map((e) => e.programId));
-        const daysTold = new Set(es.map((e) => dayKey(e.at)));
-        const leads = es.filter((e) => e.rank === 0).length;
-        return {
-          key: [...g.ids][0],
-          ids: [...g.ids],
-          entries: es,
-          first: es[0].at,
-          last: es.at(-1).at,
-          times: es.length,
-          programmes: [...programmes],
-          days: [...daysTold].sort(),
-          best,
-          latest: es.at(-1),
-          category: best.category,
-          score: es.length + 1.5 * programmes.size + 2 * daysTold.size + 2 * leads + (es.some((e) => e.breaking) ? 3 : 0),
-        };
-      })
-      .sort((a, b) => b.score - a.score || b.last - a.last);
+  week({ days = 7, now = this.now(), same = null, memo = null } = {}) {
+    return groupWeek(this.entries, { since: now - days * DAY, now, same, memo });
+  }
+
+  /** week(), the event loop handed back every `sliceMs`. */
+  async weekAsync({ days = 7, now = this.now(), same = null, memo = null, sliceMs = 20, breathe } = {}) {
+    return groupWeekAsync(this.entries, { since: now - days * DAY, now, same, memo, sliceMs, ...(breathe ? { breathe } : {}) });
   }
 }
