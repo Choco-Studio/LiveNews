@@ -42,7 +42,9 @@ rehearsing. `tools/publish/playback-server.mjs` serves one saved episode to the 
    best of each kind first, so a programme yields variety; it never takes two clips of the same words, and a moment
    must have aired whole in the recording.
 4. **The cards.** The hook PNG and the end card are drawn by the channel's own code in a browser (`/lab/clip.html`).
-   The end card is recorded once per programme and format, with its sting.
+   The hook is clear but for its plate, so the programme's set shows round it (`vertical.md` §5). The end card is
+   recorded once per programme and format, with its sting; the vertical one on the programme's own set behind glass,
+   saying where to watch only when there is a stream (`vertical.md` §5).
 5. **Each clip** (§4) is cut, titled, scaled and captioned. Then come its contact sheet, its cover, the label check,
    its texts, the compliance verdict per network, and the queue.
 6. **The summary** (`summary.json`): every moment with its scores and every clip with its verdicts. The masters are

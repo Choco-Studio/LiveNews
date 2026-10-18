@@ -391,6 +391,21 @@ function build(name, { cast, solo, focus, programId, side }) {
       const left = leftSeat;
       return fitSingle({ ...c, X, look, headX: left ? c.headX : mirror(c.headX) }, focus);
     }
+    case 'tall': {
+      // the vertical clip's single (clip/vertical.js): the close's scale, the head on the frame's middle column, so a
+      // 216-wide crop of the 384-wide frame can centre it over the feeds' safe column whichever seat it is. Not walked
+      // clear of the bezel (the wall behind is at rest, and a centred head always has the screen's edge near it: the
+      // walk would drift the camera); only the crown kept below the frame's top
+      let spec = { ...P.close, X, look, headX: 192 };
+      let cam = compose(spec);
+      for (let i = 0; i < 8; i++) {
+        const h = framingInfo(cam, [{ slot: focus, X, look }]).heads[0];
+        if (h.y0 >= CROWN_MIN) break;
+        spec = { ...spec, eyeY: spec.eyeY + (CROWN_MIN - h.y0) };
+        cam = compose(spec);
+      }
+      return cam;
+    }
     case 'mcu-l':
     case 'mcu-r': {
       // a duo speaker keeps their own seat's side (the wall is between the seats)
@@ -415,7 +430,7 @@ function build(name, { cast, solo, focus, programId, side }) {
 }
 
 /** The framing names this module composes. */
-export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu', 'quiz-wide', 'quiz-host', 'quiz-a', 'quiz-b'];
+export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mcu', 'ots', 'solo-wide', 'solo-mcu', 'tall', 'quiz-wide', 'quiz-host', 'quiz-a', 'quiz-b'];
 
 // PAY ATTENTION's framings: studio/quiz.js quizCamera's names, and the cast slot each single is composed on
 const QUIZ_SLOT = Object.freeze({ 'quiz-wide': null, 'quiz-host': 'H', 'quiz-a': 'A', 'quiz-b': 'B' });
