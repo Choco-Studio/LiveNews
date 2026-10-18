@@ -9,6 +9,7 @@ import { WikimediaClient, PacedJson } from '../server/wikimedia.js';
 import { FaceStore } from '../server/faces.js';
 import { ImageSearch } from '../server/imagesearch.js';
 import { lookupPlace } from '../server/gazetteer.js';
+import { rightsRecord } from '../server/rights.js';
 
 const NOW = Date.UTC(2026, 9, 17, 12);
 const YEAR = 365.25 * 86400_000;
@@ -218,7 +219,7 @@ function backend({ limited = () => false } = {}) {
         .map((id) => {
           const f = FACTS[id];
           const v = (value) => ({ type: 'literal', value: String(value) });
-          return { item: { value: `http://www.wikidata.org/entity/${id}` }, ...(f.cat ? { cat: v(f.cat) } : {}), inst: v(f.inst), imgs: v(fp(f.imgs || [])), ...(f.logos ? { logos: v(fp(f.logos)) } : {}), ...(f.born ? { born: v(f.born) } : {}), ...(f.died ? { died: v(f.died) } : {}), sitelinks: v(f.sitelinks || 0), occ: v(f.occ || ''), pos: v(f.pos || ''), cty: v(f.cty || ''), ...(f.coord ? { coord: v(f.coord) } : {}) };
+          return { item: { value: `http://www.wikidata.org/entity/${id}` }, ...(f.cat ? { cat: v(f.cat), commonsCat: v(f.cat) } : {}), inst: v(f.inst), imgs: v(fp(f.imgs || [])), ...(f.logos ? { logos: v(fp(f.logos)) } : {}), ...(f.born ? { born: v(f.born) } : {}), ...(f.died ? { died: v(f.died) } : {}), sitelinks: v(f.sitelinks || 0), occ: v(f.occ || ''), pos: v(f.pos || ''), cty: v(f.cty || ''), ...(f.coord ? { coord: v(f.coord) } : {}) };
         });
       return reply({ results: { bindings } });
     }
@@ -908,5 +909,121 @@ describe('portrait variety (round 8)', () => {
     advance(HOUR);
     await desk.assign([last], { budgetMs: 2000 });
     assert.equal(last.image, first[0], 'then the one aired longest ago, never the latest');
+  });
+});
+
+describe('fewer requests a story (round 9: the desk decides ahead of air)', () => {
+  const trump = (id, title) => story(id, title, 'The US president said the plan would go ahead.');
+  function recorded(opts = {}) {
+    const m = makeDesk(opts);
+    const urls = [];
+    const fetch = m.wikimedia.fetch;
+    m.wikimedia.fetch = (url, o) => {
+      urls.push(String(url));
+      return fetch(url, o);
+    };
+    return { ...m, urls };
+  }
+  const asked = (urls, re) => urls.filter((u) => re.test(decodeURIComponent(u))).length;
+
+  test("a person's Commons category comes with their Wikidata facts: no query of its own", async () => {
+    const { desk, urls } = recorded();
+    await desk.decide([trump('c1', 'Trump says tariffs on steel will rise next month')], { budgetMs: 10_000 });
+    assert.equal(asked(urls, /query\.wikidata\.org/), 1, 'one query for the facts, the category in it');
+    assert.equal(asked(urls, /categorymembers/), 1, "the category's files asked by its name at once");
+  });
+
+  test("lean: a public figure's first story airs their Wikidata portrait; their category and searches wait until they recur", async () => {
+    const { desk, urls } = recorded();
+    const s = trump('l1', 'Trump says tariffs on steel will rise next month');
+    const d = (await desk.decide([s], { budgetMs: 10_000, lean: true })).get('l1');
+    assert.equal(asked(urls, /categorymembers|generator=search/), 0, 'no category, no search');
+    assert.equal(d.complete, true);
+    assert.match(desk.pickFor(s).rights.title, /official portrait/);
+    const before = urls.length;
+    // they aired (rotate keeps their uses): the next story of theirs looks for their other portraits
+    await desk.assign([s], { ready: true });
+    assert.equal(urls.length, before, 'reading the ready decision asks nothing');
+    await desk.decide([trump('l2', 'Trump signs an order on federal hiring')], { budgetMs: 10_000, lean: true });
+    assert.ok(asked(urls, /categorymembers/) >= 1, 'once they recur, their category');
+  });
+
+  test('lean: two stories of one person in a batch look for the rotation at once', async () => {
+    const { desk, urls } = recorded();
+    await desk.decide([trump('b1', 'Trump says tariffs on steel will rise next month'), trump('b2', 'Trump signs an order on federal hiring')], { budgetMs: 10_000, lean: true });
+    assert.ok(asked(urls, /categorymembers/) >= 1);
+  });
+
+  test('lean: a person whose Wikidata portrait will not do is decided again with their category and searches', async () => {
+    PAGES['Lena Park'] = { qid: 'Q900099', description: 'South Korean politician, mayor of Seoul', living: true };
+    FACTS.Q900099 = { cat: 'Lena Park', inst: 'human', imgs: ['Lena Park thumbnail.jpg'], born: '1975-01-01T00:00:00Z', sitelinks: 20, occ: 'politician', pos: 'Mayor of Seoul', cty: 'South Korea' };
+    FILES['File:Lena Park thumbnail.jpg'] = file('Lena Park thumbnail.jpg', { w: 90, h: 120 });
+    FILES['File:Lena Park at city hall 2026.jpg'] = file('Lena Park at city hall 2026.jpg', { w: 800, h: 1000 });
+    CATEGORIES['Lena Park'] = ['File:Lena Park at city hall 2026.jpg'];
+    const { desk, urls } = recorded();
+    const s = story('k1', 'Lena Park unveils a housing plan for Seoul', 'Seoul mayor Lena Park said 20,000 homes would be built.');
+    const first = (await desk.decide([s], { budgetMs: 10_000, lean: true })).get('k1');
+    assert.equal(first.complete, false, 'not decided in full: asked again');
+    assert.ok(!first.picks.some((p) => p.subject.label === 'Lena Park'));
+    await desk.decide([s], { budgetMs: 10_000, lean: true });
+    assert.ok(asked(urls, /categorymembers/) >= 1, 'her category, the second time');
+    assert.equal(desk.pickFor(s)?.subject?.label, 'Lena Park');
+    assert.match(desk.pickFor(s).rights.title, /city hall/);
+  });
+
+  test('a picture pinned when it airs stays under its story when the decision is made again with another first pick', async () => {
+    const { desk } = recorded();
+    const s = trump('pin1', 'Trump says tariffs on steel will rise next month');
+    await desk.decide([s], { budgetMs: 10_000, lean: true });
+    await desk.assign([s], { ready: true });
+    const aired = s.image;
+    desk.pin([s]);
+    // the queue decides it again and something else comes first (a better subject found once a source answered)
+    const key = [...desk.kept.map.keys()].find((k) => k.startsWith('d:pin1:'));
+    const d = desk.kept.get(key);
+    const other = { ...d.picks[0], url: 'https://upload.wikimedia.org/other.jpg', rights: { ...d.picks[0].rights, url: 'https://upload.wikimedia.org/other.jpg' } };
+    desk.kept.set(key, { ...d, picks: [other, ...d.picks] }, 3600_000);
+    assert.equal(desk.pickFor(s).url, aired, 'the picture it aired with, while the decision still holds it');
+    desk.failedUrls.set(aired, NOW + 3600_000);
+    assert.equal(desk.pickFor(s).url, other.url, 'unless it would not download');
+  });
+
+  test("one file a story in an episode: a story whose picture an earlier one shows takes its own next cleared picture", () => {
+    const keyOf = (st) => {
+      let h = 0;
+      for (const ch of String(st.title)) h = (h * 31 + ch.charCodeAt(0)) | 0;
+      return `${st.id}:${(h >>> 0).toString(36)}`;
+    };
+    const desk = new PictureDesk({ now: () => NOW, log: { warn() {} } });
+    const pick = (name, kind) => {
+      const url = `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/${name}.jpg/1280px-${name}.jpg`;
+      return { url, width: 1280, height: 720, tier: 2, kind, subject: { kind, label: name }, focus: 0.4, rights: rightsRecord({ source: 'wikimedia-commons', via: 'wikidata:P18', licence: 'CC-BY-SA-4.0', author: 'Jane Doe', title: `File:${name}.jpg`, page: `https://commons.wikimedia.org/wiki/File:${name}.jpg`, url }) };
+    };
+    const hq = pick('Netflix headquarters', 'thing:org');
+    const a = story('sp1', 'Netflix raises its prices again');
+    const b = story('sp2', 'Netflix and Warner sign a deal for the Harry Potter series');
+    const c = story('sp3', 'Netflix shares fall after the results');
+    desk.kept.set(`d:${keyOf(a)}`, { picks: [hq], complete: true, at: NOW }, 3600_000);
+    desk.kept.set(`d:${keyOf(b)}`, { picks: [hq, pick('Warner Bros studio', 'thing:org')], complete: true, at: NOW }, 3600_000);
+    desk.kept.set(`d:${keyOf(c)}`, { picks: [hq], complete: true, at: NOW }, 3600_000);
+    for (const s of [a, b, c]) desk.apply(s);
+    assert.equal(desk.spread([a, b, c]), 1);
+    assert.equal(a.image, hq.url);
+    assert.match(b.image, /Warner/, 'its own next subject');
+    assert.equal(c.image, hq.url, 'none left: the producer gives it its board');
+    desk.apply(b);
+    assert.match(b.image, /Warner/, 'and it stays its own');
+  });
+
+  test('a warning of each kind once in ten minutes, with the count of the ones since', () => {
+    let now = NOW;
+    const logs = [];
+    const desk = new PictureDesk({ now: () => now, log: { warn: (m) => logs.push(m) } });
+    desk.warn('titles: wikimedia HTTP 429 (pausing 51 s)');
+    desk.warn('titles: wikimedia paused after a rate limit');
+    desk.warn('files: wikimedia paused after a rate limit');
+    now += 10 * 60_000;
+    desk.warn('titles: The operation was aborted due to timeout');
+    assert.deepEqual(logs, ['[pictures] titles: wikimedia HTTP 429 (pausing 51 s)', '[pictures] files: wikimedia paused after a rate limit', '[pictures] titles: The operation was aborted due to timeout (and 1 more since)']);
   });
 });

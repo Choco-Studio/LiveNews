@@ -7,6 +7,9 @@
 //   archive.week({ days, now, same })   the week's stories, grouped by event: [{ key, entries, first, last, times,
 //                                       programmes, days, best, latest, score }], the most told first
 //   archive.story(id)                   an archived story (for its picture once the news desk has let it go)
+//   archive.amendPicture(id, picture)   a cleared picture decided after the story aired without one (the picture desk
+//                                       ahead of air, server/pictureahead.js): kept beside the days' files in
+//                                       pictures.json, so SEVEN DAYS and PICTURE THIS can show it
 // With `articles` (server/articlecache.js), each recorded story's article text (or its feed's full text) is kept beside
 // it, the outlet's words a clip or a post is measured against once the news desk has let the story go.
 import fs from 'node:fs';
@@ -36,7 +39,63 @@ export class Archive {
     this.entries = []; // oldest first
     this.byId = new Map(); // story id -> the latest entry's story fields
     this.pictured = new Map(); // story id -> the latest entry that aired it with its picture (a retelling may carry none)
+    this.amends = new Map(); // story id -> { image, imageRights, imageSubject, at }: a cleared picture decided after it aired
     this.load();
+    this.loadAmends();
+  }
+
+  get amendsFile() {
+    return this.dir ? path.join(this.dir, 'pictures.json') : null;
+  }
+
+  /** The cleared pictures decided after their stories aired (pictures.json; never a day's .jsonl, which others read line by line). */
+  loadAmends() {
+    const file = this.amendsFile;
+    if (!file || !fs.existsSync(file)) return;
+    try {
+      const since = this.now() - this.days * DAY;
+      for (const [id, a] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8'))?.pictures || {})) if (a?.at >= since) this.amendPicture(id, a, { at: a.at, save: false });
+    } catch (err) {
+      this.log.warn?.(`[archive] pictures.json: ${err.message}`);
+    }
+  }
+
+  /**
+   * A cleared picture for a story that aired without one (or with an outlet's photo the channel may not show): put on
+   * its entries, so SEVEN DAYS and PAY ATTENTION's PICTURE THIS can show it. It must be a cleared record for that very
+   * picture. An entry that already has a picture the channel may show keeps it. -> the number of entries amended
+   */
+  amendPicture(id, { image, imageRights, imageSubject = null } = {}, { at = this.now(), save = true } = {}) {
+    if (!id || !image || !imageRights?.cleared || imageRights.url !== image) return 0;
+    const shows = (e) => !!e.image && (!!(e.imageRights?.cleared && e.imageRights.url === e.image) || /^file:/i.test(e.image));
+    const entries = this.entries.filter((e) => e.id === id && !shows(e));
+    if (!entries.length) return 0;
+    for (const e of entries) {
+      e.image = image;
+      delete e.images;
+      e.imageRights = imageRights;
+      if (imageSubject?.kind) e.imageSubject = { kind: String(imageSubject.kind), label: imageSubject.label ? clip(imageSubject.label, 80) : null };
+      e.pictureLater = true; // (decided after it aired: the picture it aired with was none)
+    }
+    this.pictured.set(id, entries.at(-1));
+    this.amends.set(id, { image, imageRights, ...(imageSubject?.kind ? { imageSubject: entries.at(-1).imageSubject } : {}), at });
+    if (save) this.saveAmends();
+    return entries.length;
+  }
+
+  saveAmends() {
+    const file = this.amendsFile;
+    if (!file) return;
+    const since = this.now() - this.days * DAY;
+    for (const [id, a] of this.amends) if (!(a.at >= since)) this.amends.delete(id);
+    try {
+      fs.mkdirSync(this.dir, { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ v: 1, pictures: Object.fromEntries(this.amends) }));
+      fs.renameSync(tmp, file);
+    } catch (err) {
+      this.log.warn?.(`[archive] pictures.json: ${err.message}`);
+    }
   }
 
   load() {

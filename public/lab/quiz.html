@@ -32,6 +32,7 @@ import { drawTopRow } from '/js/graphics/bug.js';
 import { CaptionState, drawCaptions } from '/js/graphics/captions.js';
 import { CAPTION } from '/js/graphics/layout.js';
 import { quizCases } from '/lab/quiz-cases.js';
+import { quizPictureCredit } from '/js/quizplay.js';
 
 warmMapData();
 const qs = new URLSearchParams(location.search);
@@ -119,7 +120,24 @@ const field = (ctx) => {
   ctx.fillRect(0, 0, 384, 216);
 };
 
-const BOARDS = quizCases({ Q, pics: PICS, HN, NOW }).filter(([id]) => !only || only.split(',').includes(id));
+// ?credits=1: PICTURE THIS with its picture's licence credit under the board (a cleared record's, one line and two) and,
+// in a private preview, PREVIEW · NOT CLEARED (the pictures desk, round 9)
+const creditCases = () => {
+  const LOLA = { seat: 'A', name: 'LOLA', id: 'lola' };
+  const SAM = { seat: 'B', name: 'SAM', id: 'sam' };
+  const url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/x.jpg/1280px-x.jpg';
+  const q = (credit, extra = {}) => ({ type: 'picture', key: 'credit', image: url, steps: [8, 16, 32, 64], aired: { programme: 'world-now', at: NOW - 3 * 3600_000, source: 'Reuters' }, options: [{ letter: 'A', words: 'Erdogan visits quake zone as death toll rises to 30' }, { letter: 'B', words: 'Council approves a budget for the city’s schools' }, { letter: 'C', words: 'Antarctic Sea Ice Grows to Its 2026 Maximum' }], answer: 'A', ...(credit ? { imageRights: { source: 'wikimedia-commons', url, credit, cleared: true } } : {}), ...extra });
+  const board = (question, preview = false) => {
+    const o = { question, image: PICS.corridor, players: [LOLA, SAM], kicker: Q.kickerOf({ type: 'picture', k: 2, n: 3 }), optionsAt: 1, countdown: { at: 15, dur: 7 * HN }, locks: [{ seat: 'A', answer: 'A', at: 16.2 }, { seat: 'B', answer: 'B', at: 18.1, }], revealAt: 23, now: NOW, pictureCredit: quizPictureCredit(question, preview ? { picturePreview: true } : null) };
+    return { len: 26, moments: { open: 0.8, reading: 8, countdown: 15.6, locks: 18.6, step4: 20.5, reveal: 23.4, settled: 25.5 }, draw: (ctx, t) => Q.drawQuestionBoard(ctx, t, o) };
+  };
+  return [
+    ['credit1', 'PICTURE THIS · a cleared picture: its licence credit under the board, as the montage draws it', board(q('FILE 2025 · GAGE SKIDMORE · CC BY-SA 4.0 · PIXELATED'))],
+    ['credit2', 'PICTURE THIS · the longest credit: the author on one line, the licence and PIXELATED on the next', board(q('FILE · PRESIDENCY OF THE REPUBLIC OF TURKEY PRESS OFFICE · CC BY 4.0 · PIXELATED'))],
+    ['creditpreview', "PICTURE THIS · a private preview: an outlet's photo, PREVIEW · NOT CLEARED", board(q(null, { imageRights: { source: 'outlet', url, credit: 'REUTERS/MURAD SEZER', cleared: false } }), true)],
+  ];
+};
+const BOARDS = [...quizCases({ Q, pics: PICS, HN, NOW }), ...(qs.get('credits') === '1' ? creditCases() : [])].filter(([id]) => !only || only.split(',').includes(id));
 
 const CAPTIONS = {
   picture: 'Is it A, Apple launches Apple TV 4K? B, the PC port? Or C, the sea ice?',

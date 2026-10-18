@@ -11,7 +11,7 @@
 //   prepareQuiz(d, episode)   → d.quiz (null for any other programme)
 //   playQuiz(d, episode)      the edition after the open, to its end card
 //   quizMusic(d, seg)         the bed's moment for a quiz segment that starts speaking (director.js musicSegment)
-import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, quizPictureAirable, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
+import { BOARD_WAIT, quizAvoidOf, quizUnits, planQuizShots, answerSchedule, countdownHalves, scheduleNeed, revealPlan, seatOf, sameShot, roundQuestions, speechOf, isQuizEpisode, quizPictureAirable, quizPictureCredit, REVEAL_BEAT, WHERE_SETTLE, LETTER_STAGES, TAG_CLEAR, HALF_NOTE, COUNTDOWN_HALVES, PICTURE_STEPS } from './quizplay.js';
 import { kickerOf, preparePicture } from './scenes/cards-quiz.js';
 import { paceFor, gapAfter, CHANNEL, cutWait, paceTrace } from './pace.js';
 
@@ -502,7 +502,8 @@ function boardOf(d, u, item = null, index = 0) {
   const base = { players: q.players, kicker, now: Date.now(), titles: q.titles, revealAt: Infinity, double: u.double ? q.double : null };
   switch (u.type) {
     case 'picture':
-      return { board: 'picture', o: { ...base, question, image: null, optionsAt: Infinity, countdown: null, locks: [] } };
+      // (the picture's licence credit under the board while it shows; PREVIEW · NOT CLEARED in a private preview)
+      return { board: 'picture', o: { ...base, question, image: null, optionsAt: Infinity, countdown: null, locks: [], pictureCredit: quizPictureCredit(question, q.episode) } };
     case 'letters':
       return { board: 'letters', o: { ...base, question, stageTimes: [Infinity, Infinity, Infinity], countdown: null, buzzes: [], winner: null } };
     case 'where':
