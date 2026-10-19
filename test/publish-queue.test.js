@@ -104,3 +104,22 @@ test('schedule: inside the network\'s hours, its spacing, ten minutes from any o
   assert.equal(q.due(T0).length, 0);
   assert.ok(q.due(yt[0].schedule.at).some((x) => x.id === yt[0].id));
 });
+
+test('the owner\'s own caps and spacing (settings.caps, settings.spacingMinutes), never past the network\'s own limit', () => {
+  const q = new PublishQueue({ dir: tmp(), now: () => T0 });
+  q.saveSettings({ phase: 3, modes: { youtube: 'auto' } });
+  assert.equal(q.capOf('youtube', 'episode'), 3, 'Phase 3: three whole programmes a day');
+  q.saveSettings({ caps: { youtube: { uploads: 5, clips: 10 }, tiktok: { clips: 500 } }, spacingMinutes: { youtube: 50 } });
+  assert.equal(q.capOf('youtube', 'episode'), 5);
+  assert.equal(q.capOf('youtube', 'clip'), 10);
+  assert.equal(q.capOf('tiktok', 'clip'), 15, 'TikTok\'s own 15 a day is the ceiling');
+  assert.equal(q.spacingOf('youtube'), 50 * 60_000);
+  assert.equal(q.spacingOf('tiktok'), 3 * 3600_000, 'unset: the network\'s own');
+  for (let i = 1; i <= 6; i++) q.enqueue({ kind: 'episode', platform: 'youtube', format: 'horizontal', title: `Show ${i}`, media: { video: `/v${i}.mp4`, sha256: `e${i}` }, source: { episodeId: `ep${i}` }, compliance: { ok: true } });
+  const done = q.schedule(T0);
+  const day = (t) => new Date(t).toISOString().slice(0, 10);
+  const first = done.filter((it) => day(it.schedule.at) === day(done[0].schedule.at));
+  assert.equal(first.length, 5, 'five whole programmes on the first day, the sixth the next');
+  const gaps = first.map((it) => it.schedule.at).sort((a, b) => a - b).slice(1).map((t, i, a) => t - (i ? a[i - 1] : first.map((x) => x.schedule.at).sort((x, y) => x - y)[0]));
+  assert.ok(gaps.every((g) => g >= 50 * 60_000), 'fifty minutes apart at least');
+});

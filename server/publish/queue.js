@@ -249,10 +249,25 @@ export class PublishQueue {
 
   /** The day's cap of a network in the current phase (clips for video items, posts for text). */
   capOf(platform, kind) {
-    const phase = this.settings().phase;
-    const d = DAILY[phase]?.[platform] || {};
-    const range = kind === 'text' ? d.posts : kind === 'episode' ? d.uploads : d.clips;
+    const s = this.settings();
+    const d = DAILY[s.phase]?.[platform] || {};
+    const k = kind === 'text' ? 'posts' : kind === 'episode' ? 'uploads' : 'clips';
+    // the owner's own number (settings.caps, written by hand: 5 whole programmes a day, 19 Oct), never past what the
+    // network itself allows a day (platforms.js caps)
+    const own = Number(s.caps?.[platform]?.[k]);
+    if (own > 0) {
+      const hard = PLATFORMS[platform]?.caps || {};
+      const ceiling = Math.min(...[hard.uploadsPerDay, hard.postsPerDay, hard.reelsPerDay].filter((x) => x > 0), Infinity);
+      return Math.min(Math.floor(own), ceiling);
+    }
+    const range = d[k];
     return range ? range[1] : 0;
+  }
+
+  /** The least time between two items on a network (ms): settings.spacingMinutes (by hand), else the network's own. */
+  spacingOf(platform) {
+    const own = Number(this.settings().spacingMinutes?.[platform]);
+    return own >= 15 ? own * 60_000 : PLATFORMS[platform].spacing;
   }
 
   /**
@@ -282,6 +297,7 @@ export class PublishQueue {
     const p = PLATFORMS[it.platform];
     const tz = this.tzOf(it.platform);
     const cap = this.capOf(it.platform, it.kind) || 1;
+    const spacing = this.spacingOf(it.platform);
     const step = 5 * 60_000;
     let t = Math.ceil(from / step) * step;
     const limit = from + 14 * 24 * 3600_000;
@@ -292,7 +308,7 @@ export class PublishQueue {
         continue;
       }
       const sameNet = taken.filter((x) => x.platform === it.platform);
-      const tooClose = sameNet.some((x) => Math.abs(x.at - t) < p.spacing) || taken.some((x) => Math.abs(x.at - t) < GLOBAL_GAP_MS);
+      const tooClose = sameNet.some((x) => Math.abs(x.at - t) < spacing) || taken.some((x) => Math.abs(x.at - t) < GLOBAL_GAP_MS);
       const thatDay = sameNet.filter((x) => x.kind === it.kind && localParts(x.at, tz).day === lp.day).length;
       if (!tooClose && thatDay < cap) return t;
       t += step;

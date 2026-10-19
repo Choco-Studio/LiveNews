@@ -6,7 +6,8 @@
 // The live stream's title and description: videos.update on the broadcast's video (50 units), rate-limited by the
 // supervisor (server/publish/live.js).
 // Every upload then joins its programme's playlist on the channel, one for the whole programmes and one for its
-// Shorts ("WORLD NOW", "WORLD NOW · Shorts"): found by title among the channel's own (playlists.list, 1 unit), made
+// Shorts ("WORLD NOW", "WORLD NOW · Shorts"): found by title among the channel's own (playlists.list, 1 unit; the
+// owner's "🌍 WORLD NOW" is the same), made
 // public the first time (playlists.insert, 50), the video added (playlistItems.insert, 50). A playlist that fails never
 // fails the upload (the video is up: a retry would upload it twice).
 //
@@ -54,6 +55,9 @@ export function videoResource(item) {
     status,
   };
 }
+
+// the owner's own playlists count: "🌍 WORLD NOW" is WORLD NOW's (letters and digits compared, case aside)
+const sameTitle = (a, b) => String(a || '').toUpperCase().replace(/[^\p{L}\p{N}]/gu, '') === String(b || '').toUpperCase().replace(/[^\p{L}\p{N}]/gu, '');
 
 /** The playlist an item joins: its programme's, whole programmes and Shorts apart (null: none, e.g. no programme). */
 export function playlistFor(item) {
@@ -131,7 +135,7 @@ export class YouTubeAdapter extends Adapter {
     let playlistId = this.playlists.get(pl.title);
     for (let page = null, n = 0; !playlistId && n < 10; n++) {
       const r = await this.request('GET', `${PLAYLISTS}?part=snippet&mine=true&maxResults=50${page ? `&pageToken=${encodeURIComponent(page)}` : ''}`, { headers: auth });
-      playlistId = (r.body?.items || []).find((p) => p.snippet?.title === pl.title)?.id || null;
+      playlistId = (r.body?.items || []).find((p) => sameTitle(p.snippet?.title, pl.title))?.id || null;
       page = r.body?.nextPageToken;
       if (!page) break;
     }

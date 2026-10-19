@@ -101,6 +101,17 @@ test('clipWindow opens on the first whole frame after a cut, never after the fir
   assert.ok(w.end < 12.4 && w.end >= moment.end);
 });
 
+test('clipWindow never ends inside the next sentence: a frame before its first word', () => {
+  // (the owner's server, 19 Oct: the tail after "...in the province" ran 0.18 s into "Vic, thank you.": held)
+  const tl = { shots: [], segments: [{ index: 0, sentences: [{ start: 60, end: 65.78, text: 'The fire is spreading.' }, { start: 66.15, end: 67.23, text: 'Vic, thank you.' }] }] };
+  const w = clipWindow({ start: 60, end: 65.78, from: 0, to: 0 }, tl);
+  assert.ok(w.end < 66.15, `end ${w.end}`);
+  assert.ok(w.end >= 65.78, 'the last word is kept');
+  assert.ok(Math.abs(w.end * FPS - Math.round(w.end * FPS)) < 1e-6, 'on a whole frame');
+  const far = clipWindow({ start: 60, end: 65.78, from: 0, to: 0 }, { shots: [], segments: [{ index: 0, sentences: [{ start: 60, end: 65.78 }, { start: 70, end: 72 }] }] });
+  assert.ok(Math.abs(far.end - (65.78 + 0.55)) < 1 / FPS, 'with the next sentence far off, the usual breath');
+});
+
 test('clipWindow with no cut nearby keeps a breath before and after the words', () => {
   const tl = { segments: [], shots: [] };
   const w = clipWindow({ start: 10, end: 20 }, tl);

@@ -4,12 +4,15 @@
 // pieces, then the publisher's round sends what is due. Run it on a timer (systemd, every 30 minutes).
 //
 //   node tools/publish/auto.mjs [--masters data/playout/masters] [--work data/publish/auto] [--max 1] [--no-publish]
+//        [--fresh-hours 24] [--backlog 8] [--clips 2] [--skip world-weather]
 //
-// For each programme the playout rendered (data/playout/masters/<episode id>/: episode.json, horizontal.mkv and its
-// report), newest first, at most --max a round:
+// First, a piece that would reach its network more than --fresh-hours after its programme aired leaves the queue
+// (server/publish/autoplan.js). Then, while fewer than --backlog pieces wait for YouTube, at most --max programmes a
+// round, each the newest edition of the type made least recently (the programmes in turn), aired within --fresh-hours
+// (data/playout/masters/<episode id>/: episode.json, horizontal.mkv and its report):
 //   1. a copy of the folder into the work folder, so the playout's disk policy can let its master go while the pieces
 //      wait in the queue (their gate reads the episode and the report again at the moment of publishing)
-//   2. its clips (tools/publish/factory.mjs --from-playout, vertical: YouTube Shorts and TikTok)
+//   2. its best --clips clips (tools/publish/factory.mjs --from-playout, vertical: YouTube Shorts and TikTok)
 //   3. the whole programme (tools/publish/upload.mjs --from-playout: video, thumbnail, chapters, sources)
 //   4. done.json, so it is never made twice (a step that failed is tried again next round, three rounds at most)
 // then tools/publish/run.mjs: the re-check, the schedule (each network's hours, spacing and the phase's daily caps) and
@@ -18,12 +21,20 @@
 // sources: never published). One round at a time (a lock file); each step at low priority, beside the renderer.
 import fs from 'node:fs';
 import path from 'node:path';
+import { PublishQueue } from '../../server/publish/queue.js';
+import { AUTO_DEFAULTS, stale, backlog, nextProgramme } from '../../server/publish/autoplan.js';
 import { root, argsOf, run } from './lib.mjs';
 
 const { opt, flag } = argsOf();
 const MASTERS = path.resolve(opt('masters', path.join(root, 'data', 'playout', 'masters')));
 const WORK = path.resolve(opt('work', path.join(root, 'data', 'publish', 'auto')));
 const MAX = Math.max(0, Number(opt('max', 1)));
+const FRESH = Number(opt('fresh-hours', AUTO_DEFAULTS.freshHours));
+const BACKLOG = Number(opt('backlog', AUTO_DEFAULTS.backlog));
+const CLIPS = Number(opt('clips', AUTO_DEFAULTS.clipsPerProgramme));
+// programmes never published from here: WORLD WEATHER's data is Open-Meteo's free, non-commercial API (the paid plan
+// is a launch blocker: compliance.md), unless --skip says otherwise
+const SKIP = new Set(String(opt('skip', 'world-weather')).split(',').map((x) => x.trim()).filter(Boolean));
 const say = (m) => console.log(`${new Date().toISOString().slice(0, 19)} [auto] ${m}`);
 const nice = (args) => run('nice', ['-n', '10', 'node', ...args], { env: { PLAYOUT: '1' } });
 
@@ -77,25 +88,49 @@ function waiting() {
 
 const done = (id, record) => fs.writeFileSync(path.join(WORK, id, 'done.json'), JSON.stringify({ at: new Date().toISOString(), ...record }, null, 1));
 
+// news a day late is not news: what would go out more than a day after its programme aired leaves the queue
+const queue = new PublishQueue({ dir: path.join(root, 'data', 'publish') });
+for (const it of queue.list({})) {
+  const why = stale(it, Date.now(), { freshHours: FRESH });
+  if (!why) continue;
+  queue.reject(it.id, 'auto', `stale: ${why}`);
+  say(`let go (${why}): ${it.platform} ${it.title}`);
+}
+
+const typesFile = path.join(WORK, 'types.json');
+const lastMade = fs.existsSync(typesFile) ? JSON.parse(fs.readFileSync(typesFile, 'utf8')) : {};
 let made = 0;
+let candidates = [];
 for (const p of waiting()) {
-  if (made >= MAX) break;
   const title = p.episode.program?.title || p.episode.program?.id || p.id;
   fs.mkdirSync(path.join(WORK, p.id), { recursive: true });
   if (p.episode.provider === 'mock') {
     done(p.id, { skipped: 'written by the offline writer (copies its sources: never published)' });
     say(`${title} ${p.id}: skipped (the offline writer's)`);
-    continue;
-  }
+  } else if (SKIP.has(p.episode.program?.id)) done(p.id, { skipped: `${title} is not published from here (--skip)` });
+  else if (Date.now() - p.airEnd > FRESH * 3600_000) done(p.id, { skipped: `aired more than ${FRESH} h ago` });
+  else candidates.push({ ...p, title, programId: p.episode.program?.id || p.id });
+}
+// about a day of pieces waiting is enough: the round makes more as they go out (the playout keeps the masters)
+const waitingYoutube = backlog(queue.list({}), 'youtube');
+if (waitingYoutube >= BACKLOG) {
+  say(`${waitingYoutube} pieces wait for YouTube (at most ${BACKLOG}): nothing new this round`);
+  candidates = [];
+}
+while (made < MAX) {
+  const p = nextProgramme(candidates, lastMade, { freshHours: FRESH });
+  if (!p) break;
+  candidates = candidates.filter((c) => c.id !== p.id);
+  const title = p.title;
   made++;
   // (the copy keeps the episode's id as its name: the tools find a rendered master by it, server/publish/masters.js)
   const src = path.join(WORK, p.id, p.id);
   fs.rmSync(src, { recursive: true, force: true });
   fs.cpSync(p.dir, src, { recursive: true });
-  const record = { programme: title, programId: p.episode.program?.id || null };
+  const record = { programme: title, programId: p.programId };
   say(`${title} ${p.id}: clips`);
   try {
-    await nice(['tools/publish/factory.mjs', '--from-playout', src, '--out', path.join(WORK, p.id, 'clips'), '--formats', 'vertical']);
+    await nice(['tools/publish/factory.mjs', '--from-playout', src, '--out', path.join(WORK, p.id, 'clips'), '--formats', 'vertical', '--max', String(CLIPS)]);
     record.clips = 'ok';
   } catch (err) {
     record.clips = err.message.slice(-300);
@@ -109,6 +144,8 @@ for (const p of waiting()) {
     record.full = err.message.slice(-300);
     say(`${title}: the whole programme failed: ${record.full}`);
   }
+  lastMade[p.programId] = Date.now();
+  fs.writeFileSync(typesFile, JSON.stringify(lastMade, null, 1));
   const triesFile = path.join(WORK, p.id, 'tries.json');
   const tries = (fs.existsSync(triesFile) ? Number(fs.readFileSync(triesFile, 'utf8')) || 0 : 0) + 1;
   if ((record.clips !== 'ok' || record.full !== 'ok') && tries < 3) {
@@ -120,7 +157,7 @@ for (const p of waiting()) {
   fs.rmSync(path.join(src, 'horizontal.mkv'), { force: true });
   done(p.id, { ...record, tries });
 }
-if (!made) say('nothing new from the playout');
+if (!made) say('nothing new made this round');
 
 if (!flag('no-publish')) {
   say('the publisher\'s round');

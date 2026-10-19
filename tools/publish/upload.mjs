@@ -7,6 +7,9 @@
 //
 //   node tools/publish/upload.mjs --episode ep.json --out <dir> [--master m.mkv --report r.json] [--queue data/publish]
 //        [--no-video] (the metadata and the thumbnail only)
+//        [--pictures <dir>] (the episode's cleared pictures, <storyId>.jpg|png|webp, as factory.mjs takes them)
+//        [--sources <dataDir>] (the data folder whose archive holds the stories it tells: a programme made on demand,
+//        server/publish/newsday.js, keeps its own; the station's data/ by default)
 //        [--video v.mp4] (an upload composed earlier, with the --report of the master it was made from: queued once the
 //        phase takes full uploads, with no master and no new render)
 import fs from 'node:fs';
@@ -46,7 +49,9 @@ const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT 
 // the end cards point to a stream only when there is one (airmode.js streamOf: LIVE only when it is live): the clip
 // end card after the programme, and the programme's own end card in the recording (the playback page's channel)
 const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
-const pb = createPlaybackServer({ root, stream });
+const pb = createPlaybackServer({ root, pictureDir: opt('pictures') ? path.resolve(opt('pictures')) : null, stream });
+// the stories' own data folder: their sources for the gate, their articles for the description's links
+const dataDir = path.resolve(opt('sources', path.join(root, 'data')));
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 let master = opt('master') ? { file: path.resolve(opt('master')), report: path.resolve(opt('report')) } : null;
@@ -71,7 +76,7 @@ timeline.duration = D;
 const stories = new Map();
 try {
   const { readArchive } = await import('../lengths/archive.mjs');
-  for (const [id, s] of readArchive(path.join(root, 'data', 'archive')).stories) stories.set(id, s);
+  for (const [id, s] of readArchive(path.join(dataDir, 'archive')).stories) stories.set(id, s);
 } catch {
   /* no archive: no article links */
 }
@@ -146,7 +151,7 @@ await pb.close();
 
 // ---------------------------------------------------------------- the verdict, the files, the queue
 
-const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.archiveGetStory({ dataDir: path.join(root, 'data') }) });
+const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.archiveGetStory({ dataDir }) });
 const record = { episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString() }, ...meta, duration: D, thumb, video, compliance: { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub }, frameAt: at };
 fs.writeFileSync(path.join(out, `${prog}.upload.json`), JSON.stringify(record, null, 1));
 fs.writeFileSync(path.join(out, `${prog}.description.txt`), `${meta.title}\n\n${meta.description}\n\nTags: ${meta.tags.join(', ')}\n`);
@@ -169,7 +174,7 @@ if (video && meta.worthy && !unclearedPictures && queue.settings().phase >= 2) {
     compliance: record.compliance,
     score: 5,
     priority: 1,
-    gate: { episodeFile: path.resolve(epFile), reportFile: master.report, range: null },
+    gate: { episodeFile: path.resolve(epFile), reportFile: master.report, range: null, ...(opt('sources') ? { sourcesDir: dataDir } : {}) },
     dryRun: true,
   });
   say(`queued: ${it?.id} (${it?.status})`);

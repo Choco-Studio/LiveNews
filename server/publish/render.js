@@ -29,7 +29,8 @@ export const WEATHER_WIPE = 0.42;
  * or its caption, HOLD after it); when the picture changes in the 1.5 s before the first word, the clip opens on the
  * first whole frame of the change (a cut's event, or the segment's hand-over to the voice, where its strap, card or
  * board change: both are stamped one frame before the picture shows them), and never after the first word. Its end is
- * TAIL after the last word, or one frame before the next cut when that comes within 1.2 s. Both on whole frames.
+ * TAIL after the last word, or one frame before the next cut when that comes within 1.2 s, and never inside the next
+ * sentence (a frame before its first word). Both on whole frames.
  * `wipeIn`: the picture wipes in from the hand-over for that long (WEATHER_WIPE); a clip opening on the hand-over
  * then holds the first whole frame after the wipe over it (`hold` seconds from its start: the old shot is never seen,
  * and the first word is kept).
@@ -64,8 +65,15 @@ export function clipWindow(moment, timeline, { fps = FPS, lead = LEAD, tail = TA
     end = after - 1 / fps;
     snappedEnd = true;
   }
+  // never into the sentence after: its first word is not heard, and a cut inside it is a half sentence (the owner's
+  // server, 19 Oct: "the cut at 66.33 s falls inside 'Vic, thank you.' (66.15-67.23 s)", most clips held for it)
+  let nextStart = null;
+  for (const s of timeline?.segments || []) {
+    for (const x of s.sentences || []) if (x.start != null && x.start >= moment.end + 0.02 && (nextStart === null || x.start < nextStart)) nextStart = x.start;
+  }
+  if (nextStart !== null && end > nextStart - 1 / fps) end = Math.max(moment.end + 1 / fps, Math.floor((nextStart - 1 / fps) * fps) / fps);
   start = Math.max(0, frame(start, fps));
-  end = frame(end, fps);
+  end = end === Math.floor(end * fps) / fps ? end : frame(end, fps);
   const hold = wiped !== null && wiped > start && wiped < end ? frame(wiped - start, fps) : 0;
   return { start, end, duration: +(end - start).toFixed(3), snappedStart, snappedEnd, hold };
 }
