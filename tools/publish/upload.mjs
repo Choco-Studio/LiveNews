@@ -22,6 +22,8 @@ import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { renderedMaster } from '../../server/publish/masters.js';
 import { streamOf } from '../../public/js/airmode.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
+import { episodeFacts, writePackage } from '../../server/publish/packaging.js';
+import { packagingChain, renderCovers, pictureOf } from './packager.mjs';
 
 const { opt, flag } = argsOf();
 // --from-playout <dir>: a programme the pre-rendered playout rendered (docs/publishing/playout.md §6): its episode, its
@@ -46,7 +48,8 @@ const recorded = !!fromPlayout || /^(1|true|yes|on)$/i.test(process.env.PLAYOUT 
 // the end cards point to a stream only when there is one (airmode.js streamOf: LIVE only when it is live): the clip
 // end card after the programme, and the programme's own end card in the recording (the playback page's channel)
 const stream = streamOf({ url: process.env.CHANNEL_LIVE_URL || null, recorded });
-const pb = createPlaybackServer({ root, stream });
+const pictureDir = opt('pictures') ? path.resolve(opt('pictures')) : null;
+const pb = createPlaybackServer({ root, stream, pictureDir });
 const port = await pb.listen(0);
 const base = `http://127.0.0.1:${port}`;
 let master = opt('master') ? { file: path.resolve(opt('master')), report: path.resolve(opt('report')) } : null;
@@ -91,37 +94,53 @@ const framePng = path.join(tmpDir, 'frame.png');
 // the frame from a clean plate (?clip=clean: the same deterministic run with no bug, strap or caption), so the
 // thumbnail's own type never sits on the programme's
 const plate = path.join(tmpDir, 'plate.mkv');
-await run('node', ['tools/record.mjs', '--url', `${base}/?autostart=1&voice=tts&clip=clean`, '--item', path.resolve(epFile), '--seconds', String(Math.ceil(at + 1)), '--fps', '30', '--scale', '1', '--lossless', '--progressive', '--seed', '1', '--time', new Date(airedAt).toISOString(), '--out', plate], { env: { TMPDIR: tmpDir }, quiet: true });
+// (a programme whose first story has no close shot, the quiz, the weather: its first studio shot in its first minute,
+// for the packaging's presenter thumbnail, B)
+const studio = close ? null : (report.events || []).find((e) => e.type === 'shot' && (e.shot === 'close' || e.shot === 'wide') && e.v > 3 && e.v < 75 && e.v + 1.2 < D);
+// (and the next studio shot, a second face: a quiz's other player)
+const studio2 = studio ? (report.events || []).find((e) => e.type === 'shot' && ['close', 'wide', 'two', 'single'].includes(e.shot) && e.v > studio.v + 5 && e.v < studio.v + 90 && e.v + 1.2 < D) : null;
+const studioPng = path.join(tmpDir, 'studio.png');
+const studio2Png = path.join(tmpDir, 'studio2.png');
+await run('node', ['tools/record.mjs', '--url', `${base}/?autostart=1&voice=tts&clip=clean`, '--item', path.resolve(epFile), '--seconds', String(Math.ceil(Math.max(at, studio ? studio.v + 1.2 : 0, studio2 ? studio2.v + 1.2 : 0) + 1)), '--fps', '30', '--scale', '1', '--lossless', '--progressive', '--seed', '1', '--time', new Date(airedAt).toISOString(), '--out', plate], { env: { TMPDIR: tmpDir }, quiet: true });
 await run('ffmpeg', ['-v', 'error', '-y', '-ss', at.toFixed(2), '-i', plate, '-frames:v', '1', framePng], { quiet: true });
+if (studio) await run('ffmpeg', ['-v', 'error', '-y', '-ss', (studio.v + 1.0).toFixed(2), '-i', plate, '-frames:v', '1', studioPng], { quiet: true });
+if (studio2) await run('ffmpeg', ['-v', 'error', '-y', '-ss', (studio2.v + 1.0).toFixed(2), '-i', plate, '-frames:v', '1', studio2Png], { quiet: true });
 fs.rmSync(plate, { force: true });
 const { chromium } = await loadPlaywright();
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.goto(`${base}/lab/thumb.html`, { waitUntil: 'load' });
-await page.waitForFunction(() => !!window.__thumbLab);
+await page.waitForFunction(() => !!window.__thumbLab?.cover);
 const when = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(new Date(airedAt)).toUpperCase();
-const lead = episode.quiz ? null : firstStory?.seg?.headline || '';
-const spec = {
-  frame: `data:image/png;base64,${fs.readFileSync(framePng).toString('base64')}`,
-  programme: episode.program?.title || 'GLOBIT 24',
-  theme: THEME,
-  lines: episode.quiz ? ['NEWS QUIZ', 'PLAY ALONG'] : episode.weather ? ['THE WORLD', 'TODAY'] : undefined,
-  lead,
-  fallback: episode.program?.tagline || '',
-  kicker: `FULL PROGRAMME · ${when}`,
-  side,
-};
-const thumbSmall = path.join(tmpDir, 'thumb-1x.png');
-fs.writeFileSync(thumbSmall, Buffer.from((await page.evaluate((s) => window.__thumbLab.compose(s), spec)).split(',')[1], 'base64'));
-let thumb = path.join(out, `${prog}.thumb.png`);
-await run('ffmpeg', ['-v', 'error', '-y', '-i', thumbSmall, '-vf', 'scale=iw*5:ih*5:flags=neighbor', thumb], { quiet: true });
-// YouTube takes a thumbnail up to 2 MB
-if (fs.statSync(thumb).size > 2 * 1024 * 1024) {
-  const jpg = thumb.replace(/\.png$/, '.jpg');
-  await run('ffmpeg', ['-v', 'error', '-y', '-i', thumb, '-q:v', '2', jpg], { quiet: true });
-  fs.rmSync(thumb);
-  thumb = jpg;
+// the packaging (docs/publishing/thumbnails-titles.md): three titles and three thumbnails for YouTube's Test & Compare,
+// written by the AI writer of the configured chain (every field checked) or the deterministic writer, from the
+// programme's facts; the thumbnails from its lead story's cleared picture and its own clean frame of the presenter
+let presenters = {};
+try {
+  presenters = JSON.parse(fs.readFileSync(path.join(root, 'config', 'channel.json'), 'utf8')).presenters || {};
+} catch {
+  /* names fall back to ids */
 }
+const facts = episodeFacts(episode, { stories, presenters, airedAt, duration: D, title: meta.title, live: !!process.env.CHANNEL_LIVE_URL && !recorded });
+const pack = await writePackage(facts, { chain: flag('no-ai') ? null : await packagingChain({ log: { warn: (m) => say(m) } }) });
+say(`packaging (${pack.writer}): ${pack.titles.map((t) => `“${t}”`).join(' / ')} · ${pack.thumbs.join(' / ')}`);
+const leadId = (episode.segments || []).find((x) => x.type === 'story' && x.storyId)?.storyId;
+// (the clean plate: no bug, strap or caption; the presenter stands left in a close shot, the frame's middle otherwise)
+// (a close shot: the presenter, standing left; else the frame is a board or a map, shown whole)
+// (never a quiz's board: its lines of type are unreadable at YouTube's sizes; its players' faces instead)
+const studioRect = { x: 84, y: 20, w: 216, h: 176 };
+const faces = { ...(studio && fs.existsSync(studioPng) ? { presenter: { file: studioPng, rect: studioRect } } : {}), ...(facts.quizShow && studio2 && fs.existsSync(studio2Png) ? { presenter2: { file: studio2Png, rect: studioRect } } : {}) };
+const frames = close ? { presenter: { file: framePng, rect: { x: 0, y: 20, w: 216, h: 176 } } } : facts.quizShow && faces.presenter ? faces : { board: { file: framePng, rect: { x: 0, y: 0, w: 384, h: 216, focusY: 0.3 } }, ...faces };
+const thumbs = await renderCovers({ page, fmt: 'horizontal', pkg: pack, frames, picture: leadId ? pictureOf(episode, [leadId], pictureDir) : null, pictureOnlyA: true, programme: episode.program?.title || 'GLOBIT 24', theme: THEME, kicker: `FULL PROGRAMME · ${when}`, grave: facts.grave, out, name: prog });
+// YouTube takes a thumbnail up to 2 MB
+for (const [i, f] of thumbs.entries()) {
+  if (fs.statSync(f).size <= 2 * 1024 * 1024) continue;
+  const jpg = f.replace(/\.png$/, '.jpg');
+  await run('ffmpeg', ['-v', 'error', '-y', '-i', f, '-q:v', '2', jpg], { quiet: true });
+  fs.rmSync(f);
+  thumbs[i] = jpg;
+}
+const thumb = thumbs[0];
 await browser.close();
 
 // ---------------------------------------------------------------- the video
@@ -147,7 +166,7 @@ await pb.close();
 // ---------------------------------------------------------------- the verdict, the files, the queue
 
 const gate = compliance.preflight({ id: `${prog}-episode`, kind: 'episode', episode, recording: report, platforms: ['youtube'], flags: { youtube: makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: prog } }) }, text: meta.description }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.archiveGetStory({ dataDir: path.join(root, 'data') }) });
-const record = { episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString() }, ...meta, duration: D, thumb, video, compliance: { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub }, frameAt: at };
+const record = { episode: { id: episode.id, programme: episode.program?.title, airedAt: new Date(airedAt).toISOString() }, ...meta, title: pack.titles[0], titles: pack.titles, duration: D, thumb, thumbs, package: pack, video, compliance: { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub }, frameAt: at };
 fs.writeFileSync(path.join(out, `${prog}.upload.json`), JSON.stringify(record, null, 1));
 fs.writeFileSync(path.join(out, `${prog}.description.txt`), `${meta.title}\n\n${meta.description}\n\nTags: ${meta.tags.join(', ')}\n`);
 const queue = new PublishQueue({ dir: path.resolve(opt('queue', path.join(root, 'data', 'publish'))) });
@@ -158,12 +177,13 @@ if (video && meta.worthy && !unclearedPictures && queue.settings().phase >= 2) {
     kind: 'episode',
     platform: 'youtube',
     format: 'horizontal',
-    title: meta.title,
+    title: pack.titles[0],
     text: meta.description,
     description: meta.description,
     tags: meta.tags,
     links: meta.sources.filter((s) => s.link).map((s) => ({ label: s.outlet, url: s.link })),
-    media: { video, thumb, captions: path.join(out, `${prog}.srt`), duration: D + 2.6, sha256: crypto.createHash('sha256').update(fs.readFileSync(video)).digest('hex') },
+    package: { titles: pack.titles, thumbs: pack.thumbs, hook: pack.hook, lead: pack.lead, hashtags: pack.hashtags, writer: pack.writer, facts: { ...facts, sources: [] } },
+    media: { video, thumb, thumbs, captions: path.join(out, `${prog}.srt`), duration: D + 2.6, sha256: crypto.createHash('sha256').update(fs.readFileSync(video)).digest('hex') },
     source: { episodeId: episode.id, programId: prog, storyIds: [...new Set(episode.segments.map((s) => s.storyId).filter(Boolean))], airedAt },
     disclosure: { youtube: { containsSyntheticMedia: true } },
     compliance: record.compliance,

@@ -23,6 +23,11 @@
 // the report gives the timeline to the word (server/publish/timeline.js); the moments are found on it
 // (moments.js); the cards are drawn by the channel's own code (public/lab/clip.html); ffmpeg cuts, titles and scales
 // (render.js). Same seed, same item, same clock: both formats share one timeline.
+//
+// The packaging (docs/publishing/thumbnails-titles.md): each clip's three titles, three cover texts, hook, lead and
+// hashtags (server/publish/packaging.js: the AI writer of the configured chain, every field checked, the deterministic
+// writer behind it), and its three covers (vertical, 1080x1920) or thumbnails (horizontal, 1920x1080), drawn by the
+// channel's own code (public/js/clip/cover.js) from the story's cleared picture and the clip's own frames.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -33,6 +38,8 @@ import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.j
 import { detectMoments, publishable, markCopied, markUncleared, ownHook } from '../../server/publish/moments.js';
 import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
+import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
+import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf } from './packager.mjs';
 import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/platforms.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
@@ -225,6 +232,16 @@ const page = await browser.newPage();
 await page.goto(`${base}/lab/clip.html`, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__clipLab);
 const theme = THEME[episode.program?.theme] || 'world';
+// the packaging desk: its page (the covers) and its writer (the chain's AI writers, never the offline mock)
+const coverPage = await browser.newPage();
+await coverPage.goto(`${base}/lab/thumb.html`, { waitUntil: 'load' });
+await coverPage.waitForFunction(() => !!window.__thumbLab?.cover);
+const chain = flag('no-ai') ? null : await packagingChain({ log: { warn: (m) => say(m), info() {} } });
+say(`packaging: ${chain ? 'the AI writer, every field checked, the deterministic writer behind it' : 'the deterministic writer (no AI writer configured)'}`);
+const pictureDir = opt('pictures') ? path.resolve(opt('pictures')) : null;
+const live = !!process.env.CHANNEL_LIVE_URL && !recorded;
+// the vertical picture's stage (public/js/clip/layout.js V.stage): the clip's own frames of the presenter or a board
+const STAGE_RECT = { x: 0, y: 72, w: 216, h: 176 };
 async function hookPng(m, fmt) {
   // WORLD WEATHER's horizontal board fills the frame with its own heading where the hook would go (HOT & COLD, THE
   // NEXT THREE DAYS): the heading is the hook, and a plate over it would only hide it
@@ -306,6 +323,16 @@ try {
 const made = [];
 const failed = [];
 for (const m of chosen) {
+  // the clip's words, once for both formats and every network (the same story, the same facts)
+  const facts = packFacts(m, episode, { stories: storiesById, presenters, airedAt, live });
+  let pack;
+  try {
+    pack = await writePackage(facts, { chain, log: { warn: (x) => say(x) } });
+  } catch (err) {
+    pack = await writePackage(facts, { chain: null });
+    say(`packaging ${m.id}: ${String(err?.message || err).slice(0, 160)}; the deterministic writer's words`);
+  }
+  say(`packaging ${m.id} (${pack.writer}): “${pack.titles[0]}” · ${pack.thumbs.join(' / ')}${pack.rejected?.length ? ` · ${pack.rejected.length} of the AI writer's lines refused` : ''}`);
   for (const fmt of formats) {
     try {
       const tl = timelines[fmt];
@@ -329,17 +356,29 @@ for (const m of chosen) {
       fs.writeFileSync(path.join(clipsDir, `${name}.vtt`), vttFor(tl, window));
       const contact = path.join(clipsDir, `${name}.contact.png`);
       await run('ffmpeg', contactArgs({ clip: file, format: fmt, times: contactTimes(duration, endSeconds), out: contact }), { quiet: true });
-      const thumb = path.join(clipsDir, `${name}.thumb.jpg`);
-      await run('ffmpeg', ['-v', 'error', '-y', '-ss', '1.0', '-i', file, '-frames:v', '1', '-q:v', '3', thumb], { quiet: true });
+      // the covers (vertical) or thumbnails (horizontal): three variants, from the story's cleared picture (never one
+      // of a moment that shows an uncleared picture) and the clip's own frames of the presenter and of its board
+      // (the vertical picture's stage, which no caption covers: the horizontal picture's frames carry the captions and
+      // the strap, so a horizontal clip's thumbnails take the vertical master's stage when it was made, else only the
+      // story's picture)
+      const src = masters.vertical ? 'vertical' : null;
+      const picks = src ? pickFrames(reports[src], window) : { presenter: null, board: null };
+      const frames = {};
+      for (const [k, t] of Object.entries(picks)) if (t !== null) frames[k] = { file: await grabFrame(masters[src].file, t, path.join(tmpDir, `${name}.${k}.png`)), rect: STAGE_RECT };
+      const when = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(new Date(airedAt)).toUpperCase();
+      const covers = await renderCovers({ page: coverPage, fmt, pkg: pack, frames, picture: m.uncleared ? null : pictureOf(episode, m.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, out: clipsDir, name });
+      const thumb = covers[0];
       const labelFrames = await labelEvidence(file, fmt, window, tl);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
-        const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded });
+        const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt });
         meta.texts[p] = t;
         const gate = compliance.preflight({ id: name, kind: fmt === 'vertical' ? 'short' : 'clip', episode, recording: reports[fmt], range: { start: window.start, end: window.end }, storyIds: m.storyIds, platforms: [p], flags: { [p]: makeAdapter(p, { env: {}, dryRun: true }).aiFlags({ disclosure: t.disclosure, source: { programId: prog } }) }, text: t.text, labelFrames, cards, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null }, { now: Date.now(), register: compliance.register(path.join(root, 'data')), getStory: compliance.clipGetStory(m.storyIds, sourcesOf) });
-        meta.compliance[p] = { ok: gate.ok, violations: gate.violations || [], warnings: gate.warnings || [], stub: compliance.usingStub };
+        // the packaging as it will go out on this network (packaging.js checkPackage: what the owner may paste and upload)
+        const packFaults = checkPackage(pack, facts).faults.map((f) => ({ rule: 'packaging', message: `${f.field}: ${f.fault} (“${f.text}”)` }));
+        meta.compliance[p] = { ok: gate.ok && !packFaults.length, violations: [...(gate.violations || []), ...packFaults], warnings: gate.warnings || [], stub: compliance.usingStub };
       }
       fs.writeFileSync(path.join(clipsDir, `${name}.json`), JSON.stringify(meta, null, 1));
       // the queue (dry run): a publishable moment, to the networks this phase uses and this clip fits
@@ -359,7 +398,10 @@ for (const m of chosen) {
             hashtags: t.hashtags,
             tags: ['GLOBIT 24', episode.program?.title, ...t.hashtags].filter(Boolean),
             links: t.links,
-            media: { video: file, thumb, contact, captions: meta.files.srt, duration, sha256: hash, coverAt: 1 },
+            media: { video: file, thumb, thumbs: covers, contact, captions: meta.files.srt, duration, sha256: hash },
+            // the packaging: what the owner chooses from (three titles, three covers) and what every later check
+            // measures them against (manual.js packageFaults)
+            package: { titles: pack.titles, thumbs: pack.thumbs, hook: pack.hook, lead: pack.lead, hashtags: pack.hashtags, writer: pack.writer, facts: { ...facts, sources: [] } },
             source: { episodeId: episode.id, programId: prog, momentId: m.id, storyIds: m.storyIds, airedAt },
             disclosure: { [p]: t.disclosure[p] },
             compliance: meta.compliance[p],
@@ -381,6 +423,7 @@ for (const m of chosen) {
     }
   }
 }
+await coverPage.close();
 await browser.close();
 await pb.close();
 
@@ -392,7 +435,7 @@ const summary = {
   drift,
   moments: all.map((m) => ({ id: m.id, kind: m.kind, start: m.start, end: m.end, duration: m.duration, scores: m.scores, hook: m.hook, light: m.light, grave: m.grave, refused: m.refused, copied: !!m.copied, uncleared: !!m.uncleared, publishable: pub.has(m.id) })),
   failed,
-  clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
+  clips: made.map((c) => ({ name: c.name, format: c.format, duration: +c.duration.toFixed(2), window: c.window, video: c.files.video, contact: c.files.contact, covers: c.files.thumbs, titles: c.package?.titles, writer: c.package?.writer, platforms: c.platforms, compliance: Object.fromEntries(Object.entries(c.compliance).map(([p, v]) => [p, v.ok ? 'ok' : v.violations.map((x) => x.rule).join(',')])), queued: c.queued, labelFrames: c.labelFrames })),
 };
 fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 1));
 // (a rendered master is a link here: only the link goes)

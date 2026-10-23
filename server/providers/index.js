@@ -36,8 +36,9 @@ export class ProviderChain {
     for (const p of this.providers) {
       if (!p.available()) continue;
       // A provider that cannot check facts (the offline mock) never stands in for the editor, nor rewrites a story in
-      // its own words (it copies: server/ownwords.js)
-      if ((request.stage === 'review' || request.stage === 'rewrite') && p.reviews === false) {
+      // its own words (it copies: server/ownwords.js), nor writes a clip's titles (publish/packaging.js: the
+      // deterministic writer does, without it)
+      if ((request.stage === 'review' || request.stage === 'rewrite' || request.stage === 'package') && p.reviews === false) {
         nonReviewers++;
         continue;
       }
@@ -72,6 +73,7 @@ export class ProviderChain {
     }
     if (!errors.length && nonReviewers && !this.providers.some((p) => p.reviews !== false && p.available())) {
       if (request.stage === 'rewrite') throw Object.assign(new Error('no AI writer configured to rewrite (the offline mock copies its sources)'), { code: 'NO_REWRITER' });
+      if (request.stage === 'package') throw Object.assign(new Error('no AI writer configured for the packaging (the deterministic writer writes it)'), { code: 'NO_PACKAGER' });
       throw Object.assign(new Error('no AI editor configured (the offline mock writes but cannot review)'), { code: 'NO_REVIEWER' });
     }
     throw new Error(`no AI provider available (${errors.join(' | ') || 'all paused'})`);

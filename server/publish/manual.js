@@ -25,7 +25,8 @@ import { makeAdapter } from './adapters/index.js';
 import { PLATFORMS, DAILY } from './platforms.js';
 import { localParts } from './queue.js';
 import { CLIP_MIN_SECONDS } from './moments.js';
-import { CLIP_DISCLOSURE } from './clipmeta.js';
+import { CLIP_DISCLOSURE, CLIP_DISCLOSURE_PREFIX, CLIP_DISCLOSURE_DETAIL } from './clipmeta.js';
+import { checkPackage } from './packaging.js';
 
 /** A package the gate passed is handed out for this long; after it, it is checked (and signed) again. */
 export const PREPARED_TTL = 6 * 3600_000;
@@ -117,22 +118,32 @@ export function manualTexts(item, { env = process.env } = {}) {
   const hashtags = hashtagsOf(item);
   if (net === 'youtube') {
     const description = withContact(String(item.kind === 'clip' ? item.text || item.description || '' : item.description || item.text || ''));
+    // the package's other titles (packaging.js): a whole programme's go into YouTube's Test & Compare (up to three,
+    // desktop YouTube Studio); a Short has no Test & Compare, so they are the owner's other choices
+    const others = (item.package?.titles || []).filter((t) => t && t !== item.title).slice(0, 2);
+    const tc = item.kind === 'episode';
     return {
       fields: [
         { id: 'title', label: 'Título', value: String(item.title || ''), max: p.text?.title || 100 },
+        ...others.map((t, i) => ({ id: `title${i + 2}`, label: tc ? `Título ${'BC'[i]} (Probar y comparar)` : `Título ${'BC'[i]} (otra opción)`, value: t, max: p.text?.title || 100 })),
         { id: 'description', label: 'Descripción', value: description, max: p.text?.description || 5000 },
         ...(hashtags ? [{ id: 'hashtags', label: 'Hashtags', value: hashtags, max: null }] : []),
       ],
       gateText: description,
     };
   }
-  // TikTok, Instagram, Facebook: the caption, the AI disclosure first, then the credits (the description's)
+  // TikTok, Instagram, Facebook: the caption, the AI disclosure first, then the credits (the description's). Since 23
+  // Oct the disclosure's words open the first line with the hook beside them, its whole sentence right under it
+  // (clipmeta.js, compliance.md §2.10); a caption without that form gets the whole sentence as its first line, as before
   let caption = String(item.text || '').trim();
-  for (const d of [OLD_DISCLOSURE, CLIP_DISCLOSURE]) {
-    if (caption.startsWith(d) && d !== CLIP_DISCLOSURE) caption = caption.slice(d.length).trim();
-    if (caption.endsWith(d)) caption = caption.slice(0, -d.length).trim();
+  const newForm = caption.startsWith(`${CLIP_DISCLOSURE_PREFIX} `) && caption.split('\n').slice(0, 3).some((l) => l.trim() === CLIP_DISCLOSURE_DETAIL);
+  if (!newForm) {
+    for (const d of [OLD_DISCLOSURE, CLIP_DISCLOSURE]) {
+      if (caption.startsWith(d) && d !== CLIP_DISCLOSURE) caption = caption.slice(d.length).trim();
+      if (caption.endsWith(d)) caption = caption.slice(0, -d.length).trim();
+    }
+    if (!caption.startsWith(CLIP_DISCLOSURE)) caption = `${CLIP_DISCLOSURE}\n\n${caption}`;
   }
-  if (!caption.startsWith(CLIP_DISCLOSURE)) caption = `${CLIP_DISCLOSURE}\n\n${caption}`;
   const credits = creditsOf(item.description);
   if (credits.length) caption += `\n\nCredits: ${credits.join(' · ')}`;
   const max = p.text?.title || p.text?.caption || p.text?.message || 2200;
@@ -193,6 +204,24 @@ export function urlFits(platform, url) {
   }
 }
 
+/**
+ * The faults of an item's packaging as it would go out: its title (the owner's edit included) and the package's other
+ * titles and cover words, checked against the facts the package was written from (`item.package.facts`) and the
+ * stories' sources as they are now. [] for an item with no package (a text post, an item queued before 23 Oct).
+ */
+export function packageFaults(it, getStory = null) {
+  const pk = it?.package;
+  if (!pk || !pk.facts || it.kind === 'text') return [];
+  const facts = { ...pk.facts, sources: [...(pk.facts.sources || [])] };
+  if (typeof getStory === 'function') for (const id of it.source?.storyIds || []) {
+    const st = getStory(id);
+    if (st) facts.sources.push(...[st.title, st.summary, st.body].filter((x) => typeof x === 'string' && x.trim()));
+  }
+  const edited = it.platform === 'youtube' && it.title && !(pk.titles || []).includes(it.title) ? it.title : null;
+  const titles = edited ? [edited, ...(pk.titles || []).filter((t) => t !== edited)] : pk.titles || [];
+  return checkPackage({ ...pk, titles: it.platform === 'youtube' ? titles : pk.titles || [] }, facts, { editedTitle: edited }).faults;
+}
+
 const fresh = (it, now) => !!it?.manual?.ok && now - (it.manual.preparedAt || 0) <= PREPARED_TTL;
 export const isPrepared = fresh;
 
@@ -221,7 +250,9 @@ export async function prepareManual(queue, id, { dataDir = null, now = Date.now(
   const files = {};
   const marks = {};
   const manifest = compliance.buildManifest({ kind: it.kind === 'clip' && it.format === 'vertical' ? 'short' : it.kind, episode: null, platforms: [it.platform] }, { title: it.title, sources: (it.links || []).map((l) => l.url).filter(Boolean), credits: creditsOf(it.description), format: it.format });
-  for (const [kind, src] of [['video', it.media?.video], ['cover', it.media?.thumb]]) {
+  // (the package's other covers too, B and C: the owner chooses one, or tries all three in YouTube's Test & Compare)
+  const variants = (it.media?.thumbs || []).filter((f) => f && f !== it.media?.thumb).slice(0, 2).map((f, i) => [`cover${i + 2}`, f]);
+  for (const [kind, src] of [['video', it.media?.video], ['cover', it.media?.thumb], ...variants]) {
     if (!src) continue;
     const out = signedPath(src, it.id);
     const m = fs.existsSync(src) ? await mark(src, manifest, { output: out, dataDir }) : { ok: false, reason: `no file ${src}` };
@@ -236,6 +267,9 @@ export async function prepareManual(queue, id, { dataDir = null, now = Date.now(
   if (it.kind !== 'text' && HAND_LABEL.has(it.platform)) view.flags = { ...view.flags, [it.platform]: { ...(view.flags?.[it.platform] || {}), manualLabel: true } };
   const g = gate(view, { now, register: register === undefined ? compliance.register(dataDir) : register, getStory: compliance.clipGetStory(it.source?.storyIds, sources), env });
   const violations = [...(g.violations || [])];
+  // the packaging (packaging.js): every title he may paste and every cover's words, as checked when they were written,
+  // checked again (a title he edited himself is held only for what no title may do: bait, shouting, copying, length)
+  for (const f of packageFaults(it, sources)) violations.push({ rule: 'packaging', message: `${f.field}: ${f.fault} (“${f.text}”)` });
   for (const [kind, m] of Object.entries(marks)) if (!m.ok && !violations.some((v) => v.rule === 'unmarked' || v.rule === 'file-missing')) violations.push({ rule: 'unmarked', message: `the ${kind} could not be signed: ${m.reason || 'no answer'}` });
   const ok = !!g.ok && violations.length === 0;
   const verdict = { ok, violations, warnings: g.warnings || [], stub: !!compliance.usingStub, checkedAt: now, recheck: true };

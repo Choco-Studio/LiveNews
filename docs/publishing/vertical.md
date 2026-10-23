@@ -410,6 +410,11 @@ super that held a clip's first four seconds (`drawNoticeCard`) and the AI plate 
 
 ## 6. Thumbnails for whole programmes (`thumb.js`)
 
+**Since 23 Oct the uploads use the packaging's three thumbnails** (`cover.js` `drawThumb16`, with the clips' 1080×1920
+covers, `drawCover`; `docs/publishing/thumbnails-titles.md`): the lead story's cleared picture, the presenter from the
+same clean plate, the words big, three titles for YouTube's Test & Compare. `drawThumb` below stays for the lab and its
+tests.
+
 The programme's own frame, at 384 × 216: the presenter's first close shot in the first story, 1.5 s in, or two
 seconds into the story when it has none (the quiz: its first board). It is taken from a **clean plate**: the same
 deterministic run recorded with `?clip=clean`, which draws no bug, strap or caption, so the thumbnail's type never

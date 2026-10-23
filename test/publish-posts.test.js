@@ -205,8 +205,8 @@ test('quiz clip texts never give the answer away, and two questions never share 
   }
   assert.equal(titles.size, qs.length, [...titles].join(' / '));
   assert.equal(quizWords(qs[3]).title, 'Name the headline: I. D. O. A. A. D. I. 2027');
-  // a long question keeps its blank in the title
-  for (const t of titles) if (/^How many|^Where is it/.test(t)) assert.match(t, /___/, t);
+  // a question that fits keeps its blank in the title; a long one names what it is about (never the answer)
+  for (const t of titles) if (/^How many|^Where is it/.test(t)) assert.match(t, /___|A question about /, t);
   for (const t of titles) assert.doesNotMatch(t, /\b(?:the|a|of|in|to|and)…/i, `cut after a weak word: ${t}`);
   assert.equal(fitTitle('How many? Taiwanese chip giant TSMC said on Thursday that net profit soared ___ to a record high in the third quarter.', 50), 'How many? …net profit soared ___ to a record high…');
 });
@@ -218,15 +218,18 @@ test('clip texts: a story clip whose headline is the outlet\'s own cites it; its
   const stories = new Map([['w1', { title, summary: 'Fanned by the fierce Santa Ana winds, the Norte Fire is one of 13 burning across the state.', source: 'BBC Science', link: 'https://www.bbc.co.uk/news/articles/c6vgjnk8nw2wo?at_medium=RSS&at_campaign=rss' }]]);
   for (const platform of ['youtube', 'tiktok', 'instagram', 'facebook']) {
     const t = clipTexts(m, ep, { platform, stories });
-    assert.equal(t.title, "BBC Science: “Evacuation orders as fast-moving California wildfire burns homes” | GLOBIT 24", "a citation whole, the tail shortened");
-    assert.ok(t.title.length <= 100);
-    assert.match(t.lead, /^Wildfire · California, USA\. From COSMOS DESK on GLOBIT 24\. BBC Science: “/);
+    // the title is never the outlet's headline (packaging.js): the story's own label, its facts; the outlet's headline
+    // only as a citation in the description, beside its link
+    assert.ok(!/Evacuation orders as fast-moving/.test(`${t.title} ${t.lead} ${t.hook}`), t.title);
+    assert.match(t.title, /^Wildfire in California, USA/);
+    assert.ok(t.title.length <= 70);
+    assert.match(t.description, /Reporting: BBC Science: “Evacuation orders as fast-moving California wildfire burns homes”/);
     assert.ok(!/at_medium/.test(`${t.text} ${t.description || ''} ${t.links.map((l) => l.url).join(' ')}`));
   }
   // a headline the channel wrote itself leads, as before
   const own = clipTexts({ ...m, headline: 'Thirteen fires burn across California', hook: ['THIRTEEN FIRES BURN', 'ACROSS CALIFORNIA'] }, ep, { platform: 'tiktok', stories });
   assert.match(own.lead, /^Thirteen fires burn across California\. Reporting: BBC Science\./);
-  assert.match(own.title, /^Thirteen fires burn across California \|/);
+  assert.match(own.title, /^Thirteen fires burn across California/);
 });
 
 test('fitsPlatform: formats and lengths per network', () => {
@@ -246,7 +249,10 @@ test('clip texts: titles within limits, the disclosure, the outlet credited, no 
     assert.match(`${t.text}\n${t.description || ''}`, /NPR/);
     assert.ok(t.disclosure, platform);
     // the AI disclosure is the caption's first line, what a viewer reads before "more" (compliance.md §1, §3.5)
-    assert.match(t.text.split('\n')[0], platform === 'youtube' ? /^AI-produced/ : /^AI-produced news: presenters are AI characters/, `${platform}: ${t.text.split('\n')[0]}`);
+    // (since 23 Oct: the disclosure's words open the caption's first line, the hook beside them, and its whole sentence
+    // stands right under it, compliance.md §2.10)
+    assert.match(t.text.split('\n')[0], /^AI-produced news: /, `${platform}: ${t.text.split('\n')[0]}`);
+    if (platform !== 'youtube') assert.equal(t.text.split('\n\n')[1], 'Presenters are AI characters with synthetic voices; every fact is from a credited source.', platform);
     const g = clipTexts({ ...m, grave: true, light: false }, ep, { platform, stories });
     assert.ok(!EMOJI.test(`${g.title} ${g.text}`), `${platform}: an emoji on a grave clip`);
   }
@@ -299,9 +305,10 @@ test('clip texts: a hook that fell back to the programme\'s name never names the
   const m = { id: 'e:story:0-0', kind: 'story', from: 0, to: 0, light: true, grave: false, hook: ['COSMOS DESK'], headline: 'Oslo library to open on Sundays', storyIds: ['osl'], sources: ['Circuit Weekly'], credits: [], programme: 'COSMOS DESK', programId: 'cosmos' };
   const stories = new Map([['osl', { title: 'Oslo library to open on Sundays', summary: 'The main public library in Oslo will open on Sundays from next month.', source: 'Circuit Weekly', link: 'https://example.test/osl' }]]);
   const t = clipTexts(m, ep, { platform: 'youtube', stories });
-  assert.ok(!/COSMOS DESK \| COSMOS DESK/.test(t.title), t.title);
-  assert.match(t.title, /^Circuit Weekly: “Oslo library to open on Sundays”/);
+  assert.ok(!/COSMOS DESK.*COSMOS DESK/.test(t.title), t.title);
+  // (never the outlet's headline as the title, cited or not: packaging.js)
+  assert.ok(!/Oslo library to open on Sundays/.test(t.title), t.title);
   // and with no headline at all: the programme once
   const bare = clipTexts({ ...m, headline: null, storyIds: [] }, ep, { platform: 'youtube', stories });
-  assert.equal(bare.title, 'COSMOS DESK | GLOBIT 24');
+  assert.equal(bare.title.match(/COSMOS DESK/g)?.length, 1, bare.title);
 });
