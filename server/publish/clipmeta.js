@@ -1,17 +1,15 @@
-// The words that travel with a clip (docs/publishing/plan.md §4): its title, the caption each network shows under it,
-// the description, the hashtags and the links. Factual, from what aired: the clip's hook (moments.js), the story's
-// headline as aired and the outlet's own article; the disclosure first where the network shows text before "more"
-// (the compliance desk's describe()). A light clip may open its caption with one emoji that names its programme; a
-// grave one never has an emoji and never a playful line.
+// The words that travel with a clip (docs/publishing/plan.md §4; docs/publishing/thumbnails-titles.md): its title,
+// the caption each network shows under it, the description, the hashtags and the links. The title, the hook, the lead
+// and the hashtags are the clip's package (packaging.js: the AI writer's words from the story's facts, checked, or the
+// deterministic writer's); the outlet's headline only as a citation beside its link; the disclosure first where the
+// network shows text before "more" (the compliance desk's describe()). A light clip may close its caption's first line
+// with one emoji that names its programme; a grave one never has an emoji and never a playful line.
 import { describe, creditsFor, disclosureFor } from './compliance.js';
 import { PLATFORMS } from './platforms.js';
-import { ownWords, citation, storyLabel, cleanLink } from './wording.js';
+import { citation, cleanLink } from './wording.js';
+import { packFacts, fallbackPackage } from './packaging.js';
 
 const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
-const sentence = (s) => {
-  const t = norm(s).toLowerCase().replace(/(^|[.?!]\s+)(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
-  return t.replace(/\b(unit-8|globit 24|pay attention|world weather|cosmos desk|tech bytes|full time|money minute|world now|seven days|news in 60|nasa|ai|uk|us|eu|un)\b/gi, (w) => w.toUpperCase());
-};
 const EMOJI = { 'pay-attention': '🧠', 'world-weather': '🌦️', cosmos: '🔭', 'tech-bytes': '💻', 'full-time': '⚽', 'press-start': '🎮' };
 const TAGS = {
   'pay-attention': ['newsquiz', 'quiz', 'news', 'pixelart'],
@@ -21,14 +19,21 @@ const TAGS = {
   'full-time': ['sport', 'football', 'pixelart'],
   default: ['news', 'pixelart'],
 };
-const PLAYERS = (ids, presenters) => ids.map((id) => presenters?.[id]?.name?.split(' ')[0] || String(id).toUpperCase()).map((n) => (n.toUpperCase() === 'UNIT-8' ? 'UNIT-8' : n));
 
 /**
  * A title within `room` characters at whole words. A quiz question's keeps its blank: the words round the ___ (the
  * question's own label first), "…" where it was cut (How many? …net profit soared ___ to a record high…).
  */
 
-/** A clip caption's first line: the AI disclosure (the on-screen notice's words in a sentence; manual.js keeps it first). */
+/**
+ * A clip caption's AI disclosure (the on-screen notice's words in a sentence). Since 23 Oct its first words open the
+ * caption's first line, the hook beside them ("AI-produced news: Kenya confirms a third Ebola case."), and its whole
+ * sentence stands right under it (compliance.md §2.10: the words a viewer reads before "more" still say AI-produced
+ * news first; the platform's own AI label and the end card say it too). CLIP_DISCLOSURE is the older form, the whole
+ * sentence as the first line, which captions written before then still carry.
+ */
+export const CLIP_DISCLOSURE_PREFIX = 'AI-produced news:';
+export const CLIP_DISCLOSURE_DETAIL = 'Presenters are AI characters with synthetic voices; every fact is from a credited source.';
 export const CLIP_DISCLOSURE = 'AI-produced news: presenters are AI characters with synthetic voices; every fact is from a credited source.';
 
 export function fitTitle(head, room) {
@@ -62,76 +67,52 @@ export function fitTitle(head, room) {
 /**
  * The texts of a clip for one network. `stories`: archive stories by id (their links); `presenters`: the channel's
  * (for the players' names); `channelUrl`: the live stream's page when there is one; `recorded`: the channel airs
- * pre-rendered (docs/publishing/playout.md §5), so the invitation to watch it never says live.
+ * pre-rendered (docs/publishing/playout.md §5), so the invitation to watch it never says live. `pack`: the clip's
+ * packaging (packaging.js writePackage: the AI writer's words, checked; without it the deterministic writer's).
+ *
+ * The title is the package's first (YouTube: up to 70 characters, the key words first; never the outlet's headline,
+ * which is cited in the description beside its link). The caption opens with the AI disclosure's words and the hook
+ * on the same line ("AI-produced news: <hook>"), the disclosure's whole sentence right under it (compliance.md
+ * §2.10); the description opens with the disclosure, then the package's lead.
  */
-export function clipTexts(moment, episode, { platform = 'youtube', stories = new Map(), presenters = {}, channelUrl = null, recorded = false } = {}) {
+export function clipTexts(moment, episode, { platform = 'youtube', stories = new Map(), presenters = {}, channelUrl = null, recorded = false, pack = null, airedAt = null } = {}) {
   const prog = moment.programme || episode.program?.title || 'GLOBIT 24';
   const grave = !!moment.grave;
-  const hook = (moment.hook || []).join(' ');
   const links = [];
-  const sources = [];
   for (const id of moment.storyIds || []) {
     const s = stories.get?.(id);
-    if (s) sources.push(s.title, s.summary);
     const url = s?.link ? cleanLink(s.link) : null;
     if (url && !links.some((l) => l.url === url)) links.push({ label: s.source || 'Source', url, title: s.title });
   }
-  // the clip's words are the channel's own when they pass the verbatim rule; else the outlet's headline, cited
-  const ownHead = moment.headline && ownWords(moment.headline, sources.filter(Boolean)) ? norm(moment.headline) : '';
   const outlet = (moment.sources || [])[0] || links[0]?.label || null;
-  let lead;
+  const live = !!channelUrl && !recorded;
+  const facts = packFacts(moment, episode, { stories, presenters, airedAt, live });
+  const pk = pack && Array.isArray(pack.titles) && pack.titles.length ? pack : fallbackPackage(facts);
+  // the description's middle: what the clip is (a quiz's question as the board asks it, never its answer), the
+  // outlet's headline only as a citation beside its link
+  const about = [];
   if (moment.kind === 'quiz-question' || moment.kind === 'quiz-round') {
-    const who = PLAYERS(moment.quiz?.players || [], presenters);
-    lead = `${who.length === 2 ? `Can you beat ${who[0]} and ${who[1]}?` : 'Play along.'} ${moment.kind === 'quiz-round' ? 'A whole round' : 'A question'} from ${prog}, the quiz on stories GLOBIT 24 told this week.`;
-    // never the question's headline: it can be the answer (WHERE's place, HOW MANY?'s figure, LETTER BY LETTER's words)
-    if (moment.quiz?.tease) lead += ` The question: “${norm(moment.quiz.tease)}”`;
-    if (outlet) lead += ` From a story by ${outlet}.`;
-  } else if (moment.kind.startsWith('weather')) {
-    lead = `${sentence(hook)}. From ${prog}, the world's weather from the forecast data.`;
-  } else if (ownHead || !moment.headline) {
-    const h = ownHead || sentence(hook);
-    lead = `${h}${/[.?!]$/.test(h) ? '' : '.'}${outlet ? ` Reporting: ${outlet}.` : ''} From ${prog} on GLOBIT 24.`;
-  } else {
-    // the channel's headline is the outlet's: its label, and the outlet's headline only as a citation
-    const label = storyLabel({ kicker: moment.kicker, place: moment.place, category: moment.category }, sources.filter(Boolean));
-    const first = (moment.storyIds || []).map((id) => stories.get?.(id)).find(Boolean);
-    lead = `${label ? `${label}. ` : ''}From ${prog} on GLOBIT 24. ${citation(outlet || first?.source || 'Source', first?.title || moment.headline)}.`;
-  }
-  // (the on-screen notice's three parts, in a sentence: graphics/disclosure.js; compliance.md §3.5)
-  const disclosure = CLIP_DISCLOSURE;
-  const tags = (grave ? ['news'] : TAGS[moment.programId] || TAGS.default).slice(0, 5);
-  const emoji = !grave && moment.light && EMOJI[moment.programId] ? `${EMOJI[moment.programId]} ` : '';
-  // a quiz question's own title (two questions never share one); within the limit at a whole word
-  // a quiz question's own title (two questions never share one); a story's hook when it is the channel's own words,
-  // else the outlet's headline cited (the verbatim rule: wording.js); within the limit at a whole word
-  const flat = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const storyHook = moment.headline && flat(sentence(hook)) === flat(moment.headline);
-  // (a hook that fell back to the programme's name, ownHook: the title names the story, never the programme twice)
-  const progHook = moment.headline && flat(sentence(hook)) === flat(prog);
-  const head = moment.kind === 'quiz-question' && moment.quiz?.title ? norm(moment.quiz.title) : storyHook || progHook ? ownHead || citation(outlet || 'Source', norm(moment.headline)) : sentence(hook);
-  const max = PLATFORMS.youtube.text.title;
-  let title;
-  if (/^.+: “.*”$/.test(head)) {
-    // a citation is never cut (a cut quotation misquotes): a shorter tail, else the story's label instead
-    const fit = [` | ${prog} | GLOBIT 24`, ' | GLOBIT 24', ''].find((t) => head.length + t.length <= max);
-    const label = storyLabel({ kicker: moment.kicker, place: moment.place, category: moment.category }, sources.filter(Boolean));
-    title = fit !== undefined ? `${head}${fit}` : `${fitTitle(label || prog, max - 12)} | GLOBIT 24`;
-  } else if (flat(head) === flat(prog)) {
-    title = `${prog} | GLOBIT 24`;
-  } else {
-    const tail = ` | ${prog} | GLOBIT 24`;
-    title = `${fitTitle(head, max - tail.length)}${tail}`;
-  }
+    about.push(`${moment.kind === 'quiz-round' ? 'A whole round' : 'A question'} from ${prog}, the quiz on stories GLOBIT 24 told this week.`);
+    if (moment.quiz?.tease) about.push(`The question: “${norm(moment.quiz.tease)}”`);
+    if (outlet) about.push(`From a story by ${outlet}.`);
+  } else if (moment.kind.startsWith('weather')) about.push(`From ${prog}, the world's weather from the forecast data.`);
+  else about.push(`From ${prog} on GLOBIT 24.`);
+  const first = (moment.storyIds || []).map((id) => stories.get?.(id)).find(Boolean);
+  const cite = first?.title && !moment.kind.startsWith('quiz') ? citation(outlet || first.source || 'Source', first.title) : null;
+  const lead = pk.lead || pk.hook;
+  const tags = (pk.hashtags && pk.hashtags.length ? pk.hashtags : grave ? ['news'] : TAGS[moment.programId] || TAGS.default).slice(0, 4);
+  const emoji = !grave && moment.light && EMOJI[moment.programId] ? ` ${EMOJI[moment.programId]}` : '';
+  const title = fitTitle(norm(pk.titles[0]), PLATFORMS.youtube.text.title);
   const item = { kind: 'clip', episode, platforms: [platform] };
   const credits = creditsFor({ ...item, credits: (moment.credits || []) });
   const sourceLines = links.map((l) => `Source: ${l.label} — ${l.url}`);
-  const summary = [lead, ...sourceLines, channelUrl ? (recorded ? `GLOBIT 24, 24 hours a day: ${channelUrl}` : `GLOBIT 24 live, 24 hours a day: ${channelUrl}`) : ''].filter(Boolean).join('\n');
-  const description = describe(item, { credits, summary });
-  const hashtags = tags;
+  const summary = [about.join(' '), ...(cite ? [`Reporting: ${cite}.`] : []), ...sourceLines, channelUrl ? (recorded ? `GLOBIT 24, 24 hours a day: ${channelUrl}` : `GLOBIT 24 live, 24 hours a day: ${channelUrl}`) : ''].filter(Boolean).join('\n');
+  const description = describe(item, { credits, summary, lead });
   let caption;
   if (platform === 'youtube') caption = description;
-  // the disclosure first: the caption's first line is what a viewer reads before "more" (compliance.md §1, §3.5)
-  else caption = [disclosure, `${emoji}${lead}`, sourceLines[0] || (outlet ? `Source: ${outlet}` : '')].filter(Boolean).join('\n\n');
+  // the disclosure's words first, the hook beside them: the caption's first line is what a viewer reads before "more"
+  // (compliance.md §1, §2.10, §3.5); its whole sentence right under it
+  else caption = [`${CLIP_DISCLOSURE_PREFIX} ${pk.hook}${emoji}`, CLIP_DISCLOSURE_DETAIL, [lead !== pk.hook ? lead : null, about.join(' ')].filter(Boolean).join(' '), sourceLines[0] || (outlet ? `Source: ${outlet}` : '')].filter(Boolean).join('\n\n');
   const disc = disclosureFor({ kind: 'clip', episode, platforms: [platform] }).platforms[platform] || {};
-  return { title, text: caption, description, hashtags, links, disclosure: { [platform]: disc }, lead };
+  return { title, titles: pk.titles, thumbs: pk.thumbs, hook: pk.hook, writer: pk.writer || 'fallback', text: caption, description, hashtags: tags, links, disclosure: { [platform]: disc }, lead };
 }

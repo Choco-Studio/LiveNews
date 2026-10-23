@@ -48,7 +48,7 @@ por la suya solo lo ves tú.
 4. En cada tarjeta aprobada, **Preparar para publicar**. El sistema lo revisa otra vez (que no copie al medio, que no
    haya una queja en el registro, que esté la etiqueta de IA) y firma el archivo. Si algo falla, la tarjeta pasa a
    «Retenido» con el motivo, y esa no se publica.
-5. **Descargar el vídeo** (y la portada).
+5. **Descargar el vídeo** y la portada que elijas (**Portada A**, **B** o **C**; mira «Portadas y títulos» abajo).
 6. Abre la red, sube **ese** vídeo y, con los botones **Copiar**, pega el título (solo YouTube), la descripción y los
    hashtags tal cual.
 7. Pon los interruptores de la red que dice la tarjeta, y márcalos uno a uno. **La etiqueta de IA de la red es
@@ -63,6 +63,30 @@ por la suya solo lo ves tú.
    - **Facebook y Threads** (si algún día se usan): la etiqueta de IA («AI info») **a mano**, en cada vídeo.
 8. Publica. Copia la dirección de la publicación, pégala en la tarjeta y pulsa **Ya lo he publicado**. Queda apuntado
    (en la cola y en el registro de cumplimiento) y no se te ofrecerá nunca otra vez.
+
+### Portadas y títulos
+
+Cada clip trae **tres portadas** y **tres títulos**, ya revisados (que no engañen, que no griten en mayúsculas, que todo
+lo que dicen esté en la noticia y que no copien el titular del medio):
+
+- **A · la foto**: la foto con permiso de la noticia (pixelada como en antena, con su crédito) y tres o cuatro palabras grandes.
+- **B · el presentador**: el presentador del programa tal como sale en el clip, y sus palabras.
+- **C · las palabras**: las palabras en grande, con la foto o el presentador en una franja.
+
+En la tarjeta las ves las tres; con **Usar** pones otro título en la casilla. Si no eliges, van la A y el primer título.
+
+- **YouTube, un Short**: pega el título elegido. La portada de un Short se sube en YouTube Studio **en el ordenador**
+  (con la cuenta verificada); desde el móvil, elige el fotograma. YouTube no deja probar portadas de Shorts.
+- **YouTube, un programa entero** (fase 2): sube las tres miniaturas y los tres títulos en **«Probar y comparar»**
+  (YouTube Studio en el ordenador): YouTube se queda con la que más tiempo de visionado consigue.
+- **TikTok e Instagram**: la primera línea del texto ya empieza por «AI-produced news:» seguido del gancho del clip; la
+  frase entera del aviso va justo debajo. No la quites. Si la red te deja poner portada (Instagram, desde el carrete),
+  usa la descargada.
+- Si cambias un título a mano, se revisa otra vez al preparar: un gancho engañoso, mayúsculas o una copia del medio lo
+  retienen («Un título o las palabras de una portada no pasan la revisión del paquete»).
+
+Con la clave de IA, los títulos y las palabras los escribe la IA del canal a partir de los hechos de la noticia; sin
+ella, el redactor de reserva (más sencillo, pero nunca copia al medio). La tarjeta dice cuál fue.
 
 ![La pestaña «Para hoy»](img/beta-para-hoy.png)
 

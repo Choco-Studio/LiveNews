@@ -37,7 +37,7 @@ export const auditItem = (item) => (mod.auditItem ? mod.auditItem(item) : { asse
 export const checkClip = (clip, opts = {}) => mod.checkClip(clip, opts);
 /** What a clip's own cards say (the AI notice over its first seconds, its end card): the gate's clip.cards. */
 export const clipCards = (o = {}) => (mod.clipCards ? mod.clipCards(o) : null);
-export const describe = (item, o = {}) => (mod.describe ? mod.describe(item, o) : [...mod.disclosureFor(item).description.lines, ...(o.credits?.length ? ['', 'Credits:', ...o.credits.map((c) => `· ${c}`)] : [])].join('\n'));
+export const describe = (item, o = {}) => (mod.describe ? mod.describe(item, o) : [...mod.disclosureFor(item).description.lines.slice(0, 1), ...(o.lead ? [o.lead] : []), ...mod.disclosureFor(item).description.lines.slice(1), ...(o.credits?.length ? ['', 'Credits:', ...o.credits.map((c) => `· ${c}`)] : [])].join('\n'));
 export const textPost = (item, o = {}) => (mod.textPost ? mod.textPost(item, o) : `AI-generated: ${item.text}`);
 export const buildManifest = (item, o = {}) => (mod.buildManifest ? mod.buildManifest(item, o) : { title: o.title || null });
 /** The verbatim measure of a text against its sources (the compliance desk's rule: runs of 12, a share of 20 %). */

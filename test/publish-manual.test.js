@@ -255,7 +255,7 @@ test('prepare: only what is approved; the gate again on the signed files and the
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const m = r.json.item.manual;
   assert.equal(m.fresh, true);
-  assert.deepEqual(m.files, { video: true, cover: true });
+  assert.deepEqual(m.files, { video: true, cover: true, cover2: false, cover3: false });
   assert.equal(m.devCert, true);
   assert.deepEqual(m.fields.map((f) => f.id), ['title', 'description', 'hashtags']);
   assert.match(m.fields[1].value, /Editorial responsibility and complaints: editor@globit24\.example/);

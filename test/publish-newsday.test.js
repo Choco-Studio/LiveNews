@@ -111,11 +111,11 @@ test('through the factory\'s gate into the queue: the AI-written clip passes and
   const env = { EDITORIAL_CONTACT: 'editor@example.org' };
   // (the factory's cards: the AI notice over the clip's first seconds, its end card)
   const cards = compliance.clipCards();
-  const view = { kind: 'short', episode: ep, range: { start: m.start, end: m.end }, storyIds: m.storyIds, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-produced news.', cards };
+  const view = { kind: 'short', episode: ep, range: { start: m.start, end: m.end }, storyIds: m.storyIds, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-produced news: Oslo opens its library on Sundays.\n\nPresenters are AI characters with synthetic voices; every fact is from a credited source.', cards };
   const g = compliance.preflight(view, { getStory: compliance.clipGetStory(m.storyIds, sources), register: null, env });
   assert.ok(g.ok, JSON.stringify(g.violations));
   const q = new PublishQueue({ dir: tmp('newsday-q-') });
-  const it = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Oslo', text: 'AI-produced news: x', media: { duration: m.duration + 2.6 }, source: { episodeId: ep.id, programId: 'cosmos', momentId: m.id, storyIds: m.storyIds }, compliance: { ok: g.ok, violations: g.violations }, score: m.scores.total });
+  const it = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Oslo', text: 'AI-produced news: Oslo opens its library on Sundays.\n\nPresenters are AI characters with synthetic voices; every fact is from a credited source.', media: { duration: m.duration + 2.6 }, source: { episodeId: ep.id, programId: 'cosmos', momentId: m.id, storyIds: m.storyIds }, compliance: { ok: g.ok, violations: g.violations }, score: m.scores.total });
   assert.equal(it.status, 'pending');
   assert.ok(dailyPick(q, { phase: 1 }).ids.includes(it.id));
   // the re-check (and the page, and the publisher) measure it against its own sources folder, not the station's archive
@@ -248,7 +248,7 @@ test('pictures, as on air: the cleared picture the desk keeps, its record and cr
   // and the gate ("Preparar", the re-check) refuses it: the picture's rights record is checked as on air
   const env = { EDITORIAL_CONTACT: 'editor@example.org' };
   // (the factory's cards: the AI notice over the first seconds, the end card)
-  const view = (episode) => ({ kind: 'short', episode, range: { start: 0, end: 30 }, storyIds: ['osl'], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-produced news.', cards: compliance.clipCards() });
+  const view = (episode) => ({ kind: 'short', episode, range: { start: 0, end: 30 }, storyIds: ['osl'], platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-produced news: Oslo opens its library on Sundays.\n\nPresenters are AI characters with synthetic voices; every fact is from a credited source.', cards: compliance.clipCards() });
   const sources = compliance.archiveGetStory({ dataDir: r.sourcesDir });
   assert.ok(compliance.preflight(view(ep), { getStory: compliance.clipGetStory(['osl'], sources), register: null, env }).ok);
   const refused = compliance.preflight(view(bad), { getStory: compliance.clipGetStory(['osl'], sources), register: null, env });

@@ -222,9 +222,11 @@ export function disclosureFor(item = {}) {
  * The description of a published video: the disclosure first (it is what shows before "more"), the programme and any
  * recreation, then the credits (credits.js creditsFor), then who answers for the channel.
  */
-export function describe(item, { credits = [], summary = '' } = {}) {
+export function describe(item, { credits = [], summary = '', lead = '' } = {}) {
   const d = disclosureFor(item);
-  const out = [...d.description.lines];
+  // (a clip's lead, what it is about, right under the disclosure: YouTube shows a description's first lines before
+  // "more", docs/publishing/thumbnails-titles.md)
+  const out = lead ? [d.description.lines[0], String(lead).trim(), ...d.description.lines.slice(1)] : [...d.description.lines];
   if (summary) out.push('', String(summary).trim());
   if (credits.length) out.push('', 'Credits:', ...credits.map((c) => `· ${c}`));
   out.push('', CHANNEL.statement);
