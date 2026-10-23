@@ -5,6 +5,10 @@
 // (thumbnails.set, 50 units). A vertical upload up to three minutes is a Short by itself (no API field).
 // The live stream's title and description: videos.update on the broadcast's video (50 units), rate-limited by the
 // supervisor (server/publish/live.js).
+// Every upload then joins its programme's playlist on the channel, one for the whole programmes and one for its
+// Shorts ("WORLD NOW", "WORLD NOW · Shorts"): found by title among the channel's own (playlists.list, 1 unit), made
+// public the first time (playlists.insert, 50), the video added (playlistItems.insert, 50). A playlist that fails never
+// fails the upload (the video is up: a retry would upload it twice).
 //
 // Credentials (OAuth 2.0, a Desktop or Web client of a Google Cloud project with the YouTube Data API enabled, and a
 // refresh token for the channel's account with the youtube.upload and youtube scopes):
@@ -16,6 +20,8 @@ const UPLOAD = 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=r
 const THUMBS = 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set';
 const VIDEOS = 'https://www.googleapis.com/youtube/v3/videos';
 const TOKEN = 'https://oauth2.googleapis.com/token';
+const PLAYLISTS = 'https://www.googleapis.com/youtube/v3/playlists';
+const PLAYLIST_ITEMS = 'https://www.googleapis.com/youtube/v3/playlistItems';
 // YouTube's categories: 25 News & Politics, 28 Science & Technology, 17 Sports, 24 Entertainment
 const CATEGORY = { 'world-now': '25', 'news-60': '25', 'money-minute': '25', 'seven-days': '25', 'tech-bytes': '28', cosmos: '28', 'world-weather': '25', 'full-time': '17', 'pay-attention': '24', 'press-start': '20' };
 
@@ -49,6 +55,17 @@ export function videoResource(item) {
   };
 }
 
+/** The playlist an item joins: its programme's, whole programmes and Shorts apart (null: none, e.g. no programme). */
+export function playlistFor(item) {
+  const id = item.source?.programId;
+  if (!id) return null;
+  const name = String(item.source?.programTitle || id.replace(/-/g, ' ')).toUpperCase().replace(/[<>]/g, '').slice(0, 130);
+  const shorts = item.format === 'vertical';
+  const title = shorts ? `${name} · Shorts` : name;
+  const description = shorts ? `${name}: the best moments, short. GLOBIT 24, AI-made world news in pixel art.` : `Every edition of ${name}, the whole programme as it aired on GLOBIT 24. AI-made world news in pixel art: the presenters and their voices are AI-generated, the facts come from credited news outlets.`;
+  return { title, description: description.slice(0, 5000) };
+}
+
 export class YouTubeAdapter extends Adapter {
   static id = 'youtube';
   static label = 'YouTube';
@@ -71,6 +88,12 @@ export class YouTubeAdapter extends Adapter {
       { step: 'upload', method: 'PUT', url: '<the session URL from the Location header>', headers: { 'content-type': 'video/mp4', 'content-length': String(v.bytes ?? 0) }, file: v.path },
     ];
     if (item.kind === 'episode' && item.media?.thumb) steps.push({ step: 'thumbnail', method: 'POST', url: `${THUMBS}?videoId=<new video id>`, headers: { 'content-type': item.media.thumb.endsWith('.png') ? 'image/png' : 'image/jpeg' }, file: item.media.thumb });
+    const pl = playlistFor(item);
+    if (pl) {
+      steps.push({ step: 'playlist-find', method: 'GET', url: `${PLAYLISTS}?part=snippet&mine=true&maxResults=50`, headers: { authorization: 'Bearer <access token>' }, find: pl.title });
+      steps.push({ step: 'playlist-create (when not found)', method: 'POST', url: `${PLAYLISTS}?part=snippet,status`, headers: { authorization: 'Bearer <access token>', 'content-type': 'application/json' }, body: { snippet: pl, status: { privacyStatus: 'public' } } });
+      steps.push({ step: 'playlist-add', method: 'POST', url: `${PLAYLIST_ITEMS}?part=snippet`, headers: { authorization: 'Bearer <access token>', 'content-type': 'application/json' }, body: { snippet: { playlistId: '<the playlist id>', resourceId: { kind: 'youtube#video', videoId: '<new video id>' } } } });
+    }
     return steps;
   }
 
@@ -93,7 +116,34 @@ export class YouTubeAdapter extends Adapter {
     if (item.kind === 'episode' && item.media?.thumb && fs.existsSync(item.media.thumb)) {
       await this.request('POST', `${THUMBS}?videoId=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${token}`, 'content-type': item.media.thumb.endsWith('.png') ? 'image/png' : 'image/jpeg' }, body: fs.readFileSync(item.media.thumb) }).catch((err) => this.log(`[youtube] thumbnail: ${err.message}`));
     }
-    return { remoteId: id, url: item.format === 'vertical' ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}` };
+    const playlist = await this.addToPlaylist(token, id, playlistFor(item)).catch((err) => {
+      this.log(`[youtube] playlist: ${err.message}`);
+      return null;
+    });
+    return { remoteId: id, url: item.format === 'vertical' ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`, ...(playlist ? { playlistId: playlist } : {}) };
+  }
+
+  /** The video into the playlist of that title (found among the channel's own, else made). Returns its id. */
+  async addToPlaylist(token, videoId, pl) {
+    if (!pl) return null;
+    const auth = { authorization: `Bearer ${token}` };
+    this.playlists ??= new Map();
+    let playlistId = this.playlists.get(pl.title);
+    for (let page = null, n = 0; !playlistId && n < 10; n++) {
+      const r = await this.request('GET', `${PLAYLISTS}?part=snippet&mine=true&maxResults=50${page ? `&pageToken=${encodeURIComponent(page)}` : ''}`, { headers: auth });
+      playlistId = (r.body?.items || []).find((p) => p.snippet?.title === pl.title)?.id || null;
+      page = r.body?.nextPageToken;
+      if (!page) break;
+    }
+    if (!playlistId) {
+      const made = await this.request('POST', `${PLAYLISTS}?part=snippet,status`, { headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ snippet: pl, status: { privacyStatus: 'public' } }) });
+      playlistId = made.body?.id;
+      if (!playlistId) throw new PublishError('the playlist was not made', { retryable: false });
+      this.log(`[youtube] playlist made: ${pl.title}`);
+    }
+    this.playlists.set(pl.title, playlistId);
+    await this.request('POST', `${PLAYLIST_ITEMS}?part=snippet`, { headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } } }) });
+    return playlistId;
   }
 
   /** The live broadcast's title and description (videos.update on its video id, 50 units). */

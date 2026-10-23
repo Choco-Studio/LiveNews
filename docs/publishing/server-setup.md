@@ -275,3 +275,25 @@ No live stream; the owner publishes every piece himself from the approval page. 
 - The approval page as a service, `node tools/publish/beta.mjs` (127.0.0.1:8740), reached through the SSH tunnel.
 - `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the
   launch check (for the beta only `EDITORIAL_CONTACT` and a working C2PA SDK must be in place: `beta.md`).
+
+## 8. Autonomous publishing (the owner's word, 18 Oct: "que sea autónomo")
+
+Every programme published, several a day, in playlists by type, no one at the desk; no live stream. On this server:
+
+- **The playout** (§4b's command, without the test switches: `PLAYOUT_VERBATIM` and `PLAYOUT_REVIEW` at their strict
+  defaults) under systemd with `EnvironmentFile=/etc/globit24.env`; its own output files rotate (the renderer's masters
+  are what is published, not the aired file).
+- **The round**: a systemd timer every 30 minutes runs `node tools/publish/auto.mjs` with the same environment and
+  `PUBLISH_LIVE=1` in that unit only. Each programme the playout rendered becomes its clips (vertical: YouTube Shorts,
+  TikTok) and its whole programme (YouTube), then the publisher's round sends what is due.
+- **The settings** (`data/publish/settings.json`, written by hand, never by the page): `phase: 3`, `dryRun: false`,
+  `modes` `auto` for the networks with keys (the others `off`), `live` true for them. A grave story still waits for the
+  owner; a compliance refusal is still held; the daily caps and spacing are the phase's (`platforms.js`).
+- **Playlists**: each upload joins its programme's ("WORLD NOW") or its Shorts' ("WORLD NOW · Shorts"), made public the
+  first time (`server/publish/adapters/youtube.js`).
+- **The AI writer's spend**: `AI_DAILY_TOKENS` in `/etc/globit24.env` (tokens a day, in + out): spent, Claude rests until
+  the next day and that day's news is not published (the offline writer's never is).
+- **What the networks allow before their audits**: YouTube keeps an unaudited project's uploads private; TikTok's inbox
+  route leaves each video as a draft in the owner's app (at most 5 pending a day). Ask for both audits.
+- **The station fix this needed**: the news refresh is timed on the real clock (`server/playout/clock.js` `realDue`):
+  on the air clock it never came due while the renderer waited, and the station waited for news that never came.

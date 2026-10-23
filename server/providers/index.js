@@ -21,9 +21,13 @@ export function createProviders(config) {
  * do not hammer an exhausted quota; the next one in the chain takes over.
  */
 export class ProviderChain {
-  constructor(providers, usage, { log = console, now = () => Date.now() } = {}) {
+  // dailyTokens: a paid provider's tokens a day (in + out, the usage tracker's count; 0: no limit). Spent, it rests
+  // until the next day and the chain goes on without it (the offline mock's episodes are never published)
+  constructor(providers, usage, { log = console, now = () => Date.now(), dailyTokens = 0 } = {}) {
     this.providers = providers;
     this.usage = usage;
+    this.dailyTokens = dailyTokens;
+    this.overBudget = new Set();
     this.log = log;
     this.now = now;
     this.cooldownUntil = new Map();
@@ -43,6 +47,10 @@ export class ProviderChain {
         continue;
       }
       if ((this.cooldownUntil.get(p.name) || 0) > this.now()) continue;
+      if (this.spent(p)) {
+        errors.push(`${p.name}: the daily limit of ${this.dailyTokens} tokens is spent`);
+        continue;
+      }
       const started = this.now();
       let result = null;
       try {
@@ -77,6 +85,19 @@ export class ProviderChain {
       throw Object.assign(new Error('no AI editor configured (the offline mock writes but cannot review)'), { code: 'NO_REVIEWER' });
     }
     throw new Error(`no AI provider available (${errors.join(' | ') || 'all paused'})`);
+  }
+
+  /** Whether a paid provider has used its tokens for today (said once a day in the log). */
+  spent(p) {
+    if (!(this.dailyTokens > 0) || p.reviews === false || p.name === 'inbox' || typeof this.usage?.tokensToday !== 'function') return false;
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    const over = this.usage.tokensToday(p.name) >= this.dailyTokens;
+    const key = `${p.name} ${day}`;
+    if (over && !this.overBudget.has(key)) {
+      this.overBudget.add(key);
+      this.log.warn?.(`[ai] ${p.name}: today's limit of ${this.dailyTokens} tokens is spent (AI_DAILY_TOKENS); it rests until tomorrow`);
+    }
+    return over;
   }
 
   status() {

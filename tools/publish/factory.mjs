@@ -194,7 +194,9 @@ for (const m of all) {
 }
 if (copied.size) say(`verbatim: ${copied.size} of the episode's stories copy their sources; their moments are not chosen`);
 if (blind.size) say(`verbatim: ${blind.size} of the episode's stories have no sources at hand (not in the archive: --sources); their moments are not chosen and the gate refuses them`);
-const pub = new Set(publishable(all, { phase: 1 }).map((m) => m.id));
+// the moments this phase may publish (the queue's settings: Phase 1 light only, 2 anything not grave, 3 everything;
+// a grave one still waits for the owner in every mode)
+const pub = new Set(publishable(all, { phase: new PublishQueue({ dir: queueDir }).settings().phase }).map((m) => m.id));
 // the choice: the best of each kind first (variety), then by score; a moment must have aired whole in the recording
 const chosen = [];
 const perKind = new Map();
@@ -398,11 +400,11 @@ for (const m of chosen) {
             hashtags: t.hashtags,
             tags: ['GLOBIT 24', episode.program?.title, ...t.hashtags].filter(Boolean),
             links: t.links,
-            media: { video: file, thumb, thumbs: covers, contact, captions: meta.files.srt, duration, sha256: hash },
+            media: { video: file, thumb, thumbs: covers, contact, captions: meta.files.srt, duration, sha256: hash, coverAt: 1 },
             // the packaging: what the owner chooses from (three titles, three covers) and what every later check
             // measures them against (manual.js packageFaults)
             package: { titles: pack.titles, thumbs: pack.thumbs, hook: pack.hook, lead: pack.lead, hashtags: pack.hashtags, writer: pack.writer, facts: { ...facts, sources: [] } },
-            source: { episodeId: episode.id, programId: prog, momentId: m.id, storyIds: m.storyIds, airedAt },
+            source: { episodeId: episode.id, programId: prog, programTitle: episode.program?.title || null, momentId: m.id, storyIds: m.storyIds, airedAt },
             disclosure: { [p]: t.disclosure[p] },
             compliance: meta.compliance[p],
             score: m.scores.total,

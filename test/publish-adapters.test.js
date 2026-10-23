@@ -7,7 +7,10 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { ADAPTERS, makeAdapter, credentialStatus } from '../server/publish/adapters/index.js';
 import { redact, withRetries, RateLimiter, PublishError, readResponse } from '../server/publish/adapters/base.js';
-import { videoResource } from '../server/publish/adapters/youtube.js';
+import { videoResource, playlistFor } from '../server/publish/adapters/youtube.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { tiktokCaption } from '../server/publish/adapters/tiktok.js';
 import { oauth1Header } from '../server/publish/adapters/x.js';
 import { linkFacets, blueskyRecord } from '../server/publish/adapters/bluesky.js';
@@ -225,4 +228,46 @@ test('the verbatim rule fails closed: a story whose sources are not at hand is r
   assert.deepEqual(missing(C.preflight({ id: 'e1', kind: 'episode', episode, platforms: ['youtube'], flags, text: 'AI-generated: sport.' }, { now: 0 })), []);
   const { RULE_ES } = await import('../server/publish/approval.js');
   assert.match(RULE_ES['sources-missing'], /no se puede comprobar/);
+});
+
+test('YouTube (a fake network): each upload joins its programme\'s playlist, made once; a playlist failure never fails the upload', async () => {
+  const video = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'yt-')), 'v.mp4');
+  fs.writeFileSync(video, 'fake video bytes');
+  const res = (body, headers = {}) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: (k) => headers[k] ?? null } });
+  const made = [];
+  let failPlaylists = false;
+  const calls = [];
+  const fetchImpl = async (url, o) => {
+    calls.push(`${o.method} ${url.split('?')[0].split('/').pop()}`);
+    if (/oauth2/.test(url)) return res({ access_token: 'at-123' });
+    if (/uploadType=resumable/.test(url)) return res({}, { location: 'https://upload.example/session/1' });
+    if (/upload\.example/.test(url)) return res({ id: `vid${calls.length}` });
+    if (failPlaylists && /playlists/.test(url)) return { ok: false, status: 403, text: async () => '{}', headers: { get: () => null } };
+    if (/playlists\?part=snippet&mine/.test(url)) return res({ items: made.map((t, i) => ({ id: `PL${i}`, snippet: { title: t } })) });
+    if (/playlists\?part=snippet,status/.test(url)) {
+      made.push(JSON.parse(o.body).snippet.title);
+      return res({ id: `PL${made.length - 1}` });
+    }
+    if (/playlistItems/.test(url)) return res({ id: 'item' });
+    throw new Error(`unexpected ${url}`);
+  };
+  const a = makeAdapter('youtube', { env: ENV, fetchImpl, dryRun: false });
+  const ep = { ...CLIP, kind: 'episode', format: 'horizontal', media: { video }, source: { programId: 'world-now', programTitle: 'World Now' } };
+  const r1 = await a.publish(ep);
+  assert.equal(r1.ok, true);
+  assert.equal(r1.playlistId, 'PL0');
+  assert.deepEqual(made, ['WORLD NOW'], 'the whole programmes\' playlist, made the first time');
+  const r2 = await a.publish({ ...ep, id: 'c2' });
+  assert.equal(r2.playlistId, 'PL0');
+  assert.equal(made.length, 1, 'found, not made twice');
+  const r3 = await a.publish({ ...CLIP, media: { video }, source: { programId: 'world-now', programTitle: 'World Now' } });
+  assert.deepEqual(made, ['WORLD NOW', 'WORLD NOW · Shorts'], 'a Short joins the programme\'s Shorts playlist');
+  assert.equal(r3.playlistId, 'PL1');
+  failPlaylists = true;
+  const b = makeAdapter('youtube', { env: ENV, fetchImpl, dryRun: false });
+  const r4 = await b.publish({ ...ep, source: { programId: 'cosmos' } });
+  assert.equal(r4.ok, true, 'the video is up: the playlist failing does not fail it');
+  assert.equal(r4.playlistId, undefined);
+  assert.equal(calls.filter((c) => c.startsWith('PUT')).length, 4, 'one upload per item, never repeated for a playlist');
+  assert.equal(playlistFor({ source: {} }), null, 'no programme: no playlist');
 });

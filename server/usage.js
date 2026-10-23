@@ -37,6 +37,12 @@ export class UsageTracker {
     this.save();
   }
 
+  /** The tokens (in and out) a provider has used today: what its daily limit counts (ProviderChain dailyTokens). */
+  tokensToday(provider) {
+    const p = this.data.days[new Date().toISOString().slice(0, 10)]?.[provider];
+    return p ? (p.input || 0) + (p.output || 0) : 0;
+  }
+
   summary() {
     const today = new Date().toISOString().slice(0, 10);
     const month = today.slice(0, 7);
