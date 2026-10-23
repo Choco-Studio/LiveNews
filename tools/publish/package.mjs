@@ -16,7 +16,7 @@ import { createPlaybackServer } from '../../server/publish/playback.js';
 import { packFacts, writePackage } from '../../server/publish/packaging.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { root, argsOf, loadPlaywright } from './lib.mjs';
-import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf } from './packager.mjs';
+import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf, coverCast } from './packager.mjs';
 
 const { opt, flag } = argsOf();
 if (!opt('episode') || !opt('from')) {
@@ -95,7 +95,7 @@ for (const c of clips) {
     const picks = pickFrames(reports.vertical, c.window);
     for (const [k, t] of Object.entries(picks)) if (t !== null) frames[k] = { file: await grabFrame(masters('vertical'), t, path.join(tmp, `${c.name}.${k}.png`)), rect: { x: 0, y: 72, w: 216, h: 176 } };
   }
-  const covers = await renderCovers({ page, fmt: c.format, pkg: pack, frames, picture: c.moment.uncleared ? null : pictureOf(episode, c.moment.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, out, name: c.name });
+  const covers = await renderCovers({ page, fmt: c.format, pkg: pack, frames, picture: c.moment.uncleared ? null : pictureOf(episode, c.moment.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, ...coverCast(episode, c.moment), out, name: c.name });
   const texts = Object.fromEntries((c.platforms || []).map((p) => [p, clipTexts(c.moment, episode, { platform: p, stories, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt })]));
   const rec = { name: c.name, format: c.format, kind: c.moment.kind, grave: facts.grave, writer: pack.writer, package: pack, covers, frames: Object.keys(frames), texts: Object.fromEntries(Object.entries(texts).map(([p, t]) => [p, { title: t.title, text: t.text, description: t.description, hashtags: t.hashtags }])) };
   fs.writeFileSync(path.join(out, `${c.name}.package.json`), JSON.stringify(rec, null, 1));

@@ -23,7 +23,7 @@ import { renderedMaster } from '../../server/publish/masters.js';
 import { streamOf } from '../../public/js/airmode.js';
 import { root, argsOf, run, loadPlaywright, probeDuration, recordSeconds, recordMaster } from './lib.mjs';
 import { episodeFacts, writePackage } from '../../server/publish/packaging.js';
-import { packagingChain, renderCovers, pictureOf } from './packager.mjs';
+import { packagingChain, renderCovers, pictureOf, coverCast } from './packager.mjs';
 
 const { opt, flag } = argsOf();
 // --from-playout <dir>: a programme the pre-rendered playout rendered (docs/publishing/playout.md §6): its episode, its
@@ -131,7 +131,7 @@ const leadId = (episode.segments || []).find((x) => x.type === 'story' && x.stor
 const studioRect = { x: 84, y: 20, w: 216, h: 176 };
 const faces = { ...(studio && fs.existsSync(studioPng) ? { presenter: { file: studioPng, rect: studioRect } } : {}), ...(facts.quizShow && studio2 && fs.existsSync(studio2Png) ? { presenter2: { file: studio2Png, rect: studioRect } } : {}) };
 const frames = close ? { presenter: { file: framePng, rect: { x: 0, y: 20, w: 216, h: 176 } } } : facts.quizShow && faces.presenter ? faces : { board: { file: framePng, rect: { x: 0, y: 0, w: 384, h: 216, focusY: 0.3 } }, ...faces };
-const thumbs = await renderCovers({ page, fmt: 'horizontal', pkg: pack, frames, picture: leadId ? pictureOf(episode, [leadId], pictureDir) : null, pictureOnlyA: true, programme: episode.program?.title || 'GLOBIT 24', theme: THEME, kicker: `FULL PROGRAMME · ${when}`, grave: facts.grave, out, name: prog });
+const thumbs = await renderCovers({ page, fmt: 'horizontal', pkg: pack, frames, picture: leadId ? pictureOf(episode, [leadId], pictureDir) : null, pictureOnlyA: true, programme: episode.program?.title || 'GLOBIT 24', theme: THEME, kicker: `FULL PROGRAMME · ${when}`, grave: facts.grave, ...coverCast(episode), out, name: prog });
 // YouTube takes a thumbnail up to 2 MB
 for (const [i, f] of thumbs.entries()) {
   if (fs.statSync(f).size <= 2 * 1024 * 1024) continue;

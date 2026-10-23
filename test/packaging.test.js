@@ -15,7 +15,7 @@ import { createMockProvider } from '../server/providers/mock.js';
 import { checkClip, clipCards } from '../server/publish/compliance.js';
 import { manualTexts, prepareManual, packageFaults } from '../server/publish/manual.js';
 import { PublishQueue } from '../server/publish/queue.js';
-import { pickFrames, pictureOf } from '../tools/publish/packager.mjs';
+import { pickFrames, pictureOf, coverCast } from '../tools/publish/packager.mjs';
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 const EMOJI = /\p{Extended_Pictographic}/u;
@@ -314,6 +314,34 @@ describe('the covers', () => {
     }
   });
 
+  test('the presenter stands as a cut-out, and the words keep 200 pixels beside them on a thumbnail', () => {
+    const ctx = fakeCanvas(384, 216).getContext('2d');
+    // a wide figure that would crowd the words: the thumbnail moves it right (the edge may cut a shoulder, never the face)
+    const sprite = { canvas: { getContext: () => ({ getImageData: () => ({ data: new Uint8ClampedArray(240 * 200 * 4) }) }) }, w: 240, h: 200, head: { x: 120, y: 50 } };
+    const r = C.drawThumb16(ctx, { variant: 'presenter', programme: 'MONEY MINUTE', accent: '#63c74d', words: 'SKY-ITV DEAL UNDER REVIEW', sprite });
+    assert.ok(r.fit, 'the words are set');
+    assert.ok(r.box.x >= 222, `the figure starts at ${r.box.x}`);
+    assert.ok(r.box.x + 120 + 30 <= 384, 'the face stays inside the frame');
+    const words = ctx.fills.filter((f) => f.c === '#ffffff');
+    assert.ok(words.length > 20 && Math.max(...words.map((f) => f.x + f.w)) <= r.box.x, 'no word under the figure');
+  });
+
+  test('who stands on a clip\'s covers: the anchor of its first segment, with the segment\'s emotion; serious on grave news', () => {
+    const episode = { program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ anchor: 'A', emotion: 'neutral' }, { anchor: 'B', emotion: 'happy' }, { anchor: 'A', emotion: 'sad' }] };
+    assert.deepEqual(coverCast(episode, { from: 1 }), { presenter: 'lola', partner: 'paco', emotion: 'happy' });
+    assert.deepEqual(coverCast(episode, { from: 2 }), { presenter: 'paco', partner: 'lola', emotion: 'serious' }, 'sad reads as serious on a cover');
+    assert.deepEqual(coverCast(episode, { from: 1, grave: true }), { presenter: 'lola', partner: 'paco', emotion: 'serious' }, 'never a smile on grave news');
+    assert.deepEqual(coverCast({ program: { id: 'pay-attention' }, segments: [] }), { presenter: 'qm', partner: null, emotion: 'neutral' }, 'the programme\'s presenter from the channel file');
+  });
+
+  test('grave news: no plate and no accent colour in the words, the bar in the set\'s steel', () => {
+    for (const variant of C.VARIANTS) {
+      const ctx = fakeCanvas(384, 216).getContext('2d');
+      C.drawThumb16(ctx, { variant, programme: 'NEWS IN 60', accent: '#feae34', words: 'KYIV POWER PLANT HIT', grave: true });
+      assert.ok(!ctx.fills.some((f) => f.c === '#feae34' && f.h > 6 && f.y > 30), `${variant}: no plate in the programme's colour (its tag in the brand row aside)`);
+    }
+  });
+
   test('grave news: no accent colour in the words, the bar in the set\'s steel', () => {
     const ctx = fakeCanvas(216, 384).getContext('2d');
     C.drawCover(ctx, { variant: 'words', programme: 'WORLD NOW', accent: '#e43b44', words: 'TWO LINES HERE', grave: true });
@@ -349,7 +377,9 @@ describe('the big words tell a stranger what happened (the coordinator\'s round)
   test('a number clip shows its number; a person\'s health is told plainly, with who', () => {
     const num = { ...facts(), grave: false, kind: 'number', aired: 'Our number of the day: £15m for zero-emission tests at Belfast Harbour.' };
     assert.ok(checkThumb('BELFAST HARBOUR', num, {}).some((x) => /without its number/.test(x)));
-    assert.deepEqual(checkThumb('£15M', num, {}), []);
+    assert.ok(checkThumb('£15M', num, {}).some((x) => /a figure alone/.test(x)), 'a figure alone says nothing of what it is (and beside a face reads as theirs)');
+    assert.deepEqual(checkThumb('£15M FOR BELFAST', num, {}), []);
+    assert.ok(checkThumb('£15M FOR TESTS', num, {}).some((x) => /a sum without whose/.test(x)), 'a sum beside a picture names whose it is');
     const health = { ...facts(), grave: false, headline: 'Pope Leo is improving after surgery', aired: 'Pope Leo is showing steady improvement after his surgery at Rome\'s Gemelli Hospital.' };
     assert.ok(checkThumb('BACK SOON?', health, {}).length);
     assert.ok(checkTitle('Will Pope Leo be back on Sunday after his surgery?', health).some((x) => /health/.test(x)));

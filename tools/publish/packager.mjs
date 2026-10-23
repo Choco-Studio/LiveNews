@@ -6,7 +6,9 @@
 //   packagingChain({ env, log })                       the chain of AI writers (never the offline mock), or null
 //   pickFrames(report, window, fmt, kind)              the clip's frames a cover may show: { presenter, board } times
 //   grabFrame(master, t, out)                          one frame of a master at 1x (PNG)
-//   renderCovers({ page, fmt, pkg, facts, frames, picture, programme, theme, kicker, out, name }) -> [png paths]
+//   renderCovers({ page, fmt, pkg, facts, frames, picture, programme, theme, kicker, presenter, emotion, out, name })
+//                                                      -> [png paths]
+//   coverCast(episode, moment)                         who presents the clip and how: { presenter, emotion }
 //   pictureOf(episode, storyIds, pictureDir, audit)    the story's cleared picture for a cover, or null
 import fs from 'node:fs';
 import path from 'node:path';
@@ -75,6 +77,30 @@ export function pickFrames(report, window) {
   return { presenter, presenter2, board };
 }
 
+let CHANNEL = null;
+const EMOTION_OF = { happy: 'happy', surprised: 'surprised', serious: 'serious', sad: 'serious', thinking: 'thinking' };
+/**
+ * Who stands on a clip's covers (clip/sprite.js: the cast's own drawing, cut out): the anchor of the clip's first
+ * segment, else the programme's first presenter (config/channel.json); and how they look: the segment's own emotion
+ * as the writer marked it (a lighter story happy, a serious one serious), never a smile on grave news.
+ */
+export function coverCast(episode = {}, moment = null) {
+  const seg = moment && Number.isInteger(moment.from) ? episode.segments?.[moment.from] : episode.segments?.find((x) => x.anchor);
+  let presenter = (seg?.anchor && episode.cast?.[seg.anchor]) || episode.cast?.A || null;
+  if (!presenter) {
+    try {
+      CHANNEL ||= JSON.parse(fs.readFileSync(new URL('../../config/channel.json', import.meta.url), 'utf8'));
+      const id = episode.program?.id;
+      const prog = CHANNEL.programs?.[id] || CHANNEL.drafts?.[id];
+      presenter = prog?.presenters?.[0] || prog?.cast?.[0] || null;
+    } catch { /* no channel file: the clip's own frame */ }
+  }
+  const grave = moment ? !!moment.grave : false;
+  // the other presenter of a duo stands on C, so the three covers are three different pictures
+  const partner = Object.values(episode.cast || {}).find((id) => typeof id === 'string' && id !== presenter) || null;
+  return { presenter, partner, emotion: grave ? 'serious' : EMOTION_OF[seg?.emotion] || 'neutral' };
+}
+
 /** One frame of a master (1x, lossless) as a PNG. */
 export async function grabFrame(master, t, out) {
   await run('ffmpeg', ['-v', 'error', '-y', '-ss', Math.max(0, t).toFixed(3), '-i', master, '-frames:v', '1', out], { quiet: true });
@@ -106,7 +132,7 @@ export function pictureOf(episode, storyIds = [], pictureDir = null) {
  * part of the frame no caption covers: the vertical picture's stage). A variant with nothing of its own to show (no
  * picture for A, no presenter for B) shows what the clip has (A the board, B the picture), so three always come out.
  */
-export async function renderCovers({ page, fmt, pkg, frames = {}, picture = null, pictureOnlyA = false, programme, theme, kicker = '', grave = false, out, name }) {
+export async function renderCovers({ page, fmt, pkg, frames = {}, picture = null, pictureOnlyA = false, programme, theme, kicker = '', grave = false, presenter = null, partner = null, emotion = 'neutral', out, name }) {
   fs.mkdirSync(out, { recursive: true });
   const files = [];
   for (const [i, variant] of VARIANTS.entries()) {
@@ -118,7 +144,8 @@ export async function renderCovers({ page, fmt, pkg, frames = {}, picture = null
     const frame = variant === 'photo' ? aFrame : variant === 'presenter' ? (frames.presenter && (picture || aFrame !== frames.presenter) ? frames.presenter : null) : frames.presenter || frames.board;
     // (a whole programme's picture is its lead story's: only A's words are about the lead, so only A shows it)
     const photo = variant === 'presenter' || (pictureOnlyA && variant !== 'photo') ? null : picture?.url || null;
-    const spec = { format: fmt, variant, programme, theme, words, kicker, grave, photo, photoFocus: picture?.focus ?? undefined, photoFit: picture?.fit || undefined, credit: picture?.credit || '', frame: frame ? dataUrl(frame.file) : null, frameRect: frame?.rect || null };
+    // (the presenter's cut-out stands on B, and on C when there is no picture: the cast's drawing, not a frame)
+    const spec = { format: fmt, variant, programme, theme, words, kicker, grave, presenter: variant === 'words' ? partner || presenter : presenter, emotion: grave ? 'serious' : emotion, photo, photoFocus: picture?.focus ?? undefined, photoFit: picture?.fit || undefined, credit: picture?.credit || '', frame: frame ? dataUrl(frame.file) : null, frameRect: frame?.rect || null };
     const url = await page.evaluate((s) => window.__thumbLab.cover(s), spec);
     const small = path.join(out, `${name}.${variant}.1x.png`);
     fs.writeFileSync(small, Buffer.from(url.split(',')[1], 'base64'));

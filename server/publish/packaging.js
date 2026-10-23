@@ -345,9 +345,14 @@ function concreteFaults(t, facts) {
   if (LABELS.test(T)) return [`a label, not what happened ("${T}")`];
   if (quotedInFacts(t, facts)) faults.push('a quotation or nickname out of its context');
   const digits = /\d/.test(T);
+  // a figure alone ("£1.6BN") says nothing of what it is, and beside a person's picture reads as theirs: name the thing
+  if (digits && !flat(t).some((w) => /\p{L}{3,}/u.test(w) && !/^(?:bn|mn|million|billion|thousand|percent)$/.test(w))) faults.push('a figure alone: say what it is (£1.6BN SKY DEAL)');
   const names = namesOf(facts);
   const words = flat(t);
   const named = words.some((w) => names.has(w) || names.has(w.replace(/s$/, '')));
+  // money beside a picture reads as the pictured person's: a sum names whose it is or what it buys (SKY'S £1.6BN ITV BID);
+  // a quiz's question stands beside its players, never a picture of someone in the story (FROM $8 TO ?)
+  if (/[£$€¥]\s?\d|\d(?:[.,]\d+)?\s?(?:BN|MN|M|K)\b/.test(T) && !named && !facts.quiz) faults.push('a sum without whose it is (SKY\'S £1.6BN ITV BID)');
   // a number clip shows its number
   if (facts.kind === 'number' && !digits) faults.push('a number clip\'s words without its number');
   // a person's health: who it is, plainly
@@ -642,7 +647,7 @@ export function packagePrompt(facts) {
     '- thumbs: 3 thumbnail texts of 1 to 4 short words (at most 22 characters, no word over 9 letters, capitals are fine) that ADD to the title instead of repeating it: a key figure, the place, what is at stake. One for each title, in order.',
     facts.kind === 'programme' ? null : '- The first thumbnail text must make sense on its own, without any title (TikTok and Instagram show a cover alone in their grids): the striking fact or what happened; put the title that complements it first.',
     '- No "why", "how", "explained" or "all you need to know" unless the clip itself explains it.',
-    '- The thumbnail words must tell a stranger what happened, or show the striking fact: a number, a place, a who. Never a label (NUMBER OF THE DAY, STORY OF THE WEEK, THE HEADLINES, ROUND THREE, PLAY ALONG, FULL PROGRAMME), never a nickname or a quotation out of its context, never a teaser that only makes sense after watching. A number clip: the number itself. A person\'s health: plainly, who and what, no tease.',
+    '- The thumbnail words must tell a stranger what happened, or show the striking fact: a number, a place, a who. Never a label (NUMBER OF THE DAY, STORY OF THE WEEK, THE HEADLINES, ROUND THREE, PLAY ALONG, FULL PROGRAMME), never a nickname or a quotation out of its context, never a teaser that only makes sense after watching. A number clip: the number itself, with what it is (£15M FOR BELFAST, never £15M alone: a figure alone says nothing, and beside a person\'s picture reads as theirs). A sum always names whose it is or what it buys (SKY\'S £1.6BN ITV BID, not £1.6BN PURCHASE). A person\'s health: plainly, who and what, no tease.',
     '- hook: the caption\'s first line, at most 90 characters: the most interesting fact first, a reason to watch.',
     '- lead: one sentence for the description, at most 160 characters.',
     facts.grave ? '- This is grave news (deaths, disaster or conflict): plain, factual and respectful. No question, no emotional or dramatic word, no emoji.' : null,

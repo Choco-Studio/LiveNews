@@ -21,6 +21,7 @@ import { THEME_ACCENT } from '/js/cast.js';
 import { drawThumb, thumbLines } from '/js/clip/thumb.js';
 import { drawCover, drawThumb16, pictureBox, STAGE, COVER, THUMB, ON_AIR_PICTURE } from '/js/clip/cover.js';
 import { pixelate } from '/js/pixelate.js';
+import { presenterSprite } from '/js/clip/sprite.js';
 const mk = () => Object.assign(document.createElement('canvas'), { width: 384, height: 216 });
 const load = (src) => new Promise((resolve, reject) => {
   const im = new Image();
@@ -40,7 +41,8 @@ async function compose(spec) {
 // The packaging's covers and thumbnails (clip/cover.js; docs/publishing/thumbnails-titles.md):
 //   spec { format: 'vertical'|'horizontal', variant: 'photo'|'presenter'|'words', programme, theme, accent, words,
 //          photo (a URL of the story's cleared picture), photoFocus, photoFit, credit, frame (a frame of the clip, a
-//          URL), kicker, grave } -> a PNG data URL at the channel's own size (216x384 or 384x216)
+//          URL), kicker, grave, presenter (a cast id), emotion } -> a PNG data URL at the channel's own size (216x384 or
+//          384x216). The presenter stands on the cover as the cast's own drawing, cut out (clip/sprite.js).
 async function cover(spec) {
   const vertical = spec.format === 'vertical';
   const c = Object.assign(document.createElement('canvas'), vertical ? { width: COVER.w, height: COVER.h } : { width: THUMB.w, height: THUMB.h });
@@ -56,8 +58,10 @@ async function cover(spec) {
   // the clip's frame: the part of it that may show (spec.frameRect; by default the vertical picture's stage, at 1x,
   // which no caption or title covers)
   const frameRect = frame ? spec.frameRect || { ...STAGE } : null;
+  // (a close single's size on a cover; a little bigger on a thumbnail, where the figure stands on the right third)
+  const sprite = spec.presenter ? presenterSprite(spec.presenter, { emotion: spec.grave ? 'serious' : spec.emotion || 'neutral', scale: vertical ? 3.4 : 3.8 }) : null;
   const draw = vertical ? drawCover : drawThumb16;
-  draw(g, { variant: spec.variant || 'photo', programme: spec.programme, accent: spec.accent || THEME_ACCENT[spec.theme] || P.red, words: spec.words || '', photo, photoRect, credit: spec.credit || '', frame, frameRect, kicker: spec.kicker || '', grave: !!spec.grave });
+  draw(g, { variant: spec.variant || 'photo', programme: spec.programme, accent: spec.accent || THEME_ACCENT[spec.theme] || P.red, words: spec.words || '', photo, photoRect, credit: spec.credit || '', frame, frameRect, kicker: spec.kicker || '', grave: !!spec.grave, sprite });
   return c.toDataURL('image/png');
 }
 window.__thumbLab = { compose, thumbLines, cover };

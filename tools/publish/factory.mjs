@@ -39,7 +39,7 @@ import { detectMoments, publishable, markCopied, markUncleared, ownHook } from '
 import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
-import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf } from './packager.mjs';
+import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf, coverCast } from './packager.mjs';
 import { PLATFORMS, PHASE_PLATFORMS, fitsPlatform } from '../../server/publish/platforms.js';
 import { PublishQueue } from '../../server/publish/queue.js';
 import * as compliance from '../../server/publish/compliance.js';
@@ -368,7 +368,7 @@ for (const m of chosen) {
       const frames = {};
       for (const [k, t] of Object.entries(picks)) if (t !== null) frames[k] = { file: await grabFrame(masters[src].file, t, path.join(tmpDir, `${name}.${k}.png`)), rect: STAGE_RECT };
       const when = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(new Date(airedAt)).toUpperCase();
-      const covers = await renderCovers({ page: coverPage, fmt, pkg: pack, frames, picture: m.uncleared ? null : pictureOf(episode, m.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, out: clipsDir, name });
+      const covers = await renderCovers({ page: coverPage, fmt, pkg: pack, frames, picture: m.uncleared ? null : pictureOf(episode, m.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, ...coverCast(episode, m), out: clipsDir, name });
       const thumb = covers[0];
       const labelFrames = await labelEvidence(file, fmt, window, tl);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)

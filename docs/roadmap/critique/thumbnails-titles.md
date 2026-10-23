@@ -173,3 +173,27 @@ the picture above, the words below, empty dark bands, small subjects) reads as a
 redesign is handed over and done separately; the words, the validators and the pipeline stay. Still open for it: a
 face crop placed by the face reader (FACE_READER: the whole face and the eyes inside, with headroom) and the
 juxtaposition rule (a money figure beside a person's face names the deal or the company: SKY–ITV: £1.6BN).
+
+## Round 5: the redesign of the look (24 Oct, by the coordinator)
+
+What changed (public/js/clip/cover.js, public/js/clip/sprite.js, tools/publish/packager.mjs `coverCast`):
+
+- **A full frame, never a slide.** The picture fills the frame (A), is pushed back behind the presenter (B), or the
+  programme's colour fills it with a burst (C). No empty dark band: a variant with nothing of the story's or the
+  clip's own stands the presenter in the picture's place.
+- **Heavy type on the picture.** The bold face inside a whole-pixel black outline with a hard shadow; the line that
+  carries the point on a plate in the programme's colour (black type); A keeps its words to two lines along the
+  bottom, so a face in the picture's upper middle stays clear.
+- **The presenter as a cut-out.** The cast's own drawing by the on-air rig, alone on a transparent frame
+  (`presenterSprite`), ringed in black and the programme's colour, the expression the segment's own (serious on grave
+  news). B shows the clip's anchor; C a duo's other presenter, so the three variants are three pictures. Only the
+  story's own picture stands behind a cut-out (a clip frame showed the same presenter twice: a ghost).
+- **The shading** is an ordered dither of the set's black: no colour outside the channel's palette, the photo
+  pixelated exactly as on air and shown at 1x.
+- **Words:** a figure alone is refused (£15M says nothing of what it is), and a sum names whose it is or what it buys
+  (beside a person's photo "£1.6BN PURCHASE" read as hers): both in the validator and in the writer's prompt.
+
+Honest score, coordinator's own: growth 9.0, standards 9.7. What keeps growth below 9.7 is outside the drawing: the
+pictures the desk clears are often a building or a file portrait rather than the thing itself (a Tesla factory for a
+flying Roadster), and the presenters' expressions are subtle at thumbnail size. Both are worth their own round; the
+owner's eye is the gate.

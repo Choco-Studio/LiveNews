@@ -69,11 +69,16 @@ pipeline stand, the covers' and thumbnails' look is being redesigned separately.
 
 Every clip and every programme gets three titles and three pictures, paired A/B/C:
 
+The look (redesigned 24 Oct after the owner judged the first build "no gran cosa": a slide, not a thumbnail): every
+variant is a full frame. The picture fills it, the words stand on it in heavy type (the bold face inside a whole-pixel
+black outline, with a hard shadow), the line that carries the point sits on a plate in the programme's colour, and the
+presenter stands in front of the picture as a cut-out, ringed in black and the programme's colour.
+
 | Variant | Picture | Words on it |
 |---|---|---|
-| **A · the photo** | The story's cleared picture (the pictures desk's, `PICTURE_RIGHTS=cleared`, pixelated exactly as on air by `pixelate.js`, its credit on it) | The first thumbnail text |
-| **B · the presenter** | The programme's presenter as the clip shows them: a frame of the clip itself, the vertical picture's stage at 1x (`pickFrames`: a studio shot, just before a sentence starts, so the face is at rest) | The second |
-| **C · the words** | The words big, the picture (or the presenter) as a strip or a column | The third |
+| **A · the photo** | The story's cleared picture full-bleed (the pictures desk's, `PICTURE_RIGHTS=cleared`, pixelated exactly as on air by `pixelate.js`, shown at 1x, its credit top right), shaded toward the words by an ordered dither of the set's black | The first thumbnail text, at most two lines along the bottom (a picture's subject, a face, stays clear above) |
+| **B · the presenter** | The picture full-bleed and pushed back (shaded), the programme's presenter as a cut-out on the right third (`clip/sprite.js`: the cast's own drawing by the on-air rig, alone on a transparent frame; the expression the segment's own, serious on grave news). On a cover: the words at the top of the middle, the presenter big below them | The second, on the left, with 200 px at least (the figure moves right for them: the edge may cut a shoulder, never the face) |
+| **C · the words** | The programme's colour (a dithered backdrop with a burst), the words giant, the story's picture as a panel down the right third (a framed print on a cover), else the presenter's cut-out | The third |
 
 A variant with nothing of its own shows what the clip has: A without a cleared picture shows the clip's board or map
 (never the open's montage or a tease, whose frames carry the aired headlines), B without the presenter on screen shows
@@ -81,9 +86,10 @@ the programme's own card (its colour and name: never A's picture twice). A clip 
 "4 stories in 45 seconds") never shows one story's picture under words about another: only its own frames. A tall
 picture keeps its whole height in a wide box (the on-air portrait treatment), so a face is never cut. The pictures are
 never generated, never drawn, never altered beyond the channel's own pixelation and a crop; no real
-person's face is put in a situation or an expression it did not have (no arrows, no speech bubbles, no cut-outs over
-another picture). The presenters are the channel's own characters, as the owner approved them, taken from the clip's
-own frames: nothing new is drawn.
+person's face is put in a situation or an expression it did not have (no arrows, no speech bubbles, no cut-out of a real
+person). Only the channel's own presenters are cut out: the owner's approved characters, drawn by the same rig and
+renderer as on air with one of their six expressions; nothing new is drawn. A presenter the cast cannot draw alone
+falls back to the clip's own frame of them.
 
 On YouTube the owner pastes title A and uploads cover A; for a **whole programme** he can put all three titles and all
 three thumbnails into **Test & Compare**. A **Short** has no Test & Compare: the other two are his other choices (its
@@ -92,10 +98,11 @@ cover A unless he prefers another.
 
 ### 3.2 Per programme: one template, recognisable at a glance
 
-The brand frame is the same everywhere: the channel's bug top left, the programme's own tag on its accent at the right,
-a 4 px accent bar under the picture, the words in the channel's 5x7 face made bold (each glyph one pixel wider, a pixel
-apart, a one-pixel shadow), white with the line that carries the point in the accent (yellow where the accent is too
-dark to read: PAY ATTENTION's purple, WORLD NOW's red, WORLD WEATHER's blue).
+The brand frame is the same everywhere: the channel's bug and the programme's own tag top left on a black plate, a 3 px
+bar in the programme's colour along the bottom (clear of YouTube's time stamp), the words in the channel's 5x7 face
+made bold and heavy (outline and shadow), white, with the line that carries the point on a plate in the programme's
+colour (yellow where the colour is too dark for black type: PAY ATTENTION's purple, WORLD NOW's red, WORLD WEATHER's
+blue), the presenter's cut-out ringed in the same colour.
 
 | Programme | Accent | Presenter on B | Typical A | Notes |
 |---|---|---|---|---|
@@ -146,8 +153,8 @@ captions and the strap); a whole programme's from its clean plate (`?clip=clean`
 
 `packFacts` marks a clip grave when the moment is (moments.js) or its words are (`facts.js isGrave`). Then: no
 question, no dramatic word ("horror", "tragic", "heartbreaking", "chaos"…), no emoji, no `#pixelart`; the words white
-(no accent colour) and the bar in the set's steel; the presenter frame is the clip's own (their expression is the
-director's grave one, never a reaction picked for effect). Phase 1 publishes nothing grave anyway; the packaging is
+(no plate, no colour) and the bar and the presenter's ring in the set's steel; the presenter's cut-out is serious, never
+a reaction picked for effect; the picture is shaded deeper. Phase 1 publishes nothing grave anyway; the packaging is
 ready for when it does.
 
 ### 3.6 Who writes them, and the checks
