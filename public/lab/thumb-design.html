@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Thumbnail design lab</title>
+<style>body{background:#111;color:#ccc;font:13px sans-serif}canvas{image-rendering:pixelated}</style></head>
+<body>
+<p>Packaging design lab: window.__design.sprite(id, opts) and window.__design.render(spec) (public/js/clip/cover.js).</p>
+<script type="module">
+import { presenterSprite } from '/js/clip/sprite.js';
+import { pixelate } from '/js/pixelate.js';
+import { drawCover, drawThumb16, ON_AIR_PICTURE } from '/js/clip/cover.js';
+import { THEME_ACCENT } from '/js/cast.js';
+import { P } from '/js/palette.js';
+
+const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+
+function sprite(id, opts) {
+  const s = presenterSprite(id, opts);
+  return s ? { url: s.canvas.toDataURL(), w: s.w, h: s.h, head: s.head } : null;
+}
+
+async function render(spec) {
+  const vertical = spec.format === 'vertical';
+  const c = document.createElement('canvas');
+  c.width = vertical ? 216 : 384;
+  c.height = vertical ? 384 : 216;
+  const g = c.getContext('2d');
+  const photo = spec.photo ? pixelate(await load(spec.photo), ON_AIR_PICTURE.w, ON_AIR_PICTURE.h, { colors: ON_AIR_PICTURE.colors, focusY: spec.photoFocus ?? 0.4, fit: 'cover' }) : null;
+  const sp = spec.presenter ? presenterSprite(spec.presenter, { emotion: spec.emotion || 'neutral', gesture: spec.gesture || null, scale: spec.scale || 3.4, side: spec.side ?? 1 }) : null;
+  const draw = vertical ? drawCover : drawThumb16;
+  draw(g, { ...spec, accent: spec.accent || THEME_ACCENT[spec.theme] || P.red, photo, photoRect: photo ? { x: 0, y: 0, w: photo.width, h: photo.height, focusY: spec.photoFocusY ?? 0.4 } : null, sprite: sp });
+  return c.toDataURL();
+}
+window.__design = { sprite, render };
+</script>
+</body></html>

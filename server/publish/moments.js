@@ -62,16 +62,62 @@ export function placeRun(timeline, from, to, { keepStart = false } = {}) {
   if (!segs.length) return null;
   const first = segs[0];
   let startSentence = 0;
+  let lead = null;
   if (!keepStart) {
-    startSentence = first.sentences.findIndex((x) => !dangling(x.text) && !greetingOnly(x.text));
+    startSentence = first.sentences.findIndex((x) => !dangling(x.text) && !greetingOnly(x.text) && !labelOnly(x.text));
     if (startSentence < 0) return null;
+    lead = leadIn(first, first.sentences[startSentence]);
   }
   const s0 = first.sentences[startSentence] || { start: first.start, from: 0 };
   const last = segs[segs.length - 1];
   const lastSentence = last.sentences[last.sentences.length - 1];
   const end = lastSentence?.end ?? last.end;
-  const text = segs.map((s, i) => (i === 0 ? s.seg.text.slice(s0.from || 0) : s.seg.text)).map(norm).join(' ');
-  return { start: s0.start ?? first.start, end, text, trimmed: startSentence > 0, segs };
+  const from0 = lead ? lead.from : s0.from || 0;
+  const text = segs.map((s, i) => (i === 0 ? s.seg.text.slice(from0) : s.seg.text)).map(norm).join(' ');
+  return { start: lead ? lead.start : s0.start ?? first.start, end, text, trimmed: startSentence > 0 || !!lead, leadIn: !!lead, segs };
+}
+
+// A running-order label at a run's head ("And finally:", "Our number of the day:", "Now,", "Around the world in 30
+// seconds.") is the programme talking to itself, not the news: a clip starts on the news, because the first two
+// seconds decide the scroll and are mostly watched without sound (docs/publishing/attention.md §2).
+const LEAD_IN = /^(?:and finally|finally|our number of the day(?: is)?|the number of the day(?: is)?|(?:now,? )?around the world(?: in \d+ seconds)?|in other news|(?:and )?now|meanwhile|next|also)(?:\s*[:,.—–-]\s*|\s+(?=[A-Z0-9£$€"“‘'])|\s*$)/i;
+// ("now", "next", "also" and "meanwhile" only with their comma or colon, or before a capital: "Now you can call
+// anyone" keeps its "Now")
+/** The label a sentence opens with, as many as it stacks ("Now, around the world:"), or ''. */
+function leadLabel(text) {
+  let rest = String(text || '');
+  let cut = 0;
+  for (let i = 0; i < 3; i++) {
+    const m = LEAD_IN.exec(rest);
+    // (the /i flag reads [A-Z] as any letter: a label joined by a bare space must meet a real capital, "Now you" is a
+    // sentence)
+    if (!m || (!/[:,.—–-]\s*$/.test(m[0]) && rest.length > m[0].length && !/^[A-Z0-9£$€"“‘']/.test(rest.slice(m[0].length)))) break;
+    cut += m[0].length;
+    rest = rest.slice(m[0].length);
+  }
+  return { cut, rest };
+}
+/** A sentence that is nothing but a label ("Around the world in 30 seconds."): never a clip's first. */
+const labelOnly = (text) => {
+  const { cut, rest } = leadLabel(text);
+  return cut > 0 && !/[\p{L}\p{N}]/u.test(rest);
+};
+/**
+ * Where a run starts once its sentence's opening label is left out: the first word after the label (its time from the
+ * recording's word marks; estimated within the sentence when there are none), or null when there is no label (or
+ * nothing after it: then the sentence is a label alone, never a first).
+ */
+function leadIn(seg, sentence) {
+  if (!sentence?.text) return null;
+  const { cut, rest } = leadLabel(sentence.text);
+  if (!cut || !/[\p{L}\p{N}]/u.test(rest)) return null;
+  const at = (sentence.from || 0) + cut;
+  const w = (seg.words || []).find((x) => x.from >= at);
+  if (w) return { from: w.from, start: w.at };
+  const len = Math.max(1, sentence.text.length);
+  const t0 = sentence.start ?? seg.start;
+  const t1 = sentence.end ?? seg.end;
+  return Number.isFinite(t0) && Number.isFinite(t1) ? { from: at, start: t0 + ((t1 - t0) * cut) / len } : null;
 }
 
 function score(m, { grave: g, board = false, light = true }) {
@@ -140,6 +186,7 @@ function makeMoment(episode, timeline, kind, from, to, extra = {}) {
     duration: +(run.end - run.start).toFixed(2),
     text: run.text,
     trimmed: run.trimmed,
+    leadIn: !!run.leadIn,
     keepStart: !!extra.keepStart,
     storyIds,
     sources,

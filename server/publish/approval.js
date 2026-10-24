@@ -71,6 +71,7 @@ export const RULE_ES = Object.freeze({
   'label-illegible': 'La etiqueta de recreación se vería demasiado pequeña.',
   'quote-cut': 'El clip corta una cita o una frase por la mitad.',
   'editorial-contact-missing': 'Falta el contacto editorial (EDITORIAL_CONTACT) en la configuración.',
+  packaging: 'Un título o las palabras de una portada no pasan la revisión del paquete (gancho engañoso, mayúsculas, algo que la noticia no dice, copia del titular del medio o demasiado largo). Cambia el título o deja que se rehaga.',
   'text-disclosure-missing': 'Falta el aviso de IA al principio del texto («AI-generated:» en una publicación, «AI-produced news» en el texto o la descripción de un vídeo), o el vídeo no lleva texto.',
   unmarked: 'El vídeo no lleva la firma de procedencia (C2PA).',
   'rights-missing': 'Falta el permiso de uso de una foto o un vídeo, o su permiso ya no lo cubre.',
@@ -148,7 +149,10 @@ export function itemView(it, { tz = 'Europe/London', now = Date.now() } = {}) {
     description: it.description || '',
     links: (it.links || []).map((l) => ({ label: l.label || l.outlet || l.url, url: l.url })).filter((l) => /^https?:\/\//.test(l.url || '')),
     duration: it.media?.duration || null,
-    has: { video: !!it.media?.video, thumb: !!it.media?.thumb, contact: !!it.media?.contact, captions: !!it.media?.captions },
+    has: { video: !!it.media?.video, thumb: !!it.media?.thumb, contact: !!it.media?.contact, captions: !!it.media?.captions, covers: Array.isArray(it.media?.thumbs) ? it.media.thumbs.length : 0 },
+    // the packaging (packaging.js, docs/publishing/thumbnails-titles.md): three titles, three covers with their words,
+    // the caption's hook; who wrote them (the AI writer, checked, or the deterministic writer)
+    pack: it.package ? { titles: (it.package.titles || []).slice(0, 3), thumbs: (it.package.thumbs || []).slice(0, 3), hook: it.package.hook || '', writer: it.package.writer || 'fallback' } : null,
     programme: it.source?.programId || null,
     score: it.score ?? null,
     compliance: { ok: it.compliance?.ok !== false, stub: !!it.compliance?.stub, recheck: !!it.compliance?.recheck && it.status === 'held', violations: (it.compliance?.violations || []).map((v) => ({ rule: v.rule, message: v.message, es: RULE_ES[v.rule] || null })), warnings: it.compliance?.warnings || [] },
@@ -159,7 +163,7 @@ export function itemView(it, { tz = 'Europe/London', now = Date.now() } = {}) {
     tiktok: it.platform === 'tiktok' ? tiktokView(it.tiktok) : null,
     grave: !!it.grave,
     // hand publishing (manual.js): what the owner downloads, copies and ticks, once the gate has passed it again
-    manual: it.manual?.ok ? { fresh: isPrepared(it, now), preparedAt: it.manual.preparedAt, fields: it.manual.fields || [], checklist: it.manual.checklist || [], files: { video: !!it.manual.files?.video, cover: !!it.manual.files?.cover }, devCert: !!it.manual.devCert } : null,
+    manual: it.manual?.ok ? { fresh: isPrepared(it, now), preparedAt: it.manual.preparedAt, fields: it.manual.fields || [], checklist: it.manual.checklist || [], files: { video: !!it.manual.files?.video, cover: !!it.manual.files?.cover, cover2: !!it.manual.files?.cover2, cover3: !!it.manual.files?.cover3 }, devCert: !!it.manual.devCert } : null,
     result: it.result ? { manual: !!it.result.manual, url: /^https:\/\//.test(String(it.result.url || '')) ? it.result.url : null, at: it.result.at || null, dryRun: !!it.result.dryRun } : null,
   };
 }
@@ -235,9 +239,11 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     };
   }
 
-  function media(res, req, id, kind) {
+  function media(res, req, id, kind, n = null) {
     const it = queue.get(id);
-    const file = it?.media?.[kind];
+    // a cover of the package (/media/<id>/cover/0..2): the media's thumbs, as images
+    const file = kind === 'cover' ? (Array.isArray(it?.media?.thumbs) ? it.media.thumbs[Number(n)] : null) : it?.media?.[kind];
+    if (kind === 'cover') kind = 'thumb';
     if (!file || !MEDIA[kind]) return send(res, 404, { error: 'no such media' });
     const ext = path.extname(file).toLowerCase();
     if (!MEDIA[kind].includes(ext) || !insideRoots(file, roots)) return send(res, 403, { error: 'not served' });
@@ -267,7 +273,7 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     const ext = file ? path.extname(file).toLowerCase() : '';
     if (!file || !(kind === 'video' ? MEDIA.video : MEDIA.thumb).includes(ext) || !insideRoots(file, roots)) return send(res, 404, { error: 'no such file' });
     const st = fs.statSync(file);
-    const name = `GLOBIT24-${it.platform}-${String(it.source?.programId || it.kind).replace(/[^a-z0-9-]+/gi, '')}-${it.id.slice(-12)}${kind === 'cover' ? '-portada' : ''}${ext}`;
+    const name = `GLOBIT24-${it.platform}-${String(it.source?.programId || it.kind).replace(/[^a-z0-9-]+/gi, '')}-${it.id.slice(-12)}${kind === 'cover' ? '-portada-A' : kind === 'cover2' ? '-portada-B' : kind === 'cover3' ? '-portada-C' : ''}${ext}`;
     res.writeHead(200, { 'content-type': TYPES[ext] || 'application/octet-stream', 'content-length': st.size, 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     fs.createReadStream(file).pipe(res);
     return null;
@@ -368,7 +374,9 @@ export function createApprovalServer({ queue, mediaRoots = [], dataDir = null, l
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, state());
     let m = /^\/media\/([a-z0-9-]{1,80})\/(video|thumb|contact|captions)$/i.exec(p);
     if (req.method === 'GET' && m) return media(res, req, m[1], m[2]);
-    m = /^\/download\/([a-z0-9-]{1,80})\/(video|cover)$/i.exec(p);
+    m = /^\/media\/([a-z0-9-]{1,80})\/cover\/([0-2])$/i.exec(p);
+    if (req.method === 'GET' && m) return media(res, req, m[1], 'cover', m[2]);
+    m = /^\/download\/([a-z0-9-]{1,80})\/(video|cover|cover2|cover3)$/i.exec(p);
     if (req.method === 'GET' && m) return download(res, m[1], m[2]);
     m = /^\/api\/(approve|reject|edit|tiktok|settings|schedule|prepare|published)$/.exec(p);
     if (req.method === 'POST' && m) return action(req, res, m[1]);
@@ -432,6 +440,12 @@ function page(token, nonce) {
   video { width: 100%; max-height: 420px; background: #000; border-radius: 6px; }
   .vertical video { width: 56%; }
   img.contact { width: 100%; border-radius: 4px; image-rendering: pixelated; cursor: zoom-in; }
+  .pack { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+  .covers { display: flex; gap: 6px; margin: 6px 0; }
+  .covers figure { margin: 0; flex: 1; }
+  .covers img { width: 100%; image-rendering: pixelated; border-radius: 4px; display: block; }
+  .covers.tall img { max-height: 260px; object-fit: contain; }
+  .covers figcaption { font-size: 11px; color: #8a8fa3; }
   .title { width: 100%; background: #0e1018; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; font-weight: 600; }
   textarea { width: 100%; min-height: 70px; background: #0e1018; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 14px; }
   .count { font-size: 12px; color: var(--dim); }
@@ -614,6 +628,7 @@ function card(i) {
     c.append(el('div', { class: 'media' }, v));
   }
   const title = el('input', { class: 'title', value: i.title, 'aria-label': 'Título' });
+  if (i.pack) c.append(packBox(i, title));
   c.append(el('label', { class: 'dim', text: 'Título' }), title, counter(title, i.titleMax));
   const text = el('textarea', { 'aria-label': 'Texto' });
   text.value = i.text;
@@ -657,6 +672,27 @@ function card(i) {
   c.append(el('div', { class: 'row' }, approve, all, reject, save));
   return c;
 }
+// the packaging (docs/publishing/thumbnails-titles.md): the three covers (A the story's picture, B the presenter, C the
+// words) and the three titles; "Usar" puts a title in the title box (saved with the card)
+const VARIANT_ES = ['A · la foto', 'B · el presentador', 'C · las palabras'];
+function packBox(i, titleInput) {
+  const box = el('div', { class: 'pack' });
+  const tc = i.kind === 'episode' && i.platform === 'youtube';
+  box.append(el('div', { class: 'dim', text: (i.format === 'vertical' ? 'Portadas' : 'Miniaturas') + ' y títulos' + (i.pack.writer === 'fallback' ? ' (redactor de reserva: sin IA)' : i.pack.writer === 'ai' ? ' (escritos por la IA y revisados)' : ' (IA y redactor de reserva, revisados)') }));
+  if (i.has.covers) {
+    const row = el('div', { class: 'covers' + (i.format === 'vertical' ? ' tall' : '') });
+    for (let n = 0; n < i.has.covers; n++) row.append(el('figure', {}, el('img', { src: '/media/' + i.id + '/cover/' + n, alt: 'Portada ' + VARIANT_ES[n], loading: 'lazy' }), el('figcaption', { text: VARIANT_ES[n] + (i.pack.thumbs[n] ? ': «' + i.pack.thumbs[n] + '»' : '') })));
+    box.append(row);
+  }
+  if (i.platform === 'youtube') {
+    i.pack.titles.forEach((t, n) => {
+      const use = el('button', { class: 'btn copy', text: 'Usar', onclick: () => { titleInput.value = t; titleInput.dispatchEvent(new Event('input')); } });
+      box.append(el('div', { class: 'row' }, el('b', { text: 'ABC'[n] }), el('span', { text: t }), use));
+    });
+    box.append(el('div', { class: 'dim', text: tc ? 'YouTube «Probar y comparar» (YouTube Studio en el ordenador) prueba hasta 3 títulos y miniaturas y se queda con la que más tiempo de visionado consigue: sube las tres.' : 'Un Short no admite «Probar y comparar»: elige un título y una portada (la portada de un Short se sube en YouTube Studio en el ordenador).' }));
+  } else if (i.pack.hook) box.append(el('div', { class: 'dim', text: 'Primera línea del texto: «AI-produced news: ' + i.pack.hook + '»' }));
+  return box;
+}
 function copyText(value) {
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
   const t = el('textarea');
@@ -693,7 +729,9 @@ function handBox(i) {
   if (m.files.video || m.files.cover) {
     box.append(el('div', { class: 'row' },
       m.files.video ? el('a', { class: 'btn approve', href: '/download/' + i.id + '/video', download: '', text: (step++) + '. Descargar ' + (i.format === 'vertical' ? 'el vídeo vertical' : 'el vídeo horizontal') }) : null,
-      m.files.cover ? el('a', { class: 'btn save', href: '/download/' + i.id + '/cover', download: '', text: 'Descargar la portada' }) : null));
+      m.files.cover ? el('a', { class: 'btn save', href: '/download/' + i.id + '/cover', download: '', text: m.files.cover2 ? 'Portada A' : 'Descargar la portada' }) : null,
+      m.files.cover2 ? el('a', { class: 'btn save', href: '/download/' + i.id + '/cover2', download: '', text: 'Portada B' }) : null,
+      m.files.cover3 ? el('a', { class: 'btn save', href: '/download/' + i.id + '/cover3', download: '', text: 'Portada C' }) : null));
   }
   box.append(el('div', { class: 'dim', text: (step++) + '. Copia y pega cada texto en ' + net + ':' }));
   for (const f of m.fields) {

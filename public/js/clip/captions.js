@@ -29,6 +29,9 @@ export const CLIP_CAPTION = Object.freeze({
 // a line never ends on one of these words when the next word can join it (the reader's eye expects the noun)
 const WEAK = new Set('A AN THE OF TO IN ON AT BY FOR FROM WITH AND OR BUT AS INTO ONTO OVER UNDER ITS HIS HER THEIR OUR YOUR MY NOT NO IS ARE WAS WERE BE HAS HAVE HAD THAT THIS THESE THOSE'.split(' '));
 const PUNCT_END = /[,;:.!?)"'’”]$/;
+// a running-order label at a sentence's head ("And finally:", "Our number of the day:") is a page of its own, so a
+// clip that starts on the news after it (server/publish/moments.js leadIn) never shows the label on its first frame
+const LABEL_HEAD = /^(?:and finally|finally|our number of the day(?: is)?|the number of the day(?: is)?|(?:now,? )?around the world(?: in \d+ seconds)?|in other news|(?:and )?now|meanwhile|next|also)\s*[:,—–-]\s*/i;
 const SPACE_1X = 4; // a word space at 1x in the body face (3 px space + 1 px letter gap)
 
 /** Words of a sentence with their character offsets: [{ w, at, end }]. */
@@ -52,6 +55,8 @@ export function pagesOf(text, maxW, scale = 2, perPage = 2) {
   const hit = PAGES.get(key);
   if (hit) return hit;
   const words = wordsOf(text);
+  const head = LABEL_HEAD.exec(String(text ?? ''));
+  const labelEnd = head ? head[0].trimEnd().length : -1;
   const width = (w) => measureText(w, scale);
   const sp = SPACE_1X * scale;
   const lines = [];
@@ -81,12 +86,20 @@ export function pagesOf(text, maxW, scale = 2, perPage = 2) {
     cur.push(wd);
     curW = cur.length === 1 ? ww : curW + sp + ww;
     // a phrase ends the line once the line is past half full (and more words follow)
-    if (PUNCT_END.test(wd.w) && /[,;:]$/.test(wd.w) && curW >= maxW * 0.5 && i < words.length - 1) flush();
+    if (labelEnd > 0 && wd.end === labelEnd && i < words.length - 1) {
+      flush();
+      lines[lines.length - 1].pageEnd = true;
+    } else if (PUNCT_END.test(wd.w) && /[,;:]$/.test(wd.w) && curW >= maxW * 0.5 && i < words.length - 1) flush();
   }
   flush();
   const pages = [];
-  for (let i = 0; i < lines.length; i += perPage) {
-    const ls = lines.slice(i, i + perPage).map((ws) => {
+  for (let i = 0; i < lines.length; ) {
+    // (a page holds `perPage` lines, or ends early on a label's own line)
+    let j = i;
+    while (j < lines.length && j - i < perPage && !(j > i && lines[j - 1].pageEnd)) j++;
+    const group = lines.slice(i, j);
+    i = j;
+    const ls = group.map((ws) => {
       const text = ws.map((x) => x.w).join(' ');
       let x = 0;
       const placed = ws.map((x0, k) => {

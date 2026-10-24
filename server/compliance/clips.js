@@ -66,6 +66,10 @@ export const IDENT_RULES = Object.freeze({
 });
 /** A first line that says what the item is: "AI-produced news: …" (a description, a caption), "AI-generated: …" (a post). */
 const TEXT_DISCLOSURE = /\bAI-(?:produced|generated)\b/i;
+/** …at the line's start (an emoji or a quotation mark before it at most). */
+const TEXT_FIRST = /^\W{0,3}AI-(?:produced|generated)\b/iu;
+/** What in it is AI: the presenters as characters, their voices (the caption's sentence, the description's opening). */
+const TEXT_WHAT = /\b(?:AI(?:-generated)?|animated) characters\b|\bwritten by (?:AI|the channel)/i;
 const sameParts = (a, b) => Array.isArray(a) && a.length === b.length && a.every((x, i) => String(x).trim().toUpperCase() === b[i]);
 
 /**
@@ -288,8 +292,13 @@ export function checkClip(clip = {}, opts = {}) {
         }
       }
     }
-    // the caption or the description: its first line says what the item is (what the platforms show before "more")
-    if (typeof clip.text === 'string' && clip.text.trim() && !TEXT_DISCLOSURE.test(clip.text.trim().split('\n')[0])) v('text-disclosure-missing', 'the caption or description opens with the AI disclosure ("AI-produced news: …", as disclosure.describe and clipmeta.js write it)');
+    // the caption or the description: its first line says what the item is (what the platforms show before "more"),
+    // and opens with it: the disclosure's words are the first a viewer reads, whatever follows them on the line
+    const lines = typeof clip.text === 'string' ? clip.text.trim().split('\n').filter((l) => l.trim()) : [];
+    if (lines.length && !(TEXT_DISCLOSURE.test(lines[0]) && TEXT_FIRST.test(lines[0]))) v('text-disclosure-missing', 'the caption or description opens with the AI disclosure ("AI-produced news: …", as disclosure.describe and clipmeta.js write it)');
+    // a clip's caption that opens "AI-produced news: <hook>" (since 23 Oct, compliance.md §2.10) carries the
+    // disclosure's whole sentence right under it: what is AI (the presenters, their voices) and where the facts are from
+    else if (lines.length && (kind === 'clip' || kind === 'short') && !TEXT_WHAT.test(lines[0]) && !TEXT_WHAT.test(lines.slice(1, 3).join(' '))) v('text-disclosure-missing', 'the caption opens with the AI disclosure\'s words and its hook, but the disclosure\'s sentence ("Presenters are AI characters with synthetic voices; every fact is from a credited source.") is not right under it');
   }
 
   // ---- the platforms' flags
