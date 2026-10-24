@@ -270,4 +270,11 @@ test('YouTube (a fake network): each upload joins its programme\'s playlist, mad
   assert.equal(r4.playlistId, undefined);
   assert.equal(calls.filter((c) => c.startsWith('PUT')).length, 4, 'one upload per item, never repeated for a playlist');
   assert.equal(playlistFor({ source: {} }), null, 'no programme: no playlist');
+  made.length = 0;
+  made.push('🌍 TECH BYTES');
+  const c = makeAdapter('youtube', { env: ENV, fetchImpl, dryRun: false });
+  failPlaylists = false;
+  const r5 = await c.publish({ ...ep, source: { programId: 'tech-bytes', programTitle: 'TECH BYTES' } });
+  assert.equal(r5.playlistId, 'PL0', 'the owner\'s own "🌍 TECH BYTES" is used, not a second one');
+  assert.deepEqual(made, ['🌍 TECH BYTES']);
 });

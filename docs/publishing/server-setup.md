@@ -276,27 +276,38 @@ No live stream; the owner publishes every piece himself from the approval page. 
 - `node tools/publish/beta.mjs estado` prints the day's offer at any time; `node tools/compliance/cli.mjs launch` the
   launch check (for the beta only `EDITORIAL_CONTACT` and a working C2PA SDK must be in place: `beta.md`).
 
-## 8. Autonomous publishing (the owner's word, 18 Oct: "que sea autónomo")
+## 8. Autonomous publishing (the owner's word, 18-19 Oct: "que sea autónomo"; "si no vamos a hacer directos haz que se vayan haciendo programas que se van a publicar")
 
-Every programme published, several a day, in playlists by type, no one at the desk; no live stream. On this server:
+No live stream, so only what will be published is made: five programmes a day, each a different one, each with its
+whole programme on YouTube (in its playlist) and its best clips (YouTube Shorts, TikTok). No one at the desk.
 
-- **The playout** (§4b's command, without the test switches: `PLAYOUT_VERBATIM` and `PLAYOUT_REVIEW` at their strict
-  defaults) under systemd with `EnvironmentFile=/etc/globit24.env`; its own output files rotate (the renderer's masters
-  are what is published, not the aired file).
-- **The round**: a systemd timer every 30 minutes runs `node tools/publish/auto.mjs` with the same environment and
-  `PUBLISH_LIVE=1` in that unit only. Each programme the playout rendered becomes its clips (vertical: YouTube Shorts,
-  TikTok) and its whole programme (YouTube), then the publisher's round sends what is due.
+- **Making** (`tools/publish/daily.mjs`, a systemd timer at 06, 09, 12, 15 and 18 London): one programme a run, the
+  next in turn of WORLD NOW, TECH BYTES, COSMOS DESK, MONEY MINUTE and FULL TIME (the type made least recently), fresh
+  from the live feeds through the channel's producer with the AI writer, the rights desk's pictures and the voices
+  (`server/publish/newsday.js`, as the beta makes its news); then `upload.mjs` (the whole programme) and `factory.mjs`
+  (its best three clips, vertical), both with the day's `--sources` and `--pictures`. A programme with too little news,
+  or one the offline writer wrote, is passed over for the next. About ten minutes a programme on this server.
+- **Publishing** (a systemd timer every 15 minutes: `tools/publish/run.mjs` with `PUBLISH_LIVE=1` in that unit only):
+  the re-check, the schedule, what is due.
 - **The settings** (`data/publish/settings.json`, written by hand, never by the page): `phase: 3`, `dryRun: false`,
-  `modes` `auto` for the networks with keys (the others `off`), `live` true for them. A grave story still waits for the
-  owner; a compliance refusal is still held; the daily caps and spacing are the phase's (`platforms.js`).
+  `modes` `auto` for the networks with keys (the others `off`), `live` true for them, and the owner's numbers:
+  `caps: { youtube: { uploads: 5, clips: 10 }, tiktok: { clips: 5 } }`, `spacingMinutes: { youtube: 50 }` (never past
+  a network's own daily limit: `queue.js` `capOf`). A grave story still waits for the owner; a compliance refusal is
+  still held.
 - **Playlists**: each upload joins its programme's ("WORLD NOW") or its Shorts' ("WORLD NOW · Shorts"), made public the
-  first time (`server/publish/adapters/youtube.js`).
+  first time; the owner's own ("🌍 WORLD NOW") counts as the same (`server/publish/adapters/youtube.js`).
 - **The AI writer's spend**: `AI_DAILY_TOKENS` in `/etc/globit24.env` (tokens a day, in + out): spent, Claude rests until
-  the next day and that day's news is not published (the offline writer's never is).
-- **What the networks allow before their audits**: YouTube keeps an unaudited project's uploads private; TikTok's inbox
-  route leaves each video as a draft in the owner's app (at most 5 pending a day). Ask for both audits.
-- **The station fix this needed**: the news refresh is timed on the real clock (`server/playout/clock.js` `realDue`):
-  on the air clock it never came due while the renderer waited, and the station waited for news that never came.
+  the next day. Five programmes a day use a fraction of the 24-hour channel's (it wrote about twenty a day, most never
+  published).
+- **Not published**: WORLD WEATHER (Open-Meteo's free data is non-commercial: the paid plan first).
+- **What the networks allow before their audits**: on the owner's channel YouTube published the first uploads public
+  (19 Oct); TikTok's inbox route leaves each video as a draft in the owner's app (at most 5 pending a day). Ask for
+  TikTok's audit before `TIKTOK_MODE=direct`.
+- **The pre-rendered playout** (§4b) is off; `tools/publish/auto.mjs` publishes from its masters when it runs again
+  (fresh pieces only, the programmes in turn, about a day of backlog: `server/publish/autoplan.js`).
+- **Fixes this needed**: the station's news refresh on the real clock (`server/playout/clock.js` `realDue`: on the air
+  clock it never came due while the renderer waited); a clip's end never inside the next sentence
+  (`server/publish/render.js` `clipWindow`: most clips were held as `sentence-cut`).
 
 ## 9. Packaging and attention: ready on pull (24 Oct)
 

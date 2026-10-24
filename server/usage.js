@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Per-provider, per-day call and token counters, persisted to data/usage.json. */
+/** Per-provider, per-day call and token counters, persisted to data/usage.json. Each call with tokens is also appended
+ * to data/usage-ledger.jsonl (with its model): the station and the daily programmes both write usage.json whole, each
+ * from its own copy, so only the ledger adds up across processes (tools/publish/budget-guard.mjs reads it). */
 export class UsageTracker {
   constructor(dataDir) {
     this.file = dataDir ? path.join(dataDir, 'usage.json') : null;
+    this.ledger = dataDir ? path.join(dataDir, 'usage-ledger.jsonl') : null;
     this.data = { days: {}, lastError: {} };
     if (this.file && fs.existsSync(this.file)) {
       try {
@@ -18,7 +21,14 @@ export class UsageTracker {
     }
   }
 
-  record(provider, { ok, ms = 0, input = 0, output = 0, cached = 0, error }) {
+  record(provider, { ok, ms = 0, input = 0, output = 0, cached = 0, cacheWrite = 0, model = null, error }) {
+    if (this.ledger && (input || output)) {
+      try {
+        fs.appendFileSync(this.ledger, JSON.stringify({ at: new Date().toISOString(), provider, model, input, output, cached, cacheWrite }) + '\n');
+      } catch {
+        /* non-fatal */
+      }
+    }
     const day = new Date().toISOString().slice(0, 10);
     const d = (this.data.days[day] ??= {});
     const p = (d[provider] ??= { calls: 0, errors: 0, input: 0, output: 0, cached: 0, ms: 0 });

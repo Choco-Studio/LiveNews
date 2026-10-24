@@ -22,11 +22,14 @@ import Anthropic from '@anthropic-ai/sdk';
 export const SYSTEM = 'You write scripts for a TV news channel. Always reply with a single valid JSON object and nothing else.';
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-const usageOf = (u = {}) => ({
+const usageOf = (u = {}, model) => ({
   // the whole prompt, whether it was read from the cache, written to it, or neither
   input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0),
   output: u.output_tokens || 0,
   cached: u.cache_read_input_tokens || 0,
+  // what the bill needs besides (tools/publish/budget-guard.mjs): the model and the cache writes
+  cacheWrite: u.cache_creation_input_tokens || 0,
+  model,
 });
 
 export function createAnthropicProvider(cfg, { client = null } = {}) {
@@ -51,7 +54,7 @@ export function createAnthropicProvider(cfg, { client = null } = {}) {
         const why = err?.name === 'TimeoutError' || err instanceof Anthropic.APIUserAbortError ? `no reply within ${Math.round(cfg.timeoutMs / 1000)} s` : err?.message || String(err);
         throw Object.assign(new Error(`anthropic${status ? ` HTTP ${status}` : ''}: ${why}`.slice(0, 300)), status ? { status } : {});
       }
-      const usage = usageOf(message.usage);
+      const usage = usageOf(message.usage, message.model || cfg.model);
       if (message.stop_reason === 'refusal') {
         const category = message.stop_details?.category;
         throw Object.assign(new Error(`anthropic declined the request${category ? ` (${category})` : ''}`), { code: 'REFUSAL', requestOnly: true, usage });
