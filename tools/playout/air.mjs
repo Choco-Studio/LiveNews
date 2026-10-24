@@ -16,6 +16,13 @@
 // playout beside the first, to its own stream key and its own live video's title:
 //   PUBLISH_LIVE=1 node tools/playout/air.mjs --dir data/playout/vertical --rtmp rtmp://a.rtmp.youtube.com/live2 \
 //     --key-env YOUTUBE_VERTICAL_STREAM_KEY --video-env YOUTUBE_VERTICAL_VIDEO_ID
+// Several destinations at once (§13.6: YouTube's dual format and TikTok LIVE), by name, the keys from the environment
+// (server/playout/destinations.js): one encode, a relay each, each reconnecting on its own:
+//   PUBLISH_LIVE=1 node tools/playout/air.mjs --to youtube
+//   PUBLISH_LIVE=1 node tools/playout/air.mjs --dir data/playout/vertical --to youtube-vertical,tiktok
+// SIGHUP loads the keys again from /etc/globit24.env (GLOBIT_ENV_FILE) and reconnects only the destinations whose
+// address changed (TikTok's keys can be temporary); SIGUSR2 (tools/publish/live-rotate.mjs) lets go of the YouTube
+// destinations for 75 s and leaves the others on air.
 //
 // The live video's title follows what is on air, truthfully (no LIVE: server/publish/live.js recorded titles), through
 // the live supervisor's rate limits, as a dry run unless every live switch is on (publisher rules, unchanged).
@@ -26,6 +33,8 @@ import { fileURLToPath } from 'node:url';
 import { PlayoutStore, planAir, PLAYOUT_DEFAULTS, samplesOf, endOf } from '../../server/playout/queue.js';
 import { airVideoArgs, scaleFilter, AIR_DEFAULTS, airSize, parseCrf } from '../../server/playout/encode.js';
 import { canvasFor } from '../../server/airsize.js';
+import { parseDestinations, relayArgs, redact, envFile, orientationProblems } from '../../server/playout/destinations.js';
+import { TsPackets, TsTables, joinAt } from '../../server/playout/ts.js';
 import { LiveSupervisor } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
@@ -40,33 +49,32 @@ const opt = (name, def = null) => {
 };
 const DIR = path.resolve(opt('dir', process.env.PLAYOUT_DIR || path.join(root, 'data', 'playout')));
 const out = opt('out');
-const rtmp = opt('rtmp');
+// (the destinations by name, --to, or one by hand, --rtmp <server> --key-env <VAR>: tests may stream to plain files)
+const parsed = parseDestinations(args, process.env, { allowFiles: process.env.AIR_TEST_FILE_DEST === '1' });
+let dests = parsed.list;
+const streaming = dests.length > 0;
 const SEGMENT = Number(opt('segment', 0));
 const FOR = Number(opt('for', 0));
 const FPS = AIR_DEFAULTS.fps;
 const RATE = AIR_DEFAULTS.audioRate;
-if (!out && !rtmp) {
-  console.error('usage: node tools/playout/air.mjs (--out <file> [--segment <s>] | --rtmp <server> --key-env <VAR>) [--dir data/playout] [--for s]');
+if (parsed.errors.length) {
+  for (const e of parsed.errors) console.error(e);
+  process.exit(1);
+}
+if (!out && !streaming) {
+  console.error('usage: node tools/playout/air.mjs (--out <file> [--segment <s>] | --to youtube[,youtube-vertical,tiktok] | --rtmp <server> --key-env <VAR>) [--dir data/playout] [--for s]');
   process.exit(1);
 }
 // the beta (PUBLISH_MODE=manual) has no live stream, as tools/publish/live.mjs: a test into files only
-if (rtmp && isManual()) {
+if (streaming && isManual()) {
   console.error('refused: PUBLISH_MODE=manual (the beta, published by hand) has no live stream (docs/publishing/beta.md). A test into files (--out) is allowed.');
   process.exit(1);
 }
-if (rtmp && process.env.PUBLISH_LIVE !== '1') {
+if (streaming && process.env.PUBLISH_LIVE !== '1') {
   console.error('refused: streaming to a server needs PUBLISH_LIVE=1 (docs/publishing/setup.md §8). Test with --out first.');
   process.exit(1);
 }
-let target = out ? path.resolve(out) : null;
-if (rtmp) {
-  const key = process.env[opt('key-env', 'YOUTUBE_STREAM_KEY')];
-  if (!key) {
-    console.error(`the stream key is read from an environment variable: --key-env <VAR> and ${opt('key-env', 'YOUTUBE_STREAM_KEY')} set`);
-    process.exit(1);
-  }
-  target = `${String(rtmp).replace(/\/$/, '')}/${key}`;
-}
+const target = out ? path.resolve(out) : null;
 const store = new PlayoutStore(DIR);
 const say = (m) => console.log(`[air ${new Date().toISOString().slice(11, 19)}] ${m}`);
 const frameMs = 1000 / FPS;
@@ -75,7 +83,7 @@ const frameMs = 1000 / FPS;
 
 const pq = new PublishQueue({ dir: path.join(root, 'data', 'publish') });
 const s = pq.settings();
-const live = !!rtmp && !isManual() && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
+const live = streaming && !isManual() && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
 // (the vertical live's own video and outbox: --video-env names the variable holding its video id)
 const VIDEO_ENV = opt('video-env', 'YOUTUBE_LIVE_VIDEO_ID');
 const TAG = VIDEO_ENV === 'YOUTUBE_LIVE_VIDEO_ID' ? '' : `-${VIDEO_ENV.toLowerCase().replace(/^youtube_|_video_id$/g, '').replace(/[^a-z0-9]+/g, '-')}`;
@@ -137,11 +145,90 @@ function fillerAudio(frames, { fadeIn = false, fadeOut = false } = {}) {
 // ---------------------------------------------------------------- the one ffmpeg
 
 let run = 0;
+// ---------------------------------------------------------------- the destinations (one relay each)
+
+// The encoder writes MPEG-TS (its tables repeated, the H.264 headers before every keyframe) and every destination gets
+// a copy through its own relay (server/playout/destinations.js relayArgs): a destination that drops, refuses its key
+// or falls behind is reconnected alone, with a growing pause between quick failures, and the others never notice. A
+// relay joins the stream at the next keyframe with the stream's tables in front of it (server/playout/ts.js): its first
+// picture is a whole one.
+const RELAY_BACKOFF = [2, 5, 15, 30, 60];
+const RELAY_BUFFER = 8 << 20; // bytes waiting for one relay (about 15 s at 4 Mbit/s) before it counts as stuck
+const relays = new Map();
+let packets = new TsPackets();
+let tables = new TsTables();
+function startRelay(dest) {
+  const r = relays.get(dest.name) || { restarts: 0, fails: 0, holdUntil: 0, timer: null };
+  r.dest = dest;
+  r.gone = false;
+  const p = spawn('ffmpeg', relayArgs(dest), { stdio: ['pipe', 'ignore', 'pipe'] });
+  r.p = p;
+  r.alive = true;
+  r.joined = false;
+  r.startedAt = Date.now();
+  p.stdin.on('error', () => {});
+  p.stderr.on('data', (d) => {
+    const line = String(d).trim();
+    if (line) say(`relay ${dest.name}: ${redact(line, dests).slice(0, 300)}`);
+  });
+  p.on('exit', (code, signal) => {
+    r.alive = false;
+    if (stopping || r.gone) return;
+    // (asked for, a new key or a new encoder: again at once; a failure: a growing pause between quick ones; a hold: when
+    // it ends)
+    const quick = Date.now() - r.startedAt < 60_000;
+    if (!r.now) r.fails = quick ? r.fails + 1 : 0;
+    const wait = Math.max(r.now ? 500 : RELAY_BACKOFF[Math.min(r.fails, RELAY_BACKOFF.length - 1)] * 1000, r.holdUntil - Date.now());
+    r.now = false;
+    store.event('relay-down', { destination: dest.name, code, signal, restartIn: Math.round(wait / 1000) });
+    say(`relay ${dest.name} ended (${code ?? signal}); again in ${Math.round(wait / 1000)} s`);
+    clearTimeout(r.timer);
+    r.timer = setTimeout(() => {
+      if (stopping || r.gone) return;
+      r.restarts++;
+      startRelay(r.dest);
+    }, wait);
+  });
+  relays.set(dest.name, r);
+  say(`relay ${dest.name} → ${dest.shown}`);
+  return r;
+}
+/** Reconnect a destination now (a new key, a new encoder): its relay ends and starts again at once. */
+function reconnect(r) {
+  r.fails = 0;
+  r.now = true;
+  if (r.alive) r.p.kill('SIGKILL');
+}
+function fanOut(chunk) {
+  const whole = packets.push(chunk);
+  if (!whole.length) return;
+  tables.see(whole);
+  for (const r of relays.values()) {
+    if (!r.alive) continue;
+    let buf = whole;
+    if (!r.joined) {
+      // (from the next keyframe, the PAT and the PMT in front of it)
+      const at = joinAt(whole);
+      const head = tables.prefix();
+      if (at < 0 || !head) continue;
+      buf = Buffer.concat([head, whole.subarray(at)]);
+      r.joined = true;
+    }
+    if (r.p.stdin.writableLength > RELAY_BUFFER) {
+      say(`relay ${r.dest.name}: ${(r.p.stdin.writableLength / 1048576).toFixed(0)} MB behind; reconnecting`);
+      store.event('relay-behind', { destination: r.dest.name });
+      r.p.kill('SIGKILL');
+      continue;
+    }
+    r.p.stdin.write(buf);
+  }
+}
+
 let air = null;
 function startAir() {
   run++;
   const outArgs = [];
-  if (rtmp) outArgs.push('-f', 'flv', target);
+  if (streaming) outArgs.push('-f', 'mpegts', '-mpegts_flags', '+resend_headers', 'pipe:1');
   else {
     const file = target.replace('{n}', String(run));
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -150,18 +237,31 @@ function startAir() {
     if (SEGMENT > 0) outArgs.push('-f', 'segment', '-segment_time', String(SEGMENT), '-segment_format', fmt, '-reset_timestamps', '1', ...(fmt === 'mp4' ? ['-segment_format_options', 'movflags=+frag_keyframe+empty_moov'] : []), file);
     else outArgs.push(...(fmt === 'mp4' ? ['-movflags', '+frag_keyframe+empty_moov'] : []), '-f', fmt, file);
   }
+  // (the video input probed from its first 32 kB, not 5 MB: the encoder reads the sound only once the video is probed,
+  // and a short filler at a small size never reached 5 MB before the sound's pipe filled: both sides waited for ever)
   const argv = ['-hide_banner', '-loglevel', 'warning', '-y',
-    '-re', '-thread_queue_size', '256', '-fflags', '+genpts', '-f', 'h264', '-framerate', String(FPS), '-i', 'pipe:0',
+    '-re', '-thread_queue_size', '256', '-fflags', '+genpts', '-probesize', '32768', '-analyzeduration', '0', '-f', 'h264', '-framerate', String(FPS), '-i', 'pipe:0',
     '-re', '-thread_queue_size', '256', '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', 'pipe:3',
     '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', AIR_DEFAULTS.audioBitrate, '-ar', String(RATE), '-ac', '2',
     ...outArgs];
-  const p = spawn('ffmpeg', argv, { stdio: ['pipe', 'ignore', 'pipe', 'pipe'] });
+  const p = spawn('ffmpeg', argv, { stdio: ['pipe', streaming ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
   let err = '';
   p.stderr.on('data', (d) => {
     err = (err + d).slice(-2000);
     const line = String(d).trim();
-    if (line && !/Guessed Channel Layout/.test(line)) say(`ffmpeg: ${line.replace(target, rtmp ? `${rtmp}/<key>` : target).slice(0, 300)}`);
+    if (line && !/Guessed Channel Layout/.test(line)) say(`ffmpeg: ${redact(line, dests).slice(0, 300)}`);
   });
+  if (streaming) {
+    // a new encoder is a new stream (its clock from zero): every destination joins it afresh
+    packets = new TsPackets();
+    tables = new TsTables();
+    p.stdout.on('data', fanOut);
+    for (const d of dests) {
+      const r = relays.get(d.name);
+      if (!r) startRelay(d);
+      else reconnect(r);
+    }
+  }
   p.stdin.on('error', () => {});
   p.stdio[3].on('error', () => {});
   air = { p, v: p.stdin, a: p.stdio[3], dead: false, err };
@@ -169,7 +269,7 @@ function startAir() {
     air.dead = true;
     say(`ffmpeg ended (${code})`);
   });
-  say(`→ ${rtmp ? `${rtmp}/<key>` : target.replace('{n}', String(run))}${SEGMENT ? ` in ${SEGMENT} s files` : ''}`);
+  say(`→ ${streaming ? dests.map((d) => d.shown).join(' + ') : target.replace('{n}', String(run))}${SEGMENT ? ` in ${SEGMENT} s files` : ''}`);
   return air;
 }
 
@@ -220,16 +320,69 @@ const started = Date.now();
 let stopping = false;
 process.on('SIGINT', () => (stopping = true));
 process.on('SIGTERM', () => (stopping = true));
-// SIGUSR2: let go of the RTMP connection for a while (tools/publish/live-rotate.mjs: YouTube starts a new broadcast
-// only after the encoder has been disconnected for about a minute); the schedule is joined again afterwards
+// SIGUSR2: let go of the YouTube connections for a while (tools/publish/live-rotate.mjs: YouTube starts a new broadcast
+// only after the encoder has been disconnected for about a minute); the other destinations stay on air, and the
+// schedule runs on (the YouTube relays join it again when the hold ends)
 const HOLD_MS = Number(process.env.AIR_HOLD_MS) || 75_000;
 let holdUntil = 0;
 process.on('SIGUSR2', () => {
+  const held = [...relays.values()].filter((r) => r.dest.platform === 'youtube');
+  if (!held.length) return say('hold asked: no YouTube destination here; nothing let go');
   holdUntil = Date.now() + HOLD_MS;
-  say(`hold: disconnecting for ${HOLD_MS / 1000} s`);
-  store.event('air-hold', { at: new Date().toISOString(), seconds: HOLD_MS / 1000 });
-  air?.p.kill('SIGKILL');
+  say(`hold: ${held.map((r) => r.dest.name).join(', ')} disconnected for ${HOLD_MS / 1000} s`);
+  store.event('air-hold', { at: new Date().toISOString(), seconds: HOLD_MS / 1000, destinations: held.map((r) => r.dest.name) });
+  for (const r of held) {
+    r.holdUntil = holdUntil;
+    if (r.alive) r.p.kill('SIGKILL');
+  }
 });
+// SIGHUP: the keys again (the settings file, as systemd gave it at the start: TikTok's keys can be temporary); only a
+// destination whose address changed is reconnected, one no longer asked for is closed (never a key in the log)
+const ENV_FILE = process.env.GLOBIT_ENV_FILE || '/etc/globit24.env';
+process.on('SIGHUP', () => {
+  let file = {};
+  try {
+    file = envFile(fs.readFileSync(ENV_FILE, 'utf8'));
+  } catch (err) {
+    return say(`reload: ${ENV_FILE} not readable (${err.code || err.message}); keys unchanged`);
+  }
+  const next = parseDestinations(args, { ...process.env, ...file }, { allowFiles: process.env.AIR_TEST_FILE_DEST === '1' });
+  if (next.errors.length) return say(`reload refused, keys unchanged: ${next.errors.join(' · ')}`);
+  Object.assign(process.env, file);
+  const changed = [];
+  for (const d of next.list) {
+    const r = relays.get(d.name);
+    if (!r) {
+      startRelay(d);
+      changed.push(d.name);
+    } else if (r.dest.url !== d.url) {
+      r.dest = d;
+      reconnect(r);
+      changed.push(d.name);
+    }
+  }
+  for (const [name, r] of relays) {
+    if (next.list.some((d) => d.name === name)) continue;
+    r.gone = true;
+    clearTimeout(r.timer);
+    if (r.alive) r.p.kill('SIGKILL');
+    relays.delete(name);
+    changed.push(`${name} (closed)`);
+  }
+  dests = next.list;
+  say(`reload: ${changed.length ? `reconnected ${changed.join(', ')}` : 'nothing changed'}`);
+  store.event('air-reload', { changed });
+});
+// (a vertical destination on the horizontal playout, or the other way round, is refused before anything airs; the
+// size from what is queued or aired, else the renderer's status for this queue, else unknown: not checked)
+if (streaming) {
+  const q = store.queued()[0] || store.airedList().at(-1);
+  const problems = orientationProblems(dests, q?.size || opt('size') || store.readStatus('render')?.size || null);
+  if (problems.length) {
+    for (const p of problems) console.error(`refused: ${p}`);
+    process.exit(1);
+  }
+}
 const stats = { segments: 0, fillerSeconds: 0, underruns: 0, underrunSeconds: 0, gaps: 0, dropped: 0, restarts: 0 };
 let underrunSince = null;
 let onAir = null;
@@ -237,24 +390,26 @@ startAir();
 // the playhead: the air time of the next frame written (the stream's time since it started, from a whole second)
 let playhead = Math.ceil(Date.now() / 1000) * 1000;
 say(`playout from ${new Date(playhead).toISOString()} · ${DIR}`);
-store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: rtmp ? null : target, segment: SEGMENT || null });
+store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: streaming ? null : target, destinations: dests.map((d) => d.name), segment: SEGMENT || null });
 
+const relayStatus = () => [...relays.values()].map((r) => ({ name: r.dest.name, platform: r.dest.platform, up: !!r.alive, restarts: r.restarts, holding: r.holdUntil > Date.now() }));
 function status() {
-  store.status('air', { pid: process.pid, canHold: true, holding: holdUntil > Date.now(), run, onAir, playhead: new Date(playhead).toISOString(), ahead: +((playhead - Date.now()) / 1000).toFixed(1), queued: store.queued().length, bufferMinutes: +(store.queued().reduce((n, q) => n + Math.max(0, endOf(q) - Math.max(q.airAt, Date.now())), 0) / 60000).toFixed(1), stats, out: rtmp ? `${rtmp}/<key>` : target, live, title: titles.title });
+  store.status('air', { pid: process.pid, canHold: true, holding: holdUntil > Date.now(), run, onAir, playhead: new Date(playhead).toISOString(), ahead: +((playhead - Date.now()) / 1000).toFixed(1), queued: store.queued().length, bufferMinutes: +(store.queued().reduce((n, q) => n + Math.max(0, endOf(q) - Math.max(q.airAt, Date.now())), 0) / 60000).toFixed(1), stats, out: streaming ? dests.map((d) => d.shown) : target, destinations: relayStatus(), live, title: titles.title });
 }
 
 while (!stopping) {
   if (FOR > 0 && Date.now() - started > FOR * 1000) break;
   if (air.dead) {
-    // a dead encoder (an RTMP drop): a new one from now on; what should have aired meanwhile is skipped, the schedule
-    // is joined again at the next programme's time
+    // a dead encoder (a file it could not write, or the encoder's own failure: the destinations drop and reconnect in
+    // their relays): a new one from now on; what should have aired meanwhile is skipped, the schedule is joined again
+    // at the next programme's time
     stats.restarts++;
     store.event('air-restart', { run, at: new Date().toISOString() });
-    await new Promise((r) => setTimeout(r, Math.max(2000, holdUntil - Date.now())));
+    await new Promise((r) => setTimeout(r, 2000));
     if (stopping) break;
     startAir();
     playhead = Math.ceil(Date.now() / 1000) * 1000;
-    store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: rtmp ? null : target, segment: SEGMENT || null });
+    store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: streaming ? null : target, destinations: dests.map((d) => d.name), segment: SEGMENT || null });
   }
   const step = planAir(store.queued(), playhead, { fps: FPS });
   if (step.type === 'drop') {
@@ -330,6 +485,7 @@ while (!stopping) {
   playhead += seg.frames * frameMs;
 }
 status();
+stopping = true; // (the relays end with the encoder, none starts again)
 try {
   air.v.end();
   air.a.end();
@@ -337,5 +493,22 @@ try {
   /* gone */
 }
 await new Promise((r) => (air.dead ? r() : air.p.once('exit', r)));
+// the relays: what the encoder sent them, then their own end
+await Promise.all(
+  [...relays.values()].map(
+    (r) =>
+      new Promise((done) => {
+        clearTimeout(r.timer);
+        if (!r.alive) return done();
+        r.p.once('exit', done);
+        try {
+          r.p.stdin.end();
+        } catch {
+          r.p.kill('SIGKILL');
+        }
+        setTimeout(() => r.alive && r.p.kill('SIGKILL'), 10_000).unref();
+      }),
+  ),
+);
 say(`stopped: ${stats.segments} files aired, ${stats.fillerSeconds.toFixed(0)} s of filler, ${stats.underruns} underruns, ${stats.dropped} dropped`);
 process.exit(0);

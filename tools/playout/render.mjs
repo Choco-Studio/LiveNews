@@ -10,14 +10,15 @@
 //
 //   node tools/playout/render.mjs --station http://127.0.0.1:8790 [--dir data/playout] [--buffer 60] [--size 1920x1080]
 //        [--bitrate 5500k] [--crf 20|off] [--start-lead 900] [--no-twin] [--capture png|raw] [--for <s>]
-//        [--vertical [--vertical-size 1080x1920]]
+//        [--vertical [--vertical-size 1080x1920] [--vertical-bitrate 4000k]]
 //
 // --vertical (PLAYOUT_VERTICAL=1): the vertical live too (docs/publishing/playout.md §13). The same frames give a third
 // picture, the 216x384 vertical one (public/js/clip/vertical.js and vchannel.js, the clean frame's spots at 2x in its
 // window: server/playout/encode.js renderGraph), encoded at the vertical size with the air's settings and queued with
 // the same sound and the same times in <dir>/vertical/, where a second playout (air.mjs --dir <dir>/vertical) streams
 // it to the vertical stream; the programme's vertical master goes beside its horizontal one (masters/<id>/vertical.mkv),
-// so the clip factory cuts its vertical clips from it and records nothing.
+// so the clip factory cuts its vertical clips from it and records nothing. Its rate is capped lower than the horizontal
+// one's (4000k: TikTok LIVE's recommended ceiling, and the same stream goes to YouTube's dual format: §13.6).
 //
 // Every programme's twin picture is drawn from the same frames: the publishing desk's clip-mode master (384x216,
 // lossless, the factory's own format) with its report and the episode, in <dir>/masters/<episode id>/ as the rendered-
@@ -62,11 +63,12 @@ const SEED = Number(opt('seed', 1)) || 1;
 const VERTICAL = flag('vertical') || /^(1|true|yes|on)$/i.test(String(process.env.PLAYOUT_VERTICAL || ''));
 const VSIZE = VERTICAL ? airSize(opt('vertical-size', process.env.PLAYOUT_VERTICAL_SIZE || '1080x1920'), (m) => console.log(`[render] WARNING: ${m}`)) : null;
 if (VSIZE && !(Number(VSIZE.split('x')[1]) > Number(VSIZE.split('x')[0]))) throw new Error(`the vertical size is portrait (e.g. 1080x1920), not ${VSIZE}`);
+const VBITRATE = opt('vertical-bitrate', process.env.PLAYOUT_VERTICAL_BITRATE || '4000k');
 const gateOpts = { ...gateOptionsFromEnv(), ...(opt('verbatim') ? { verbatim: opt('verbatim') === 'warn' ? 'warn' : 'block' } : {}) };
 const diskPolicy = diskPolicyFromEnv();
 const CRF = parseCrf(opt('crf', process.env.PLAYOUT_CRF));
 airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }); // (throws on a bad size, bitrate, crf or preset before anything starts)
-if (VSIZE) airVideoArgs({ size: VSIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET });
+if (VSIZE) airVideoArgs({ size: VSIZE, bitrate: VBITRATE, crf: CRF, fps: FPS, preset: PRESET });
 const GRAPH = renderGraph({ size: SIZE, twin: TWIN, vertical: VSIZE });
 
 const store = new PlayoutStore(DIR);
@@ -368,7 +370,7 @@ async function renderItem(item, airAt, hold, slot, vhold = null) {
       '-v', 'error', '-y', ...input, '-filter_complex', GRAPH.graph,
       '-map', '[air]', ...airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', airVideo,
       ...(TWIN ? ['-map', '[m]', ...lossless(masterVideo)] : []),
-      ...(VSIZE ? ['-map', '[vair]', ...airVideoArgs({ size: VSIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', vairVideo, '-map', '[vm]', ...lossless(vmasterVideo)] : []),
+      ...(VSIZE ? ['-map', '[vair]', ...airVideoArgs({ size: VSIZE, bitrate: VBITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', vairVideo, '-map', '[vm]', ...lossless(vmasterVideo)] : []),
     ], { input: true });
 
     let stepped = 0;
@@ -557,7 +559,7 @@ function status(extra = {}) {
   const ahead = frontier ? (frontier - real()) / 1000 : 0;
   const st = { pid: process.pid, frontier: frontier ? new Date(frontier).toISOString() : null, bufferMinutes: +(ahead / 60).toFixed(1), targetMinutes: TARGET / 60, speed: +speed.speed.toFixed(3), units, held: heldUnits, late: lateUnits, size: SIZE, bitrate: BITRATE, crf: CRF, twin: TWIN, vertical: VSIZE, gate: gateOpts, ...extra };
   store.status('render', st);
-  vstore?.status('render', { ...st, size: VSIZE, follows: DIR });
+  vstore?.status('render', { ...st, size: VSIZE, bitrate: VBITRATE, follows: DIR });
 }
 
 function cleanDisk() {
@@ -666,7 +668,7 @@ function queueUnit(unit, gate) {
     }
     store.enqueue(seg);
     // the vertical live airs the same unit at the same times (its own playout, its own queue)
-    if (vstore && r.vfile) vstore.enqueue({ ...seg, file: r.vfile, size: VSIZE, master: undefined });
+    if (vstore && r.vfile) vstore.enqueue({ ...seg, file: r.vfile, size: VSIZE, bitrate: VBITRATE, master: undefined });
   }
   store.event('queued', { unit: unit.id, airAt: new Date(unit.airAt).toISOString(), end: new Date(unit.end).toISOString(), segments: unit.segments.map((s) => s.title) });
 }
@@ -680,7 +682,7 @@ function holdUnit(unit, gate) {
   say(`  HELD ${unit.segments.at(-1)?.title}: ${violations.map((v) => `${v.rule}: ${v.message}`).join(' | ').slice(0, 400)}`);
 }
 
-say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${CRF === null ? BITRATE : `crf ${CRF} up to ${BITRATE}`} · twin ${TWIN ? 'on' : 'off'} · vertical ${VSIZE || 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
+say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${CRF === null ? BITRATE : `crf ${CRF} up to ${BITRATE}`} · twin ${TWIN ? 'on' : 'off'} · vertical ${VSIZE ? `${VSIZE} up to ${VBITRATE}` : 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
 while (!stopping) {
   if (FOR > 0 && real() - started > FOR * 1000) break;
   cleanDisk();

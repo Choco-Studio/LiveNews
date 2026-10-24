@@ -146,13 +146,30 @@ async function waitForBreak() {
   say('no break in 15 minutes; rotating anyway');
 }
 
-/** Have the playout drop its RTMP connection for 75 s (air.mjs, SIGUSR2), so YouTube auto starts the bound block. */
+/**
+ * Have the playout drop its YouTube connection for 75 s (air.mjs, SIGUSR2), so YouTube auto starts the bound block;
+ * with YouTube's dual format the vertical playout's YouTube feed too (data/playout/vertical: the same broadcast, both
+ * its feeds off together as when one encoder stops). Any other destination of either playout (TikTok) stays on air
+ * (air.mjs holds only its YouTube relays).
+ */
 function holdEncoder() {
   const st = JSON.parse(fs.readFileSync(path.join(root, 'data', 'playout', 'air-status.json'), 'utf8'));
   // (an air.mjs without the handler would be killed by the signal)
   if (!st.canHold || !st.pid) throw new Error('the playout on air cannot hold (deploy, then restart globit24-live)');
   process.kill(st.pid, 'SIGUSR2');
   say(`encoder off for 75 s (air.mjs ${st.pid})`);
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(root, 'data', 'playout', 'vertical', 'air-status.json'), 'utf8'));
+    const fresh = Date.now() - Date.parse(v.at || 0) < 20 * 60_000; // (its status is written at every item it airs)
+    // (only the dual format's vertical feed, `youtube-vertical`: a vertical live of its own, --vertical-rtmp, is another
+    // broadcast with no block bound to follow it, and letting go of it would end it)
+    if (fresh && v.canHold && v.pid && (v.destinations || []).some((d) => d.name === 'youtube-vertical')) {
+      process.kill(v.pid, 'SIGUSR2');
+      say(`the vertical feed off for 75 s too (air.mjs ${v.pid}; its other destinations stay on air)`);
+    }
+  } catch {
+    /* no vertical playout */
+  }
 }
 /** Any other broadcast waiting on our stream could take the auto start from `keep`, so it goes: the ready
  * "Emisión en directo de …" YouTube Studio makes after each end, or a block left by a rotation cut short. */

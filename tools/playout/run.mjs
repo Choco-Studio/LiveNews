@@ -7,16 +7,27 @@
 //   PORT=8790 VOICE_ENGINE=kokoro node tools/playout/run.mjs --out data/playout/air/air-%03d.ts --segment 3600 \
 //        [--buffer 60] [--size 1920x1080] [--bitrate 5500k] [--crf 20] [--for <s>]
 //        [--vertical (--vertical-out <file> | --vertical-rtmp <server> [--vertical-key-env YOUTUBE_VERTICAL_STREAM_KEY]
-//         [--vertical-video-env YOUTUBE_VERTICAL_VIDEO_ID]) [--vertical-size 1080x1920]]
+//         | --vertical-to youtube-vertical[,tiktok]) [--vertical-video-env YOUTUBE_VERTICAL_VIDEO_ID]
+//         [--vertical-size 1080x1920] [--vertical-bitrate 4000k]]
+//
+// On air with the destinations by name (docs/publishing/playout.md §13.6: YouTube's dual format and TikTok LIVE at
+// once, the keys in /etc/globit24.env), the horizontal stream and the vertical one each to its own:
+//   PUBLISH_LIVE=1 node tools/playout/run.mjs --to youtube --vertical --vertical-to youtube-vertical,tiktok
 //
 // --vertical: the vertical live too (docs/publishing/playout.md §13): the renderer draws it from the same frames into
 // <dir>/vertical and a fourth process, a second playout, airs it to its own file or stream.
 //
+// SIGHUP (systemctl reload): the keys again from /etc/globit24.env (GLOBIT_ENV_FILE), kept for a playout started again
+// later and passed on to the playouts, which reconnect only the destinations whose key changed (TikTok's keys can be
+// temporary); the station and the renderer go on untouched.
+//
 // Everything after the known options is passed to the playout (air.mjs). Logs: one line per event, each prefixed with
 // the process it came from; the playout's state is in data/playout/*-status.json and events.jsonl.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { envFile } from '../../server/playout/destinations.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -27,21 +38,22 @@ const opt = (name, def = null) => {
 const port = Number(process.env.PORT || 8790);
 const station = `http://127.0.0.1:${port}`;
 const pass = (names) => names.flatMap((n) => (opt(n) !== null ? [`--${n}`, opt(n)] : []));
-const airArgs = [...pass(['out', 'segment', 'rtmp', 'key-env', 'dir']), ...(opt('for') ? ['--for', opt('for')] : [])];
+const airArgs = [...pass(['out', 'segment', 'rtmp', 'key-env', 'to', 'dir']), ...(opt('for') ? ['--for', opt('for')] : [])];
 const VERTICAL = args.includes('--vertical');
-const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'crf', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(VERTICAL ? ['--vertical', ...pass(['vertical-size'])] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
-if (!opt('out') && !opt('rtmp')) {
-  console.error('usage: node tools/playout/run.mjs --out <file> [--segment s] | --rtmp <server> --key-env <VAR>  [--buffer 60] [--for s] [--vertical --vertical-out <file> | --vertical-rtmp <server>]');
+const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'crf', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(VERTICAL ? ['--vertical', ...pass(['vertical-size', 'vertical-bitrate'])] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
+if (!opt('out') && !opt('rtmp') && !opt('to')) {
+  console.error('usage: node tools/playout/run.mjs --out <file> [--segment s] | --to youtube | --rtmp <server> --key-env <VAR>  [--buffer 60] [--for s] [--vertical --vertical-out <file> | --vertical-to youtube-vertical,tiktok | --vertical-rtmp <server>]');
   process.exit(1);
 }
-if (VERTICAL && !opt('vertical-out') && !opt('vertical-rtmp')) {
-  console.error('--vertical needs where the vertical live goes: --vertical-out <file> or --vertical-rtmp <server> (its key in --vertical-key-env, YOUTUBE_VERTICAL_STREAM_KEY by default)');
+if (VERTICAL && !opt('vertical-out') && !opt('vertical-rtmp') && !opt('vertical-to')) {
+  console.error('--vertical needs where the vertical live goes: --vertical-out <file>, --vertical-to youtube-vertical,tiktok, or --vertical-rtmp <server> (its key in --vertical-key-env, YOUTUBE_VERTICAL_STREAM_KEY by default)');
   process.exit(1);
 }
 const vairArgs = [
   '--dir', path.join(path.resolve(opt('dir') || path.join(root, 'data', 'playout')), 'vertical'),
   ...(opt('vertical-out') ? ['--out', opt('vertical-out')] : []),
   ...(opt('vertical-rtmp') ? ['--rtmp', opt('vertical-rtmp'), '--key-env', opt('vertical-key-env', 'YOUTUBE_VERTICAL_STREAM_KEY')] : []),
+  ...(opt('vertical-to') ? ['--to', opt('vertical-to')] : []),
   '--video-env', opt('vertical-video-env', 'YOUTUBE_VERTICAL_VIDEO_ID'),
   ...pass(['segment']),
   ...(opt('for') ? ['--for', opt('for')] : []),
@@ -123,6 +135,20 @@ function stop() {
 }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
+const ENV_FILE = process.env.GLOBIT_ENV_FILE || '/etc/globit24.env';
+process.on('SIGHUP', () => {
+  try {
+    Object.assign(process.env, envFile(fs.readFileSync(ENV_FILE, 'utf8')));
+  } catch (err) {
+    say('run', `reload: ${ENV_FILE} not readable (${err.code || err.message}); the playouts keep their keys`);
+    return;
+  }
+  for (const name of ['air', 'vair']) {
+    if (!procs[name]?.child) continue;
+    say(name, 'reload: the keys again');
+    procs[name].child.kill('SIGHUP');
+  }
+});
 
 start('station');
 start('air'); // (filler until the first programme is ready: never black)

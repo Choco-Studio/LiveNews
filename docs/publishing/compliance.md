@@ -37,7 +37,7 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 | YouTube altered or synthetic content | Set on the broadcast (§2.5) | `status.containsSyntheticMedia = true` | Same, for Shorts | n/a |
 | YouTube audience ("made for kids", COPPA) | `status.selfDeclaredMadeForKids = false` on the broadcast | Same, on every video | Same, for Shorts | n/a |
 | YouTube inauthentic and reused content (monetisation) | Applies to the channel | Applies | Applies | n/a |
-| TikTok AI-generated content label | n/a | n/a | `post_info.is_aigc = true` | n/a |
+| TikTok AI-generated content label | TikTok LIVE (ready, not on air): the ident on the stream, the AI in the title the owner types (§2.6) | n/a | `post_info.is_aigc = true` | n/a |
 | Meta AI info label | n/a | Facebook: label set by hand plus C2PA | Instagram `is_ai_generated = true`. Facebook and Threads: by hand on every video, plus C2PA | Threads: prefix |
 | X synthetic and manipulated media | n/a | n/a | Labelled on the end card and in text | Prefix. Automated-account label |
 | Election rule (§5.4) | Recreations held. Silence on air is not needed (news is allowed) | Held and silence | Held and silence | Silence |
@@ -189,6 +189,15 @@ Written 17 October 2026 for the owner, the publishing team and the lawyer who wi
 - Creators must label realistic AI-generated content, and TikTok "is starting to automatically label AIGC when it's uploaded from certain other platforms" using C2PA Content Credentials ([TikTok newsroom, 9 May 2024](https://newsroom.tiktok.com/en-us/partnering-with-our-industry-to-advance-ai-transparency-and-literacy)).
 - The guidelines bar fake authoritative sources or crisis events and public figures shown in certain contexts, such as endorsements, even when labelled ([Integrity and authenticity](https://www.tiktok.com/community-guidelines/en/integrity-authenticity)). That page renders only in a browser, so its wording was checked through secondary summaries: re-read before launch.
 - In the API it is `post_info.is_aigc` ([Content Posting API](https://developers.tiktok.com/docs/en/content-posting-api-reference-direct-post)). **We set it on every video.**
+- **TikTok LIVE** (ready, not on air: `playout.md` §13.6). A LIVE has no API: its title, typed by the owner in LIVE
+  Center, says the channel is AI-made, and the ident before every programme is on the stream as everywhere. TikTok
+  Shop's LIVE quality rules (US, from June 2026) ban "non-real-time verbal interaction such as AI-generated voices,
+  audio recordings, or radio" ([Social Media Today](https://www.socialmediatoday.com/news/tiktok-bans-ai-generated-voices-in-shopping-livestreams/822977/),
+  [PPC Land](https://ppc.land/tiktok-shops-quality-rules-ban-ai-voices-and-still-images-from-lives/); TikTok's own
+  page not read). We sell nothing on a LIVE, so the rule does not bind us as written. But it shows how TikTok treats a
+  LIVE made ahead with AI voices. TikTok's general LIVE rules were not read first-hand (the pages render only in a
+  browser). The risk is the owner's to weigh: fewer viewers, a LIVE refused, the account restricted. Re-read before the
+  first LIVE.
 
 ### 2.7 Meta (Instagram, Facebook, Threads)
 

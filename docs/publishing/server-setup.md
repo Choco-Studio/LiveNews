@@ -335,11 +335,32 @@ the horizontal one (no second writer, no second set of voices).
    data/test24/vertical/air-%03d.ts`. Look at a programme, a break (the spots whole in their window) and the ident (the
    AI notice) in the vertical files; check `data/playout/render-status.json` keeps its buffer.
 2. **The machine:** both streams together need about 2.7 cores for the renderer alone, plus the voices (playout.md
-   §13.4): **4 cores at the least, 6 to keep the hour's buffer**, and about 1,500 GB of traffic a month for the two.
+   §13.4): **4 cores at the least, 6 to keep the hour's buffer**, and about 1,500 GB of traffic a month for the two
+   (about 2,200 GB with TikTok too, and 25 Mbit/s of upload at the least: playout.md §13.6).
    Check `nproc` first; on a smaller machine tell the owner, plainly, that the vertical needs a bigger plan.
-3. **On air, only when the owner says so:** a second live stream in YouTube Studio (vertical, 1080x1920, its own stream
-   key). The owner types the key on their own screen into `/etc/globit24.env` as `YOUTUBE_VERTICAL_STREAM_KEY=…`
-   (and the live video's id as `YOUTUBE_VERTICAL_VIDEO_ID=…` for its title), `chmod 600`. Never in a chat, a log or a
-   commit. Then the playout's unit gets `--vertical --vertical-rtmp rtmp://a.rtmp.youtube.com/live2` (§13.3).
-4. **Report to the owner** in Spanish, plainly: the buffer over a day with both on, any filler, and how the vertical
-   stream looks on a phone.
+3. **On air, only when the owner says so** (playout.md §13.6: YouTube's dual format and TikTok LIVE at once). The
+   owner does the platform steps and types every key on their own screen into `/etc/globit24.env` (`chmod 600`).
+   Never in a chat, a log or a commit; never `cat` the file.
+   - **YouTube, dual format:** YouTube Studio > Go live > Live Control Room > Stream, **Dual stream** on, then Encoder:
+     YouTube gives a second stream key for the vertical feed. In the file: `YOUTUBE_STREAM_KEY=…` (as now) and
+     `YOUTUBE_VERTICAL_STREAM_KEY=…`. Leave `YOUTUBE_VERTICAL_VIDEO_ID` out (one broadcast, one title). If the channel
+     has no Dual stream option yet (YouTube is rolling it out), say so to the owner and leave YouTube's vertical out.
+   - **TikTok LIVE:** in TikTok LIVE Center (LIVE Studio, or the web on an eligible account), the server URL and the
+     stream key: `TIKTOK_RTMP_URL=…` and `TIKTOK_STREAM_KEY=…`. Its LIVE title, written there by the owner, says the
+     channel is AI-made (`compliance.md` §2.6). Before this, tell the owner the risk in Spanish (playout.md §13.6
+     point 3: TikTok may limit or refuse a LIVE with AI voices made ahead).
+   - **The unit** (`globit24-live`): `ExecStart=` with `node tools/playout/run.mjs --to youtube --vertical
+     --vertical-to youtube-vertical,tiktok` plus the options it has now, and `PUBLISH_LIVE=1`, as now; add
+     `ExecReload=/bin/kill -HUP $MAINPID` (node started directly or through `nice`, never through a shell, so that
+     `$MAINPID` is `run.mjs`), then `systemctl daemon-reload`. Check that ffmpeg speaks RTMPS:
+     `ffmpeg -hide_banner -protocols | grep rtmps`. Without TikTok: `--vertical-to youtube-vertical`. Without YouTube's
+     vertical: `--vertical-to tiktok`.
+   - **A new TikTok key** (it may change from one LIVE to the next): the owner puts it in the file, then
+     `systemctl reload globit24-live`. Only TikTok reconnects (about a second). YouTube does not notice. The log
+     says `reload: reconnected tiktok`.
+   - **Watch the first day:** `data/playout/air-status.json` and `data/playout/vertical/air-status.json`, under
+     `destinations`, show each one `up` and its `restarts`. The first block rotation shows whether YouTube's vertical
+     feed follows into the new block (Live Control Room). If it does not, tell the owner the three choices in
+     playout.md §13.6 point 2.
+4. **Report to the owner** in Spanish, plainly: the buffer over a day with both on, any filler, each destination's
+   restarts, and how the vertical stream looks on a phone (YouTube's vertical feed and TikTok).

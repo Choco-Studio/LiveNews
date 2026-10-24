@@ -669,17 +669,25 @@ PORT=8790 VOICE_ENGINE=kokoro node tools/playout/run.mjs --out data/playout/air/
   --vertical --vertical-out data/playout/vertical/air/air-%03d.ts
 ```
 
-On air (only on the owner's word; the keys in `/etc/globit24.env`, never in a chat or a commit):
+On air (only on the owner's word; the keys in `/etc/globit24.env`, never in a chat or a commit), the destinations by
+name (§13.6): YouTube's dual format (the horizontal and the vertical feed of one broadcast) and TikTok LIVE at once:
 
 ```
-PUBLISH_LIVE=1 node tools/playout/run.mjs --rtmp rtmp://a.rtmp.youtube.com/live2 --key-env YOUTUBE_STREAM_KEY \
-  --vertical --vertical-rtmp rtmp://a.rtmp.youtube.com/live2 \
+PUBLISH_LIVE=1 node tools/playout/run.mjs --to youtube --vertical --vertical-to youtube-vertical,tiktok
+```
+
+Or a vertical live of its own on YouTube (a second broadcast, its own key and title; not rotated in blocks, §13.6):
+
+```
+PUBLISH_LIVE=1 node tools/playout/run.mjs --to youtube \
+  --vertical --vertical-rtmp rtmps://a.rtmps.youtube.com:443/live2 \
   --vertical-key-env YOUTUBE_VERTICAL_STREAM_KEY --vertical-video-env YOUTUBE_VERTICAL_VIDEO_ID
 ```
 
 Or the parts by hand: `render.mjs --vertical` (or `PLAYOUT_VERTICAL=1`; `--vertical-size 1080x1920` by default, a
-portrait whole multiple of 216x384), and `air.mjs --dir data/playout/vertical --rtmp … --key-env
-YOUTUBE_VERTICAL_STREAM_KEY --video-env YOUTUBE_VERTICAL_VIDEO_ID`.
+portrait whole multiple of 216x384; `--vertical-bitrate 4000k` by default), and `air.mjs --dir data/playout/vertical
+--to youtube-vertical,tiktok` (or `--rtmp … --key-env YOUTUBE_VERTICAL_STREAM_KEY --video-env
+YOUTUBE_VERTICAL_VIDEO_ID`).
 
 ### 13.4 What it costs
 
@@ -712,7 +720,84 @@ NEWS IN 60 rendered both ways from a playback server; CPU seconds per second of 
 - The vertical live runs on the pre-rendered playout only. A live capture of the page (`tools/stream.mjs` with
   `?format=vertical`) gives the clip's vertical picture, without the channel's moments set for the frame.
 - A spot's pixel in the window is 2x2 against 5x5 for everything else: square and even, finer.
-- The vertical title band names the programme, not the story (a clip's hook is the factory's).
-- The platforms: a vertical stream on YouTube is a second live stream on the channel with its own key (set up in
-  YouTube Studio, vertical, 1080x1920); TikTok LIVE gives a stream key only to eligible accounts; Instagram streams
-  from software only for professional accounts. Each platform's AI label and rules apply as for the clips (`compliance.md`).
+- The platforms: YouTube takes the vertical stream as the second feed of its dual format, or as a live of its own;
+  TikTok LIVE gives a stream key only to eligible accounts; Instagram streams from software only for professional
+  accounts. Each platform's AI label and rules apply as for the clips (`compliance.md`); what is known and unknown of
+  YouTube's dual format and TikTok LIVE is in §13.6.
+
+### 13.6 Several destinations at once: YouTube's dual format and TikTok LIVE (24 Oct)
+
+The owner, 24 Oct: "prepáralo para que pueda hacer directo en modo dual en YouTube y en TikTok a la vez … deja los
+protocolos y todo lo de dentro preparado". Ready on pull; nothing streams until the owner says so and has put the keys
+in place (`server-setup.md` §10).
+
+**Where each picture goes** (`server/playout/destinations.js`), by name, with `--to` on a playout (`run.mjs`: `--to`
+for the horizontal one, `--vertical-to` for the vertical one):
+
+| `--to` | Picture | Server | Key |
+|---|---|---|---|
+| `youtube` | horizontal, 1920x1080 | YouTube's RTMPS ingest, `rtmps://a.rtmps.youtube.com:443/live2` (`YOUTUBE_RTMP_URL` to change it) | `YOUTUBE_STREAM_KEY` |
+| `youtube-vertical` | vertical, 1080x1920 | the same | `YOUTUBE_VERTICAL_STREAM_KEY`: the dual format's second key (Live Control Room > Stream > Dual stream > Encoder) |
+| `tiktok` | vertical, 1080x1920 | `TIKTOK_RTMP_URL`: the server URL TikTok LIVE Center shows the account | `TIKTOK_STREAM_KEY` |
+
+One more by hand: `--rtmp <server> --key-env <VAR>` (RTMP, RTMPS or SRT; its picture's shape not checked).
+
+**How** (`tools/playout/air.mjs`, `server/playout/ts.js`):
+
+- **One encode a picture, a relay a destination.** The renderer encodes each picture once (§13.2). Each playout's
+  ffmpeg writes the stream as MPEG-TS to the playout, and the playout copies it to one relay per destination: an ffmpeg
+  that copies the stream untouched into FLV for RTMP(S) (TS as it is for SRT). Nothing is encoded again, so no
+  destination loses any quality and a relay costs under 1 % of a core (measured: 0.36 CPU-s for 60 s of the vertical
+  stream; RTMPS's encryption adds a little).
+- **Each destination on its own.** A destination that drops, refuses its key or falls more than 8 MB behind is
+  reconnected alone, after 2, 5, 15, 30 then 60 s between quick failures; the others never notice. A relay that joins
+  (or joins again) is fed from the next keyframe (every 2 s) with the stream's tables in front of it, so its first
+  picture is a whole one (tested: no undecodable frame on a join).
+- **The picture's shape is checked before anything airs**: TikTok and `youtube-vertical` on the horizontal playout, or
+  `youtube` on the vertical one, are refused, named.
+- **The rotation in blocks** (`tools/publish/live-rotate.mjs`, three YouTube blocks a day, 23 Oct): the 75 s hold
+  (SIGUSR2) lets go of the YouTube destinations only. TikTok stays on air through YouTube's rotation. With the dual
+  format, the vertical playout's `youtube-vertical` feed is let go of together with the horizontal one (one broadcast,
+  both its feeds off together, as when one encoder stops). A vertical live of its own (`--vertical-rtmp`) is never held:
+  no block is bound to follow it, and letting go of it would end it.
+- **New keys without stopping** (TikTok's keys can be temporary): the owner puts the new key in
+  `/etc/globit24.env`, then `systemctl reload globit24-live` (its unit: `ExecReload=/bin/kill -HUP $MAINPID`).
+  `run.mjs` reads the file again (for a playout started again later too) and passes the signal to both playouts; only a
+  destination whose address changed reconnects (about 1 s, tested). A file with a missing key is refused, and the keys
+  on air are kept.
+- **The keys** come from the environment only, never from the command line given to `run.mjs` or `air.mjs`. Every log
+  line, status and event shows `<key>` (tested). The relay's own ffmpeg is given the full address, as the playout's
+  encoder was before: the server's own users can see it in `ps`, nobody else.
+- **The titles.** In the dual format, the broadcast is one: its title follows what is on air from the horizontal
+  playout (`YOUTUBE_LIVE_VIDEO_ID`). Leave `YOUTUBE_VERTICAL_VIDEO_ID` unset: the vertical playout then plans no
+  change it could send. TikTok has no API for a LIVE's title: the owner writes it in LIVE Center, and it says the
+  channel is AI-made (`compliance.md` §2.6).
+- **What a viewer gets**: H.264 high, a keyframe every 2 s, no B-frames, 30 fps; AAC 160k at 48 kHz. The horizontal
+  stream is capped at 5500k. The vertical one is capped at 4000k (`--vertical-bitrate`), the top of what the TikTok
+  guides recommend (2,500–4,000k at 1080x1920, a keyframe every 2 s) and plenty for YouTube's vertical feed. The guides
+  list 44.1 kHz audio for TikTok. The stream sends 48 kHz, OBS's default, which TikTok takes: check it on the first
+  test.
+
+**State**: `data/playout/air-status.json` and `data/playout/vertical/air-status.json` carry `destinations` (each one's
+name, platform, up, restarts, holding); `events.jsonl` has `relay-down`, `relay-behind`, `air-hold` and `air-reload`.
+
+**Traffic**: each destination is a copy of its stream. YouTube horizontal, YouTube vertical and TikTok together are
+about 2,200 GB a month of upload (about 750 GB each, §12.2), up to 14 Mbit/s at the caps: ask for 25 Mbit/s of upload
+at the least.
+
+**Not known yet** (no key here, nothing tested against the platforms; say it to the owner plainly):
+
+1. **YouTube's dual format** reached encoders such as ours on 20 Aug 2026, rolled out channel by channel: the channel
+   may not have it yet (the Dual stream option in Live Control Room). One write-up says the vertical feed cannot be
+   added once a broadcast has started.
+2. **Dual format and the blocks.** `live-rotate.mjs` makes each new block through the API, and the API's documentation
+   has no call for the vertical feed (a broadcast takes one stream). The vertical feed may not follow into the next
+   block. Watch the first rotation in Live Control Room. If the feed does not follow, the owner chooses: one broadcast
+   with no rotation (YouTube keeps only its last 12 hours), the vertical on TikTok only, or a vertical live of its own.
+3. **TikTok LIVE and this channel.** TikTok Shop's LIVE rules (US, from June 2026) ban "non-real-time verbal
+   interaction such as AI-generated voices, audio recordings, or radio", as reported in the trade press. Our LIVE has
+   AI voices and is made ahead: on TikTok it may be shown to fewer people, refused or the account restricted. TikTok's
+   own general LIVE rules were not read first-hand (the pages render only in a browser). The owner decides with that
+   risk in view. The code takes TikTok off with `--vertical-to youtube-vertical`, and nothing else changes.
+4. **TikTok's key.** LIVE Center gives a server URL and a key only to eligible accounts (adults; the follower minimum
+   is unofficial, about 1,000), and the key may change from one LIVE to the next: the reload above.
