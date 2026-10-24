@@ -210,6 +210,16 @@ const started = Date.now();
 let stopping = false;
 process.on('SIGINT', () => (stopping = true));
 process.on('SIGTERM', () => (stopping = true));
+// SIGUSR2: let go of the RTMP connection for a while (tools/publish/live-rotate.mjs: YouTube starts a new broadcast
+// only after the encoder has been disconnected for about a minute); the schedule is joined again afterwards
+const HOLD_MS = Number(process.env.AIR_HOLD_MS) || 75_000;
+let holdUntil = 0;
+process.on('SIGUSR2', () => {
+  holdUntil = Date.now() + HOLD_MS;
+  say(`hold: disconnecting for ${HOLD_MS / 1000} s`);
+  store.event('air-hold', { at: new Date().toISOString(), seconds: HOLD_MS / 1000 });
+  air?.p.kill('SIGKILL');
+});
 const stats = { segments: 0, fillerSeconds: 0, underruns: 0, underrunSeconds: 0, gaps: 0, dropped: 0, restarts: 0 };
 let underrunSince = null;
 let onAir = null;
@@ -220,7 +230,7 @@ say(`playout from ${new Date(playhead).toISOString()} · ${DIR}`);
 store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: rtmp ? null : target, segment: SEGMENT || null });
 
 function status() {
-  store.status('air', { pid: process.pid, run, onAir, playhead: new Date(playhead).toISOString(), ahead: +((playhead - Date.now()) / 1000).toFixed(1), queued: store.queued().length, bufferMinutes: +(store.queued().reduce((n, q) => n + Math.max(0, endOf(q) - Math.max(q.airAt, Date.now())), 0) / 60000).toFixed(1), stats, out: rtmp ? `${rtmp}/<key>` : target, live, title: titles.title });
+  store.status('air', { pid: process.pid, canHold: true, holding: holdUntil > Date.now(), run, onAir, playhead: new Date(playhead).toISOString(), ahead: +((playhead - Date.now()) / 1000).toFixed(1), queued: store.queued().length, bufferMinutes: +(store.queued().reduce((n, q) => n + Math.max(0, endOf(q) - Math.max(q.airAt, Date.now())), 0) / 60000).toFixed(1), stats, out: rtmp ? `${rtmp}/<key>` : target, live, title: titles.title });
 }
 
 while (!stopping) {
@@ -230,7 +240,8 @@ while (!stopping) {
     // is joined again at the next programme's time
     stats.restarts++;
     store.event('air-restart', { run, at: new Date().toISOString() });
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, Math.max(2000, holdUntil - Date.now())));
+    if (stopping) break;
     startAir();
     playhead = Math.ceil(Date.now() / 1000) * 1000;
     store.event('air-start', { run, playhead: new Date(playhead).toISOString(), out: rtmp ? null : target, segment: SEGMENT || null });

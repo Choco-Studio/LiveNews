@@ -72,9 +72,9 @@ describe('Claude provider', () => {
   test('usage: the whole prompt as input (cache reads and writes included), the output, and what came from the cache', async () => {
     const client = fakeClient(() => message({ usage: { input_tokens: 100, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 45 } }));
     const { usage } = await createAnthropicProvider(CFG, { client }).generate({ prompt: 'p' });
-    assert.deepEqual(usage, { input: 150, output: 45, cached: 30 });
+    assert.deepEqual(usage, { input: 150, output: 45, cached: 30, cacheWrite: 20, model: 'the-model' });
     const bare = await createAnthropicProvider(CFG, { client: fakeClient(() => message({ usage: undefined, content: [] })) }).generate({ prompt: 'p' });
-    assert.deepEqual(bare, { text: '', usage: { input: 0, output: 0, cached: 0 } });
+    assert.deepEqual(bare, { text: '', usage: { input: 0, output: 0, cached: 0, cacheWrite: 0, model: 'the-model' } });
   });
 
   test('a declined request is that request\'s fault: an error with its category and its cost, marked requestOnly', async () => {
@@ -83,7 +83,7 @@ describe('Claude provider', () => {
       assert.equal(err.code, 'REFUSAL');
       assert.equal(err.requestOnly, true);
       assert.match(err.message, /declined.*general_harms/);
-      assert.deepEqual(err.usage, { input: 120, output: 45, cached: 0 });
+      assert.deepEqual(err.usage, { input: 120, output: 45, cached: 0, cacheWrite: 0, model: 'the-model' });
       return true;
     });
   });
@@ -162,7 +162,7 @@ describe('Claude provider with the real SDK', () => {
     const { server, seen, url } = await serve((req, res) => sse(res, streamed('{"title":"Hello"}')));
     try {
       const out = await withBaseUrl(url, () => createAnthropicProvider({ ...CFG, effort: 'medium' }).generate({ prompt: 'write it' }));
-      assert.deepEqual(out, { text: '{"title":"Hello"}', usage: { input: 80, output: 33, cached: 0 } });
+      assert.deepEqual(out, { text: '{"title":"Hello"}', usage: { input: 80, output: 33, cached: 0, cacheWrite: 0, model: 'the-model' } });
       assert.equal(seen.length, 1);
       assert.equal(seen[0].url, '/v1/messages');
       assert.equal(seen[0].headers['x-api-key'], 'k');
@@ -226,7 +226,7 @@ describe('Claude in the provider chain', () => {
     assert.equal((await chain.generate({ prompt: 'p' }, JSON.parse)).provider, 'backup');
     assert.equal(chain.status()[0].cooldownUntil, null, 'no pause for the next story');
     assert.equal(chain.status()[0].failures, 0);
-    assert.deepEqual(usage.records[0], { name: 'anthropic', ok: false, ms: 0, error: 'anthropic declined the request', input: 120, output: 45, cached: 0 });
+    assert.deepEqual(usage.records[0], { name: 'anthropic', ok: false, ms: 0, error: 'anthropic declined the request', input: 120, output: 45, cached: 0, cacheWrite: 0, model: 'the-model' });
 
     assert.equal((await chain.generate({ prompt: 'q' }, JSON.parse)).provider, 'anthropic', 'the next story goes to Claude again');
   });
