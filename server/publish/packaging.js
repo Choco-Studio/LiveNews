@@ -346,6 +346,8 @@ function concreteFaults(t, facts) {
   const T = norm(t).toUpperCase().replace(/[.!]+$/, '');
   const faults = [];
   if (LABELS.test(T)) return [`a label, not what happened ("${T}")`];
+  // a date alone says when, not what
+  if (/^(?:\d{1,2}\s+)?(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[A-Z]*(?:\s+\d{1,2})?$/.test(T)) return [`a date, not what happened ("${T}")`];
   if (quotedInFacts(t, facts)) faults.push('a quotation or nickname out of its context');
   const digits = /\d/.test(T);
   // a figure alone ("£1.6BN") says nothing of what it is, and beside a person's picture reads as theirs: name the thing
@@ -476,11 +478,24 @@ function labelPhrase(facts) {
   return k || (p ? `News from ${p}` : '');
 }
 
+// (a figure that ends on a weak word reads as a fragment: "6 ALL YOU")
+const FRAGMENT_END = /\b(?:ALL|YOU|YOUR|THE|OF|TO|A|AN|AND|OR|FOR|IN|ON|AT|WITH|IS|ARE|WAS|IT|ITS)$/;
+const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The story's figures that are figures: a small number right after a name is part of the name (GTA 6, iPhone 17). */
+function realFigures(facts, n) {
+  const aired = String(facts.aired || '');
+  return extractFigures(aired, n).filter((f) => {
+    const v = String(f.value).trim();
+    return !(/^\d{1,2}$/.test(v) && new RegExp(`(?:\\b[A-Z]{2,}|\\b\\p{Lu}\\p{Ll}+)\\s+${escapeRe(v)}\\b`, 'u').test(aired));
+  });
+}
+/** A subject that can stand big: not a suffix or initials cut from a name (JR, SR). */
+const bigSubject = (facts) => (facts.subject && facts.subject.replace(/[^\p{L}]/gu, '').length >= 3 ? facts.subject.toUpperCase() : '');
 function figureWords(facts, max = 14) {
-  for (const f of extractFigures(facts.aired, 4)) {
+  for (const f of realFigures(facts, 4)) {
     const v = norm(f.fact).toUpperCase();
-    if (chars(v) <= max && f.label) return v;
-    if (chars(f.value) <= max) return norm(f.value).toUpperCase();
+    if (chars(v) <= max && f.label && !FRAGMENT_END.test(v)) return v;
+    if (chars(f.value) <= max && /\D/.test(f.value)) return norm(f.value).toUpperCase();
   }
   return '';
 }
@@ -524,8 +539,8 @@ function genericThumbs(facts) {
   // (a quiz's aired lines hold its answers: nothing of them on a cover)
   if (facts.quiz || facts.quizShow) return out;
   // (a figure with its noun before the bare figure: MORE THAN 40 PEOPLE tells more than 40)
-  const figs = extractFigures(facts.aired, 6);
-  for (const f of figs) add(norm(f.fact).toUpperCase());
+  const figs = realFigures(facts, 6);
+  for (const f of figs) if (!FRAGMENT_END.test(norm(f.fact).toUpperCase())) add(norm(f.fact).toUpperCase());
   for (const f of figs) add(norm(f.value).toUpperCase());
   // the names the story's first words give, as they are written (two or three capitalised words: CHANNEL TUNNEL)
   // (a quiz's words never come from its aired lines: they can hold the answer)
@@ -533,7 +548,7 @@ function genericThumbs(facts) {
     for (const m of String(s).matchAll(/(?<=\S\s+)\p{Lu}[\p{L}\d’'-]+(?:\s+\p{Lu}[\p{L}\d’'-]+){0,2}/gu)) add(m[0].toUpperCase().replace(/[’']S$/, ''));
   }
   if (facts.place) add(placeName(facts.place).toUpperCase());
-  if (facts.subject) add(facts.subject.toUpperCase());
+  add(bigSubject(facts));
   // (never the outlet's name: who reported it is not what happened)
   const outlets = new Set([facts.outlet, ...(facts.credits || [])].filter((o) => typeof o === 'string').flatMap((o) => flat(o)));
   for (let i = out.length - 1; i >= 0; i--) if (!/\d/.test(out[i]) && flat(out[i]).some((w) => outlets.has(w))) out.splice(i, 1);
@@ -603,7 +618,7 @@ export function fallbackPackage(facts) {
       `${prog}: the story${secs ? ` in ${secs} seconds` : ''}`,
     ];
     const kick = facts.label.split(' · ')[0] || '';
-    thumbs = [fig, place ? place.toUpperCase() : '', kick && place ? `${kick} IN ${place}`.toUpperCase() : '', facts.subject ? facts.subject.toUpperCase() : ''];
+    thumbs = [fig, place ? place.toUpperCase() : '', kick && place ? `${kick} IN ${place}`.toUpperCase() : '', bigSubject(facts)];
     hook = s ? `${s}.` : lab ? `${lab}: what the reports say.` : `The story from ${prog}.`;
     lead = `${s ? `${s}.` : lab ? `${lab}.` : ''}${facts.outlet ? ` Reporting: ${facts.outlet}.` : ''}`.trim() || `From ${prog} on GLOBIT 24.`;
   }

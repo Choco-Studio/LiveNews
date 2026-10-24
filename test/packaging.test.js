@@ -378,6 +378,13 @@ describe('the big words tell a stranger what happened (the coordinator\'s round)
     for (const t of ['19 INJURED', 'KENYA', 'NAIROBI CONTACTS', 'MORE THAN 40 TRACED']) assert.deepEqual(checkThumb(t, { ...f(), aired: `${f().aired} 19 injured.` }, {}), [], t);
   });
 
+  test('the deterministic writer never sets a fragment big: a number inside a name is no figure, a date alone no news', () => {
+    const f = { ...facts(), grave: false, aired: 'GTA 6 - all you need to know about the new trailer from Rockstar.', subject: 'Jr' };
+    const pack = fallbackPackage(f);
+    assert.ok(!pack.thumbs.some((t) => /^6 ALL|^JR$/.test(t)), pack.thumbs.join(' / '));
+    assert.ok(checkThumb('17 OCT', facts(), {}).some((x) => /a date/.test(x)));
+  });
+
   test('a title leads with its topic: never a filler first (the first two words are what a scanning eye reads)', () => {
     const f = { ...facts(), grave: false };
     for (const t of ["Here's what NASA plans for its low flights over Texas", 'There is a new GTA 6 trailer from Rockstar today', 'So, Tesla says its Roadster can now fly']) assert.ok(checkTitle(t, f).some((x) => /filler/.test(x)), t);
