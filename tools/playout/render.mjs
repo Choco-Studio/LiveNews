@@ -10,6 +10,14 @@
 //
 //   node tools/playout/render.mjs --station http://127.0.0.1:8790 [--dir data/playout] [--buffer 60] [--size 1920x1080]
 //        [--bitrate 5500k] [--crf 20|off] [--start-lead 900] [--no-twin] [--capture png|raw] [--for <s>]
+//        [--vertical [--vertical-size 1080x1920]]
+//
+// --vertical (PLAYOUT_VERTICAL=1): the vertical live too (docs/publishing/playout.md §13). The same frames give a third
+// picture, the 216x384 vertical one (public/js/clip/vertical.js and vchannel.js, the clean frame's spots at 2x in its
+// window: server/playout/encode.js renderGraph), encoded at the vertical size with the air's settings and queued with
+// the same sound and the same times in <dir>/vertical/, where a second playout (air.mjs --dir <dir>/vertical) streams
+// it to the vertical stream; the programme's vertical master goes beside its horizontal one (masters/<id>/vertical.mkv),
+// so the clip factory cuts its vertical clips from it and records nothing.
 //
 // Every programme's twin picture is drawn from the same frames: the publishing desk's clip-mode master (384x216,
 // lossless, the factory's own format) with its report and the episode, in <dir>/masters/<episode id>/ as the rendered-
@@ -23,7 +31,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pageInit } from '../recorder/page.mjs';
 import { PlayoutStore, renderPlan, SpeedMeter, PLAYOUT_DEFAULTS, endOf } from '../../server/playout/queue.js';
-import { airVideoArgs, scaleFilter, AIR_DEFAULTS, airSize, parseCrf } from '../../server/playout/encode.js';
+import { airVideoArgs, AIR_DEFAULTS, airSize, parseCrf, renderGraph } from '../../server/playout/encode.js';
 import { airGate, gateOptionsFromEnv } from '../../server/playout/gate.js';
 import { diskPlan, diskPolicyFromEnv } from '../../server/playout/disk.js';
 import { voicedAir } from '../../server/airtime.js';
@@ -51,12 +59,19 @@ const TWIN = !flag('no-twin');
 const CAPTURE = opt('capture', 'png') === 'raw' ? 'raw' : 'png';
 const FOR = Number(opt('for', 0));
 const SEED = Number(opt('seed', 1)) || 1;
+const VERTICAL = flag('vertical') || /^(1|true|yes|on)$/i.test(String(process.env.PLAYOUT_VERTICAL || ''));
+const VSIZE = VERTICAL ? airSize(opt('vertical-size', process.env.PLAYOUT_VERTICAL_SIZE || '1080x1920'), (m) => console.log(`[render] WARNING: ${m}`)) : null;
+if (VSIZE && !(Number(VSIZE.split('x')[1]) > Number(VSIZE.split('x')[0]))) throw new Error(`the vertical size is portrait (e.g. 1080x1920), not ${VSIZE}`);
 const gateOpts = { ...gateOptionsFromEnv(), ...(opt('verbatim') ? { verbatim: opt('verbatim') === 'warn' ? 'warn' : 'block' } : {}) };
 const diskPolicy = diskPolicyFromEnv();
 const CRF = parseCrf(opt('crf', process.env.PLAYOUT_CRF));
 airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }); // (throws on a bad size, bitrate, crf or preset before anything starts)
+if (VSIZE) airVideoArgs({ size: VSIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET });
+const GRAPH = renderGraph({ size: SIZE, twin: TWIN, vertical: VSIZE });
 
 const store = new PlayoutStore(DIR);
+// the vertical live's queue (a playout store of its own: air.mjs --dir <dir>/vertical)
+const vstore = VERTICAL ? new PlayoutStore(path.join(DIR, 'vertical')) : null;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'playout-render-'));
 const real = () => Date.now(); // (this process keeps the real clock: the station is the one on the air clock)
 const hhmm = (ms) => new Date(ms).toISOString().slice(11, 19);
@@ -170,10 +185,12 @@ async function loadPlaywright() {
   }
 }
 
-// In the page, after the recorder's init: the frame grab (the air picture and its twin side by side, one image), a
-// count of the director's requests for the next item (the second one marks the end of this item), the held frame
+// In the page, after the recorder's init: the frame grab (the air picture, its twin, and the vertical live's clean
+// frame and picture, side by side from the left in one image: encode.js grabLayout), a count of the director's
+// requests for the next item (the second one marks the end of this item), the held frames
 function grabInit(cfg) {
   if (cfg.hold) window.__playoutHold = cfg.hold;
+  if (cfg.vhold) window.__playoutVHold = cfg.vhold;
   window.__nextAsked = 0;
   const of = window.fetch;
   window.fetch = function (u, ...a) {
@@ -192,10 +209,9 @@ function grabInit(cfg) {
   window.__playoutGrab = (mode) => {
     const c = document.getElementById('screen');
     if (!c) return null;
-    const tw = window.__twin || null;
-    const W = c.width;
-    const H = c.height;
-    const w2 = tw ? W * 2 : W;
+    const pics = [c, window.__twin, window.__clean, window.__vertical].filter(Boolean);
+    const w2 = pics.reduce((a, p) => a + p.width, 0);
+    const H = Math.max(...pics.map((p) => p.height));
     let g = window.__grabCv;
     if (!g || g.width !== w2 || g.height !== H) {
       g = window.__grabCv = document.createElement('canvas');
@@ -203,8 +219,14 @@ function grabInit(cfg) {
       g.height = H;
       g.__ctx = g.getContext('2d', { willReadFrequently: mode === 'raw' });
     }
-    g.__ctx.drawImage(c, 0, 0);
-    if (tw) g.__ctx.drawImage(tw, W, 0);
+    let x = 0;
+    for (const p of pics) {
+      // (the vertical picture leaves a spot's window transparent: the grab keeps its alpha, never the last frame's; the
+      // clean frame is only read through that window, so it is grabbed only while it is open, blank otherwise)
+      if (p === window.__vertical || p === window.__clean) g.__ctx.clearRect(x, 0, p.width, p.height);
+      if (p !== window.__clean || window.__vertical?.windowOpen) g.__ctx.drawImage(p, x, 0);
+      x += p.width;
+    }
     const img = mode === 'raw' ? b64(g.__ctx.getImageData(0, 0, w2, H).data) : g.toDataURL('image/png').slice(22);
     window.__rec?.pump?.();
     return { img, w: w2, h: H, perf: performance.now(), inflight: window.__rec?.inflight ?? 0, asked: window.__nextAsked };
@@ -271,9 +293,10 @@ function estimateSeconds(item) {
 
 /**
  * Render one item at air time `airAt` (its first frame), the page's opening stinger over `hold` (a PNG data URL: the
- * last frame of what airs before it). -> { frames, seconds, file, master, report, lastFrame, realSeconds, overrun }
+ * last frame of what airs before it; `vhold` the vertical one). -> { frames, seconds, file, master, vfile, vmaster,
+ * report, lastFrame, lastVFrame, realSeconds, overrun }
  */
-async function renderItem(item, airAt, hold, slot) {
+async function renderItem(item, airAt, hold, slot, vhold = null) {
   await ensureBrowser();
   const est = estimateSeconds(item);
   const maxSeconds = Math.ceil(est * 1.35 + 45);
@@ -289,7 +312,7 @@ async function renderItem(item, airAt, hold, slot) {
   let ff = null;
   try {
     await page.addInitScript(pageInit, { audio: true, sampleRate: RATE, maxSeconds: maxSeconds + 4, seed: SEED, progressive: true, chunk: 2, margin: 1, trace: false });
-    await page.addInitScript(grabInit, { hold: hold || null });
+    await page.addInitScript(grabInit, { hold: hold || null, vhold: vhold || null });
     await page.route(/\/js\/main\.js(\?.*)?$/, async (route) => {
       const res = await route.fetch();
       const body = `${await res.text()}${MAIN_HOOK}`;
@@ -306,7 +329,7 @@ async function renderItem(item, airAt, hold, slot) {
     const T0 = Math.round(airAt - 20_000);
     await page.clock.install({ time: T0 });
     await page.clock.pauseAt(T0 + 1000);
-    await page.goto(`${STATION}/?autostart=1&voice=tts${TWIN ? '&twin=1' : ''}`, { waitUntil: 'load' });
+    await page.goto(`${STATION}/?autostart=1&voice=tts${TWIN ? '&twin=1' : ''}${VERTICAL ? '&vertical=1' : ''}`, { waitUntil: 'load' });
     // the page starts (its channel, its audio, the director) on the fake clock, until it asks for its item
     let stuck = 0;
     const settle = async (allowed = 0, cap = 8000) => {
@@ -332,15 +355,21 @@ async function renderItem(item, airAt, hold, slot) {
     await startRoute.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
     await settle();
 
-    const [w, h] = [384, 216];
     const out = path.join(TMP, `${slot}`);
     fs.mkdirSync(out, { recursive: true });
     const airVideo = path.join(out, 'air.video.mkv');
     const masterVideo = path.join(out, 'master.video.mkv');
-    const inW = TWIN ? w * 2 : w;
-    const input = CAPTURE === 'raw' ? ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${inW}x${h}`, '-framerate', String(FPS), '-i', 'pipe:0'] : ['-f', 'image2pipe', '-c:v', 'png', '-framerate', String(FPS), '-i', 'pipe:0'];
-    const graph = TWIN ? `[0:v]split=2[a][b];[a]crop=${w}:${h}:0:0,${scaleFilter({ size: SIZE })}[air];[b]crop=${w}:${h}:${w}:0,format=rgb24[m]` : `[0:v]${scaleFilter({ size: SIZE })}[air]`;
-    ff = runFfmpeg(['-v', 'error', '-y', ...input, '-filter_complex', graph, '-map', '[air]', ...airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', airVideo, ...(TWIN ? ['-map', '[m]', '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-an', masterVideo] : [])], { input: true });
+    const vairVideo = path.join(out, 'vair.video.mkv');
+    const vmasterVideo = path.join(out, 'vmaster.video.mkv');
+    const L = GRAPH.layout;
+    const input = CAPTURE === 'raw' ? ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${L.w}x${L.h}`, '-framerate', String(FPS), '-i', 'pipe:0'] : ['-f', 'image2pipe', '-c:v', 'png', '-framerate', String(FPS), '-i', 'pipe:0'];
+    const lossless = (file) => ['-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-an', file];
+    ff = runFfmpeg([
+      '-v', 'error', '-y', ...input, '-filter_complex', GRAPH.graph,
+      '-map', '[air]', ...airVideoArgs({ size: SIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', airVideo,
+      ...(TWIN ? ['-map', '[m]', ...lossless(masterVideo)] : []),
+      ...(VSIZE ? ['-map', '[vair]', ...airVideoArgs({ size: VSIZE, bitrate: BITRATE, crf: CRF, fps: FPS, preset: PRESET }), '-an', vairVideo, '-map', '[vm]', ...lossless(vmasterVideo)] : []),
+    ], { input: true });
 
     let stepped = 0;
     let frames = 0;
@@ -369,6 +398,7 @@ async function renderItem(item, airAt, hold, slot) {
     }
     ff.p.stdin.end();
     const lastFrame = await page.evaluate(() => document.getElementById('screen').toDataURL('image/png'));
+    const lastVFrame = VERTICAL ? await page.evaluate(() => window.__vertical?.toDataURL('image/png') || null) : null;
 
     // the sound: exactly the frames' length (frames x 1600 samples), rendered by the page, as 16-bit PCM
     const from = perf0;
@@ -400,6 +430,17 @@ async function renderItem(item, airAt, hold, slot) {
       master = path.join(out, 'master.mkv');
       await runFfmpeg(['-v', 'error', '-y', '-i', masterVideo, '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', pcm, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'flac', master]).done;
     }
+    // the vertical live's file (the same sound, muxed once) and the programme's vertical master
+    let vfile = null;
+    let vmaster = null;
+    if (VSIZE) {
+      vfile = path.join(DIR, 'vertical', 'segments', `${slot}.mkv`);
+      await runFfmpeg(['-v', 'error', '-y', '-i', vairVideo, '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', pcm, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'flac', vfile]).done;
+      if (item.kind === 'episode') {
+        vmaster = path.join(out, 'vmaster.mkv');
+        await runFfmpeg(['-v', 'error', '-y', '-i', vmasterVideo, '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', pcm, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'flac', vmaster]).done;
+      }
+    }
     const sentences = events.filter((e) => e.type === 'sentence');
     const report = {
       out: file,
@@ -414,7 +455,7 @@ async function renderItem(item, airAt, hold, slot) {
       errors: errors.slice(0, 20),
     };
     const cpu1 = treeCpu();
-    return { frames, seconds: frames / FPS, file, master, masterDir: out, report, lastFrame, realSeconds: (real() - t0) / 1000, cpuSeconds: cpu0 !== null && cpu1 !== null ? cpu1 - cpu0 : null, overrun, estimate: est, errors };
+    return { frames, seconds: frames / FPS, file, master, vfile, vmaster, masterDir: out, report, lastFrame, lastVFrame, realSeconds: (real() - t0) / 1000, cpuSeconds: cpu0 !== null && cpu1 !== null ? cpu1 - cpu0 : null, overrun, estimate: est, errors };
   } finally {
     if (ff) {
       try {
@@ -458,6 +499,34 @@ async function fillerCard() {
   }
 }
 
+/** The vertical live's filler card (the same words set for the 216x384 frame: clip/vchannel.js), in its own queue's folder. */
+async function verticalFillerCard() {
+  const file = path.join(DIR, 'vertical', 'filler.png');
+  if (fs.existsSync(file)) return `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
+  await ensureBrowser();
+  const context = await newContext();
+  const page = await context.newPage();
+  try {
+    await page.goto(`${STATION}/lab/clip.html`, { waitUntil: 'load' }).catch(() => page.goto(`${STATION}/`, { waitUntil: 'load' }));
+    const url = await page.evaluate(async () => {
+      const m = await import('/js/clip/vchannel.js');
+      const c = Object.assign(document.createElement('canvas'), { width: 216, height: 384 });
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      for (let i = 0; i < 3; i++) {
+        m.drawVerticalStandby(g, 0, { title: 'BACK SHORTLY', message: 'GLOBIT 24 · NEWS 24 HOURS A DAY' });
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return c.toDataURL('image/png');
+    });
+    fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
+    return url;
+  } finally {
+    await page.close().catch(() => {});
+    await context.close().catch(() => {});
+  }
+}
+
 // ---------------------------------------------------------------- the loop
 
 const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
@@ -475,6 +544,7 @@ function frontierFromStore() {
 let frontier = frontierFromStore();
 let lastItemId = null;
 let lastFrame = null; // the last frame of the unit that airs before the next one (null: filler airs before it)
+let lastVFrame = null; // (its vertical picture's)
 let units = 0;
 let heldUnits = 0;
 let lateUnits = 0;
@@ -485,7 +555,9 @@ process.on('SIGTERM', () => (stopping = true));
 
 function status(extra = {}) {
   const ahead = frontier ? (frontier - real()) / 1000 : 0;
-  store.status('render', { pid: process.pid, frontier: frontier ? new Date(frontier).toISOString() : null, bufferMinutes: +(ahead / 60).toFixed(1), targetMinutes: TARGET / 60, speed: +speed.speed.toFixed(3), units, held: heldUnits, late: lateUnits, size: SIZE, bitrate: BITRATE, crf: CRF, twin: TWIN, gate: gateOpts, ...extra });
+  const st = { pid: process.pid, frontier: frontier ? new Date(frontier).toISOString() : null, bufferMinutes: +(ahead / 60).toFixed(1), targetMinutes: TARGET / 60, speed: +speed.speed.toFixed(3), units, held: heldUnits, late: lateUnits, size: SIZE, bitrate: BITRATE, crf: CRF, twin: TWIN, vertical: VSIZE, gate: gateOpts, ...extra };
+  store.status('render', st);
+  vstore?.status('render', { ...st, size: VSIZE, follows: DIR });
 }
 
 function cleanDisk() {
@@ -513,19 +585,28 @@ function cleanDisk() {
     fs.rmSync(d.path, { recursive: true, force: true });
     store.event('delete', { path: path.relative(DIR, d.path), kind: d.kind, reason: d.reason });
   }
+  // the vertical live's aired files, by the same policy (its masters are the horizontal ones' neighbours, above)
+  if (vstore) {
+    for (const d of diskPlan({ aired: vstore.airedList(), held: [], masters: [], now: real(), policy: diskPolicy })) {
+      if (!fs.existsSync(d.path)) continue;
+      fs.rmSync(d.path, { recursive: true, force: true });
+      vstore.event('delete', { path: path.relative(DIR, d.path), kind: d.kind, reason: d.reason });
+    }
+  }
 }
 
 async function renderUnit(airAt) {
   const unit = { id: `u${stamp(airAt)}`, airAt, segments: [], items: [] };
   let t = airAt;
   let hold = lastFrame || (await fillerCard());
+  let vhold = VERTICAL ? lastVFrame || (await verticalFillerCard()) : null;
   let afterId = lastItemId;
   for (let k = 0; k < 3; k++) {
     const item = await nextItem(afterId, t);
     afterId = item.id;
     const slot = `${stamp(t)}-${item.kind === 'break' ? 'break' : item.program?.id || 'episode'}-${item.id}`;
     say(`rendering ${item.kind === 'break' ? `break (${item.ads} ads${item.hold ? `, ${item.hold} s countdown` : ''}${item.next ? `, then ${item.next.title}` : ''})` : `${item.program?.title} ${item.id}${item.replay ? ' (replay)' : ''}`} for ${new Date(t).toISOString()}`);
-    const r = await renderItem(item, t, hold, slot);
+    const r = await renderItem(item, t, hold, slot, vhold);
     const seg = { id: slot, kind: item.kind, unit: unit.id, itemId: item.id, programId: item.program?.id || null, title: item.kind === 'break' ? 'Break' : item.program?.title || item.id, airAt: Math.round(t), frames: r.frames, fps: FPS, file: r.file, size: SIZE, bitrate: BITRATE, crf: CRF, preset: PRESET, render: { realSeconds: +r.realSeconds.toFixed(1), speed: +(r.seconds / r.realSeconds).toFixed(3), cpuSeconds: r.cpuSeconds === null ? null : +r.cpuSeconds.toFixed(1), cpuPerAirSecond: r.cpuSeconds === null ? null : +(r.cpuSeconds / r.seconds).toFixed(3), estimate: Math.round(r.estimate), overrun: r.overrun, pageErrors: r.errors.length } };
     say(`  ${seg.title}: ${r.seconds.toFixed(1)} s on air in ${r.realSeconds.toFixed(1)} s (${seg.render.speed}x, ${seg.render.cpuPerAirSecond ?? '?'} CPU-s per air second)${r.overrun ? ' OVERRUN' : ''}`);
     store.event('rendered', { id: slot, kind: item.kind, programme: seg.title, airAt: new Date(t).toISOString(), seconds: +r.seconds.toFixed(2), realSeconds: seg.render.realSeconds, speed: seg.render.speed, cpuSeconds: seg.render.cpuSeconds, cpuPerAirSecond: seg.render.cpuPerAirSecond, load1: +os.loadavg()[0].toFixed(2) });
@@ -534,11 +615,13 @@ async function renderUnit(airAt) {
     unit.items.push({ item, r });
     t += r.frames * frameMs;
     hold = r.lastFrame;
+    vhold = r.lastVFrame;
     if (item.kind === 'episode' || item.filler) break;
   }
   unit.lastItemId = afterId;
   unit.end = t;
   unit.lastFrame = hold;
+  unit.lastVFrame = vhold;
   return unit;
 }
 
@@ -573,23 +656,31 @@ function queueUnit(unit, gate) {
         fs.writeFileSync(path.join(dir, 'horizontal.report.json'), JSON.stringify(r.report, null, 1));
         fs.writeFileSync(path.join(dir, 'episode.json'), JSON.stringify({ ...item, airedAt: new Date(seg.airAt).toISOString() }, null, 1));
         fs.writeFileSync(path.join(dir, 'unit.json'), JSON.stringify({ unit: unit.id, segment: seg.id, airAt: new Date(seg.airAt).toISOString(), airEnd: new Date(endOf(seg)).toISOString() }, null, 1));
+        // (and its vertical master, drawn from the same frames: the factory's vertical clips are cut from it)
+        if (r.vmaster) {
+          fs.renameSync(r.vmaster, path.join(dir, 'vertical.mkv'));
+          fs.writeFileSync(path.join(dir, 'vertical.report.json'), JSON.stringify({ ...r.report, format: 'vertical' }, null, 1));
+        }
       }
       seg.master = dir;
     }
     store.enqueue(seg);
+    // the vertical live airs the same unit at the same times (its own playout, its own queue)
+    if (vstore && r.vfile) vstore.enqueue({ ...seg, file: r.vfile, size: VSIZE, master: undefined });
   }
   store.event('queued', { unit: unit.id, airAt: new Date(unit.airAt).toISOString(), end: new Date(unit.end).toISOString(), segments: unit.segments.map((s) => s.title) });
 }
 
 function holdUnit(unit, gate) {
   const files = unit.segments.map((s) => s.file); // (the air files stay a while for a look; the masters go)
+  for (const { r } of unit.items) if (r.vfile) fs.rmSync(r.vfile, { force: true }); // (the vertical ones go: the same pictures)
   const violations = gate.verdicts.flatMap((v) => v.violations.map((x) => ({ ...x, programme: v.programme })));
   store.hold({ id: unit.id, stage: 'air', airAt: unit.airAt, programId: unit.segments.at(-1)?.programId, title: unit.segments.at(-1)?.title, segments: unit.segments.map((s) => ({ id: s.id, kind: s.kind, title: s.title, frames: s.frames })), violations, warnings: gate.verdicts.flatMap((v) => v.warnings || []).slice(0, 20), skipped: gate.verdicts.flatMap((v) => (v.skipped || []).map((x) => x.rule)), files });
   store.event('held', { stage: 'air', unit: unit.id, airAt: new Date(unit.airAt).toISOString(), programme: unit.segments.at(-1)?.title, rules: violations.map((v) => v.rule) });
   say(`  HELD ${unit.segments.at(-1)?.title}: ${violations.map((v) => `${v.rule}: ${v.message}`).join(' | ').slice(0, 400)}`);
 }
 
-say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${CRF === null ? BITRATE : `crf ${CRF} up to ${BITRATE}`} · twin ${TWIN ? 'on' : 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
+say(`station ${STATION} · ${DIR} · buffer ${TARGET / 60} min · ${SIZE} ${CRF === null ? BITRATE : `crf ${CRF} up to ${BITRATE}`} · twin ${TWIN ? 'on' : 'off'} · vertical ${VSIZE || 'off'} · capture ${CAPTURE} · gate verbatim ${gateOpts.verbatim}, review ${gateOpts.requireReview ? 'required' : 'not required'}`);
 while (!stopping) {
   if (FOR > 0 && real() - started > FOR * 1000) break;
   cleanDisk();
@@ -625,6 +716,7 @@ while (!stopping) {
     store.event('gap', { from: new Date(frontier).toISOString(), to: new Date(plan.airAt).toISOString(), seconds: plan.gap, why: 'the buffer ran short: the next unit renders for a later time, the playout fills the gap' });
     say(`the frontier fell behind: ${plan.gap.toFixed(0)} s of filler before the next unit`);
     lastFrame = null;
+    lastVFrame = null;
   }
   let unit;
   try {
@@ -635,6 +727,7 @@ while (!stopping) {
     await browser?.close().catch(() => {});
     browser = null;
     lastFrame = null;
+    lastVFrame = null;
     await sleep(5000);
     continue;
   }
@@ -647,9 +740,13 @@ while (!stopping) {
     store.event('late', { unit: unit.id, airAt: new Date(unit.airAt).toISOString(), by: (real() - unit.airAt) / 1000 });
     say(`  LATE by ${((real() - unit.airAt) / 1000).toFixed(0)} s: not queued`);
     for (const s of unit.segments) fs.rmSync(s.file, { force: true });
-    for (const { r } of unit.items) fs.rmSync(r.masterDir, { recursive: true, force: true });
+    for (const { r } of unit.items) {
+      fs.rmSync(r.masterDir, { recursive: true, force: true });
+      if (r.vfile) fs.rmSync(r.vfile, { force: true });
+    }
     frontier = null;
     lastFrame = null;
+    lastVFrame = null;
     continue;
   }
   const gate = gateUnit(unit);
@@ -659,6 +756,7 @@ while (!stopping) {
     typicalUnit = 0.7 * typicalUnit + 0.3 * ((unit.end - unit.airAt) / 1000);
     frontier = unit.end;
     lastFrame = unit.lastFrame;
+    lastVFrame = unit.lastVFrame;
   } else {
     heldUnits++;
     holdUnit(unit, gate);

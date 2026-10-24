@@ -45,9 +45,35 @@ if (typeof window.__playoutHold === 'string' && window.__playoutHold) {
 if (params.get('twin') === '1' && !clipOpts.on) {
   const g = await import('./clip/graphics.js');
   const tw = Object.assign(document.createElement('canvas'), { width: canvas.width, height: canvas.height, id: 'twin' });
-  renderer.twin = { canvas: tw, ctx: tw.getContext('2d'), graphics: new g.ClipGraphics({ audio }) };
-  renderer.twin.ctx.imageSmoothingEnabled = false;
+  const twin = { canvas: tw, ctx: tw.getContext('2d'), graphics: new g.ClipGraphics({ audio }) };
+  twin.ctx.imageSmoothingEnabled = false;
+  renderer.twins.push(twin);
   window.__twin = tw;
+}
+// ...and the vertical picture for the vertical live (docs/publishing/playout.md §13): the clean frame (no air graphics)
+// on a second canvas, and the vertical compositor drawing the 216x384 picture from it, as a vertical clip is drawn
+let vertical = null;
+if (params.get('vertical') === '1' && !clipOpts.on) {
+  const [g, { installVertical }] = await Promise.all([import('./clip/graphics.js'), import('./clip/index.js')]);
+  const src = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const clean = { canvas: src, ctx: src.getContext('2d'), graphics: new g.VerticalGraphics({ audio }) };
+  clean.ctx.imageSmoothingEnabled = false;
+  // (no stinger on the clean frame: the vertical picture draws its own, clip/vertical.js)
+  clean.stinger = false;
+  renderer.twins.push(clean);
+  const { VW, VH } = await import('./clip/layout.js');
+  const vc = Object.assign(document.createElement('canvas'), { width: VW, height: VH, id: 'vertical' });
+  // (the compositor reads the renderer's picture and its graphics' bookkeeping: here the clean twin's)
+  const view = Object.create(renderer, { canvas: { value: src }, graphics: { value: clean.graphics } });
+  vertical = await installVertical({ canvas: vc, renderer: view, audio, channel, live: true });
+  // the playout's held frame in the vertical picture (tools/playout/render.mjs: the last vertical frame before)
+  if (typeof window.__playoutVHold === 'string' && window.__playoutVHold) {
+    const img = new Image();
+    img.src = window.__playoutVHold;
+    vertical.compositor.holdImage = img;
+  }
+  window.__vertical = vc;
+  window.__clean = src;
 }
 
 // --- integer scaling so pixels stay square and sharp -----------------------
@@ -75,6 +101,7 @@ function loop() {
   try {
     renderer.render(t, scene);
     clip?.frame(t, scene); // (vertical: the page's picture composed from the renderer's; never throws)
+    vertical?.frame(t, scene); // (the vertical live's picture, beside the air picture)
   } catch (err) {
     try {
       renderer.guard.recover(renderer, t);

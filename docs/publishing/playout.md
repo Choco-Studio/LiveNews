@@ -607,3 +607,102 @@ worker 0.7–1.1 GB: about 2.7–3.1 GB of the server's 4.
 - Not found: an official statement of how YouTube labels a 1152x648 stream or upload, or of the bitrates of its
   delivered 1080p and 720p live renditions. The only sure test is an unlisted upload of a minute at 1152x648 and
   `yt-dlp -F` on it (not done: nothing is published from here).
+
+## 13. The vertical live (24 Oct)
+
+The owner, 24 Oct: "directos en vertical sin perder la calidad, para Shorts". A second 24/7 stream, 9:16, for the
+vertical feeds (YouTube's Shorts feed shows vertical live streams; other vertical platforms where the channel is allowed
+to stream take the same file). The same programmes at the same moment as the horizontal channel: drawn from the same
+frames by the same renderer, so nothing is written, voiced or rendered twice.
+
+### 13.1 What airs
+
+- **The programmes:** the vertical picture of the clips (`vertical.md`): 216x384 at 5x = 1080x1920, the same pixel as
+  the horizontal channel, the presenter's single made tall in the programme's set stood on end, the boards on glass, the
+  captions burned in at 2x (the feeds play with the sound off). The title band holds the programme's name beside the
+  channel's bug (a clip's hook is laid over it only by the factory).
+- **The channel's own moments, set for the frame** (`public/js/clip/vchannel.js`; before, the vertical frame showed the
+  middle of the horizontal card, cutting its words and the countdown's ring in half):
+  - the **ident** before every programme: the earth from orbit under the frame, the lock-up, and the AI notice in the
+    end card's three rows (AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES), the only
+    disclosure, as on the horizontal channel; never in a break (a test counts it);
+  - the **break bumper** (BACK IN / 1 MINUTE, what comes after the break, the break's clock and rail), the **UP NEXT
+    promo** (the programme on its plate, its line, its presenters cut out by the rig, standing side by side), the
+    **countdown clock**, the **standby** card (and the vertical playout's filler, BACK SHORTLY), the **breaking** card;
+  - the **spots**: an advert is a 384x216 film, so it is not redrawn. The frame carries the ADVERTISEMENT tag and the
+    break's clock over a window, and what comes after the break under it; the window is left transparent and the
+    renderer's encoder fills it with the spot itself at **2x** (768x432 in the 770x435 window of the 1080x1920 picture,
+    every pixel of the spot a 2x2 block, nothing resampled). A centre crop would have cut every spot's titles.
+- **The stinger** between programmes and breaks, drawn for the frame (the logo at 1x: at 2x it is wider than the frame),
+  and the **held frame** under an item's opening stinger is the last vertical frame of what aired before.
+- Every word a viewer must read is in the platforms' safe column (x 8-188 of 216, under the feeds' buttons on the right)
+  and above their band at the foot (y 300): tested.
+
+### 13.2 How it is made
+
+| Part | What it does |
+|---|---|
+| The page, `?vertical=1` (`public/js/main.js`) | The renderer draws each frame once; a clean copy (no air graphics, no stinger) goes to a second canvas (`renderer.twins`, `studio.js`), and the vertical compositor (`clip/index.js installVertical`, `live: true`) draws the 216x384 picture from it, as a vertical clip is drawn |
+| The grab (`tools/playout/render.mjs`) | One image a frame, side by side: the air picture, the twin master, the clean frame, the vertical picture (`encode.js grabLayout`), its window's transparency kept |
+| The encode (`server/playout/encode.js renderGraph`) | One ffmpeg: the air picture as before; the vertical picture at 5x over the clean frame at 2x padded into the window; the air's settings (H.264 high, 2 s GOP, no B-frames, crf 20 under 5500k, BT.709) at 1080x1920; the vertical master lossless at 1x |
+| The queue | `<dir>/vertical/` (a playout store of its own): each segment the horizontal one's, with the vertical file, the same sound and the same air time. The gate's verdict is the horizontal unit's: held together, queued together, late together |
+| The playout | A second `air.mjs` on `<dir>/vertical`, to its own stream key and its own live video's title (`--video-env`); its filler is the vertical BACK SHORTLY |
+| The masters | Each programme's vertical master beside its horizontal one (`masters/<id>/vertical.mkv` and its report): the clip factory cuts its vertical clips from it and records nothing (`server/publish/masters.js`) |
+| Disk | The vertical queue's aired files go by the same policy as the horizontal ones (§8) |
+
+### 13.3 Running it
+
+Files only (a test): `run.mjs` takes the vertical playout as a fourth process.
+
+```
+PORT=8790 VOICE_ENGINE=kokoro node tools/playout/run.mjs --out data/playout/air/air-%03d.ts --segment 3600 \
+  --vertical --vertical-out data/playout/vertical/air/air-%03d.ts
+```
+
+On air (only on the owner's word; the keys in `/etc/globit24.env`, never in a chat or a commit):
+
+```
+PUBLISH_LIVE=1 node tools/playout/run.mjs --rtmp rtmp://a.rtmp.youtube.com/live2 --key-env YOUTUBE_STREAM_KEY \
+  --vertical --vertical-rtmp rtmp://a.rtmp.youtube.com/live2 \
+  --vertical-key-env YOUTUBE_VERTICAL_STREAM_KEY --vertical-video-env YOUTUBE_VERTICAL_VIDEO_ID
+```
+
+Or the parts by hand: `render.mjs --vertical` (or `PLAYOUT_VERTICAL=1`; `--vertical-size 1080x1920` by default, a
+portrait whole multiple of 216x384), and `air.mjs --dir data/playout/vertical --rtmp … --key-env
+YOUTUBE_VERTICAL_STREAM_KEY --video-env YOUTUBE_VERTICAL_VIDEO_ID`.
+
+### 13.4 What it costs
+
+Measured here (24 Oct, the 4-core cloud machine shared with other sessions; the same break of two spots and the same
+NEWS IN 60 rendered both ways from a playback server; CPU seconds per second of air, by process):
+
+| | The browser | The encoders | Node | All |
+|---|---|---|---|---|
+| Horizontal 1080p and its twin master | 0.62 | 0.72 | 0.06 | **1.42** |
+| ... and the vertical live (first build) | 1.14 | 2.24 | 0.08 | 3.46 |
+| ... and the vertical live (as built) | 1.15 | 1.51 | 0.08 | **2.74** |
+
+- **The encoders.** The first build laid the clean frame over the whole 1080x1920 picture (an RGBA scale and a
+  full-frame overlay): the filters alone cost 1.06 CPU-s a second. Now the vertical frame is scaled and converted to
+  4:2:0 in one pass and the spot is laid over its window alone, its alpha the frame's window inverted: **0.19**. What
+  is left is the second x264 encode at 1080x1920 (about 0.55, as much as the horizontal one: the same number of
+  pixels) and the lossless vertical master. Benchmarked on the masters' own frames (600 frames,
+  `renderGraph` as it is): horizontal 0.75, with the vertical 1.48.
+- **The browser** (+0.5): the vertical compositor draws its own frame every frame, and its presenter's single is a
+  second render of the presenter at the vertical's framing (the tall single); the grab is larger. A programme of
+  singles costs more than a break (3.02 against 2.42 CPU-s a second).
+- **So:** the vertical live adds about 1.3 CPU-s per second of air to the renderer's 1.4: about **2.7 cores** for the
+  renderer alone, at real time, before the voices (about 1.5 CPU-s per second of speech with Kokoro, §10) and the
+  station. Both streams together want **4 cores at the least, 6 to keep the hour's buffer**; the horizontal stream
+  alone keeps needing what §10 measured. Memory: the encoder holds about 0.9 GB with both pictures (0.3 GB without).
+  Traffic: a second stream of the same kind, about 750 GB a month (§12.2), so both together about 1,500 GB.
+
+### 13.5 Limits
+
+- The vertical live runs on the pre-rendered playout only. A live capture of the page (`tools/stream.mjs` with
+  `?format=vertical`) gives the clip's vertical picture, without the channel's moments set for the frame.
+- A spot's pixel in the window is 2x2 against 5x5 for everything else: square and even, finer.
+- The vertical title band names the programme, not the story (a clip's hook is the factory's).
+- The platforms: a vertical stream on YouTube is a second live stream on the channel with its own key (set up in
+  YouTube Studio, vertical, 1080x1920); TikTok LIVE gives a stream key only to eligible accounts; Instagram streams
+  from software only for professional accounts. Each platform's AI label and rules apply as for the clips (`compliance.md`).

@@ -12,6 +12,10 @@
 //   node tools/playout/air.mjs --out /tmp/air-{n}.flv
 // On air (the owner's guide, docs/publishing/setup.md §8; refused unless PUBLISH_LIVE=1, as tools/publish/live.mjs):
 //   PUBLISH_LIVE=1 node tools/playout/air.mjs --rtmp rtmp://a.rtmp.youtube.com/live2 --key-env YOUTUBE_STREAM_KEY
+// The vertical live (render.mjs --vertical queues it in <dir>/vertical: docs/publishing/playout.md §13), a second
+// playout beside the first, to its own stream key and its own live video's title:
+//   PUBLISH_LIVE=1 node tools/playout/air.mjs --dir data/playout/vertical --rtmp rtmp://a.rtmp.youtube.com/live2 \
+//     --key-env YOUTUBE_VERTICAL_STREAM_KEY --video-env YOUTUBE_VERTICAL_VIDEO_ID
 //
 // The live video's title follows what is on air, truthfully (no LIVE: server/publish/live.js recorded titles), through
 // the live supervisor's rate limits, as a dry run unless every live switch is on (publisher rules, unchanged).
@@ -21,6 +25,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PlayoutStore, planAir, PLAYOUT_DEFAULTS, samplesOf, endOf } from '../../server/playout/queue.js';
 import { airVideoArgs, scaleFilter, AIR_DEFAULTS, airSize, parseCrf } from '../../server/playout/encode.js';
+import { canvasFor } from '../../server/airsize.js';
 import { LiveSupervisor } from '../../server/publish/live.js';
 import { YouTubeAdapter } from '../../server/publish/adapters/youtube.js';
 import { PublishQueue } from '../../server/publish/queue.js';
@@ -71,21 +76,26 @@ const frameMs = 1000 / FPS;
 const pq = new PublishQueue({ dir: path.join(root, 'data', 'publish') });
 const s = pq.settings();
 const live = !!rtmp && !isManual() && process.env.PUBLISH_LIVE === '1' && s.dryRun === false && !!s.live?.youtube && !usingStub;
-const titles = new LiveSupervisor({ youtube: new YouTubeAdapter({ env: process.env, dryRun: !live }), live, recorded: true, videoId: process.env.YOUTUBE_LIVE_VIDEO_ID || null, outbox: path.join(root, 'data', 'publish', 'outbox-live.jsonl'), log: (m) => say(m) });
+// (the vertical live's own video and outbox: --video-env names the variable holding its video id)
+const VIDEO_ENV = opt('video-env', 'YOUTUBE_LIVE_VIDEO_ID');
+const TAG = VIDEO_ENV === 'YOUTUBE_LIVE_VIDEO_ID' ? '' : `-${VIDEO_ENV.toLowerCase().replace(/^youtube_|_video_id$/g, '').replace(/[^a-z0-9]+/g, '-')}`;
+const titles = new LiveSupervisor({ youtube: new YouTubeAdapter({ env: process.env, dryRun: !live }), live, recorded: true, videoId: process.env[VIDEO_ENV] || null, outbox: path.join(root, 'data', 'publish', `outbox-live${TAG}.jsonl`), log: (m) => say(m) });
 
 // ---------------------------------------------------------------- the filler (encoded with the programmes' settings)
 
 /** The air settings of what is queued (the filler matches them), else the defaults. */
 function airSettings() {
   const q = store.queued()[0] || store.airedList().at(-1);
-  return { size: airSize(q?.size || opt('size', AIR_DEFAULTS.size), () => {}), bitrate: q?.bitrate || opt('bitrate', AIR_DEFAULTS.bitrate), crf: q && 'crf' in q ? q.crf : parseCrf(opt('crf', process.env.PLAYOUT_CRF)), preset: q?.preset || opt('preset', AIR_DEFAULTS.preset) };
+  // (nothing queued yet: the size asked, else the renderer's for this queue, render-status.json: portrait for the vertical)
+  return { size: airSize(q?.size || opt('size') || store.readStatus('render')?.size || AIR_DEFAULTS.size, () => {}), bitrate: q?.bitrate || opt('bitrate', AIR_DEFAULTS.bitrate), crf: q && 'crf' in q ? q.crf : parseCrf(opt('crf', process.env.PLAYOUT_CRF)), preset: q?.preset || opt('preset', AIR_DEFAULTS.preset) };
 }
 const fillerPng = () => {
   const f = path.join(DIR, 'filler.png');
   if (fs.existsSync(f)) return f;
   // (before the renderer has drawn the card: a plain one from ffmpeg, the channel's ink with nothing on it)
-  const plain = path.join(DIR, 'filler-plain.png');
-  if (!fs.existsSync(plain)) spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x0d1020:s=384x216', '-frames:v', '1', plain]);
+  const c = canvasFor(airSettings().size);
+  const plain = path.join(DIR, `filler-plain-${c.w}x${c.h}.png`);
+  if (!fs.existsSync(plain)) spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x0d1020:s=${c.w}x${c.h}`, '-frames:v', '1', plain]);
   return plain;
 };
 const granuleCache = new Map();

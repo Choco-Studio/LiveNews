@@ -180,6 +180,8 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 43. ✅ **Miniaturas, títulos y estudio de la atención (23–24 oct).** Tres títulos, tres textos de portada y un gancho por vídeo, escritos por Claude desde los hechos de la noticia y revisados (sin cebo, sin copiar al medio, sin cifras sueltas). Portadas rediseñadas a mano: la foto a toda la imagen, letras gruesas, la frase clave sobre el color del programa y el presentador recortado mirando al texto; tres por vídeo para «Probar y comparar» de YouTube. Estudio con fuentes (`docs/publishing/attention.md`): los clips empiezan en la noticia (sin «And finally»), el título de arriba dice lo que ha pasado desde el primer fotograma. Falta: ver los números reales de YouTube y TikTok tras las primeras semanas.
 
+44. 🟡 **Directo vertical para Shorts (24 oct).** Un segundo directo 24/7 en vertical (9:16, 1080x1920) con los mismos programas a la vez que el horizontal, sacado de los mismos fotogramas: no se escribe ni se pone voz dos veces. Los programas salen como los clips verticales (presentador alto en su plató, subtítulos grandes). Las pantallas del canal están rediseñadas para el móvil: el aviso de IA antes de cada programa, «volvemos en 1 minuto», «a continuación» con los presentadores, la cuenta atrás y la última hora. Los anuncios salen enteros y nítidos en una ventana. Probado en local con archivos, nada emitido. Falta: tu visto bueno, una segunda emisión en YouTube Studio (vertical, con su propia clave, que pones tú en el servidor) y comprobar que el servidor aguanta los dos a la vez (ver `docs/publishing/playout.md` §13).
+
 ## No tocar (te gusta así)
 - El mapa que señala dónde ocurren las noticias.
 - El anuncio de Cloudbrella.

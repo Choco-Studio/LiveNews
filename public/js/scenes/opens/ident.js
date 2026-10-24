@@ -10,7 +10,7 @@
 // tenth of the frame per second, eased in and out over 6 s, so a 3.2 s or a
 // 5.5 s ident both look finished (channel-and-breaks.md 4.2).
 //
-//   drawIdentScene(ctx, dt, { variant: 'dusk' | 'dawn' }?)   full frame
+//   drawIdentScene(ctx, dt, { variant: 'dusk' | 'dawn', words: false }?)   full frame (words: false, the earth alone)
 //   identVariant()  'dusk' or 'dawn' from the London clock
 //
 // Palette colours only; Bayer 4x4 only in the terminator's falloff; the
@@ -250,6 +250,8 @@ export function drawIdentScene(ctx, dt, opts = null) {
     renderCap(T, u, variant);
   }
   ctx.drawImage(T.cv, 0, Y0);
+  // (the vertical ident sets its own words: clip/vchannel.js)
+  if (opts?.words === false) return;
   // the wordmark: one step darker for 0.15 s, then itself; still from 0.65 s
   const g = t - 0.5;
   if (g < 0) return;

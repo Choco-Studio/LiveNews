@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab: the channel's moments in the vertical live</title>
+<style>
+  body { margin: 0; background: #0b0d14; color: #c8cbd8; font: 13px system-ui, sans-serif; }
+  p { margin: 12px 16px; color: #8a8fa3; max-width: 1100px; }
+  canvas { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<p>The vertical live's channel cards (clip/vchannel.js): window.__vch.frame(shot, card, dt, extra) returns one 216x384
+frame as a PNG data URL (the spot's window transparent, as the playout's encoder fills it).</p>
+<script type="module">
+import { drawVerticalChannel } from '/js/clip/vchannel.js';
+import { presenterSprite } from '/js/clip/sprite.js';
+import { warmMapData } from '/js/scenes/worldmap.js';
+try { await warmMapData?.(); } catch { /* the ident's cities later */ }
+const channel = await fetch('/api/channel').then((r) => r.json()).catch(() => ({ presenters: {} }));
+const c = Object.assign(document.createElement('canvas'), { width: 216, height: 384 });
+const g = c.getContext('2d');
+g.imageSmoothingEnabled = false;
+const memo = {};
+function frame(shot, card = {}, dt = 3, extra = {}) {
+  const t = 1000;
+  const scene = { shot, card, shotSince: t - dt, adBreak: extra.adBreak ? { until: t + extra.adBreak.left, total: extra.adBreak.total } : null };
+  g.clearRect(0, 0, 216, 384);
+  drawVerticalChannel(g, t, scene, { adWindow: extra.adWindow !== false, source: null, channel, memo, sprite: presenterSprite });
+  return c.toDataURL();
+}
+window.__vch = { frame };
+</script>
+</body>
+</html>

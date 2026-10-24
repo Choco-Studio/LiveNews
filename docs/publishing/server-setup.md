@@ -314,3 +314,21 @@ What the pull brings (`docs/publishing/thumbnails-titles.md`, `docs/publishing/a
   whatever the station uses. Its spend is in `data/usage.json` and capped by `AI_DAILY_TOKENS` (§8).
 - What tells whether it works: YouTube Studio's impressions click-through rate and average view duration, TikTok's and
   Instagram's share of viewers past the first seconds. Report them to the owner after the first weeks.
+
+## 10. The vertical live: ready on pull, nothing streams until the owner says (24 Oct)
+
+`docs/publishing/playout.md` §13. A second 24/7 stream in 9:16 for the vertical feeds, drawn from the same frames as
+the horizontal one (no second writer, no second set of voices).
+
+1. **Test it on files first** (§4b's command plus the vertical): `--vertical --vertical-out
+   data/test24/vertical/air-%03d.ts`. Look at a programme, a break (the spots whole in their window) and the ident (the
+   AI notice) in the vertical files; check `data/playout/render-status.json` keeps its buffer.
+2. **The machine:** both streams together need about 2.7 cores for the renderer alone, plus the voices (playout.md
+   §13.4): **4 cores at the least, 6 to keep the hour's buffer**, and about 1,500 GB of traffic a month for the two.
+   Check `nproc` first; on a smaller machine tell the owner, plainly, that the vertical needs a bigger plan.
+3. **On air, only when the owner says so:** a second live stream in YouTube Studio (vertical, 1080x1920, its own stream
+   key). The owner types the key on their own screen into `/etc/globit24.env` as `YOUTUBE_VERTICAL_STREAM_KEY=…`
+   (and the live video's id as `YOUTUBE_VERTICAL_VIDEO_ID=…` for its title), `chmod 600`. Never in a chat, a log or a
+   commit. Then the playout's unit gets `--vertical --vertical-rtmp rtmp://a.rtmp.youtube.com/live2` (§13.3).
+4. **Report to the owner** in Spanish, plainly: the buffer over a day with both on, any filler, and how the vertical
+   stream looks on a phone.

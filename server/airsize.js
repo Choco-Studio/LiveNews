@@ -1,11 +1,14 @@
 // The size of the picture on air: always a whole multiple of the channel's 384x216 canvas (public/js/set.js W, H), so
-// every pixel of the art becomes the same k x k block of screen pixels (nearest neighbour). 1280x720 is x3.33: a third
+// every pixel of the art becomes the same k x k block of screen pixels (nearest neighbour). A portrait size is a
+// multiple of the vertical picture's 216x384 canvas instead (public/js/clip/layout.js VW, VH: the vertical live, x5 =
+// 1080x1920, docs/publishing/playout.md §13). 1280x720 is x3.33: a third
 // of the art's pixels would come out a screen pixel wider or taller than the rest (uneven lines, a shimmer when the
 // picture pans). The live stream (tools/stream.mjs) and the pre-rendered playout (server/playout/encode.js) both size
 // their picture here.
 //
 //   integerSize('1920x1080') -> { w: 1920, h: 1080, k: 5, size: '1920x1080', asked: '1920x1080', rounded: false }
 //   integerSize('1280x720')  -> { w: 1152, h: 648, k: 3, ..., rounded: true }   (and a warning: nearest whole multiple)
+//   integerSize('1080x1920') -> { w: 1080, h: 1920, k: 5, ... }                   (portrait: the 216x384 canvas)
 //   scaleFilter('1920x1080') -> the ffmpeg filter: nearest neighbour, BT.709, 4:2:0
 //   colourArgs()             -> the ffmpeg output options that say so (players read untagged HD as BT.709)
 //
@@ -14,9 +17,17 @@
 // 0xff004d as 0xff1b4c. The filter converts with BT.709 and the stream is tagged BT.709, limited range.
 
 export const CANVAS = Object.freeze({ w: 384, h: 216 });
-/** The sizes worth naming: x3 (YouTube files it as 480p), x5 (1080p, the default). */
-export const SIZES = Object.freeze({ '648p': '1152x648', '1080p': '1920x1080' });
+/** The vertical picture's canvas (public/js/clip/layout.js VW, VH). */
+export const VCANVAS = Object.freeze({ w: 216, h: 384 });
+/** The sizes worth naming: x3 (YouTube files it as 480p), x5 (1080p, the default), the vertical x5. */
+export const SIZES = Object.freeze({ '648p': '1152x648', '1080p': '1920x1080', vertical: '1080x1920' });
 export const DEFAULT_SIZE = SIZES['1080p'];
+
+/** The canvas a size is a multiple of: the vertical picture's for a portrait size, else the channel's. */
+export const canvasFor = (size) => {
+  const { w, h } = typeof size === 'object' && size ? size : parse(size);
+  return h > w ? VCANVAS : CANVAS;
+};
 
 function parse(size) {
   const s = String(size ?? '').trim().toLowerCase();
@@ -27,11 +38,13 @@ function parse(size) {
 }
 
 /**
- * The air size for `size`: itself when it is a whole multiple k of the canvas, else the nearest whole multiple (by
- * area) with a warning through `warn` (never a fractional scale). `strict` refuses instead of rounding.
+ * The air size for `size`: itself when it is a whole multiple k of the canvas (the channel's, or the vertical one's
+ * for a portrait size), else the nearest whole multiple (by area) with a warning through `warn` (never a fractional
+ * scale). `strict` refuses instead of rounding.
  */
-export function integerSize(size = DEFAULT_SIZE, { canvas = CANVAS, warn = (m) => console.warn(m), strict = false } = {}) {
+export function integerSize(size = DEFAULT_SIZE, { canvas = null, warn = (m) => console.warn(m), strict = false } = {}) {
   const asked = parse(size);
+  canvas = canvas || canvasFor(asked);
   const askedSize = `${asked.w}x${asked.h}`;
   const kx = asked.w / canvas.w;
   const ky = asked.h / canvas.h;
