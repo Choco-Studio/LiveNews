@@ -297,3 +297,20 @@ Every programme published, several a day, in playlists by type, no one at the de
   route leaves each video as a draft in the owner's app (at most 5 pending a day). Ask for both audits.
 - **The station fix this needed**: the news refresh is timed on the real clock (`server/playout/clock.js` `realDue`):
   on the air clock it never came due while the renderer waited, and the station waited for news that never came.
+
+## 9. Packaging and attention: ready on pull (24 Oct)
+
+Nothing to configure: `git pull origin claude/charming-gates-sc3lbb && npm ci`, restart the station and the timers.
+What the pull brings (`docs/publishing/thumbnails-titles.md`, `docs/publishing/attention.md`):
+
+- Every clip and programme gets three titles, three cover texts, a hook and hashtags, written by the AI writer from
+  the story's facts and checked (bait, copying, labels, a figure alone, a sum without whose it is, a filler first);
+  without the AI writer the deterministic writer's, which are plainer.
+- Three covers (vertical) and three 16:9 thumbnails per video: the picture full-frame, heavy type, the presenter as a
+  cut-out turned toward the words. A whole programme's three go to YouTube's Test & Compare.
+- A clip starts on the news (no "And finally:" in the sound or the captions) and its title band holds its own big
+  words, from the AI writer, from the first frame.
+- The AI writer is the configured provider (`PROVIDERS`, `ANTHROPIC_MODEL` in `/etc/globit24.env`): the packaging uses
+  whatever the station uses. Its spend is in `data/usage.json` and capped by `AI_DAILY_TOKENS` (§8).
+- What tells whether it works: YouTube Studio's impressions click-through rate and average view duration, TikTok's and
+  Instagram's share of viewers past the first seconds. Report them to the owner after the first weeks.
