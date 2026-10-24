@@ -1982,41 +1982,41 @@ const STINGER_LAYERS = [
 const STING = { lead: 0, tail: 0 };
 let STING_LOGO = null;
 
-export function drawStinger(ctx, t, p) {
+export function drawStinger(ctx, t, p, { w = W, h = H, logoScale = 2 } = {}) {
   if (!(p > 0 && p < 1)) return;
   const SL = 0.5;
-  const SH = H * SL;
+  const SH = h * SL;
   let front = false;
   for (let i = 0; i < STINGER_LAYERS.length; i++) {
     const L = STINGER_LAYERS[i];
-    const lead = lerp(0, W + SH, easeInOut(seg(p, L.a, L.b - L.a)));
-    const tail = lerp(0, W + SH, easeInOut(seg(p, L.e, L.f - L.e)));
+    const lead = lerp(0, w + SH, easeInOut(seg(p, L.a, L.b - L.a)));
+    const tail = lerp(0, w + SH, easeInOut(seg(p, L.e, L.f - L.e)));
     if (lead - tail < 1) continue;
-    slab(ctx, tail, 0, lead - tail, H, -SL, L.c);
+    slab(ctx, tail, 0, lead - tail, h, -SL, L.c);
     if (L.front) {
       // the front slab's leading edge: one pixel of brand red
-      if (lead < W + SH) slab(ctx, lead - 1, 0, 1, H, -SL, P.red);
+      if (lead < w + SH) slab(ctx, lead - 1, 0, 1, h, -SL, P.red);
       front = true;
       STING.lead = lead;
       STING.tail = tail;
     }
   }
   if (!front) return;
-  // the logo glides through while the black slab covers the frame
+  // the logo glides through while the black slab covers the frame (the vertical picture's at 1x: 2x is 236 wide)
   const lp = seg(p, 0.26, 0.48);
   if (lp <= 0 || lp >= 1) return;
-  const size = STING_LOGO || (STING_LOGO = measureLogo({ variant: 'full', scale: 2 }));
+  const size = logoScale === 2 ? STING_LOGO || (STING_LOGO = measureLogo({ variant: 'full', scale: 2 })) : measureLogo({ variant: 'full', scale: logoScale });
   const drift = Math.round(lerp(14, -14, easeInOut(lp)));
   ctx.save();
   try {
     // clip to the front slab (minus its red edge) so the logo never spills onto the picture
     ctx.beginPath();
-    for (let y = 0; y < H; y += 2) {
+    for (let y = 0; y < h; y += 2) {
       const off = Math.floor(y * -SL);
       ctx.rect(Math.round(STING.tail + off), y, Math.max(0, Math.round(STING.lead - STING.tail) - 1), 2);
     }
     ctx.clip();
-    drawLogo(ctx, W / 2 + drift, Math.round(H / 2 - size.h / 2), { variant: 'full', scale: 2, align: 'center' });
+    drawLogo(ctx, w / 2 + drift, Math.round(h / 2 - size.h / 2), { variant: 'full', scale: logoScale, align: 'center' });
   } finally {
     ctx.restore();
   }

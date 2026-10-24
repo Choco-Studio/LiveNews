@@ -6,6 +6,11 @@
 //
 //   PORT=8790 VOICE_ENGINE=kokoro node tools/playout/run.mjs --out data/playout/air/air-%03d.ts --segment 3600 \
 //        [--buffer 60] [--size 1920x1080] [--bitrate 5500k] [--crf 20] [--for <s>]
+//        [--vertical (--vertical-out <file> | --vertical-rtmp <server> [--vertical-key-env YOUTUBE_VERTICAL_STREAM_KEY]
+//         [--vertical-video-env YOUTUBE_VERTICAL_VIDEO_ID]) [--vertical-size 1080x1920]]
+//
+// --vertical: the vertical live too (docs/publishing/playout.md §13): the renderer draws it from the same frames into
+// <dir>/vertical and a fourth process, a second playout, airs it to its own file or stream.
 //
 // Everything after the known options is passed to the playout (air.mjs). Logs: one line per event, each prefixed with
 // the process it came from; the playout's state is in data/playout/*-status.json and events.jsonl.
@@ -23,15 +28,29 @@ const port = Number(process.env.PORT || 8790);
 const station = `http://127.0.0.1:${port}`;
 const pass = (names) => names.flatMap((n) => (opt(n) !== null ? [`--${n}`, opt(n)] : []));
 const airArgs = [...pass(['out', 'segment', 'rtmp', 'key-env', 'dir']), ...(opt('for') ? ['--for', opt('for')] : [])];
-const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'crf', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
+const VERTICAL = args.includes('--vertical');
+const renderArgs = ['--station', station, ...pass(['buffer', 'size', 'bitrate', 'crf', 'dir', 'start-lead']), ...(args.includes('--no-twin') ? ['--no-twin'] : []), ...(VERTICAL ? ['--vertical', ...pass(['vertical-size'])] : []), ...(opt('for') ? ['--for', opt('for')] : [])];
 if (!opt('out') && !opt('rtmp')) {
-  console.error('usage: node tools/playout/run.mjs --out <file> [--segment s] | --rtmp <server> --key-env <VAR>  [--buffer 60] [--for s]');
+  console.error('usage: node tools/playout/run.mjs --out <file> [--segment s] | --rtmp <server> --key-env <VAR>  [--buffer 60] [--for s] [--vertical --vertical-out <file> | --vertical-rtmp <server>]');
   process.exit(1);
 }
+if (VERTICAL && !opt('vertical-out') && !opt('vertical-rtmp')) {
+  console.error('--vertical needs where the vertical live goes: --vertical-out <file> or --vertical-rtmp <server> (its key in --vertical-key-env, YOUTUBE_VERTICAL_STREAM_KEY by default)');
+  process.exit(1);
+}
+const vairArgs = [
+  '--dir', path.join(path.resolve(opt('dir') || path.join(root, 'data', 'playout')), 'vertical'),
+  ...(opt('vertical-out') ? ['--out', opt('vertical-out')] : []),
+  ...(opt('vertical-rtmp') ? ['--rtmp', opt('vertical-rtmp'), '--key-env', opt('vertical-key-env', 'YOUTUBE_VERTICAL_STREAM_KEY')] : []),
+  '--video-env', opt('vertical-video-env', 'YOUTUBE_VERTICAL_VIDEO_ID'),
+  ...pass(['segment']),
+  ...(opt('for') ? ['--for', opt('for')] : []),
+];
 const procs = {
   station: { argv: [path.join(root, 'tools', 'playout', 'station.mjs')], env: { PORT: String(port) } },
   render: { argv: [path.join(root, 'tools', 'playout', 'render.mjs'), ...renderArgs], after: 'station' },
   air: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...airArgs] },
+  ...(VERTICAL ? { vair: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...vairArgs] } } : {}),
 };
 const BACKOFF = [2, 5, 15, 30, 60];
 let stopping = false;
@@ -69,7 +88,7 @@ function start(name) {
   });
 }
 function maybeDone() {
-  if (!procs.render.child && !procs.air.child) stop();
+  if (!procs.render.child && !procs.air.child && !procs.vair?.child) stop();
 }
 async function waitStation() {
   for (let i = 0; i < 600 && !stopping; i++) {
@@ -107,5 +126,6 @@ process.on('SIGTERM', stop);
 
 start('station');
 start('air'); // (filler until the first programme is ready: never black)
+if (procs.vair) start('vair');
 await waitStation();
 start('render');

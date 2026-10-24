@@ -40,6 +40,8 @@ import { pictureCreditOf } from '../graphics/picture.js';
 import { prepareLocator, drawLocator } from '../graphics/locator.js';
 import { drawTopicBoard } from '../graphics/topicboard.js';
 import { VerticalSet, twinkle, drawBoardFrame, glassRect, glassScrims, glint, OVERLAP } from './vset.js';
+import { drawVerticalChannel } from './vchannel.js';
+import { drawStinger, STINGER_DURATION } from '../scenes/cards.js';
 
 const ST = V.stage;
 // the presenter's single made tall: the Stage's 216 rows from this row (its framings put the eyes about 70 rows down:
@@ -113,7 +115,7 @@ export function verticalFraming(cast, slot) {
 export const windowX = (x, w = VW) => clamp(Math.round(x - w / 2), 0, HW - w);
 
 export class VerticalCompositor {
-  constructor({ canvas, source, renderer = null, audio = null, channel = null, makeStage = null, vset = null }) {
+  constructor({ canvas, source, renderer = null, audio = null, channel = null, makeStage = null, vset = null, live = false, sprite = null }) {
     // the programme's set stood on end (clip/vset.js: the studio's renderer when clip/index.js hands it in, else the
     // programme's colours on a graded field)
     this.vset = vset || new VerticalSet(null);
@@ -139,6 +141,11 @@ export class VerticalCompositor {
     this.lastMode = null;
     this.lastHead = { x: HW / 2, y: 150 };
     this.errors = new Set();
+    // the vertical live (main.js ?vertical=1): the channel's stinger, the playout's held frame, the spots' window
+    this.live = !!live;
+    this.sprite = sprite;
+    this.holdImage = null;
+    this.memo = {}; // the break's programme after it, the promo's cut-outs (clip/vchannel.js)
   }
 
   /** The stage's box for a scene (profileOf). */
@@ -171,6 +178,7 @@ export class VerticalCompositor {
     try {
       ctx.fillStyle = P.black;
       ctx.fillRect(0, 0, VW, VH);
+      if (this.live && this.liveFrame(t, scene)) return;
       const on = !['start', 'standby', 'ad', 'ident', 'promo', 'countdown', 'breakingCard'].includes(scene.shot);
       if (on && this.lastMode !== 'on') this.onAt = t;
       this.lastMode = on ? 'on' : 'off';
@@ -192,9 +200,35 @@ export class VerticalCompositor {
         this.drawMast(t, scene);
         if (this.profile.captions !== false) this.drawCaptions(t, scene);
       } else this.drawChannelFrame(t, scene);
+      if (this.live) this.stinger(t, scene);
     } catch (err) {
       this.log(err);
     }
+  }
+
+  /**
+   * The vertical live's own frames: the playout's held frame (the last vertical frame of what aired before, under this
+   * item's opening stinger) and the channel's shots set for the frame (clip/vchannel.js), each under the stinger. False
+   * for a programme's shot.
+   */
+  liveFrame(t, scene) {
+    const ctx = this.ctx;
+    // (the renderer's grab carries the clean frame only while a spot's window is open: tools/playout/render.mjs)
+    this.canvas.windowOpen = scene.shot === 'ad' && !!scene.card?.ad && !scene.card.ad.black;
+    if (scene.shot === 'hold') {
+      if (this.holdImage?.complete && this.holdImage.naturalWidth === VW) ctx.drawImage(this.holdImage, 0, 0);
+    } else if (!drawVerticalChannel(ctx, t, scene, { adWindow: true, source: this.src, channel: this.channel, memo: this.memo, sprite: this.sprite })) return false;
+    if (scene.shot !== 'hold') this.lastMode = 'off';
+    this.stinger(t, scene);
+    return true;
+  }
+
+  /** The channel's stinger over the vertical frame (scenes/cards.js drawStinger set for 216x384, the logo at 1x). */
+  stinger(t, scene) {
+    const st = scene.stinger;
+    if (!st) return;
+    const p = (t - st.start) / STINGER_DURATION;
+    if (p > 0 && p < 1) drawStinger(this.ctx, t, p, { w: VW, h: VH, logoScale: 1 });
   }
 
   // ------------------------------------------------------------------ the stage
@@ -738,8 +772,9 @@ export class VerticalCompositor {
 
   /** Full-frame channel shots (start, standby, break bumper...): the frame's middle and the logo. */
   drawChannelFrame(t, scene) {
-    const lw = measureLogo({ variant: 'full', scale: 2 }).w;
-    drawLogo(this.ctx, Math.round((VW - lw) / 2), 30, { variant: 'full', scale: 2, t });
+    // (the full logo at 1x: at 2x it is 236 wide, past the frame's edges)
+    const lw = measureLogo({ variant: 'full', scale: 1 }).w;
+    drawLogo(this.ctx, Math.round((VW - lw) / 2), 30, { variant: 'full', scale: 1, t });
   }
 }
 

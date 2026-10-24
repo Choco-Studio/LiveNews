@@ -63,6 +63,7 @@ export class Renderer {
     this.sctx.imageSmoothingEnabled = false;
     this.anim = {};
     this.graphics = new Graphics({ audio });
+    this.twins = []; // { canvas, ctx, graphics }: pictures drawn from the same frames (main.js ?twin=1, ?vertical=1)
     this.guard = new FrameGuard(); // a throwing shot shows a held frame / slate, never black
     // Wave 2 (?v2=1): the v2 Stage draws the studio shots (runtime/host.js). Loaded only when
     // asked, so the default path never runs v2 code; any v2 failure falls back to the shots below.
@@ -370,15 +371,16 @@ export class Renderer {
     this.guard.shot(this, t, scene); // drawShot, isolated: overlays and stinger always draw
     // PAY ATTENTION's scores strip over the studio (the half-time scores and the banter after them)
     if (scene.quizStrip && (scene.shot === 'wide' || scene.shot === 'close')) drawQuizStrip(this.ctx, t, scene.quizStrip);
-    // the twin picture (pre-rendered playout's ?twin=1): the same shot under the clip graphics, for the publishing desk
-    const tw = this.twin;
-    if (tw) tw.ctx.drawImage(this.canvas, 0, 0);
+    // the twin pictures (pre-rendered playout's ?twin=1 and ?vertical=1): the same shot under other graphics, the
+    // publishing desk's clip graphics, or none (the clean frame the vertical picture is composed from)
+    const tws = this.twins;
+    for (const tw of tws) tw.ctx.drawImage(this.canvas, 0, 0);
     this.drawOverlays(t, scene);
-    if (tw) {
+    for (const tw of tws) {
       try {
         tw.graphics.draw(tw.ctx, t, scene);
       } catch {
-        /* the twin is a by-product: the air picture never waits on it */
+        /* a twin is a by-product: the air picture never waits on it */
       }
     }
     if (scene.stinger) {
@@ -386,7 +388,7 @@ export class Renderer {
       if (p >= 1) scene.stinger = null;
       else if (p > 0) {
         cards.drawStinger(this.ctx, t, p, { channel: scene.channel.name });
-        if (tw) cards.drawStinger(tw.ctx, t, p, { channel: scene.channel.name });
+        for (const tw of tws) if (tw.stinger !== false) cards.drawStinger(tw.ctx, t, p, { channel: scene.channel.name });
       }
     }
   }

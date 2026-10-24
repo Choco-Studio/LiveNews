@@ -26,7 +26,7 @@
 // memory. A page crash ends the run with code 2: run it under the live supervisor (tools/publish/live.mjs), which
 // starts it again; YouTube and Twitch take the reconnection. Ctrl+C stops both cleanly.
 import { spawn } from 'node:child_process';
-import { integerSize, scaleFilter, colourArgs, DEFAULT_SIZE } from '../server/airsize.js';
+import { integerSize, scaleFilter, colourArgs, DEFAULT_SIZE, CANVAS, VCANVAS } from '../server/airsize.js';
 import { capturePageInit, CAPTURES, DEFAULT_CAPTURE } from './live/capture.mjs';
 import { FrameSink, sinkInputArgs } from './live/sink.mjs';
 import { procTree, summariseTree } from './leak/proc.mjs';
@@ -66,8 +66,11 @@ if (opts.rtmp) {
   }
   target = `${String(opts.rtmp).replace(/\/$/, '')}/${key}`;
 }
-// the picture's size: a whole multiple of the canvas, or the nearest one with a warning (never a fractional scale)
-const size = integerSize(opts.size, { warn: (m) => say(`WARNING: ${m}`) });
+// the picture's size: a whole multiple of the canvas, or the nearest one with a warning (never a fractional scale); the
+// canvas is the page's: the vertical picture's only for a page that draws it (?format=vertical), never a portrait size
+// stretched over the channel's 16:9
+const pageCanvas = /[?&]format=(vertical|9x16|9:16)(&|$)/i.test(String(opts.url || '')) ? VCANVAS : CANVAS;
+const size = integerSize(opts.size, { warn: (m) => say(`WARNING: ${m}`), canvas: pageCanvas });
 const fps = Number(opts.fps);
 const kbps = parseInt(opts.bitrate, 10);
 if (!(kbps > 0)) {

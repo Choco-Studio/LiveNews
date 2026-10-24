@@ -51,7 +51,19 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
     return { vertical: false, frame() {} };
   }
   renderer.graphics = new g.VerticalGraphics({ audio });
-  const [{ VerticalCompositor }, stageMod, quizMod, weatherMod, sportMod, vsetMod, kit] = await Promise.all([
+  return installVertical({ canvas, renderer, audio, channel });
+}
+
+/**
+ * The vertical compositor drawing `canvas` (216x384) from `renderer.canvas` (the horizontal frame without the air
+ * graphics) and `renderer.graphics` (the clip graphics' bookkeeping) after every renderer frame. `live`: the vertical
+ * live's picture (main.js ?vertical=1): the channel's stinger drawn for the frame, the playout's held frame, and the
+ * break's spots left to a window the pre-rendered playout fills with the spot itself at 2x (clip/vchannel.js
+ * AD_WINDOW, server/playout/encode.js renderGraph); a clip is drawn without them.
+ * Returns { vertical: true, compositor, frame(t, scene) }.
+ */
+export async function installVertical({ canvas, renderer, audio, channel, live = false }) {
+  const [{ VerticalCompositor }, stageMod, quizMod, weatherMod, sportMod, vsetMod, kit, spriteMod] = await Promise.all([
     import('./vertical.js'),
     import('../v2/canvas25d/runtime/stage.js').catch(() => null),
     import('./vquiz.js').catch(() => null),
@@ -59,6 +71,7 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
     import('./vsport.js').catch(() => null),
     import('./vset.js'),
     setKit(),
+    import('./sprite.js').catch(() => null),
   ]);
   const comp = new VerticalCompositor({
     canvas,
@@ -68,6 +81,8 @@ export async function installClip({ canvas, renderer, audio, channel, opts }) {
     channel,
     makeStage: stageMod ? (o) => new stageMod.Stage({ ...o, idle: null }) : null,
     vset: new vsetMod.VerticalSet(kit),
+    live,
+    sprite: spriteMod?.presenterSprite || null,
   });
   if (quizMod?.installQuiz) quizMod.installQuiz(comp);
   if (weatherMod?.installWeather) weatherMod.installWeather(comp);

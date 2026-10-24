@@ -12,6 +12,11 @@ compositor: its single, a board, a map, the montage, the end card, the quiz's bo
 which answers `/api/channel`), `/lab/vquiz.html`, `/lab/vweather.html`, `/lab/vsport.html`, `/lab/clip.html`,
 `/lab/thumb.html`; `/lab/weather.html` draws the vertical stage of the weather's map shots beside its frame.
 
+**The vertical live (24 Oct).** The same picture airs as a second 24/7 stream for the vertical feeds (YouTube's Shorts
+feed, and the other vertical platforms where the channel is allowed to stream): drawn from the same frames as the
+horizontal channel by the pre-rendered playout, with the channel's own moments (the ident and its AI notice, the break,
+the spots in a window, the promo, the countdown) set for the frame. See `playout.md` §13.
+
 **Round 10 (owner, 18 Oct: "eso queda fatal", "el fondo no pega nada").** Until round 9 the frame was a flat dark
 field with the bands in black: a small board floated in empty space, every programme looked the same, and a clip could
 open on a panel half wiped in. Since round 10 every frame is the programme's own studio, stood on end (§1, §2), boards
