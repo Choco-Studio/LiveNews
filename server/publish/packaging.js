@@ -250,12 +250,15 @@ function common(text, facts, field) {
 }
 
 /** A title's faults ([] when it can be used). `edited`: the owner's own (his words: unsupported words are his call). */
+const FILLER_OPEN = /^(?:here'?s|here is|so,?|well,?|there (?:is|are|was|were)|it turns out|this is|meet the|watch|you won'?t|guess)\b/i;
 export function checkTitle(text, facts, { edited = false } = {}) {
   const t = norm(text);
   const faults = [];
   const n = chars(t);
   if (n < LIMITS.title.min) faults.push(`too short (${n} characters, at least ${LIMITS.title.min})`);
   if (n > (edited ? LIMITS.title.hard : LIMITS.title.max)) faults.push(`too long (${n} characters, at most ${edited ? LIMITS.title.hard : LIMITS.title.max})`);
+  // the first two words are what a scanning eye reads (docs/publishing/attention.md): a topic, never a filler
+  if (FILLER_OPEN.test(t)) faults.push('opens on a filler, not the topic');
   // shouting: a word of capitals that is no acronym (NASA, UK, UNIT-8 are fine)
   const shout = (t.replace(PROGRAMME_WORDS, ' ').match(/\b\p{Lu}[\p{Lu}\d]*(?:-[\p{Lu}\d]+)*\b/gu) || []).filter((w) => w.replace(/[^\p{Lu}]/gu, '').length >= 4).filter((w) => !ACRONYM_OK.test(w) && !shoutBasis(facts).includes(w));
   if (shout.length) faults.push(`capitals: ${shout.join(' ')}`);
@@ -649,6 +652,12 @@ export function packagePrompt(facts) {
     '- No "why", "how", "explained" or "all you need to know" unless the clip itself explains it.',
     '- The thumbnail words must tell a stranger what happened, or show the striking fact: a number, a place, a who. Never a label (NUMBER OF THE DAY, STORY OF THE WEEK, THE HEADLINES, ROUND THREE, PLAY ALONG, FULL PROGRAMME), never a nickname or a quotation out of its context, never a teaser that only makes sense after watching. A number clip: the number itself, with what it is (£15M FOR BELFAST, never £15M alone: a figure alone says nothing, and beside a person\'s picture reads as theirs). A sum always names whose it is or what it buys (SKY\'S £1.6BN ITV BID, not £1.6BN PURCHASE). A person\'s health: plainly, who and what, no tease.',
     '- hook: the caption\'s first line, at most 90 characters: the most interesting fact first, a reason to watch.',
+    // (docs/publishing/attention.md: what holds a stranger's eye, within the story)
+    '- Lead with the topic: the first two words of every title and of the hook name what the story is about (a thing, a place, a who, a number), never a filler ("Here\'s", "So", "There is", "It turns out").',
+    '- Numbers as digits (19, not nineteen), and the most specific true detail over a general one (a place, a figure, a name).',
+    '- Say what is new or surprising in the story, in its own facts. For science, space and technology: the wonder of it, plainly (the scale, the first, the record) when the facts carry it.',
+    '- When the facts say how the story touches ordinary people (prices, health, the phone or apps they use, their weather), say that, plainly; never invent a link that is not in the facts.',
+    '- Never make it sound worse or better than the facts: no exaggeration of harm, no false hope. A curiosity gap only when the clip closes it.',
     '- lead: one sentence for the description, at most 160 characters.',
     facts.grave ? '- This is grave news (deaths, disaster or conflict): plain, factual and respectful. No question, no emotional or dramatic word, no emoji.' : null,
     facts.quiz ? '- A quiz: invite the viewer to play along; never give or hint at the answer. The first thumbnail text shows what the question is about (TSMC: HOW MUCH?, FROM $8 TO ?); a challenge to a player (BEAT PENNY?) only after it, or when nothing of the question can be shown without its answer.' : null,

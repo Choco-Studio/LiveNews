@@ -35,7 +35,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
-import { detectMoments, publishable, markCopied, markUncleared, ownHook } from '../../server/publish/moments.js';
+import { detectMoments, publishable, markCopied, markUncleared, ownHook, hookLines } from '../../server/publish/moments.js';
 import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
@@ -335,6 +335,13 @@ for (const m of chosen) {
     say(`packaging ${m.id}: ${String(err?.message || err).slice(0, 160)}; the deterministic writer's words`);
   }
   say(`packaging ${m.id} (${pack.writer}): “${pack.titles[0]}” · ${pack.thumbs.join(' / ')}${pack.rejected?.length ? ` · ${pack.rejected.length} of the AI writer's lines refused` : ''}`);
+  // the title band holds the clip's own big words from its first frame (docs/publishing/attention.md §2: the scroll
+  // decides in under two seconds, mostly without sound): the packaging's first cover text, already checked for bait,
+  // labels and copying, when it fits the band's two lines; else the hook as before (never the programme's name when
+  // the story has words of its own). A quiz keeps its own (its covers never give the answer: PLAY ALONG)
+  // (the AI writer's words only: the deterministic writer's cover texts are fragments, "6 ALL YOU", worse than the hook)
+  const bandHook = pack.writer === 'ai' && !facts.quiz && pack.thumbs?.[0] ? hookLines(pack.thumbs[0]) : null;
+  if (bandHook) m.hook = bandHook;
   for (const fmt of formats) {
     try {
       const tl = timelines[fmt];

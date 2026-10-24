@@ -331,6 +331,10 @@ describe('the covers', () => {
     assert.deepEqual(coverCast(episode, { from: 1 }), { presenter: 'lola', partner: 'paco', emotion: 'happy' });
     assert.deepEqual(coverCast(episode, { from: 2 }), { presenter: 'paco', partner: 'lola', emotion: 'serious' }, 'sad reads as serious on a cover');
     assert.deepEqual(coverCast(episode, { from: 1, grave: true }), { presenter: 'lola', partner: 'paco', emotion: 'serious' }, 'never a smile on grave news');
+    const feat = { cast: { A: 'max' }, segments: [{ anchor: 'A', emotion: 'neutral', feature: 'number' }, { anchor: 'A', emotion: 'neutral', feature: 'lighter' }] };
+    assert.equal(coverCast(feat, { from: 0 }).emotion, 'surprised', 'a striking figure');
+    assert.equal(coverCast(feat, { from: 1 }).emotion, 'happy', 'a lighter story');
+    assert.equal(coverCast(feat, { from: 0, grave: true }).emotion, 'serious');
     assert.deepEqual(coverCast({ program: { id: 'pay-attention' }, segments: [] }), { presenter: 'qm', partner: null, emotion: 'neutral' }, 'the programme\'s presenter from the channel file');
   });
 
@@ -372,6 +376,11 @@ describe('the big words tell a stranger what happened (the coordinator\'s round)
     const nick = { ...f(), aired: `${f().aired} Loughnane, nicknamed 'Billy the Kid', won.` };
     assert.ok(checkThumb('BILLY THE KID', nick, {}).some((x) => /out of its context/.test(x)));
     for (const t of ['19 INJURED', 'KENYA', 'NAIROBI CONTACTS', 'MORE THAN 40 TRACED']) assert.deepEqual(checkThumb(t, { ...f(), aired: `${f().aired} 19 injured.` }, {}), [], t);
+  });
+
+  test('a title leads with its topic: never a filler first (the first two words are what a scanning eye reads)', () => {
+    const f = { ...facts(), grave: false };
+    for (const t of ["Here's what NASA plans for its low flights over Texas", 'There is a new GTA 6 trailer from Rockstar today', 'So, Tesla says its Roadster can now fly']) assert.ok(checkTitle(t, f).some((x) => /filler/.test(x)), t);
   });
 
   test('a number clip shows its number; a person\'s health is told plainly, with who', () => {

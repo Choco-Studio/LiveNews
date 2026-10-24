@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detectMoments, publishable, hookLines, pickHook, placeRun, momentId, headlineHook, markCopied, ownHook, CLIP_MIN_SECONDS } from '../server/publish/moments.js';
-import { estimateTimeline } from '../server/publish/timeline.js';
+import { estimateTimeline, buildTimeline } from '../server/publish/timeline.js';
 import { dangling, backReference, endsClean, quotesBalanced } from '../server/publish/text.js';
 
 const S = (text, extra = {}) => ({ type: 'story', anchor: 'A', text, ...extra });
@@ -80,6 +80,24 @@ test('placeRun starts a run on its first sentence that stands alone', () => {
   const run = placeRun(estimateTimeline(ep), 0, 0);
   assert.ok(run.trimmed);
   assert.match(run.text, /^And finally|^NASA/);
+});
+
+test('a clip starts on the news, never on a running-order label (the first seconds decide the scroll)', () => {
+  const tl = (text) => estimateTimeline({ segments: [S(text)] });
+  assert.match(placeRun(tl('Thanks, UNIT-8. And finally: NASA names a new director for its Marshall centre.'), 0, 0).text, /^NASA names/);
+  assert.match(placeRun(tl('Our number of the day: 2 million. A new console sold 2 million units in a week.'), 0, 0).text, /^2 million/);
+  assert.match(placeRun(tl('Now, around the world in 30 seconds. Heavy rain has flooded streets in Kerala.'), 0, 0).text, /^Heavy rain/, 'a label alone is never the first sentence');
+  assert.match(placeRun(tl('Now you can call anyone with WhatsApp, even without the app.'), 0, 0).text, /^Now you can call/, 'a "now" that is part of the sentence stays');
+  assert.match(placeRun(tl('From Circuit Weekly: a chipmaker has unveiled a new laptop processor.'), 0, 0).text, /^From Circuit Weekly/, 'the attribution is never cut');
+  // with the recording's word marks, the clip starts at the first word after the label
+  const seg = { ...S('And finally: astronomers found water vapour on a distant planet.') };
+  const text = seg.text;
+  const at = (w) => text.indexOf(w);
+  seg.audio = { duration: 4, words: ['And', 'finally:', 'astronomers', 'found', 'water'].map((w, i) => ({ char: at(w), len: w.length, t: i * 0.4 })) };
+  const run = placeRun(buildTimeline({ segments: [seg] }, { events: [{ type: 'speak', v: 10, text }] }), 0, 0);
+  assert.ok(run, 'the run is placed on the recording');
+  assert.match(run.text, /^astronomers/);
+  assert.ok(Math.abs(run.start - 10.8) < 0.05, `starts at the word: ${run.start}`);
 });
 
 test('COSMOS DESK: light stories, UNIT-8 with the story it answers, a run of stories, a grave story never light', () => {

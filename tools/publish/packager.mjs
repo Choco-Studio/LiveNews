@@ -98,7 +98,10 @@ export function coverCast(episode = {}, moment = null) {
   const grave = moment ? !!moment.grave : false;
   // the other presenter of a duo stands on C, so the three covers are three different pictures
   const partner = Object.values(episode.cast || {}).find((id) => typeof id === 'string' && id !== presenter) || null;
-  return { presenter, partner, emotion: grave ? 'serious' : EMOTION_OF[seg?.emotion] || 'neutral' };
+  // (a striking figure is surprising, a lighter story happy: arousal is what makes a stranger stop, docs/publishing/
+  // attention.md §1; only where the story is that, never on grave news)
+  const feel = seg?.feature === 'number' ? 'surprised' : seg?.feature === 'lighter' ? 'happy' : EMOTION_OF[seg?.emotion] || 'neutral';
+  return { presenter, partner, emotion: grave ? 'serious' : feel };
 }
 
 /** One frame of a master (1x, lossless) as a PNG. */

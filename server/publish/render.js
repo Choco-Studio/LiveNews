@@ -47,7 +47,8 @@ export function clipWindow(moment, timeline, { fps = FPS, lead = LEAD, tail = TA
   let wiped = null; // the first whole frame after a wipe the clip opens on
   const before = cutsAround(timeline, moment.start + 0.05).before;
   const seg = (timeline?.segments || []).find((s) => s.index === moment.from);
-  if (before !== null && before >= moment.start - 1.5 && before <= moment.start + 0.05) {
+  // (a run that starts after a running-order label never opens on a cut before it: the label would be heard)
+  if (before !== null && before >= moment.start - (moment.leadIn ? 0.05 : 1.5) && before <= moment.start + 0.05) {
     start = firstFrameAfter(before);
     snappedStart = true;
   } else if (!moment.trimmed && Number.isFinite(seg?.spokeAt) && seg.spokeAt >= moment.start - 1.5 && seg.spokeAt <= moment.start) {
@@ -55,7 +56,8 @@ export function clipWindow(moment, timeline, { fps = FPS, lead = LEAD, tail = TA
     snappedStart = true;
     if (wipeIn > 0) wiped = firstFrameAfter(seg.spokeAt + wipeIn);
   }
-  // never after the first word
+  // never in the label's last word, never after the first word
+  if (moment.leadIn) start = Math.max(start, moment.start - 0.12);
   start = Math.min(start, moment.start - 0.04);
   let end = moment.end + tail;
   let snappedEnd = false;

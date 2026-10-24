@@ -928,3 +928,12 @@ describe('the vertical picture', () => {
     }
   });
 });
+
+test('a running-order label is a caption page of its own: a clip that starts on the news never shows it', async () => {
+  const { pagesOf } = await import('../public/js/clip/captions.js');
+  const pages = pagesOf('And finally: Rockstar has released a new trailer for GTA 6, its biggest game.', 200);
+  assert.equal(pages[0].lines.map((l) => l.text).join(' '), 'And finally:');
+  assert.match(pages[1].lines[0].text, /^Rockstar/);
+  const plain = pagesOf('Now you can call anyone with WhatsApp, even without the app.', 200);
+  assert.match(plain[0].lines[0].text, /^Now you/, 'a "now" inside the sentence is no label');
+});

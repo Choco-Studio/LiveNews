@@ -58,8 +58,9 @@ async function cover(spec) {
   // the clip's frame: the part of it that may show (spec.frameRect; by default the vertical picture's stage, at 1x,
   // which no caption or title covers)
   const frameRect = frame ? spec.frameRect || { ...STAGE } : null;
-  // (a close single's size on a cover; a little bigger on a thumbnail, where the figure stands on the right third)
-  const sprite = spec.presenter ? presenterSprite(spec.presenter, { emotion: spec.grave ? 'serious' : spec.emotion || 'neutral', scale: vertical ? 3.4 : 3.8 }) : null;
+  // (a close single's size on a cover; a little bigger on a thumbnail, where the figure stands on the right third and
+  // turns toward the words on the left: a face's gaze carries the viewer's eye where it looks, docs/publishing/attention.md)
+  const sprite = spec.presenter ? presenterSprite(spec.presenter, { emotion: spec.grave ? 'serious' : spec.emotion || 'neutral', scale: vertical ? 3.4 : 3.8, yaw: vertical ? 0 : -0.3 }) : null;
   const draw = vertical ? drawCover : drawThumb16;
   draw(g, { variant: spec.variant || 'photo', programme: spec.programme, accent: spec.accent || THEME_ACCENT[spec.theme] || P.red, words: spec.words || '', photo, photoRect, credit: spec.credit || '', frame, frameRect, kicker: spec.kicker || '', grave: !!spec.grave, sprite });
   return c.toDataURL('image/png');

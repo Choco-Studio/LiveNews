@@ -15,9 +15,10 @@ const EMOTIONS = new Set(['neutral', 'happy', 'serious', 'surprised', 'sad', 'th
 /**
  * The presenter `id` (config/channel.json presenters) at rig scale `scale` (a close single is about 3.4), facing
  * screen-left (`side` 1) or screen-right (-1), the expression `emotion` held from the start, an optional gesture
- * caught `t` seconds in. Drawn on a cleared (transparent) frame: every pixel the renderer writes is the figure.
+ * caught `t` seconds in, the head turned by `yaw` (radians; negative turns the face to screen-left, toward a
+ * thumbnail's words). Drawn on a cleared (transparent) frame: every pixel the renderer writes is the figure.
  */
-export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale = 3.4, side = 1, t = 2.6 } = {}) {
+export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale = 3.4, side = 1, t = 2.6, yaw = 0 } = {}) {
   if (!id || typeof document === 'undefined') return null;
   const perf = { side, seed: 11, emotions: EMOTIONS.has(emotion) ? [{ t0: 0, name: emotion }] : [], gestures: gesture ? [{ name: gesture, t0: 0.2 }] : [] };
   let head = null;
@@ -26,6 +27,8 @@ export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale
     frame.clear(0);
     parts.clear();
     const sk = poseAt(a, t);
+    // (a head turned toward the words: a face's gaze carries the viewer's eye where it looks; cast-a lab's yaw offset)
+    if (yaw) sk.head.yaw += yaw;
     // the neck where a close single keeps it: the head in the upper part of the frame, the body to the bottom edge
     head = drawCharacter(parts, a.look, sk, { x: W >> 1, y: Math.round(30 + 26 * scale), s: scale, gb: 0, clip: false });
     parts.resolve(frame);
