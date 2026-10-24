@@ -112,6 +112,11 @@ would have held (`strict-would-hold` in `events.jsonl`).
   padding at the joins, no gap, no drift between picture and sound, however many files.
 - **Paced.** Both inputs are read at real time (`-re`); the playhead (the air time of the next frame written) runs at
   most a few seconds ahead of the clock.
+- **Its start.** The encoder reads the first 32 kB of picture before any sound. Until it has had twice that much, the
+  playout queues the sound in memory instead of waiting for the sound's pipe to empty. Until 24 Oct, a first filler
+  of about a second of a plain card (well under 32 kB) left both waiting for ever, at a start or after a restart:
+  `test/playout-destinations.test.js` opens on such a filler, wherever the clock starts. A write that cannot finish
+  never holds up a stop (SIGTERM, `--for`).
 - **On time, or not at all.** A file airs when the playhead reaches its air time. One whose time has passed by more than
   2 s is dropped (`drop` in the log): aired late, its clock would lie and push every later file off its time.
 - **Never black.** A gap before the next file is filled up to its time with the **filler card** (BACK SHORTLY · GLOBIT
@@ -125,8 +130,9 @@ would have held (`strict-would-hold` in `events.jsonl`).
   bed fading in under it. `tools/playout/joins.mjs` draws the frames around each join from the playout's own output
   and the sound's level across it.
 - **Output.** `--out file` (`.ts`, `.flv`, `.mkv`, `.mp4`; `{n}` numbers restarts), `--segment <s>` for one file per
-  period (a 24-hour test keeps hours, not one 30 GB file). RTMP: `--rtmp <server> --key-env <VAR>`, refused unless
-  `PUBLISH_LIVE=1`. If the encoder dies (an RTMP drop), a new one starts and the schedule is joined at the next
+  period (a 24-hour test keeps hours, not one 30 GB file). Streaming: `--to youtube[,…]` by name or `--rtmp <server>
+  --key-env <VAR>`, refused unless `PUBLISH_LIVE=1`, each destination through its own relay (§13.6): a destination
+  that drops reconnects alone. If the encoder itself dies, a new one starts and the schedule is joined at the next
   programme's time.
 
 ## 5. No false LIVE

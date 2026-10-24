@@ -238,9 +238,9 @@ function startAir() {
     else outArgs.push(...(fmt === 'mp4' ? ['-movflags', '+frag_keyframe+empty_moov'] : []), '-f', fmt, file);
   }
   // (the video input probed from its first 32 kB, not 5 MB: the encoder reads the sound only once the video is probed,
-  // and a short filler at a small size never reached 5 MB before the sound's pipe filled: both sides waited for ever)
+  // and the sound waits in memory until then: write() below)
   const argv = ['-hide_banner', '-loglevel', 'warning', '-y',
-    '-re', '-thread_queue_size', '256', '-fflags', '+genpts', '-probesize', '32768', '-analyzeduration', '0', '-f', 'h264', '-framerate', String(FPS), '-i', 'pipe:0',
+    '-re', '-thread_queue_size', '256', '-fflags', '+genpts', '-probesize', String(VIDEO_PROBE), '-analyzeduration', '0', '-f', 'h264', '-framerate', String(FPS), '-i', 'pipe:0',
     '-re', '-thread_queue_size', '256', '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', 'pipe:3',
     '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', AIR_DEFAULTS.audioBitrate, '-ar', String(RATE), '-ac', '2',
     ...outArgs];
@@ -264,7 +264,7 @@ function startAir() {
   }
   p.stdin.on('error', () => {});
   p.stdio[3].on('error', () => {});
-  air = { p, v: p.stdin, a: p.stdio[3], dead: false, err };
+  air = { p, v: p.stdin, a: p.stdio[3], dead: false, err, videoBytes: 0 };
   p.on('exit', (code) => {
     air.dead = true;
     say(`ffmpeg ended (${code})`);
@@ -273,12 +273,20 @@ function startAir() {
   return air;
 }
 
+// The encoder reads the first 32 kB of its picture before it reads any sound (it probes the picture: -probesize). A
+// sound write that waited for its pipe to empty before then would wait for ever, and the picture behind it with it (a
+// short filler first, under a second or so of a plain card, never reached 32 kB: the playout hung at its start). Until
+// the encoder has had twice that much picture, the sound is queued in memory instead (seconds of it at most).
+const VIDEO_PROBE = 32768;
+// (a write that cannot finish never holds up a stop: SIGTERM, or --for run out)
+const over = () => stopping || (FOR > 0 && Date.now() - started > FOR * 1000);
 function write(stream, buf) {
   return new Promise((resolve) => {
     if (air.dead) return resolve(false);
-    if (stream.write(buf)) return resolve(true);
+    if (stream === air.v) air.videoBytes += buf.length;
+    if (stream.write(buf) || (stream === air.a && air.videoBytes < 2 * VIDEO_PROBE)) return resolve(true);
     const t = setInterval(() => {
-      if (air.dead) {
+      if (air.dead || over()) {
         clearInterval(t);
         resolve(false);
       }

@@ -103,6 +103,7 @@ const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
 test('the playout streams one encode to two destinations; a hold lets go of YouTube only; a reload reconnects TikTok alone', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 90_000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'air-dual-'));
+  let p = null;
   try {
     const { airVideoArgs } = await import('../server/playout/encode.js');
     const { PlayoutStore } = await import('../server/playout/queue.js');
@@ -119,7 +120,7 @@ test('the playout streams one encode to two destinations; a hold lets go of YouT
     const wrong = spawnSync(process.execPath, [path.join(root, 'tools/playout/air.mjs'), '--dir', q, '--to', 'youtube', '--for', '2'], { env: { ...env, YOUTUBE_RTMP_URL: path.join(dir, 'yt'), YOUTUBE_STREAM_KEY: 'h.flv' }, encoding: 'utf8' });
     assert.notEqual(wrong.status, 0);
     assert.match(wrong.stderr, /refused: youtube wants a landscape/);
-    const p = spawn(process.execPath, [path.join(root, 'tools/playout/air.mjs'), '--dir', q, '--to', 'youtube-vertical,tiktok', '--for', '13'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    p = spawn(process.execPath, [path.join(root, 'tools/playout/air.mjs'), '--dir', q, '--to', 'youtube-vertical,tiktok', '--for', '13'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let log = '';
     p.stdout.on('data', (d) => (log += d));
     p.stderr.on('data', (d) => (log += d));
@@ -141,6 +142,43 @@ test('the playout streams one encode to two destinations; a hold lets go of YouT
     assert.deepEqual(events.find((e) => e.type === 'air-reload')?.changed, ['tiktok'], 'the reload reconnects TikTok alone');
     assert.ok(!/non-existing PPS|decode_slice_header/.test(log), 'every relay joined at a keyframe');
   } finally {
+    // (a failure never leaves the playout running: its process group, the encoder and the relays with it)
+    if (p && p.exitCode === null) process.kill(-p.pid, 'SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a short filler first never stalls the playout (the encoder probes its picture before it reads any sound)', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'air-probe-'));
+  let p = null;
+  try {
+    const { airVideoArgs } = await import('../server/playout/encode.js');
+    const { PlayoutStore } = await import('../server/playout/queue.js');
+    // a two-frame programme 0.9 s after every whole second: the playout starts its clock on a whole second, so wherever
+    // it starts, it opens with a 0.9 s filler, under 32 kB of a plain card (it hung for ever there before: the encoder
+    // waited for more picture, the playout for the sound's pipe to empty)
+    const seg = path.join(dir, 'seg.mkv');
+    const mk = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=216x384:r=30', '-f', 'lavfi', '-i', 'sine=f=440:r=48000', '-frames:v', '2', ...airVideoArgs({ size: '216x384' }), '-c:a', 'flac', '-ac', '2', '-t', String(2 / 30), seg]);
+    assert.equal(mk.status, 0, String(mk.stderr));
+    const q = path.join(dir, 'q');
+    const store = new PlayoutStore(q);
+    const t0 = Math.floor(Date.now() / 1000) * 1000;
+    for (let k = 0; k < 12; k++) store.enqueue({ id: `seg-${k}`, kind: 'break', unit: `u${k}`, itemId: `b${k}`, programId: null, title: 'Break', airAt: t0 + k * 1000 + 900, frames: 2, fps: 30, file: seg, size: '216x384', bitrate: '4000k', crf: 20, preset: 'veryfast' });
+    const out = path.join(dir, 'air.ts');
+    p = spawn(process.execPath, [path.join(root, 'tools/playout/air.mjs'), '--dir', q, '--out', out, '--for', '5'], { env: { ...process.env, NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    let log = '';
+    p.stdout.on('data', (d) => (log += d));
+    p.stderr.on('data', (d) => (log += d));
+    const code = await Promise.race([new Promise((r) => p.on('exit', r)), new Promise((r) => setTimeout(() => r('hung'), 40_000))]);
+    assert.equal(code, 0, `the playout ends by itself (${code}): ${log}`);
+    const streams = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,start_time,duration', '-of', 'csv=p=0', out], { encoding: 'utf8' }).stdout.trim().split('\n').map((l) => l.split(','));
+    const v = streams.find((x) => x[0] === 'video');
+    const a = streams.find((x) => x[0] === 'audio');
+    assert.ok(v && a, `picture and sound aired: ${streams.join(' | ')}`);
+    assert.ok(Number(v[2]) > 3, `the fillers and the programmes aired (${v[2]} s)`);
+    assert.ok(Math.abs(Number(v[1]) - Number(a[1])) < 1 / 30 + 1e-6, `picture and sound start together (${v[1]} / ${a[1]})`);
+  } finally {
+    if (p && p.exitCode === null) process.kill(-p.pid, 'SIGKILL');
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
