@@ -28,17 +28,18 @@ const H = 216;
 export const OVERLAP = 8;
 
 // The set's screen (geometry.js SET.screen, X -73..73, Y -110..-22, on the wall at Z 1400) is framed so that it is the
-// board's glass exactly: 190 px wide (x 3-193, centred on the safe column's middle, 98), its top at the glass's top
+// board's glass exactly: 190 px wide (x 13-203, centred on the frame's middle, 108), its top at the glass's top
 // (row 75) in the upper half and its foot at the glass's foot (row 245) in the lower half. Zoom z puts the wall at
 // k = z / 1.4 px a unit: 146 k = 190 gives z = 1.822; row 75 = hy + (-110 + 60) k gives hy = 140; row 245 =
-// hy + drop + (-22 + 60) k gives drop = 56; the screen's middle on column 98 of the crop takes columns 94-309 of the
-// 384-wide render (x0). PAY ATTENTION's board is the screen in its 9-unit purple frame (studio/quiz.js QUIZ.frame), 164
+// hy + drop + (-22 + 60) k gives drop = 56; the screen's middle on column 108 of the crop takes columns 84-299 of the
+// 384-wide render (x0); until 24 Oct the glass sat at x 3-193, centred on x 98, and read as off-centre. PAY
+// ATTENTION's board is the screen in its 9-unit purple frame (studio/quiz.js QUIZ.frame), 164
 // units wide: z = 1.622 makes the frame the marquee's 190 px on the tall stage's glass (rows 35-245), hy 103, drop 87.
 function studio(id) {
-  return { style: id, cam: { zoom: 1.822, hy: 140, x: 0, y: -60, z: 0 }, seam: 160, drop: 56, x0: 94, wall: 'rest', frame: 'bezel' };
+  return { style: id, cam: { zoom: 1.822, hy: 140, x: 0, y: -60, z: 0 }, seam: 160, drop: 56, x0: 84, wall: 'rest', frame: 'bezel' };
 }
 function quizSet() {
-  return { style: 'pay-attention', cam: { zoom: 1.622, hy: 103, x: 0, y: -60, z: 0 }, seam: 140, drop: 87, x0: 94, wall: 'rest', frame: 'marquee' };
+  return { style: 'pay-attention', cam: { zoom: 1.622, hy: 103, x: 0, y: -60, z: 0 }, seam: 140, drop: 87, x0: 84, wall: 'rest', frame: 'marquee' };
 }
 
 /**
@@ -413,8 +414,8 @@ function scrimRows(ctx, y0, h, level) {
   ctx.putImageData(img, 0, y0);
 }
 
-/** The glass over a stage box: 3 px in at the left, 190 wide (centred on the safe column), 3 px in at top and foot. */
-export const glassRect = (box) => ({ x: 3, y: box.y + 3, w: 190, h: box.h - 6 });
+/** The glass over a stage box: 190 wide, centred on the frame (x 13-203), 3 px in at top and foot. */
+export const glassRect = (box) => ({ x: (VW - 190) >> 1, y: box.y + 3, w: 190, h: box.h - 6 });
 
 // the set's screen bezels (styles.js bezel: base and top), so a board's frame is the set's own
 const BEZEL = {

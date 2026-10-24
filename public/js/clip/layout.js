@@ -25,12 +25,30 @@ export const V = Object.freeze({
 /** The part of the frame no feed covers (TikTok, Reels and Shorts measured together: docs/publishing/vertical.md §2). */
 export const PLATFORM_SAFE = Object.freeze({ left: 8, right: 188, top: 32, bottom: 300 });
 /**
- * The column every word a viewer must read keeps to: x 8-188 (TikTok's, Reels' and Shorts' buttons cover the right
- * 12 %, their caption and handle the bottom 20 %). `cx` is its middle: what is centred is centred there.
+ * The column every word a viewer must read keeps to: centred on the frame (owner, 24 Oct: "está como descentrado"),
+ * as wide as a centred column can be inside the platforms' safe area (their buttons cover the right 12 %, their
+ * caption and handle the bottom 20 %): x 28-188, its middle the frame's (108). Until 24 Oct it was the whole safe area,
+ * x 8-188, and everything centred on x 98: ten pixels left of the frame's middle, which read as off-centre.
  */
-export const SAFE = Object.freeze({ x: PLATFORM_SAFE.left, right: PLATFORM_SAFE.right, w: PLATFORM_SAFE.right - PLATFORM_SAFE.left, cx: (PLATFORM_SAFE.left + PLATFORM_SAFE.right) >> 1 });
-/** A board's box on a stage: the stage's rows, its right edge where the safe column ends (a board keeps 8 px in). */
-export const boardBox = (box) => ({ ...box, w: SAFE.right + 8 - box.x });
+const HALF = Math.min(VW / 2 - PLATFORM_SAFE.left, PLATFORM_SAFE.right - VW / 2);
+export const SAFE = Object.freeze({ x: VW / 2 - HALF, right: VW / 2 + HALF, w: 2 * HALF, cx: VW / 2 });
+/** A board's box on a stage: the stage's rows, 8 px either side of the safe column (centred on the frame). */
+export const boardBox = (box) => ({ ...box, x: SAFE.x - 8, w: SAFE.w + 16 });
+/**
+ * PAY ATTENTION's boards on the tall stage (clip/vquiz.js: their words from 12 px inside the box): 12 px either side of
+ * the safe column, so their words fill it exactly, centred on the frame.
+ */
+export const quizBox = (box) => ({ ...box, x: SAFE.x - 12, w: SAFE.w + 24 });
+/**
+ * The mast's margins: the bug at the safe column's left edge, the programme's tag at its right (the feeds' own icons
+ * sit in the frame's top corners), so the mast is centred on the frame as the rest is.
+ */
+export const MAST = Object.freeze({ left: SAFE.x, right: SAFE.right });
+/**
+ * The title band's plate, centred on the frame: a clip's hook (clip/cards.js drawHook) and the vertical live's story
+ * line (clip/vertical.js) fill exactly this box, so a hook laid over a master made on air covers the story line whole.
+ */
+export const TITLE_BOX = Object.freeze({ x: SAFE.x - 8, y: V.title.y + 2, w: SAFE.w + 16, h: V.title.h - 4 });
 /** The horizontal channel's frame (the renderer's picture the vertical one is composed from). */
 export const HW = 384;
 export const HH = 216;

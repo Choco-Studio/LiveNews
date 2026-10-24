@@ -622,21 +622,31 @@ frames by the same renderer, so nothing is written, voiced or rendered twice.
   captions burned in at 2x (the feeds play with the sound off). The title band holds the programme's name beside the
   channel's bug (a clip's hook is laid over it only by the factory).
 - **The channel's own moments, set for the frame** (`public/js/clip/vchannel.js`; before, the vertical frame showed the
-  middle of the horizontal card, cutting its words and the countdown's ring in half):
+  middle of the horizontal card, cutting its words and the countdown's ring in half). Round 2 (owner, 24 Oct: "está
+  como descentrado", "necesita claras mejoras la adaptación"): every card centred on the frame, its rows stacked round
+  the frame's middle between two accent rules as far from either edge (rows 30 and 352), never under the feeds' band:
   - the **ident** before every programme: the earth from orbit under the frame, the lock-up, and the AI notice in the
     end card's three rows (AI-PRODUCED NEWS · PRESENTERS ARE AI CHARACTERS · FACTS FROM CREDITED SOURCES), the only
     disclosure, as on the horizontal channel; never in a break (a test counts it);
   - the **break bumper** (BACK IN / 1 MINUTE, what comes after the break, the break's clock and rail), the **UP NEXT
-    promo** (the programme on its plate, its line, its presenters cut out by the rig, standing side by side), the
-    **countdown clock**, the **standby** card (and the vertical playout's filler, BACK SHORTLY), the **breaking** card;
-  - the **spots**: an advert is a 384x216 film, so it is not redrawn. The frame carries the ADVERTISEMENT tag and the
-    break's clock over a window, and what comes after the break under it; the window is left transparent and the
-    renderer's encoder fills it with the spot itself at **2x** (768x432 in the 770x435 window of the 1080x1920 picture,
-    every pixel of the spot a 2x2 block, nothing resampled). A centre crop would have cut every spot's titles.
+    promo** (the programme on its plate, its line, its presenters cut out by the rig, standing side by side, their
+    names), the **countdown clock**, the **standby** card (and the vertical playout's filler, BACK SHORTLY), the
+    **breaking** card;
+  - the **films**: an advert and a programme's **title sequence** are 384x216 pictures, so they are not redrawn. The
+    frame carries the ADVERTISEMENT tag and the break's clock over a window (or the programme's name on its plate) and
+    what comes after the break (or the presenters and the programme's line) under it; the window, centred on the frame
+    across and down (x 31–185, rows 148–235), is left transparent and the renderer's encoder fills it with the film
+    itself at **2x** (768x432 in the 770x435 window of the 1080x1920 picture, every pixel a 2x2 block, nothing
+    resampled). A centre crop would have cut every spot's titles and every title sequence's name;
+  - a programme's **end card** set for the frame (its name on its plate, STAY WITH US, the channel's line, the logo).
+- **The story line** (the live only): the title band's plate (`TITLE_BOX`) holds the story on air, its headline from the
+  rundown (else the strap's, else the programme's line), two lines at 2x when they fit, else up to three at 1x,
+  centred; a new story wipes in. A viewer who arrives mid-programme reads what it is about. A clip's hook fills the
+  same box, so a hook laid over a master made on air covers it whole.
 - **The stinger** between programmes and breaks, drawn for the frame (the logo at 1x: at 2x it is wider than the frame),
   and the **held frame** under an item's opening stinger is the last vertical frame of what aired before.
-- Every word a viewer must read is in the platforms' safe column (x 8-188 of 216, under the feeds' buttons on the right)
-  and above their band at the foot (y 300): tested.
+- Every word a viewer must read is in the safe column, centred on the frame (x 28-188 of 216, clear of the feeds'
+  buttons on the right) and above their band at the foot (y 300): tested.
 
 ### 13.2 How it is made
 

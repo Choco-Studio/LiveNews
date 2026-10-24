@@ -737,7 +737,9 @@ function vLetters(ctx, dt, o, box) {
       }
     }
     const footY = C.py + C.ph - footH + 1;
-    if (!revealed) drawFoot(ctx, gt, C.x + ((C.cw - 128 - STAKE_W) >> 1), footY + 4, 128 + STAKE_W, o.countdown || null, stakeOf('letters', stage, doubleName(o)));
+    // (the foot no wider than the board's column: the countdown gives way to the stake)
+    const fw = Math.min(128 + STAKE_W, C.cw);
+    if (!revealed) drawFoot(ctx, gt, C.x + ((C.cw - fw) >> 1), footY + 4, fw, o.countdown || null, stakeOf('letters', stage, doubleName(o)));
     else drawCredit(ctx, creditLines(o.credit || creditOf(q.aired, o), C.cw, 2), C.x, footY, dt, revealAt + 0.3);
   } finally {
     ctx.restore();
@@ -1013,7 +1015,9 @@ function vDouble(ctx, dt, o, box) {
       }
     }
     const name = nameOf(o.players, o.player);
-    const line = offered.length > 1 ? 'PICKS THE DESK' : 'PLAYS FOR DOUBLE POINTS';
+    // (the shorter wording when the long one would run past the column beside the player's mark)
+    const long = offered.length > 1 ? 'PICKS THE DESK' : 'PLAYS FOR DOUBLE POINTS';
+    const line = markWidth(name) + 6 + textW(long, 1) <= C.cw ? long : offered.length > 1 ? 'PICKS' : 'PLAYS FOR DOUBLE';
     const lw = markWidth(name) + 6 + textW(line, 1);
     const lx = C.x + ((C.cw - lw) >> 1);
     if (de >= 0.45) {
@@ -1106,11 +1110,12 @@ function vScoresBig(ctx, dt0, o, C, players) {
     if (!panel(ctx, dt, C.px, y, C.pw, h, true)) return;
     const title = up(o.title || 'THE SCORES');
     rise(ctx, title, C.x + ((C.cw - textW(title, 1)) >> 1), y + 6, seg(dt, 0.2, 0.3), S.fog);
-    const half = C.pw >> 1;
+    // (the halves of the words' column, not of the panel: every name inside the safe column)
+    const half = C.cw >> 1;
     ctx.fillStyle = P.slate;
-    if (dt >= 0.3) ctx.fillRect(C.px + half, y + 30, 1, h - 34);
+    if (dt >= 0.3) ctx.fillRect(C.x + half, y + 30, 1, h - 34);
     players.forEach((pl, i) => {
-      const cx = C.px + half * i + (half >> 1);
+      const cx = C.x + half * i + (half >> 1);
       let name = up(pl.name);
       while (name.length > 2 && textW(name, 2) > half - 22) name = name.slice(0, -1);
       const mw = 14 + 4 + textW(name, 2);

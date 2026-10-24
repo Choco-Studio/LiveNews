@@ -14,7 +14,7 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import { seg, easeOutQuint } from '../gfx/index.js';
-import { VW, VH, HW, HH, V, SAFE } from './layout.js';
+import { VW, VH, HW, HH, V, SAFE, MAST, TITLE_BOX } from './layout.js';
 import { drawBugOnly, drawProgrammeTag } from './graphics.js';
 import { groundOf } from './vertical.js';
 import { noticeParts, IDENT_ROWS, IDENT_STYLES, NOTICE_DRAWS } from '../graphics/disclosure.js';
@@ -42,7 +42,7 @@ export const sizeOf = (format) => (format === 'vertical' ? { w: VW, h: VH } : { 
 export function drawHook(ctx, { format = 'vertical', lines = [], programme = '', accent = P.red, t = 9, profile = 'normal' } = {}) {
   const ls = (lines || []).slice(0, 3).map((l) => String(l).toUpperCase());
   // two short lines at 2x; a whole headline too long for that in the body face, up to three lines (moments.js)
-  const big = ls.length <= 2 && ls.every((l) => measureText(l, 2) <= (format === 'vertical' ? SAFE.right - 15 : 300));
+  const big = ls.length <= 2 && ls.every((l) => measureText(l, 2) <= (format === 'vertical' ? TITLE_BOX.w - 16 : 300));
   const sc = big ? 2 : 1;
   const pitch = big ? 18 : 10;
   const lineH = 7 * sc;
@@ -50,40 +50,42 @@ export function drawHook(ctx, { format = 'vertical', lines = [], programme = '',
     // the quiz's tall stage owns the title band (its boards say the question): the hook takes the mast, the bug at its
     // left and one line at 2x at its right on a black plate, in place of the programme's tag (the plate covers the
     // master's tag); everywhere else the card is clear, so the set shows round it
-    const bw = drawBugOnly(ctx, t, 0, 8, 10);
+    const bw = drawBugOnly(ctx, t, 0, MAST.left, 10);
     const line = ls.join(' ');
     // 2x when it fits beside the bug, else the body face (never over the bug); at 2x the type's image runs 2 px past
-    // its measure, so its right edge stands 2 px in from the safe column's
-    const big = measureText(line, 2) <= SAFE.right - 2 - 6 - (8 + bw + 4);
+    // its measure, so its right edge stands 2 px in from the mast's
+    const big = measureText(line, 2) <= MAST.right - 2 - 6 - (MAST.left + bw + 4);
     const w = measureText(line, big ? 2 : 1);
-    const right = SAFE.right - (big ? 2 : 0);
+    const right = MAST.right - (big ? 2 : 0);
     // on a black plate that covers the master's programme tag (the set shows round it)
     const tagW = programme ? measureText(programme) + 8 : 0;
-    const x0 = Math.max(8 + bw + 2, Math.min(right - w - 9, SAFE.right - tagW - 1));
+    const x0 = Math.max(MAST.left + bw + 2, Math.min(right - w - 9, MAST.right - tagW - 1));
     ctx.fillStyle = P.black;
-    ctx.fillRect(x0, 6, SAFE.right + 3 - x0, 21);
+    ctx.fillRect(x0, 6, MAST.right + 3 - x0, 21);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
     ctx.fillRect(right - w - 6, big ? 9 : 10, 2, big ? 14 : 13);
     drawText(ctx, line, right - w, big ? 9 : 13, big ? S.white2 : S.white);
     return;
   }
   if (format === 'vertical') {
-    // the mast as the master draws it (the bug, the programme's tag), and the hook on a black plate in the title band,
-    // the accent bar down its left edge; the rest of the card is clear: the programme's set shows round the plate
-    drawBugOnly(ctx, t, 0, 8, 10);
+    // the mast as the master draws it (the bug, the programme's tag), and the hook on the title band's plate (centred
+    // on the frame, the accent bar down its left edge, the lines centred on it: TITLE_BOX, which also covers the vertical
+    // live's story line in a master made on air); the rest of the card is clear: the programme's set shows round it
+    drawBugOnly(ctx, t, 0, MAST.left, 10);
     if (programme) {
       const w = measureText(programme) + 8;
-      drawProgrammeTag(ctx, SAFE.right - w, 10, programme, accent);
+      drawProgrammeTag(ctx, MAST.right - w, 10, programme, accent);
     }
     const n = ls.length;
     const h = n * pitch - (pitch - lineH);
-    const y = V.title.y + Math.round((V.title.h - h) / 2);
-    const w = Math.max(0, ...ls.map((l) => measureText(l, sc)));
+    const B = TITLE_BOX;
+    const y = B.y + Math.round((B.h - h) / 2);
     ctx.fillStyle = P.black;
-    ctx.fillRect(8, y - 5, w + 15, h + 10);
+    ctx.fillRect(B.x, B.y, B.w, B.h);
     ctx.fillStyle = accent === P.purple ? P.fog : accent;
-    ctx.fillRect(8, y - 5, 2, h + 10);
-    ls.forEach((l, i) => drawText(ctx, l, 15, y + i * pitch, big ? S.white2 : S.white));
+    ctx.fillRect(B.x, B.y, 2, B.h);
+    const cx = B.x + 1 + (B.w >> 1);
+    ls.forEach((l, i) => drawText(ctx, l, Math.round(cx - measureText(l, sc) / 2), y + i * pitch, big ? S.white2 : S.white));
     return;
   }
   if (profile === 'tall') {

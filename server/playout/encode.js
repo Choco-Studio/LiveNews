@@ -101,7 +101,7 @@ export function grabLayout({ twin = false, vertical = false } = {}) {
  * the same numbers: a test holds them together): the largest whole scale that fits the 154x87 window, centred in it, on
  * even pixels (a 2x pixel is then exactly one 4:2:0 chroma sample: no colour bleeds between the spot's pixels).
  */
-export const AD_WINDOW = Object.freeze({ x: 21, y: 116, w: 154, h: 87 });
+export const AD_WINDOW = Object.freeze({ x: 31, y: 148, w: 154, h: 87 });
 export function adPlacement(k = 5) {
   const W = AD_WINDOW.w * k;
   const H = AD_WINDOW.h * k;

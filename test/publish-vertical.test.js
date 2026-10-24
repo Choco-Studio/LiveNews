@@ -203,7 +203,7 @@ describe('the vertical picture', () => {
   });
 
   test('every PAY ATTENTION board set for the tall stage stays inside its box, its words in the safe column', () => {
-    const BOX = L.boardBox({ x: 0, y: 32, w: 216, h: 216 });
+    const BOX = L.quizBox({ x: 0, y: 32, w: 216, h: 216 });
     const pics = Object.fromEntries(['device', 'ice', 'corridor', 'rocket', 'owl', 'phone'].map((k) => [k, fakeCanvas(512, 288)]));
     const box = (fn) => (ctx, t, o) => fn(ctx, t, o, BOX);
     const V = { ...Q, drawQuestionBoard: box(VQ.VQUIZ.picture), drawLettersBoard: box(VQ.VQUIZ.letters), drawWhereBoard: box(VQ.VQUIZ.where), drawHowManyBoard: box(VQ.VQUIZ.howmany), drawTodayBoard: box(VQ.VQUIZ.today), drawScoresStrip: (ctx, t, o) => (o.compact ? null : VQ.VQUIZ.final(ctx, t, o, BOX)), drawDoubleCard: box(VQ.VQUIZ.double), drawTableBoard: box(VQ.VQUIZ.table), drawRoundCard: box(VQ.VQUIZ.round) };
@@ -332,7 +332,7 @@ describe('the vertical picture', () => {
 
   test('HOW MANY? gives the space under the guesses a job all question long, with or without the countdown on the board', async () => {
     const { P: PAL } = await import('../public/js/palette.js');
-    const BOX = L.boardBox({ x: 0, y: 32, w: 216, h: 216 });
+    const BOX = L.quizBox({ x: 0, y: 32, w: 216, h: 216 });
     // the real TSMC question of 17 Oct: the board is up while the host reads; the countdown runs over the players' faces
     const q = { type: 'howmany', words: 'TSMC profit soars', masked: 'Taiwanese chip giant TSMC said on Thursday that net profit soared ▮▮▮▮▮ to a record high in the third quarter.', sentence: 'Taiwanese chip giant TSMC said on Thursday that net profit soared 68.7% to a record high in the third quarter.', figure: { value: '68.7%', label: 'NET PROFIT UP', qualifier: '', exact: true }, aired: { programme: 'world-now', at: Date.parse('2026-10-16T16:56:00Z'), source: 'Euronews Business' } };
     const players = [{ seat: 'A', name: 'UNIT-8', id: 'unit8' }, { seat: 'B', name: 'PENNY', id: 'penny' }];

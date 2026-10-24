@@ -783,11 +783,13 @@ function figureLayout(spec, B = BOX) {
   const qual = String(spec.qual || '');
   // what it counts: one line at 2x when short, else up to two lines at 1x
   let lab = { lines: [], scale: 2, w: 0, h: 0 };
+  // (the label's column: 132 px, narrower in a narrow box, so the figure at 3x and its label always fit it)
+  const LW = Math.min(132, Math.max(60, B.maxW - 8 - measureText(value, 3)));
   if (label) {
-    const two = balanceLines(label, 132, 2, 1);
+    const two = balanceLines(label, LW, 2, 1);
     if (label.length <= 11 && two.length === 1 && !two[0].endsWith('...')) lab = { lines: two, scale: 2, w: measureText(two[0], 2), h: 14 };
     else {
-      const lines = balanceLines(label, 132, 1, 2);
+      const lines = balanceLines(label, LW, 1, 2);
       lab = { lines, scale: 1, w: Math.max(...lines.map((l) => measureText(l))), h: lines.length * 11 - 4 };
     }
   }

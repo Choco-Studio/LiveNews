@@ -82,7 +82,7 @@ LED line at row 288, the glossy floor mirroring the wall). Without the studio's 
 the programme's colours on a graded field.
 
 **Glass** (`vset.js` `GLASS`, `glassRect`): a board stands on the set seen through tinted glass, 190 × the stage less
-6 px (x 3–193, centred on the safe column), every colour taken to the dark end of its hue (white and the greys to ink,
+6 px (x 13–203, centred on the frame), every colour taken to the dark end of its hue (white and the greys to ink,
 the warm colours to maroon, the blues to navy, the greens to their darkest): the set reads through as shapes and its
 own colour, its lettering never does, and the board's type stands on nothing lighter than navy. Its frame is the set's
 screen bezel with the programme's accent along the top (`drawBoardFrame`); PAY ATTENTION's is its marquee: a purple
@@ -92,11 +92,16 @@ band in a fog rim with a chase of gold lamps.
 edge (about 12 % of the width) and their caption and handle over the foot (about 20 % of the height), so every word a
 viewer must read stays inside this box.
 
-**The safe column** (`SAFE`: x 8–188, centre 98). Pictures, maps, grounds and the studio fill all 216 columns, but
-everything to read is set in the column:
+**The safe column** (`SAFE`: x 28–188, centre 108, the frame's). Pictures, maps, grounds and the studio fill all 216
+columns, but everything to read is set in the column. Until 24 Oct the column was the whole safe area (x 8–188) and
+everything was centred on x 98, ten pixels left of the frame's middle: the owner saw it ("está como descentrado").
+Since then the column is the widest one centred on the frame that stays inside the safe area, and the mast, the
+boards, the glass, the singles, the captions, the hook and the channel's cards are all centred on the frame:
 
-- every board is laid out in `boardBox(stage)`, a box that ends 8 px right of the column (x 0–196), so its panel's
-  padding, never its words, reaches toward the buttons;
+- every board is laid out in `boardBox(stage)`, 8 px either side of the column (x 20–196), so its panel's padding,
+  never its words, reaches past it; PAY ATTENTION's in `quizBox` (x 16–200: its words start 12 px in);
+- the mast's bug and programme tag at the column's edges (`MAST`), the title band's plate across it (`TITLE_BOX`:
+  x 20–196, rows 34–70; the clip's hook fills it and centres its lines on it);
 - the captions are centred on the column's centre and are no wider than the column;
 - the title band, the hook and the name tags are set inside it; the two-way's boxes, the end card and the quiz's
   strip are centred on it;
@@ -266,7 +271,7 @@ board lights the same row on the same word.
 
 The map shots are composed again for the stage, not cropped (`scenes/weather/index.js` `drawWeatherVertical`, round 5).
 The weather centre draws them with its own code at the stage's size (216 × 176): the map runs to the stage's full
-width, under the feeds' buttons too, and every word stays inside the safe column (x 8–188) and the stage.
+width, under the feeds' buttons too, and every word stays inside the safe column (x 28–188) and the stage.
 
 - **The world ("graphic"):** the world at the horizontal graphic's own scale (1.2 px a degree), so about half of it
   is in view. The camera opens on the first place the voice names. It pans (1.1 s) to each place, high or low the voice

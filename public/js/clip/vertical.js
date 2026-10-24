@@ -32,7 +32,7 @@ import { bayer } from '../gfx/dither.js';
 import { mk } from '../gfx/canvas.js';
 import { u32 } from '../gfx/color.js';
 import { contentWords } from '../graphics/index.js';
-import { VW, VH, V, HW, HH, SAFE, boardBox } from './layout.js';
+import { VW, VH, V, HW, HH, SAFE, MAST, boardBox, quizBox } from './layout.js';
 import { WordCaptions, CLIP_CAPTION } from './captions.js';
 import { drawVerticalBoard, boardKind, microFit } from './vboards.js';
 import { drawBugOnly, drawProgrammeTag, speechNow, graveNow, boardRepeats } from './graphics.js';
@@ -40,7 +40,7 @@ import { pictureCreditOf } from '../graphics/picture.js';
 import { prepareLocator, drawLocator } from '../graphics/locator.js';
 import { drawTopicBoard } from '../graphics/topicboard.js';
 import { VerticalSet, twinkle, drawBoardFrame, glassRect, glassScrims, glint, OVERLAP } from './vset.js';
-import { drawVerticalChannel } from './vchannel.js';
+import { drawVerticalChannel, drawVerticalFilm, drawStoryLine, storyLines, windowOpen } from './vchannel.js';
 import { drawStinger, STINGER_DURATION } from '../scenes/cards.js';
 
 const ST = V.stage;
@@ -198,6 +198,7 @@ export class VerticalCompositor {
       if (on) {
         // (the title band holds the clip's hook, laid over the master by the factory: the master leaves it to the set)
         this.drawMast(t, scene);
+        if (this.live && this.profile.title && this.profile.name !== 'montage') this.storyLine(t, scene);
         if (this.profile.captions !== false) this.drawCaptions(t, scene);
       } else this.drawChannelFrame(t, scene);
       if (this.live) this.stinger(t, scene);
@@ -213,14 +214,32 @@ export class VerticalCompositor {
    */
   liveFrame(t, scene) {
     const ctx = this.ctx;
-    // (the renderer's grab carries the clean frame only while a spot's window is open: tools/playout/render.mjs)
-    this.canvas.windowOpen = scene.shot === 'ad' && !!scene.card?.ad && !scene.card.ad.black;
+    // (the renderer's grab carries the clean frame only while a film's window is open: tools/playout/render.mjs)
+    this.canvas.windowOpen = windowOpen(scene);
+    const opts = { adWindow: true, source: this.src, channel: this.channel, memo: this.memo, sprite: this.sprite };
     if (scene.shot === 'hold') {
       if (this.holdImage?.complete && this.holdImage.naturalWidth === VW) ctx.drawImage(this.holdImage, 0, 0);
-    } else if (!drawVerticalChannel(ctx, t, scene, { adWindow: true, source: this.src, channel: this.channel, memo: this.memo, sprite: this.sprite })) return false;
+    } else if (!drawVerticalChannel(ctx, t, scene, opts) && !drawVerticalFilm(ctx, t, scene, opts)) return false;
     if (scene.shot !== 'hold') this.lastMode = 'off';
     this.stinger(t, scene);
     return true;
+  }
+
+  /**
+   * The vertical live's title band: the story on air (its headline from the rundown, else the strap's), else the
+   * programme's line, on the title band's plate (clip/vchannel.js drawStoryLine); a new story wipes in.
+   */
+  storyLine(t, scene) {
+    const story = scene.storyId && Array.isArray(scene.rundown) ? scene.rundown.find((r) => r?.storyId === scene.storyId) : null;
+    const strap = this.renderer?.graphics?.strap;
+    const text = String(story?.headline || (strap?.cur && strap.outAt === null ? strap.cur.headline : '') || scene.program?.tagline || '').trim();
+    if (!text) return;
+    if (text !== this.storyText) {
+      this.storyText = text;
+      this.storySince = t;
+      this.storyFit = storyLines(text);
+    }
+    drawStoryLine(this.ctx, t, { ...this.storyFit, since: this.storySince, accent: THEME_ACCENT[scene.program?.theme] || P.red });
   }
 
   /** The channel's stinger over the vertical frame (scenes/cards.js drawStinger set for 216x384, the logo at 1x). */
@@ -254,7 +273,7 @@ export class VerticalCompositor {
       else if (shot === 'location') this.remote(scene);
       else if (shot === 'twoway') this.twoway(scene);
       else if (shot === 'broll') this.broll(t, scene, dt);
-      else if (shot === 'quiz' && this.quiz?.(t, scene, dt, boardBox(this.box))) {
+      else if (shot === 'quiz' && this.quiz?.(t, scene, dt, quizBox(this.box))) {
         /* the programme's own vertical board */
       } else if (shot === 'scores' && this.sport && scene.card?.scores?.length) {
         // FULL TIME's SCORE CENTRE: the board set again, a result on two lines, on the glass
@@ -469,14 +488,14 @@ export class VerticalCompositor {
     ctx.save();
     try {
       ctx.beginPath();
-      ctx.rect(8, y, vis, 26);
+      ctx.rect(SAFE.x, y, vis, 26);
       ctx.clip();
       ctx.fillStyle = acc;
-      ctx.fillRect(8, y, 2, role ? 22 : 13);
+      ctx.fillRect(SAFE.x, y, 2, role ? 22 : 13);
       ctx.fillStyle = P.ink;
-      ctx.fillRect(10, y, w - 2, role ? 22 : 13);
-      drawText(ctx, name, 14, y + 3, S.white);
-      if (role) drawText(ctx, role, 14, y + 14, S.microSilver);
+      ctx.fillRect(SAFE.x + 2, y, w - 2, role ? 22 : 13);
+      drawText(ctx, name, SAFE.x + 6, y + 3, S.white);
+      if (role) drawText(ctx, role, SAFE.x + 6, y + 14, S.microSilver);
     } finally {
       ctx.restore();
     }
@@ -504,21 +523,15 @@ export class VerticalCompositor {
   }
 
   /**
-   * The map over the safe column (its place label and the names round it fall inside x 8-188), the strip beyond it in
-   * the map's own sea, under the feed's buttons.
+   * The map edge to edge, centred on the frame (its place label and the names round it fall inside the safe column).
    */
   map(t, scene, dt) {
     const card = scene.card || {};
-    const w = SAFE.right + 8;
-    drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
-    this.seaStrip(w);
+    drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
     this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
   }
 
-  /** The stage beyond the safe column, after a map drawn to its edge: the map's last column of sea, carried on. */
-  seaStrip(x) {
-    this.ctx.drawImage(this.canvas, x - 1, this.box.y, 1, this.box.h, x, this.box.y, VW - x, this.box.h);
-  }
+
 
   picture(t, scene, dt) {
     const img = scene.storyId ? scene.images?.get?.(scene.storyId) : null;
@@ -557,8 +570,7 @@ export class VerticalCompositor {
     const img = scene.storyId ? scene.images?.get?.(scene.storyId) : null;
     if (!scene.card?.footage && img?.full) return this.picture(t, scene, dt);
     if (!scene.card?.footage && scene.remote && Number.isFinite(scene.remote.lat)) {
-      drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: SAFE.right + 8, h: this.box.h, lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, follow: true });
-      this.seaStrip(SAFE.right + 8);
+      drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, follow: true });
       this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
       return;
     }
@@ -667,22 +679,22 @@ export class VerticalCompositor {
     for (let i = 0; i < lines.length; i++) {
       const lp = seg(dt + 0.5, 0.15 + i * 0.07, 0.3); // (pre-rolled: the headline whole on the shot's first frame)
       if (lp <= 0) continue;
-      drawText(ctx, lines[i], 12, py + 8 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
+      drawText(ctx, lines[i], SAFE.x + 4, py + 8 + i * lh + Math.round((1 - easeOutQuint(lp)) * 4), scale === 2 ? S.white2 : S.white);
     }
     // (the source on the plate with the headline)
-    if (item.source) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), 12, py + 8 + textH + 6, S.microFog);
+    if (item.source) drawText(ctx, microFit(`SOURCE: ${String(item.source).toUpperCase()}`, SAFE.w - 8), SAFE.x + 4, py + 8 + textH + 6, S.microFog);
     // the tag: TOP STORIES (with the pips of the run) or STILL TO COME (on the plate: the clip's hook covers the
     // title band all clip long)
     const tag = tease ? 'STILL TO COME' : 'TOP STORIES';
     const tw = measureText(tag, 1, 'micro') + 8;
     ctx.fillStyle = P.black;
-    ctx.fillRect(8, py - 11, tw, 9);
-    drawText(ctx, tag, 12, py - 9, S.microWhite);
+    ctx.fillRect(SAFE.x, py - 11, tw, 9);
+    drawText(ctx, tag, SAFE.x + 4, py - 9, S.microWhite);
     if (!tease) {
       const total = scene.rundown?.length || 1;
       for (let i = 0; i < Math.min(total, 8); i++) {
         ctx.fillStyle = i <= (card.index || 0) ? P.white : P.slate;
-        ctx.fillRect(8 + tw + 4 + i * 6, py - 7, 4, 2);
+        ctx.fillRect(SAFE.x + tw + 4 + i * 6, py - 7, 4, 2);
       }
     }
   }
@@ -700,12 +712,12 @@ export class VerticalCompositor {
 
   drawMast(t, scene) {
     const ctx = this.ctx;
-    drawBugOnly(ctx, t, this.onAt, 8, 10);
+    drawBugOnly(ctx, t, this.onAt, MAST.left, 10);
     const title = scene.program?.title ? String(scene.program.title) : '';
     if (title) {
       const color = THEME_ACCENT[scene.program?.theme] || P.red;
       const w = measureText(title) + 8;
-      drawProgrammeTag(ctx, SAFE.right - w, 10, title, color);
+      drawProgrammeTag(ctx, MAST.right - w, 10, title, color);
     }
   }
 

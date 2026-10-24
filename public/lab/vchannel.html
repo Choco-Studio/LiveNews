@@ -11,9 +11,9 @@
 </head>
 <body>
 <p>The vertical live's channel cards (clip/vchannel.js): window.__vch.frame(shot, card, dt, extra) returns one 216x384
-frame as a PNG data URL (the spot's window transparent, as the playout's encoder fills it).</p>
+frame as a PNG data URL (the film's window transparent, as the playout's encoder fills it); shots 'open' and 'endcard' are a programme's (drawVerticalFilm), extra.story draws the live's story line.</p>
 <script type="module">
-import { drawVerticalChannel } from '/js/clip/vchannel.js';
+import { drawVerticalChannel, drawVerticalFilm, drawStoryLine, storyLines } from '/js/clip/vchannel.js';
 import { presenterSprite } from '/js/clip/sprite.js';
 import { warmMapData } from '/js/scenes/worldmap.js';
 try { await warmMapData?.(); } catch { /* the ident's cities later */ }
@@ -24,9 +24,11 @@ g.imageSmoothingEnabled = false;
 const memo = {};
 function frame(shot, card = {}, dt = 3, extra = {}) {
   const t = 1000;
-  const scene = { shot, card, shotSince: t - dt, adBreak: extra.adBreak ? { until: t + extra.adBreak.left, total: extra.adBreak.total } : null };
+  const scene = { shot, card, shotSince: t - dt, program: extra.program || null, cast: extra.cast || null, adBreak: extra.adBreak ? { until: t + extra.adBreak.left, total: extra.adBreak.total } : null };
   g.clearRect(0, 0, 216, 384);
-  drawVerticalChannel(g, t, scene, { adWindow: extra.adWindow !== false, source: null, channel, memo, sprite: presenterSprite });
+  const opts = { adWindow: extra.adWindow !== false, source: null, channel, memo, sprite: presenterSprite };
+  if (!drawVerticalChannel(g, t, scene, opts)) drawVerticalFilm(g, t, scene, opts);
+  if (extra.story) drawStoryLine(g, t, { ...storyLines(extra.story), since: t - 2, accent: extra.accent || '#ff004d' });
   return c.toDataURL();
 }
 window.__vch = { frame };

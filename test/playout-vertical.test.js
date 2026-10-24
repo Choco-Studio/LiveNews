@@ -101,15 +101,15 @@ test('the grab and the filter graph: the air picture, the twin master, the clean
   assert.deepEqual(both.outputs, ['[air]', '[m]', '[vair]', '[vm]']);
   assert.match(both.graph, /crop=216:384:1152:0/);
   assert.match(both.graph, /scale=w=768:h=432:flags=neighbor/, 'the spot at 2x');
-  assert.match(both.graph, /overlay=106:582:format=yuv420\[vair\]/, 'over its window alone');
+  assert.match(both.graph, /overlay=156:742:format=yuv420\[vair\]/, 'over its window alone');
   assert.match(both.graph, /scale=w=1080:h=1920:flags=neighbor:out_color_matrix=bt709:out_range=tv,format=yuv420p/, 'the vertical frame at 5x, BT.709');
   assert.match(both.graph, /alphaextract,negate/, "the spot shown where the frame's window is open");
   assert.throws(() => renderGraph({ vertical: '1080x1900' }), /not a whole multiple/);
 });
 
 test("the spot's place: the largest whole scale in the 154x87 window, centred (2x at 1080x1920, 1x at 648x1152)", () => {
-  assert.deepEqual(adPlacement(5), { a: 2, x: 106, y: 582, w: 768, h: 432 });
-  assert.deepEqual(adPlacement(3), { a: 1, x: 102, y: 370, w: 384, h: 216 });
+  assert.deepEqual(adPlacement(5), { a: 2, x: 156, y: 742, w: 768, h: 432 });
+  assert.deepEqual(adPlacement(3), { a: 1, x: 132, y: 466, w: 384, h: 216 });
   for (const k of [3, 4, 5, 6]) {
     const p = adPlacement(k);
     assert.ok(p.x >= AD_WINDOW.x * k && p.x + p.w <= (AD_WINDOW.x + AD_WINDOW.w) * k, `x${k}: inside the window across`);
@@ -169,10 +169,11 @@ describe("the channel's moments in the vertical frame", () => {
     D = await import('../public/js/graphics/disclosure.js');
   });
 
-  test("the spot's window is the encoder's: one window, centred on the safe column, inside it", () => {
+  test("the film's window is the encoder's: one window, centred on the frame across and down, inside the safe column", () => {
     assert.deepEqual({ ...V.AD_WINDOW }, { ...AD_WINDOW });
     for (const k of [3, 5]) assert.deepEqual(V.adPlacement(k), adPlacement(k));
-    assert.equal(V.AD_WINDOW.x + V.AD_WINDOW.w / 2, L.SAFE.cx);
+    assert.equal(V.AD_WINDOW.x + V.AD_WINDOW.w / 2, L.VW / 2);
+    assert.ok(Math.abs(V.AD_WINDOW.y + V.AD_WINDOW.h / 2 - L.VH / 2) <= 1, "its middle on the frame's middle row");
     assert.ok(V.AD_WINDOW.x >= L.SAFE.x && V.AD_WINDOW.x + V.AD_WINDOW.w <= L.SAFE.right);
     assert.ok(V.AD_WINDOW.y >= L.V.stage.y && V.AD_WINDOW.y + V.AD_WINDOW.h <= L.V.stage.y + L.V.stage.h);
   });
