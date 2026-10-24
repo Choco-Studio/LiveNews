@@ -336,7 +336,7 @@ describe('own words through the producer', () => {
     assert.equal(ep.pipeline.find((p) => p.stage === 'review').reviewed, false);
     assert.ok(logs.some((l) => /fakeai failed \(fakeai HTTP 429/.test(l)));
     // ...and the publish gate holds it, whatever its clip shows, with the reason in Spanish on the approval page
-    const pf = preflight({ id: 'c1', kind: 'clip', episode: ep, storyIds: ep.storyIds, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { getStory: (id) => desk.get(id), calendar: { generatedAt: new Date().toISOString(), elections: [] }, env: { EDITORIAL_CONTACT: 'x@example.org' }, requireReview: false });
+    const pf = preflight({ id: 'c1', kind: 'clip', episode: ep, storyIds: ep.storyIds, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } } }, { getStory: (id) => desk.get(id), calendar: { generatedAt: new Date().toISOString(), elections: [] }, env: { EDITORIAL_CONTACT: 'x@example.org' }, requireReview: false });
     assert.equal(pf.ok, false);
     assert.ok(pf.violations.some((v) => v.rule === 'offline-writer'));
     assert.match(RULE_ES['offline-writer'], /^Escrito sin IA: copia demasiado de la fuente/);
@@ -346,7 +346,7 @@ describe('own words through the producer', () => {
 
   test('an AI-written episode is not held for its writer, nor an offline one\'s clip that tells no story', () => {
     const opts = { getStory: () => null, calendar: { generatedAt: new Date().toISOString(), elections: [] }, env: { EDITORIAL_CONTACT: 'x@example.org' }, requireReview: false };
-    const flags = { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } };
+    const flags = { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } };
     const ep = { id: 'e1', provider: 'openai', program: { id: 'world-now' }, storyIds: ['lis'], segments: [{ type: 'intro', text: 'Hello.' }, seg('lis', GOOD.lis)] };
     assert.ok(!preflight({ id: 'e1', kind: 'episode', episode: ep, platforms: ['youtube'], flags }, opts).violations.some((v) => v.rule === 'offline-writer'));
     const offline = { ...ep, provider: 'mock' };

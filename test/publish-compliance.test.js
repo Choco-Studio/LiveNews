@@ -32,7 +32,7 @@ const REPORT = {
     { type: 'sentence', slot: 'A', i: 1, text: 'New Yorkers are delighted.', v: 9.9 },
   ],
 };
-const FLAGS = { youtube: { containsSyntheticMedia: true }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
+const FLAGS = { youtube: { containsSyntheticMedia: false }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
 const MODULES = [['loaded', C], ['stub', STUB]];
 
 test(`compliance.js loads ${REAL ? 'the real module' : 'the stub'} and says which`, () => {

@@ -64,6 +64,7 @@ export const RULE_ES = Object.freeze({
   demo: 'Son datos de prueba (demostración): nunca se publican.',
   'flag-missing': 'Falta la etiqueta de IA de la red («contenido generado por IA»): es obligatoria, la red la enseña desde el primer segundo.',
   'flag-unavailable': 'Esta red no tiene marca de IA automática: hay que ponerla a mano o no publicar aquí.',
+  'flag-wrong': 'La respuesta a «Uso de IA» de YouTube no es la que toca: para nuestros vídeos es No (ninguna de sus cuatro preguntas se cumple).',
   'election-hold': 'Periodo electoral: este contenido espera a que pase la votación.',
   'election-silence': 'Jornada de reflexión: no se publica nada sobre la votación.',
   'review-missing': 'Falta tu revisión de la recreación.',

@@ -6,7 +6,9 @@
 //  live publish refuses to run on the stub (server/publish/publisher.js).
 // ============================================================================================================
 //
-//   disclosureFor(item)        flags and labels per platform (every flag set: a synthetic voice narrates real news)
+//   disclosureFor(item)        flags and labels per platform (TikTok's and Instagram's set: realistic synthetic voices;
+//                              YouTube's "altered or synthetic content" No unless item.synthetic names one of its four
+//                              questions, as server/compliance/disclosure.js youtubeSynthetic)
 //   describe(item, { credits, summary })   a description with the disclosure first
 //   textPost(item, { max })    a text post that starts "AI-generated:"
 //   creditsFor(item)           credit lines: the outlets the item's stories came from, the channel's own assets
@@ -54,7 +56,8 @@ export function disclosureFor(item = {}) {
   for (const p of wanted) {
     const f = PLATFORM_FIELDS[p];
     if (!f) continue;
-    platforms[p] = f.field ? { field: f.field, [f.key]: true, required: recreations.length > 0, textTop: opening } : { field: null, manualLabel: recreations.length > 0 && isVideo(kind), textTop: p === 'x' || p === 'bluesky' ? TEXT_PREFIX : opening };
+    const yes = p === 'youtube' ? Object.values(item.synthetic || {}).some((x) => x === true) : true;
+    platforms[p] = f.field ? { field: f.field, [f.key]: yes, required: p === 'youtube' ? yes : recreations.length > 0, textTop: opening } : { field: null, manualLabel: recreations.length > 0 && isVideo(kind), textTop: p === 'x' || p === 'bluesky' ? TEXT_PREFIX : opening };
   }
   return { kind, stub: true, ai: { text: true, voices: isVideo(kind), recreation: recreations.length > 0, pictures: 'real, credited (never AI-generated)' }, recreations, labels: { mark: 'AI', textPrefix: TEXT_PREFIX }, description: { opening, lines }, platforms };
 }
@@ -166,10 +169,11 @@ export function checkClip(clip = {}, opts = {}) {
     else if (lf.labelled < lf.total) v('label-out-of-frame', `the RECREATION label is missing on ${lf.total - lf.labelled} of ${lf.total} frames of the recreation`);
   }
   // the flags
-  const d = disclosureFor({ kind, episode, recreations: inRange, platforms: clip.platforms });
+  const d = disclosureFor({ kind, episode, recreations: inRange, platforms: clip.platforms, synthetic: clip.synthetic });
   for (const [name, p] of Object.entries(d.platforms)) {
     const set = clip.flags?.[name] || {};
-    if (name === 'youtube' && set.containsSyntheticMedia !== true) v('flag-missing', 'YouTube: set status.containsSyntheticMedia = true', { platform: name });
+    if (name === 'youtube' && typeof set.containsSyntheticMedia !== 'boolean') v('flag-missing', `YouTube: set status.containsSyntheticMedia = ${p.containsSyntheticMedia}`, { platform: name });
+    else if (name === 'youtube' && set.containsSyntheticMedia !== p.containsSyntheticMedia) v('flag-wrong', `YouTube: altered or synthetic content is ${p.containsSyntheticMedia ? 'Yes' : 'No'} here: set status.containsSyntheticMedia = ${p.containsSyntheticMedia}`, { platform: name });
     if (name === 'tiktok' && set.is_aigc !== true) v('flag-missing', 'TikTok: set post_info.is_aigc = true', { platform: name });
     if (name === 'instagram' && set.is_ai_generated !== true) v('flag-missing', 'Instagram: set is_ai_generated = true', { platform: name });
     if (!p.field && p.manualLabel && set.manualLabel !== true) v('flag-unavailable', `${name}: no API flag; apply the AI label by hand or leave ${name} out`, { platform: name });
@@ -187,7 +191,8 @@ export function buildManifest(item = {}, { title = null, sources = [], credits =
     title: title || item.title || 'GLOBIT 24',
     format,
     assertions: [
-      { label: 'c2pa.actions', data: { actions: [{ action: 'c2pa.created', digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia' }] } },
+      // (AI and real material mixed, as the real module says: not "entirely AI", which YouTube labels on its own)
+      { label: 'c2pa.actions', data: { actions: [{ action: 'c2pa.created', digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia' }] } },
       { label: 'stds.schema-org.CreativeWork', data: { author: [{ '@type': 'Organization', name: 'GLOBIT 24' }], citation: sources, credits } },
     ],
   };

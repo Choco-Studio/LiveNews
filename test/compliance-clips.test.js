@@ -54,7 +54,7 @@ function timeline(ep) {
     { start: 14, end: 17, text: 'It will clear by the weekend.', segIndex: 2, kind: 'speech', quote: false },
   ];
 }
-const FLAGS = { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
+const FLAGS = { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } };
 const reviewed = () => {
   const reg = new ComplianceRegister({});
   reg.recordReview('e1', { by: 'owner', checks: { quoteAgainstSource: true, factsChecked: true }, verdict: 'approve' });
@@ -67,8 +67,10 @@ test('a clip with a recreation from the hand-over to the end of the words, flagg
   const r = checkClip({ id: 'c1', kind: 'clip', cards: CARDS, text: CAPTION, episode: ep, range: { start: 4, end: 10.4 }, timeline: timeline(ep), platforms: ['youtube', 'tiktok', 'instagram'], flags: FLAGS }, { now: NOW, calendar: QUIET, register: reviewed() });
   assert.deepEqual(r.violations, []);
   assert.equal(r.recreations.length, 1);
-  assert.equal(r.disclosure.platforms.youtube.containsSyntheticMedia, true);
-  assert.equal(r.disclosure.platforms.youtube.required, true, 'with a recreation the flag is required');
+  // (YouTube's "altered or synthetic content" No even here: a pixel-art figure saying the person's exact public words in
+  // a generic voice is none of YouTube's four questions; TikTok's and Instagram's labels are required)
+  assert.equal(r.disclosure.platforms.youtube.containsSyntheticMedia, false);
+  assert.equal(r.disclosure.platforms.tiktok.required, true, 'with a recreation TikTok\'s label is required');
 });
 
 test('no hand-over, a cut inside the words or inside a sentence: refused, and it says where to cut', () => {
@@ -137,11 +139,11 @@ test('the platforms\' flags: missing ones refuse; Facebook has none, so a recrea
   assert.equal(r.violations.filter((v) => v.rule === 'flag-missing').length, 4, 'YouTube\'s two settings, TikTok\'s and Instagram\'s');
   assert.deepEqual(rules(checkClip({ ...base, platforms: ['facebook'], flags: {} }, opts)), ['flag-unavailable']);
   assert.deepEqual(rules(checkClip({ ...base, platforms: ['facebook'], flags: { facebook: { manualLabel: true } } }, opts)), []);
-  // a clip without a recreation still carries the flags on YouTube (our policy: every upload)
+  // a clip without a recreation still answers both of YouTube's settings
   const plain = checkClip({ ...base, range: { start: 11, end: 17 }, platforms: ['youtube'], flags: {} }, opts);
   assert.deepEqual(plain.violations.map((v) => v.field), ['containsSyntheticMedia', 'selfDeclaredMadeForKids']);
   // YouTube's audience: news for a general audience is never "made for kids" (that would also switch off comments)
-  const kids = checkClip({ ...base, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: true } } }, opts);
+  const kids = checkClip({ ...base, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: true } } }, opts);
   assert.deepEqual(kids.violations.map((v) => [v.rule, v.field]), [['flag-missing', 'selfDeclaredMadeForKids']]);
   assert.equal(kids.disclosure.platforms.youtube.selfDeclaredMadeForKids, false);
 });
@@ -159,7 +161,7 @@ test('the publishing desk\'s adapters send the flags this check asks for (the fa
     assert.deepEqual(r.violations.filter((v) => /^flag-/.test(v.rule)), [], `${p}: ${JSON.stringify(flags)}`);
   }
   const ep2 = makeAdapter('youtube', { env: {}, dryRun: true }).aiFlags({ kind: 'episode', source: { programId: 'cosmos' } });
-  assert.deepEqual(ep2, { containsSyntheticMedia: true, selfDeclaredMadeForKids: false }, 'a whole programme\'s upload too');
+  assert.deepEqual(ep2, { containsSyntheticMedia: false, selfDeclaredMadeForKids: false }, 'a whole programme\'s upload too');
 });
 
 test('election periods: a politician of a country inside its window is held; a scientist is not; silence holds a clip about the vote', () => {
@@ -247,15 +249,25 @@ test('a clip is held without its end card or its caption; the end card carries t
   assert.deepEqual(Object.keys(CARDS), ['endCard']);
 });
 
-test('the platform\'s own AI label is required on every video: YouTube, TikTok and Instagram by their fields, Facebook and Threads by hand', () => {
+test('the platforms\' AI fields on every video: TikTok\'s and Instagram\'s labels on, YouTube\'s question answered No, Facebook and Threads by hand', () => {
   const ep = episode();
   const base = { id: 'c1', kind: 'clip', cards: CARDS, text: CAPTION, episode: ep, range: { start: 11, end: 17 }, timeline: timeline(ep) };
   const opts = { now: NOW, calendar: QUIET, register: reviewed() };
   assert.deepEqual(rules(checkClip({ ...base, platforms: ['youtube', 'tiktok', 'instagram'], flags: FLAGS }, opts)), []);
-  for (const [p, flag] of [['youtube', 'containsSyntheticMedia'], ['tiktok', 'is_aigc'], ['instagram', 'is_ai_generated']]) {
+  for (const [p, flag] of [['tiktok', 'is_aigc'], ['instagram', 'is_ai_generated']]) {
     const off = { ...FLAGS, [p]: { ...FLAGS[p], [flag]: false } };
     assert.ok(rules(checkClip({ ...base, platforms: [p], flags: off }, opts)).includes('flag-missing'), `${p}: ${flag}`);
   }
+  // YouTube (owner, 24 Oct: "estamos usando mal el botón de uso de IA"): a Yes for a video none of its four questions
+  // describes is held as wrong, as no answer is; a video that names one of them must say Yes
+  const yt = (flags, extra = {}) => checkClip({ ...base, ...extra, platforms: ['youtube'], flags: { youtube: { selfDeclaredMadeForKids: false, ...flags } } }, opts);
+  assert.deepEqual(rules(yt({ containsSyntheticMedia: true })), ['flag-wrong']);
+  assert.deepEqual(rules(yt({})), ['flag-missing']);
+  assert.deepEqual(rules(yt({ containsSyntheticMedia: false })), []);
+  const real = yt({ containsSyntheticMedia: false }, { synthetic: { realPerson: true } });
+  assert.deepEqual(rules(real), ['flag-wrong']);
+  assert.match(real.violations[0].message, /Yes here \(a real person seems to do or say something/);
+  assert.deepEqual(rules(yt({ containsSyntheticMedia: true }, { synthetic: { realPerson: true } })), []);
   // no recreation in it: Facebook and Threads still need Meta's "AI info" set by hand
   for (const p of ['facebook', 'threads']) {
     assert.deepEqual(rules(checkClip({ ...base, platforms: [p], flags: {} }, opts)), ['flag-unavailable'], p);

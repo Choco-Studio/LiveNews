@@ -55,7 +55,7 @@ test('launch exits 1 while a blocker stands; check refuses an item without its f
   assert.match(refused.stdout, /REFUSED/);
   assert.match(refused.stdout, /flag-missing +YouTube: set status\.containsSyntheticMedia/);
   assert.match(refused.stdout, /flag-missing +YouTube: set status\.selfDeclaredMadeForKids = false/);
-  fs.writeFileSync(item, JSON.stringify({ id: 'e1', kind: 'episode', episode, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }));
+  fs.writeFileSync(item, JSON.stringify({ id: 'e1', kind: 'episode', episode, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } } }));
   const r = spawnSync(process.execPath, [CLI, 'check', item], { cwd: root, env: { ...env(dir), EDITORIAL_CONTACT: 'desk@example.org' }, encoding: 'utf8', timeout: 60_000 });
   assert.equal(r.status, 0, r.stdout);
   assert.match(r.stdout, /OK: may be published/);

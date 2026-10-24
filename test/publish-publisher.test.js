@@ -26,7 +26,7 @@ function setup({ gate = () => ({ ok: true, violations: [] }), env = {} } = {}) {
     throw new Error('the dry run touched the network');
   };
   const p = new Publisher({ queue: q, env: { YOUTUBE_CLIENT_ID: SECRET, ...env }, fetchImpl, gate, mark, readMark: () => ({ ok: true, aiGenerated: true }), usingStub: false, now: () => T0 });
-  const it = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Owls', text: 'Owls', media: { video, sha256: 'abc' }, source: { episodeId: 'e', momentId: 'e:story:1-1', storyIds: ['s1'] }, compliance: { ok: true }, disclosure: { youtube: { containsSyntheticMedia: true } } });
+  const it = q.enqueue({ kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Owls', text: 'Owls', media: { video, sha256: 'abc' }, source: { episodeId: 'e', momentId: 'e:story:1-1', storyIds: ['s1'] }, compliance: { ok: true }, disclosure: { youtube: { containsSyntheticMedia: false } } });
   return { dir, q, p, it, marks, video };
 }
 
@@ -83,7 +83,7 @@ test('the gate sees the clip as the contract asks: the recording, the range, the
   await p.publishOne(q.get(it.id));
   assert.equal(seen.kind, 'short');
   assert.deepEqual(seen.platforms, ['youtube']);
-  assert.equal(seen.flags.youtube.containsSyntheticMedia, true);
+  assert.equal(seen.flags.youtube.containsSyntheticMedia, false);
   assert.equal(seen.frame.output.h, 1920);
 });
 

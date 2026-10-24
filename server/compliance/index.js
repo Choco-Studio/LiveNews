@@ -175,7 +175,7 @@ export function launchReport({ env = process.env, dataDir = null, now = Date.now
     blockers.push(`the writer's aired text breaks the verbatim rule in ${pct} % of the last ${verbatim.stories} stories (at most ${VERBATIM_LAUNCH_RATE * 100} %): sentences must be composed from the facts, not copied (docs/publishing/verbatim.md)`);
   }
   if (verbatim.stories && verbatim.withArticle < verbatim.stories / 2) warnings.push(`verbatim: ${verbatim.withArticle} of ${verbatim.stories} stories measured against their article (the rest against title and summary only, a floor); node tools/compliance/verbatim-audit.mjs fills the cache`);
-  warnings.push('YouTube live: set "altered or synthetic content" on the broadcast (videos.update on its video id, or Studio) at each new stream');
+  warnings.push('YouTube live: answer "altered or synthetic content" No on the broadcast (none of YouTube\u2019s four questions is true of it: disclosure.js youtubeSynthetic; videos.update on its video id, or Studio) at each new stream');
   warnings.push('X, Bluesky, Mastodon: mark the accounts as automated where the network offers it');
   return { ready: blockers.length === 0, blockers, warnings, c2pa: c2, watermark: wm, calendar: { generatedAt: cal.generatedAt, stale: cal.stale, votes: cal.elections.length }, verbatim };
 }

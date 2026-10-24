@@ -52,7 +52,7 @@ test('the episode lint: per story, with the reading and the expert\'s answer; a 
   assert.equal(r.stories.find((s) => s.storyId === 's2').unverified, true);
   assert.equal(lintEpisode(ep, { getStory: () => null, strict: true }).violations.filter((v) => v.rule === 'unverified').length, 2);
   // the publish-time check refuses it (the writer team's lint is upstream; this is the last net)
-  const pf = preflight({ id: 'e1', kind: 'episode', episode: { id: 'e1', provider: 'mock', program: { id: 'world-now' }, storyIds: ['s1'], segments: ep.segments.slice(0, 2) }, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { calendar: { generatedAt: new Date().toISOString(), elections: [] }, env: { EDITORIAL_CONTACT: 'x@example.org' }, getStory: () => ({ title: 'Harbour bridge to close', body: ARTICLE }), requireReview: false });
+  const pf = preflight({ id: 'e1', kind: 'episode', episode: { id: 'e1', provider: 'mock', program: { id: 'world-now' }, storyIds: ['s1'], segments: ep.segments.slice(0, 2) }, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } } }, { calendar: { generatedAt: new Date().toISOString(), elections: [] }, env: { EDITORIAL_CONTACT: 'x@example.org' }, getStory: () => ({ title: 'Harbour bridge to close', body: ARTICLE }), requireReview: false });
   assert.ok(pf.violations.some((v) => v.rule === 'verbatim'));
 });
 

@@ -162,8 +162,8 @@ GLOBIT", "this is live" or carry the LIVE label (`falseLive`). The word "live" i
 there", an outlet's live page, a launch's live stream).
 
 Compliance and YouTube: the YouTube adapter's `liveUpdate` and the broadcast's disclosure are the same in both modes (a
-YouTube Live broadcast carrying recorded programmes is still set as "altered or synthetic" on the broadcast,
-compliance.md §2.5). Two lines of compliance.md assumed live and are updated: the stream now has a publish check of its
+YouTube Live broadcast carrying recorded programmes answers "altered or synthetic content" No on the broadcast, as
+every upload does since 24 Oct: compliance.md §2.5). Two lines of compliance.md assumed live and are updated: the stream now has a publish check of its
 own (§1 table and §9), and the editorial-review exemption is still not relied on (nobody reads the programmes before
 air: the gate is automated).
 

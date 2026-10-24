@@ -12,8 +12,8 @@
 // Rules that are not about the programme's picture and words, reported (`skipped`) but not holding it:
 //   editorial-contact-missing   who answers for the channel goes in the stream's description (the supervisor's), and
 //                               in every upload's, where the publishing desk's gate requires it
-//   flag-missing, flag-unavailable   the synthetic-media flag is set on the broadcast once (compliance.md §2.5), not
-//                               per programme
+//   flag-missing, flag-unavailable, flag-wrong   the platforms' AI flags are set on the broadcast once (compliance.md
+//                               §2.5: YouTube's "altered or synthetic content" answered No), not per programme
 //   unmarked                    C2PA cannot survive RTMP ingest (compliance.md §4); the masters the publishing desk
 //                               exports are marked by its own gate
 //
@@ -26,6 +26,7 @@ export const NOT_FOR_AIR = Object.freeze({
   'editorial-contact-missing': 'a description rule: the stream description and every upload name who answers (EDITORIAL_CONTACT)',
   'flag-missing': 'the synthetic-media flag is set once on the broadcast, not per programme',
   'flag-unavailable': 'the synthetic-media flag is set once on the broadcast, not per programme',
+  'flag-wrong': 'the synthetic-media flag is set once on the broadcast, not per programme',
   unmarked: 'C2PA does not survive RTMP ingest; exported files are marked by the publishing gate',
 });
 

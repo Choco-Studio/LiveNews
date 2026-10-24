@@ -15,11 +15,13 @@
 //   writerOf(episode)             'ai' | 'software' (who wrote the words: an AI writer or the channel's rule-based one)
 //   recreationsIn(episode)        [{ id, name, role, outlet, slot, storyId, words }] of an episode's IN THEIR WORDS pieces
 //   disclosureFor(item)           flags, labels and text per platform for an episode, a clip, a Short or a text post
+//   youtubeSynthetic(item)        YouTube's "altered or synthetic content" answer: { answer, reasons }
 //   describe(item, { credits })   the description text: disclosure first, then the programme, then the credits
 //   textPost(item)                a text post with its disclosure placed first (CoP Measure 1.2.2 f)
 //
 // Platform fields, as their APIs name them (checked 17 Oct 2026, sources in compliance.md §2):
-//   YouTube    videos.status.containsSyntheticMedia (live: the broadcast's own video id, videos.update)
+//   YouTube    videos.status.containsSyntheticMedia (live: the broadcast's own video id, videos.update): YouTube's
+//              "altered or synthetic content", answered by its four questions (youtubeSynthetic): No for what we make
 //              and status.selfDeclaredMadeForKids = false on every video and broadcast (the audience YouTube requires)
 //   TikTok     post_info.is_aigc (Content Posting API, /v2/post/publish/video/init/)
 //   Instagram  is_ai_generated on the media container (Content Publishing API, 22 Jun 2026)
@@ -100,6 +102,31 @@ export function writerOf(episode) {
   return RULE_BASED.has(p) ? 'software' : 'ai';
 }
 
+// YouTube's "altered or synthetic content" (YouTube Studio, the video's details, "Uso de IA": four questions, read
+// 24 Oct 2026; compliance.md §2.5) asks about realistic content a viewer could take for real, and about nothing else.
+export const YOUTUBE_QUESTIONS = Object.freeze({
+  realPerson: 'a real person seems to do or say something they did not do or say',
+  alteredRecording: 'a recording of a real event or place has been altered',
+  realisticScene: 'a realistic scene that did not happen has been generated',
+  aiMusic: 'AI-made music is the focus of the video',
+});
+
+/**
+ * YouTube's answer for an item: Yes only when one of its four questions is true of it. None is true of what the channel
+ * makes: its presenters, reporters and experts are pixel-art characters (clearly animated); their voices are generic
+ * synthetic ones, never a real person's; photos and footage are real, pixelated (a filter: what they show is
+ * unchanged); a recreation is a pixel-art figure saying the person's exact public words in a generic voice; the music is
+ * a bed under the news. So No, on every video and on the live (owner, 24 Oct: "estamos usando mal el botón de uso de
+ * IA", YouTube's own assistant said so; until then every upload said Yes, and YouTube showed "altered or synthetic" on
+ * the player of every news video). An item that ever is one names it in `item.synthetic` ({ realPerson: true, … }) and
+ * the answer is Yes. The channel says how it is made in its own words: the ident before every programme, the
+ * description's first line, the C2PA manifest (AI and real material mixed).
+ */
+export function youtubeSynthetic(item = {}) {
+  const reasons = Object.keys(YOUTUBE_QUESTIONS).filter((k) => item?.synthetic?.[k] === true);
+  return { answer: reasons.length > 0, reasons: reasons.map((k) => YOUTUBE_QUESTIONS[k]) };
+}
+
 /** The IN THEIR WORDS pieces of an episode (producer.js guests(): a `cross` of kind 'restage', recreation: true). */
 export function recreationsIn(episode) {
   const out = [];
@@ -176,22 +203,24 @@ export function disclosureFor(item = {}) {
     ...(hasRecreation ? { recreation: 'AI RECREATION — WORDS FROM PUBLIC STATEMENTS', source: 'SOURCE: <OUTLET>' } : {}),
     textPrefix: 'AI-generated:',
   };
-  // Every platform gets the flag where it has one: a realistic synthetic voice narrating real news is what the
-  // platforms' own words cover ("synthetically generating a person's voice to narrate a video", YouTube), our
-  // C2PA manifest makes YouTube and TikTok apply their label anyway (and then it cannot be taken off), and a
-  // recreation must carry it on every platform without exception.
+  // TikTok and Instagram ask for their label on realistic-sounding synthetic audio ("realistic images, audio, or video",
+  // TikTok; "realistic-sounding audio that was digitally created", Meta): our voices are that, so every video carries
+  // it, a recreation without exception. YouTube's question is narrower, about real people, real recordings, realistic
+  // scenes and AI music (youtubeSynthetic): No for what we make.
   const flag = true;
+  const yt = youtubeSynthetic(item);
   const platforms = {
     youtube: {
       field: kind === 'live' ? 'videos.status.containsSyntheticMedia (the broadcast’s video id)' : 'videos.status.containsSyntheticMedia',
-      containsSyntheticMedia: flag,
-      required: hasRecreation,
+      containsSyntheticMedia: yt.answer,
+      reasons: yt.reasons,
+      required: yt.answer,
       // the audience YouTube requires on every upload and broadcast (US COPPA): news for a general audience
       audienceField: 'status.selfDeclaredMadeForKids',
       selfDeclaredMadeForKids: false,
       descriptionTop: opening,
-      // news is a sensitive topic: YouTube shows its label on the player, not only in the description
-      prominentLabel: true,
+      // (news is a sensitive topic: a Yes would show YouTube's label on the player, not only in the description)
+      prominentLabel: yt.answer,
     },
     tiktok: { field: 'post_info.is_aigc', is_aigc: flag, required: hasRecreation, captionTop: opening },
     instagram: { field: 'is_ai_generated', is_ai_generated: flag, required: hasRecreation, captionTop: opening },

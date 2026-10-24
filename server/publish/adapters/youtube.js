@@ -45,7 +45,9 @@ export function videoResource(item) {
     // the desk uploads at the item's own scheduled time, public; a publishAt (YouTube's own schedule) only when asked
     privacyStatus: item.youtube?.privacy || (item.youtube?.publishAt ? 'private' : 'public'),
     selfDeclaredMadeForKids: false,
-    containsSyntheticMedia: item.disclosure?.youtube?.containsSyntheticMedia !== false,
+    // (YouTube's "altered or synthetic content": the item's own answer, No unless it says Yes; the gate has checked it
+    // against YouTube's four questions: compliance disclosure.js youtubeSynthetic)
+    containsSyntheticMedia: item.disclosure?.youtube?.containsSyntheticMedia === true,
     embeddable: true,
     license: 'youtube',
   };

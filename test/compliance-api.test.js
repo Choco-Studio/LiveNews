@@ -18,12 +18,19 @@ const ep = (extra = {}) => ({
   ...extra,
 });
 
-test('disclosureFor: every platform gets its flag; a recreation makes it required; Facebook and Threads need a hand label', () => {
+test('disclosureFor: TikTok and Instagram get their label, a recreation makes it required; YouTube answers its four questions (No); Facebook and Threads need a hand label', () => {
   const d = disclosureFor({ kind: 'episode', episode: ep() });
   assert.deepEqual(Object.keys(d.platforms), PLATFORMS);
-  assert.equal(d.platforms.youtube.containsSyntheticMedia, true);
-  assert.equal(d.platforms.youtube.required, true);
-  assert.equal(d.platforms.youtube.prominentLabel, true, 'news: the label shows on the player');
+  // YouTube's "altered or synthetic content": No, even with a recreation (none of its four questions: pixel art, the
+  // exact public words, a generic voice), so no label on the player (owner, 24 Oct)
+  assert.equal(d.platforms.youtube.containsSyntheticMedia, false);
+  assert.equal(d.platforms.youtube.required, false);
+  assert.equal(d.platforms.youtube.prominentLabel, false);
+  assert.deepEqual(d.platforms.youtube.reasons, []);
+  const yes = disclosureFor({ kind: 'episode', episode: ep(), synthetic: { alteredRecording: true } }).platforms.youtube;
+  assert.equal(yes.containsSyntheticMedia, true, 'an item that names one of the questions: Yes');
+  assert.deepEqual(yes.reasons, ['a recording of a real event or place has been altered']);
+  assert.equal(yes.prominentLabel, true, 'news: then the label shows on the player');
   assert.equal(d.platforms.youtube.selfDeclaredMadeForKids, false, 'the audience YouTube requires: general, not made for kids');
   assert.equal(d.platforms.tiktok.is_aigc, true);
   assert.equal(d.platforms.instagram.is_ai_generated, true);
@@ -34,7 +41,7 @@ test('disclosureFor: every platform gets its flag; a recreation makes it require
   assert.deepEqual(d.recreations.map((r) => [r.name, r.outlet]), [['Ana Silva', 'Harbour Herald']]);
   // without a recreation: flags still set (our policy), not required by the platform's own rule
   const plain = disclosureFor({ kind: 'clip', episode: ep({ segments: ep().segments.slice(0, 1) }) });
-  assert.equal(plain.platforms.youtube.containsSyntheticMedia, true);
+  assert.equal(plain.platforms.youtube.containsSyntheticMedia, false);
   assert.equal(plain.platforms.youtube.required, false);
   assert.equal(plain.platforms.facebook.manualLabel, true, 'every video: Meta\'s AI info by hand, recreation or not (18 Oct: the label is the clip\'s first disclosure)');
   assert.equal(plain.platforms.threads.manualLabel, true);

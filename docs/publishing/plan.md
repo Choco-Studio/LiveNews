@@ -21,8 +21,9 @@ The machinery is in `pipeline.md`, the clip rules in `clips.md`, the picture in 
   - A post's headline is the outlet's own (the archive's title). Its line of news is a whole sentence the channel said.
     Nothing is rewritten, and no opinion is added.
 - **Disclosed as AI-made, every time.**
-  - Each upload's AI field is set (YouTube `containsSyntheticMedia`, TikTok `is_aigc`, Instagram `is_ai_generated`;
-    Facebook and Threads by hand), and the gate holds a video without it.
+  - Each upload's AI field is set (TikTok `is_aigc`, Instagram `is_ai_generated`; Facebook and Threads by hand), and
+    YouTube's `containsSyntheticMedia` answered by its four questions (No for what we make, `compliance.md` §2.5); the
+    gate holds a video without them, or with YouTube's answer wrong.
   - Every clip's caption opens with the AI disclosure, and its end card says AI-PRODUCED NEWS · PRESENTERS ARE AI
     CHARACTERS · FACTS FROM CREDITED SOURCES in the channel ident's design. A whole programme opens on the ident. Nothing
     stands over a programme or a clip's first seconds, and no AI plate beside the bug (owner, 18 Oct: `compliance.md`

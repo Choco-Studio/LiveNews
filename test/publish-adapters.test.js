@@ -22,7 +22,7 @@ ENV.PUBLIC_MEDIA_BASE_URL = 'https://media.example.org/clips';
 const noFetch = () => {
   throw new Error('a dry run must not touch the network');
 };
-const CLIP = { id: 'c1', kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Barn owls move into Manhattan', text: 'AI-generated: Barn owls move into Manhattan.', description: 'A clip.', hashtags: ['owls', 'nyc'], tags: ['GLOBIT 24'], links: [{ label: 'NPR', url: 'https://www.npr.org/owls', title: 'Owls', description: 'Owls in the park' }], media: { video: '/nonexistent/clip.mp4', duration: 30 }, source: { programId: 'cosmos' }, disclosure: { youtube: { containsSyntheticMedia: true }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } } };
+const CLIP = { id: 'c1', kind: 'clip', platform: 'youtube', format: 'vertical', title: 'Barn owls move into Manhattan', text: 'AI-generated: Barn owls move into Manhattan.', description: 'A clip.', hashtags: ['owls', 'nyc'], tags: ['GLOBIT 24'], links: [{ label: 'NPR', url: 'https://www.npr.org/owls', title: 'Owls', description: 'Owls in the park' }], media: { video: '/nonexistent/clip.mp4', duration: 30 }, source: { programId: 'cosmos' }, disclosure: { youtube: { containsSyntheticMedia: false }, tiktok: { is_aigc: true }, instagram: { is_ai_generated: true } } };
 
 test('every network has an adapter, its variables and a dry run that sends nothing and shows no secret', async () => {
   for (const id of Object.keys(ADAPTERS)) {
@@ -56,9 +56,10 @@ test('redact: every secret value, bearer tokens, bot tokens and credential field
   assert.equal(r.token, '<redacted>');
 });
 
-test('YouTube: the synthetic-media flag on, title and description within the limits, the Shorts category', () => {
+test('YouTube: "altered or synthetic content" answered No, title and description within the limits, the Shorts category', () => {
   const v = videoResource({ ...CLIP, title: 'x'.repeat(150), description: 'é'.repeat(4000), tags: Array.from({ length: 80 }, (_, i) => `tag number ${i}`) });
-  assert.equal(v.status.containsSyntheticMedia, true);
+  assert.equal(v.status.containsSyntheticMedia, false);
+  assert.equal(videoResource({ ...CLIP, disclosure: {} }).status.containsSyntheticMedia, false, 'an item that says nothing: No');
   assert.equal(v.status.selfDeclaredMadeForKids, false);
   assert.equal(v.snippet.title.length, 100);
   assert.ok(Buffer.byteLength(v.snippet.description, 'utf8') <= 5000);
@@ -175,12 +176,12 @@ test('aiFlags: the AI fields each adapter really sends (what the publisher\'s ga
   const flags = (id, item = CLIP) => makeAdapter(id, { env: {}, fetchImpl: noFetch }).aiFlags(item);
   // (YouTube: the audience too, on the same line of the compliance desk's check; without it every Short was held as
   // flag-missing by the real module, 17 Oct)
-  assert.deepEqual(flags('youtube'), { containsSyntheticMedia: true, selfDeclaredMadeForKids: false });
+  assert.deepEqual(flags('youtube'), { containsSyntheticMedia: false, selfDeclaredMadeForKids: false });
   assert.deepEqual(flags('tiktok'), { is_aigc: true });
   assert.deepEqual(flags('instagram'), { is_ai_generated: true });
   assert.deepEqual(flags('facebook'), {}, 'no API field');
-  // the flag follows the item, so an item that turned it off is caught by the gate, not hidden
-  assert.deepEqual(flags('youtube', { ...CLIP, disclosure: { youtube: { containsSyntheticMedia: false } } }), { containsSyntheticMedia: false, selfDeclaredMadeForKids: false });
+  // the flag follows the item, so a wrong Yes is caught by the gate, not hidden
+  assert.deepEqual(flags('youtube', { ...CLIP, disclosure: { youtube: { containsSyntheticMedia: true } } }), { containsSyntheticMedia: true, selfDeclaredMadeForKids: false });
 });
 
 test('the gate measures a clip\'s own stories\' aired words against their sources (clipGetStory), not its episode\'s others', async () => {
@@ -195,7 +196,7 @@ test('the gate measures a clip\'s own stories\' aired words against their source
   };
   const sources = { s1: { title: 'Evacuation orders as fast-moving California wildfire burns homes', summary, body: null }, s2: { title: 'A rare family of barn owls moved into Manhattan', summary: 'Barn owls are nesting in Manhattan this autumn.', body: null } };
   const getStory = (id) => sources[id] || null;
-  const gate = (ids) => C.preflight({ id: 'c1', kind: 'short', episode, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, text: 'AI-generated: owls.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory: C.clipGetStory(ids, getStory) });
+  const gate = (ids) => C.preflight({ id: 'c1', kind: 'short', episode, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } }, text: 'AI-generated: owls.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory: C.clipGetStory(ids, getStory) });
   const verbatim = (r) => (r.violations || []).filter((v) => v.rule === 'verbatim');
   if (C.usingStub) return; // (the stub has no episode lint)
   assert.equal(verbatim(gate(['s2'])).length, 0, 'the owls clip carries no copied words');
@@ -214,7 +215,7 @@ test('the verbatim rule fails closed: a story whose sources are not at hand is r
   };
   // (a FULL TIME edition replayed from a sport snapshot: the archive never kept s1)
   const getStory = (id) => (id === 's2' ? { title: 'A rare family of barn owls moved into Manhattan', summary: 'Barn owls are nesting in Manhattan this autumn.', body: null } : null);
-  const flags = { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } };
+  const flags = { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } };
   const missing = (r) => (r.violations || []).filter((v) => v.rule === 'sources-missing').map((v) => v.storyId);
   const clip = (ids) => C.preflight({ id: 'c1', kind: 'short', episode, storyIds: ids, platforms: ['youtube'], flags, text: 'AI-generated: sport.' }, { now: Date.parse('2026-10-17T12:00:00Z'), getStory: C.clipGetStory(ids, getStory) });
   assert.deepEqual(missing(clip(['s1'])), ['s1']);

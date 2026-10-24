@@ -259,8 +259,8 @@ hand, from the approval page, with every rule of the pipeline still in force.
      and the hashtags;
    - a text post: its text as the network shows it ("AI-generated:" first), and the article's link (Telegram's message
      shows its links as labels, so by hand the address goes under the text).
-4. **The network's own switches** (`checklistFor`), ticked one by one: YouTube "altered or synthetic content" yes and
-   "made for kids" no; TikTok's "AI-generated content" label on, the privacy, no branded content; Instagram's "AI info"
+4. **The network's own switches** (`checklistFor`), ticked one by one: YouTube "altered or synthetic content" ("Uso
+   de IA") No (none of its four questions is true of our videos: `compliance.md` §2.5) and "made for kids" no; TikTok's "AI-generated content" label on, the privacy, no branded content; Instagram's "AI info"
    label; Facebook's label by hand. The wording quoted is the networks' own as read for `compliance.md` §2.5–2.7; the
    apps' Spanish labels were not read, so each switch is described by what it does.
 5. **Ya lo he publicado** (`POST /api/published`, `recordManual`), with the post's address if he has it (https, on the

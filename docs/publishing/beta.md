@@ -55,8 +55,10 @@ por la suya solo lo ves tú.
    obligatoria** (la tarjeta la pone la primera, después del archivo, y dice «Obligatorio»): desde el 18 de octubre el
    clip ya no lleva aviso en sus primeros segundos, así que esa etiqueta es lo primero que ve quien lo mira. Sin
    marcarla, «Ya lo he publicado» no funciona.
-   - **YouTube**: contenido alterado o sintético («altered or synthetic content»): **Sí**. Público («made for kids»):
-     **no es para niños**.
+   - **YouTube**: «Uso de IA» (contenido alterado o sintético, «altered or synthetic content»): **No** en las cuatro
+     preguntas. Ninguna se cumple en nuestros vídeos: personajes animados, voces sintéticas que no imitan a nadie, fotos
+     reales sin cambiar lo que muestran (corregido el 24 de octubre: antes ponía Sí, y era un error). Que es IA ya lo
+     dicen la cabecera del canal y la primera línea de la descripción. Público («made for kids»): **no es para niños**.
    - **TikTok**: la etiqueta de contenido generado por IA («AI-generated content»): **activada**. La privacidad la
      eliges tú (para la beta, todo el mundo). Contenido de marca: no.
    - **Instagram**: la etiqueta de IA («AI info»): **activada**.

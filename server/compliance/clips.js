@@ -18,6 +18,8 @@
 //   (no rule asks for the yellow AI plate once docked to the bug, nor for any notice over a programme or a clip's first
 //   seconds: owner, 18 Oct; compliance.md §2.10, §3)
 //   flag-missing        a platform's synthetic-media flag is not set on an upload that must carry it
+//   flag-wrong           YouTube's "altered or synthetic content" answered against its four questions (a Yes for a
+//                        video none of them describes: disclosure.js youtubeSynthetic)
 //   flag-unavailable     a platform with no API flag for a recreation (Facebook, Threads): set it by hand or leave it out
 //   election-hold        a recreation of a politician of a country inside its election window, or of a candidate
 //   election-silence     an item about a vote in a country during its legal silence (held until polls close)
@@ -302,10 +304,13 @@ export function checkClip(clip = {}, opts = {}) {
   }
 
   // ---- the platforms' flags
-  const disclosure = disclosureFor({ kind: kind === 'short' ? 'short' : kind, episode, recreations: inRange, platforms: clip.platforms });
+  const disclosure = disclosureFor({ kind: kind === 'short' ? 'short' : kind, episode, recreations: inRange, platforms: clip.platforms, synthetic: clip.synthetic });
   for (const [name, d] of Object.entries(disclosure.platforms)) {
     const set = clip.flags?.[name] || {};
-    if (d.field && name === 'youtube' && set.containsSyntheticMedia !== true) v('flag-missing', 'YouTube: set status.containsSyntheticMedia = true', { platform: name, field: 'containsSyntheticMedia' });
+    // (YouTube's "altered or synthetic content" answered as its four questions give it: No for what we make, so a Yes is
+    // as wrong as no answer: disclosure.js youtubeSynthetic)
+    if (d.field && name === 'youtube' && typeof set.containsSyntheticMedia !== 'boolean') v('flag-missing', `YouTube: set status.containsSyntheticMedia = ${d.containsSyntheticMedia}`, { platform: name, field: 'containsSyntheticMedia' });
+    else if (d.field && name === 'youtube' && set.containsSyntheticMedia !== d.containsSyntheticMedia) v('flag-wrong', d.containsSyntheticMedia ? `YouTube: altered or synthetic content is Yes here (${d.reasons.join('; ')}): set status.containsSyntheticMedia = true` : 'YouTube: altered or synthetic content is No (none of YouTube’s four questions is true of this video: animated characters, generic synthetic voices, real pictures unchanged): set status.containsSyntheticMedia = false', { platform: name, field: 'containsSyntheticMedia' });
     if (d.field && name === 'youtube' && set.selfDeclaredMadeForKids !== false) v('flag-missing', 'YouTube: set status.selfDeclaredMadeForKids = false (news for a general audience, not made for kids)', { platform: name, field: 'selfDeclaredMadeForKids' });
     if (d.field && name === 'tiktok' && set.is_aigc !== true) v('flag-missing', 'TikTok: set post_info.is_aigc = true', { platform: name });
     if (d.field && name === 'instagram' && set.is_ai_generated !== true) v('flag-missing', 'Instagram: set is_ai_generated = true', { platform: name });

@@ -130,6 +130,9 @@ test('the switches to set by hand, per network: the network\'s own AI label righ
     assert.match(label[0].text, /^Obligatorio: /, n);
     assert.equal(label[0], AI_LABEL[n]);
   }
+  // YouTube's "Uso de IA": No for what we make (owner, 24 Oct), Yes only for an item that says so
+  assert.match(checklistFor(clip('youtube')).find((c) => c.id === 'synthetic').text, /marcas No en las cuatro preguntas/);
+  assert.match(checklistFor({ ...clip('youtube'), disclosure: { youtube: { containsSyntheticMedia: true } } }).find((c) => c.id === 'synthetic').text, /marca Sí/);
 });
 
 test('a post\'s address must be on its network\'s own host', () => {
@@ -264,7 +267,7 @@ test('prepare: only what is approved; the gate again on the signed files and the
   const g = gates.at(-1).view;
   assert.ok(g.files.length === 2 && g.files.every((f) => /\.youtube-[0-9a-f]+\.c2pa\.(mp4|jpg)$/.test(f)), JSON.stringify(g.files));
   assert.equal(g.text, m.fields[1].value);
-  assert.equal(g.flags.youtube.containsSyntheticMedia, true);
+  assert.equal(g.flags.youtube.containsSyntheticMedia, false);
   assert.equal(g.flags.youtube.selfDeclaredMadeForKids, false);
   assert.ok(!JSON.stringify(r.json).includes(dir), 'no path on the page');
   // the download: the signed copy, as an attachment

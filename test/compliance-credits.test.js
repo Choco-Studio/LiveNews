@@ -65,13 +65,13 @@ test('WORLD WEATHER credits Open-Meteo (CC BY 4.0) and GDACS; the demo forecast 
   assert.ok(credits.includes('Alerts: GDACS (UN / European Commission)'));
   const demo = auditItem({ ...w, weather: { demo: true, source: 'DEMO DATA' } });
   assert.ok(demo.assets.some((x) => x.kind === 'weather' && x.publish === false));
-  const pf = preflight({ id: 'w1', kind: 'episode', episode: { ...w, weather: { demo: true, source: 'DEMO DATA' } }, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
+  const pf = preflight({ id: 'w1', kind: 'episode', episode: { ...w, weather: { demo: true, source: 'DEMO DATA' } }, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
   assert.ok(pf.violations.some((v) => v.rule === 'demo') && pf.violations.some((v) => v.rule === 'not-publishable'));
 });
 
 test('an export with an asset without a record is refused; on air the strict gate takes the asset off', () => {
   const ep = episode();
-  const pf = preflight({ id: 'e1', kind: 'episode', episode: ep, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
+  const pf = preflight({ id: 'e1', kind: 'episode', episode: ep, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } } }, { calendar: QUIET, env: ENV, requireReview: false });
   assert.equal(pf.ok, false);
   assert.deepEqual(pf.violations.map((v) => v.rule), ['rights-missing']);
   // report mode notes it; strict mode drops the uncleared picture (the story keeps its card) and keeps the cleared ones

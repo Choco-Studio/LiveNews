@@ -113,7 +113,10 @@ test('the server keeps the label and the platforms\' flags whatever an item asks
   };
   const d = disclosureFor({ kind: 'short', episode: ep, labels: { recreation: false }, recreationLabel: false, platforms: ['youtube', 'tiktok', 'instagram', 'facebook'] });
   assert.equal(d.labels.recreation, 'AI RECREATION — WORDS FROM PUBLIC STATEMENTS');
-  assert.equal(d.platforms.youtube.required, true);
+  // (YouTube's "altered or synthetic content" stays No: a pixel-art figure, the exact public words, a generic voice; an
+  // item cannot turn on what YouTube's four questions do not ask for, nor turn off TikTok's or Instagram's label)
+  assert.equal(d.platforms.youtube.required, false);
+  assert.equal(d.platforms.youtube.containsSyntheticMedia, false);
   assert.equal(d.platforms.tiktok.required, true);
   assert.equal(d.platforms.instagram.required, true);
   assert.equal(d.platforms.facebook.manualLabel, true);
@@ -125,7 +128,7 @@ test('the server keeps the label and the platforms\' flags whatever an item asks
     { start: 4, end: 6, text: hand, segIndex: 0, kind: 'provenance', recreationId: booking.id, quote: false },
     { start: 6.5, end: 10, text: words, segIndex: 1, kind: 'recreation', recreationId: booking.id, quote: true },
   ];
-  const clip = { id: 'c1', kind: 'short', cards: clipCards(), text: 'AI-produced news: presenters are AI characters.', episode: ep, range: { start: 4, end: 10.4 }, timeline: tl, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: true, selfDeclaredMadeForKids: false } }, frame: { crop: { x: 132, y: 0, w: 121, h: 216 }, output: { w: 1080, h: 1920 }, window: null }, label: false, recreationLabel: false };
+  const clip = { id: 'c1', kind: 'short', cards: clipCards(), text: 'AI-produced news: presenters are AI characters.', episode: ep, range: { start: 4, end: 10.4 }, timeline: tl, platforms: ['youtube'], flags: { youtube: { containsSyntheticMedia: false, selfDeclaredMadeForKids: false } }, frame: { crop: { x: 132, y: 0, w: 121, h: 216 }, output: { w: 1080, h: 1920 }, window: null }, label: false, recreationLabel: false };
   for (const opts of [{}, { label: false }, { recreationLabel: false, skipLabel: true }, { requireReview: false }]) {
     const r = checkClip(clip, { now: Date.parse('2026-10-17T12:00:00Z'), calendar: { generatedAt: '2026-10-17T12:00:00Z', elections: [] }, register: reg, ...opts });
     assert.ok(r.violations.some((v) => v.rule === 'label-out-of-frame'), JSON.stringify(opts));

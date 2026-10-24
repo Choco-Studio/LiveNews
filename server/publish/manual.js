@@ -42,8 +42,11 @@ const CHECK = {
   file: { id: 'file', text: 'Subes el vídeo descargado de aquí (lleva dentro la firma de procedencia C2PA), no otro.' },
   ytTexts: { id: 'texts', text: 'Pegas el título, la descripción y los hashtags tal cual.' },
   capTexts: { id: 'texts', text: 'Pegas la descripción y los hashtags tal cual.' },
-  // the network's own AI label (since 18 Oct what a clip's viewer sees first, beside the player: compliance.md §3.2): required
-  synthetic: { id: 'synthetic', ai: true, text: 'Obligatorio: contenido alterado o sintético («altered or synthetic content»): marcas Sí.' },
+  // the network's own AI label (since 18 Oct what a clip's viewer sees first, beside the player: compliance.md §3.2): required.
+  // YouTube's is a question, not a label (its four questions, compliance disclosure.js youtubeSynthetic): No for what we
+  // make (owner, 24 Oct: "estamos usando mal el botón de uso de IA"), Yes only for an item that names one of them
+  synthetic: { id: 'synthetic', ai: true, text: 'Obligatorio: «Uso de IA» (contenido alterado o sintético, «altered or synthetic content»): marcas No en las cuatro preguntas. Ninguna se cumple: personajes animados, voces sintéticas que no imitan a nadie, fotos reales sin cambiar lo que muestran. Que es IA ya lo dicen la cabecera del canal y la primera línea de la descripción.' },
+  syntheticYes: { id: 'synthetic', ai: true, text: 'Obligatorio: «Uso de IA» (contenido alterado o sintético, «altered or synthetic content»): este vídeo marca Sí (lo dice su ficha).' },
   kids: { id: 'kids', text: 'Público («made for kids»): marcas que no es contenido para niños.' },
   thumb: { id: 'thumb', text: 'Miniatura: subes la portada descargada.' },
   aigc: { id: 'aigc', ai: true, text: 'Obligatorio: activas la etiqueta de contenido generado por IA («AI-generated content»).' },
@@ -65,7 +68,7 @@ const CHECK = {
 export function checklistFor(item) {
   const net = item?.platform;
   if (item?.kind === 'text') return [CHECK.postText, net === 'bluesky' || net === 'threads' ? CHECK.linkCard : net === 'telegram' ? CHECK.linkBelow : CHECK.linkIn];
-  const label = AI_LABEL[net] || null;
+  const label = net === 'youtube' && item.disclosure?.youtube?.containsSyntheticMedia === true ? CHECK.syntheticYes : AI_LABEL[net] || null;
   const list = [CHECK.file, ...(label ? [label] : []), net === 'youtube' ? CHECK.ytTexts : CHECK.capTexts];
   if (net === 'youtube') list.push(CHECK.kids, ...(item.kind === 'episode' && item.media?.thumb ? [CHECK.thumb] : []));
   else if (net === 'tiktok') list.push(CHECK.privacy, CHECK.branded);
