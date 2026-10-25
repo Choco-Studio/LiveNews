@@ -22,6 +22,7 @@ import { airable, compactRights, currentRights, pictureMode } from './rights.js'
 import { locate, lookupPlace, placeSupported, institutionPlace } from './gazetteer.js';
 import { boardSpec } from '../public/js/boardspec.js';
 import { airedText } from './compliance/verbatim.js';
+import { loadCalendar, silenceHold } from './compliance/elections.js';
 import { MAX_REWRITES, checkScore, copiedPassages, currentLines, dropStory, editorChanges, mergeRewrite, parseRewrite, rewriteFaults, rewritePrompt, storyCheck, storySources, trimStory } from './ownwords.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -322,6 +323,24 @@ export class Producer {
     return this.stock(program).length >= this.floorOf(program);
   }
 
+  /**
+   * A story about a vote in a country now in its legal silence never reaches the writer: the gate holds the whole
+   * programme for one such story (server/compliance/elections.js silenceHold), and the station tried the slot again and
+   * again (25 Oct, Brazil's run-off: WORLD NOW held or short of stories for over an hour, filler on air).
+   */
+  outOfSilence(list) {
+    let calendar;
+    try {
+      calendar = loadCalendar({ dataDir: this.config.dataDir || null });
+    } catch {
+      return list;
+    }
+    const now = Date.now();
+    const kept = list.filter((s) => !silenceHold({ text: `${s.title || ''}. ${s.summary || ''} ${s.body || ''}`, now, calendar }).hold);
+    if (kept.length < list.length) this.log.info?.(`[producer] ${list.length - kept.length} stories left out: about a vote in its silence`);
+    return kept;
+  }
+
   async produce(channel, programId, { upcoming = [] } = {}) {
     const program = { id: programId, ...channel.programs[programId] };
     const cast = castOf(channel, programId);
@@ -329,7 +348,7 @@ export class Producer {
     if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
     if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
     if (program.kind === 'quiz') return this.produceQuiz(channel, program);
-    const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    const candidates = this.outOfSilence(this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) }));
     // (the programmes after this one, and the clock's pinned bulletin: their candidates are the picture desk's next work)
     this.lookAhead(channel, [...upcoming, ...(channel.clock?.pins || []).map((p) => p.program)]);
     if (candidates.length < this.floorOf(program)) return null;
