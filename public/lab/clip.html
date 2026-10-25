@@ -49,7 +49,7 @@ function endCanvas(spec, t) {
   const c = mk(w, h);
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream || 'none', backdrop: backdropOf(spec) });
+  drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream || 'none', backdrop: backdropOf(spec), cta: spec.cta || null });
   return c;
 }
 window.__clipLab = {
@@ -62,8 +62,9 @@ const run = qs.get('run');
 if (run === 'end') {
   // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
   // (&stream=live|recorded|none, airmode.js streamOf: WATCH LIVE only for a live stream, "24 hours a day" for the
-  // pre-rendered one, nothing about where to watch without a stream; none unless the factory says otherwise)
-  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', programId: qs.get('programId') || '', stream: qs.get('stream') || 'none' };
+  // pre-rendered one, nothing about where to watch without a stream; none unless the factory says otherwise;
+  // &cta=next-question: the series' invitation, cards.js END_CTAS)
+  const spec = { format: qs.get('format') || 'vertical', programme: qs.get('programme') || '', theme: qs.get('theme') || '', programId: qs.get('programId') || '', stream: qs.get('stream') || 'none', cta: qs.get('cta') || null };
   const backdrop = backdropOf(spec);
   const { w, h } = sizeOf(spec.format);
   const screen = mk(w, h);
@@ -74,7 +75,7 @@ if (run === 'end') {
   const t0 = performance.now();
   const frame = () => {
     requestAnimationFrame(frame);
-    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream, backdrop });
+    drawEndCard(g, (performance.now() - t0) / 1000, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream, backdrop, cta: spec.cta });
   };
   frame();
   if (qs.get('sting') === '1') {
@@ -96,8 +97,8 @@ if (run === 'end') {
     grid.append(f);
   };
   const cases = [
-    { format: 'vertical', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz' },
-    { format: 'horizontal', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz' },
+    { format: 'vertical', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz', cta: 'next-question' },
+    { format: 'horizontal', lines: ['HOW MANY?', 'PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz', cta: 'next-question' },
     { format: 'vertical', lines: ['UNIT-8 HAS A', 'THOUGHT'], programme: 'COSMOS DESK', theme: 'space' },
     { format: 'vertical', lines: ['PLAY ALONG'], programme: 'PAY ATTENTION', theme: 'quiz', profile: 'tall' },
     { format: 'vertical', lines: ['FULL ROUND'], programme: 'PAY ATTENTION', theme: 'quiz', profile: 'tall' },

@@ -114,7 +114,7 @@ blue), the presenter's cut-out ringed in the same colour.
 | WORLD WEATHER | blue | Sam Night at the map wall | the weather board or map (no photos) | |
 | SEVEN DAYS | coral | Paco Pixel, Lola Byte | the story of the week's picture | |
 | FULL TIME | orange | Kai Sprite, Rosa Rally | the result board | |
-| PAY ATTENTION | purple | the players (UNIT-8, Penny…) | the question board (never its answer) | "PLAY ALONG", "BEAT UNIT-8?" |
+| PAY ATTENTION | purple | the players (UNIT-8, Penny…) | the question board (never its answer) | the question itself ("HOW MANY PONIES?", "TSMC: HOW MUCH?"), then "BEAT UNIT-8?" |
 
 ### 3.3 Per platform: sizes and safe areas
 
@@ -147,7 +147,15 @@ captions and the strap); a whole programme's from its clean plate (`?clip=clean`
   light clip of a light programme; never on grave news. (Why the disclosure moved: §4.)
 - **Hashtags**: at most four, relevant: the story's subject and place as the facts name them, the programme's own
   (`#technews`, `#sciencenews`, `#newsquiz`…), `#pixelart` for the brand on light clips. On grave news: the place and
-  the programme's only, never a person, never `#pixelart`.
+  the programme's only, never a person, never `#pixelart`. A quiz question: its topic when it is a plain name
+  (`#NASA`, `#ExmoorPonyHerd`: never the answer, which its words mask), then `#newsquiz #quiz #news`.
+- **A quiz question** (`shorts-v2.md` A4, 25 Oct): every line leads with its topic, and the board's own question is
+  said in plain words (`moments.js` `quizWords` `ask`, from the figure: "How many ponies?"; WHERE IN THE WORLD? asks
+  "Which country?"). The first cover is the question itself (a grid shows a cover alone: HOW MANY PONIES?), else its
+  topic with it (TSMC: HOW MUCH?, NASA: HOW MANY?); the title beside it the challenge ("Exmoor Pony Herd: can you beat
+  Paco and Penny?"), the second title the question ("Exmoor Pony Herd: how many ponies? Guess before the answer"); the
+  caption's first line both ("Exmoor Pony Herd: how many ponies? Paco and Penny guess; can you beat them?"). A cover
+  that is the board's question, or its topic with it, counts as concrete; anything looser is checked as words.
 
 ### 3.5 Grave news
 
@@ -182,8 +190,8 @@ Every field is checked before it is used, whoever wrote it (`checkTitle`, `check
 What fails is dropped and the **deterministic writer** (`fallbackPackage`) fills the place: the channel's aired
 headline when it passes the verbatim rule, else an aired sentence of its own (whole, never cut mid-clause), else the
 clip's own hook ("£15m investment"), else the story's label ("Wildfire in California, USA: the facts"); a quiz's
-question as the board asks it, or "How many? A question about TSMC from this week's news", "Can you beat UNIT-8 and
-Penny?"; the weather's own boards. Without an AI writer the whole package is the deterministic writer's, and the
+topic with its challenge and its question ("NASA: can you beat Paco and Penny?", "NASA: how many light-years? Guess
+before the answer", §3.4); the weather's own boards. Without an AI writer the whole package is the deterministic writer's, and the
 approval page says so.
 
 ### 3.7 Where it runs, and the publish checks

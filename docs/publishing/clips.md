@@ -57,7 +57,7 @@ guess at the words.
 
 | Kind | What it is | Base interest |
 |---|---|---|
-| quiz-question | PAY ATTENTION: a question from its frame to its reveal, opening on the round's card when it is the round's first, with the player's one-line reaction when it follows | 7.5 |
+| quiz-question | PAY ATTENTION: a question from its frame to its reveal, with the player's one-line reaction when it follows; never from the round's card (until 25 Oct a round's first question opened on it: four seconds of its name and its rules before anything was asked, `shorts-v2.md` A2) | 7.5 |
 | quiz-round | a whole round, its card to its last reveal: the longer clip TikTok rewards | 7 |
 | weather-board | WORLD WEATHER's HOT AND COLD and THE NEXT THREE DAYS | 6.5 |
 | weather-story | the weather warning (usually grave) | 6.5 |
@@ -151,7 +151,13 @@ exact transcript in recording time: every segment, sentence and word.
   - the end card concatenated (its own picture and sting);
   - a 5x nearest-neighbour scale;
   - H.264 High (yuv420p, CRF 18, a keyframe a second), AAC 160k, faststart;
-  - the sound faded in over 0.12 s and out over 0.35 s.
+  - the sound faded in over 0.12 s and out over 0.35 s;
+  - **the feeds' loudness** (`shorts-v2.md` A1, 25 Oct): the clip's sound is measured first as the graph will mix it
+    (the window, its fades and the end card: `loudnessArgs`, EBU R128), and one linear gain on the whole brings it to
+    −14 LUFS integrated, never past −1.5 dBTP true peak (`loudnessGain`, `LOUDNESS`): no compressor and no limiter, so
+    the mix keeps its dynamics. YouTube plays a video at about −14 and turns a louder one down, never a quieter one up;
+    the house mixes its voices at −16, and the clips measured −15.7 to −17.1. The made file is measured again and the
+    clip's JSON keeps both (`loudness: { target, gain, before, lufs, truePeak }`); a true peak over −1 dBTP is logged.
 - **Captions.** The `.srt` and `.vtt` files come from the voice's own word times, in pages of two lines of 42
   characters, never overlapping.
 - **Contact sheet.** Twelve frames: the first four (the hook in two seconds), evenly through the clip, and the end card.

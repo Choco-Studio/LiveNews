@@ -26,6 +26,7 @@
 import { ownWords, storyLabel } from './wording.js';
 import { tokens } from '../compliance/verbatim.js';
 import { numbersIn, numberWordsIn, contentWords, sentencesIn, extractFigures, sameWord, isGrave, GRAVE } from '../facts.js';
+import { quizTopic } from '../../public/js/scenes/quiz-ask.js';
 
 const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const chars = (s) => [...String(s ?? '')].length;
@@ -49,7 +50,7 @@ export const GRAVE_WORDS = /\b(?:horror|horrific|horrifying|terrifying|carnage|b
 const LIVE = /\bLIVE\b|\blive (?:now|stream|coverage|updates?|blog)\b|\bwatch live\b|\bstreaming now\b/i;
 const EMOJI = /\p{Extended_Pictographic}/u;
 // words a package may add that are no claim about the story (its kind, the clip, the invitation)
-const FRAMING = new Set('one two three four five six seven eight nine ten did does many much full whole reporting source sources what why how who where when know known explained explain explainer story stories headline headlines today\'s this week\'s news quiz question questions answer answers play along beat guess weather forecast week weeks numbers number latest briefing brief report reports reported says said means mean matters matter next inside look closer can you your here heres facts fact key big minute minutes second seconds today tonight world around update world\'s channel find out see watch clip short programme edition desk read the and in on of at for to with a an is are was were be from by as it its this that'.split(' '));
+const FRAMING = new Set('one two three four five six seven eight nine ten did does many much full whole reporting source sources what why how who where when know known explained explain explainer story stories headline headlines today\'s this week\'s news quiz question questions answer answers play along beat guess guesses percentage weather forecast week weeks numbers number latest briefing brief report reports reported says said means mean matters matter next inside look closer can you your here heres facts fact key big minute minutes second seconds today tonight world around update world\'s channel find out see watch clip short programme edition desk read the and in on of at for to with a an is are was were be from by as it its this that'.split(' '));
 const PROGRAMME_WORDS = /\b(?:globit|world now|tech bytes|cosmos desk|money minute|news in 60|world weather|seven days|full time|pay attention)\b/gi;
 
 const flat = (s) => tokens(s).map((t) => t.w);
@@ -147,7 +148,7 @@ export function packFacts(moment, episode = {}, { stories = new Map(), presenter
     outletTitles,
     summaries: st.map((s) => norm(s.summary)).filter(Boolean),
     sources,
-    quizInfo: quiz ? { title: norm(moment.quiz?.title), tease: norm(moment.quiz?.tease), type: moment.quiz?.type || null, players: (moment.quiz?.players || []).map((id) => firstName(presenters, id)) } : null,
+    quizInfo: quiz ? { title: norm(moment.quiz?.title), tease: norm(moment.quiz?.tease), ask: norm(moment.quiz?.ask), type: moment.quiz?.type || null, players: (moment.quiz?.players || []).map((id) => firstName(presenters, id)) } : null,
     presenters: [...new Set(cast.map((id) => firstName(presenters, id)).filter(Boolean))].slice(0, 2),
     // (every presenter of the channel: a guest expert of another programme is still not the story)
     castNames: Object.values(presenters || {}).map((p) => p?.name).filter(Boolean),
@@ -346,6 +347,9 @@ function concreteFaults(t, facts) {
   const T = norm(t).toUpperCase().replace(/[.!]+$/, '');
   const faults = [];
   if (LABELS.test(T)) return [`a label, not what happened ("${T}")`];
+  // a quiz's cover may be its board's own question (HOW MANY PONIES?) or its topic before it (TSMC: HOW MUCH?): the
+  // game is what a stranger sees, in the board's own words (docs/publishing/shorts-v2.md A4)
+  if (facts.quiz && quizCovers(facts.quizInfo || {}).includes(T)) return faults;
   // a date alone says when, not what
   if (/^(?:\d{1,2}\s+)?(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[A-Z]*(?:\s+\d{1,2})?$/.test(T)) return [`a date, not what happened ("${T}")`];
   if (quotedInFacts(t, facts)) faults.push('a quotation or nickname out of its context');
@@ -508,7 +512,13 @@ export function hashtagsFor(facts) {
     const tag = String(t || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').map((w) => (w.length <= 4 && w === w.toUpperCase() && !/^(?:OF|THE|AND|IN|ON|AT|TO|FOR|A|AN|BY)$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join('');
     if (tag.length >= 3 && tag.length <= 24 && !tags.some((x) => x.toLowerCase() === tag.toLowerCase())) tags.push(tag);
   };
-  if (facts.quiz) return ['newsquiz', 'quiz', 'news', 'pixelart'];
+  // a quiz: its topic first (NASA, ExmoorPonyHerd: never the answer, which its words mask); a possessive's owner alone
+  // (NASA's Webb: NASA, Jack Dorsey's Block: JackDorsey)
+  if (facts.quiz) {
+    const about = quizAbout(facts.quizInfo || {}).split(/[’']s\b/)[0].trim();
+    if (about) add(about);
+    return tags.length ? [tags[0], 'newsquiz', 'quiz', 'news'] : ['newsquiz', 'quiz', 'news', 'pixelart'];
+  }
   if (facts.weather) return ['weather', 'forecast', 'pixelart'];
   const place = facts.place ? placeName(facts.place) : '';
   if (facts.grave) {
@@ -560,6 +570,23 @@ function genericThumbs(facts) {
 }
 
 const QUIZ_KIND = { where: 'where in the world is it?', howmany: 'how many?', letters: 'name the headline', today: 'today or not today?', which: 'which story is it?', picture: 'what is in the picture?' };
+// a quiz's question as its board asks it, where the moment gives none of its own (moments.js quizWords `ask`)
+const QUIZ_ASK = { howmany: 'How many?', where: 'Which country?', today: 'Today or not today?' };
+// an ask that says nothing of its question alone (a cover takes the topic with it: TSMC: HOW MUCH?)
+const GENERIC_ASK = /^(?:HOW MANY|HOW MUCH|WHAT PERCENTAGE|WHICH COUNTRY|TODAY OR NOT TODAY)\?$/;
+/**
+ * A quiz's cover texts, best first: its question (HOW MANY PONIES?), its topic with it (TSMC: HOW MUCH?, NASA: HOW
+ * MANY?), and last, alone, a question that still says its game (WHICH COUNTRY?, TODAY OR NOT TODAY?).
+ */
+function quizCovers(q = {}, about = quizAbout(q)) {
+  const ask = norm(q.ask || QUIZ_ASK[q.type] || '').toUpperCase();
+  if (!ask) return [];
+  const short = /^HOW MANY /.test(ask) ? 'HOW MANY?' : ask;
+  const A = about.toUpperCase();
+  return [GENERIC_ASK.test(ask) ? '' : ask, A ? `${A}: ${ask}` : '', A && short !== ask ? `${A}: ${short}` : '', /^(?:WHICH COUNTRY|TODAY OR NOT TODAY)\?$/.test(ask) ? ask : ''].filter(Boolean);
+}
+/** What a quiz question is about, without its answer: the first name its board's words give (TSMC, Waymo), or ''. */
+const quizAbout = (q = {}) => quizTopic(q.tease || '');
 
 /** The deterministic writer: a package from the facts alone (no AI), never the outlet's headline. */
 export function fallbackPackage(facts) {
@@ -573,13 +600,32 @@ export function fallbackPackage(facts) {
     const q = facts.quizInfo || {};
     const who = q.players?.length === 2 ? `${q.players[0]} and ${q.players[1]}` : '';
     const kindWords = QUIZ_KIND[q.type] || 'a question from the news';
-    // what the question is about, without its answer: the first name it gives (TSMC, Waymo), as the board shows it
-    const qtext = `${q.tease || q.title || ''}`;
-    const about = ((qtext.match(/(?<=\S\s+)\p{Lu}[\p{L}\d’'&-]*(?:\s+\p{Lu}[\p{L}\d’'&-]+){1,2}/u) || qtext.match(/\b(?!AI\b)[\p{Lu}\d]{2,6}\b/u) || qtext.match(/(?<=\S\s+)(?!(?:The|A|An|In|On|And|But)\b)\p{Lu}\p{Ll}[\p{L}\d’'&-]*/u) || [''])[0]).replace(/[’']s$/, '');
-    const ask = { howmany: 'How many?', where: 'Where is it?', today: 'Today or not today?' }[q.type] || 'News quiz:';
-    titles = [q.title && chars(q.title) <= LIMITS.title.max ? q.title : '', about ? `${ask} A question about ${about} from this week's news` : '', who ? `Can you beat ${who}? This week's news quiz` : '', `News quiz: ${kindWords}`, `Play along: a ${prog} question on this week's news`];
-    thumbs = [about && chars(about) <= 16 ? `${about.toUpperCase()}?` : 'YOUR GUESS?', who ? `BEAT ${q.players[0].toUpperCase()}?` : 'CAN YOU?', 'PLAY ALONG', 'NEWS QUIZ'];
-    hook = who ? `Can you beat ${who}? Play along with a question on this week's news.` : 'Play along with a question on this week\'s news.';
+    const about = quizAbout(q);
+    // the board's own question in plain words (scenes/quiz-ask.js: How many ponies?), never its answer; the topic first
+    // in every line (docs/publishing/shorts-v2.md A4): the title the challenge beside the question on screen, the cover
+    // the question itself (a grid shows a cover alone), the caption's first line both
+    const ask = q.ask || QUIZ_ASK[q.type] || '';
+    const ASK = ask.toUpperCase();
+    const lower = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+    const challenge = who ? `${who} guess; can you beat them?` : 'Your guess?';
+    // the cover: the question (HOW MANY PONIES?), else its topic with it (TSMC: HOW MUCH?, NASA: HOW MANY?), whichever
+    // passes a cover's own checks (22 characters, no word over 9 letters)
+    const cover = quizCovers(q, about).find((c) => checkThumb(c, facts).length === 0) || '';
+    const challengeTitle = about && who ? `${about}: can you beat ${who}?` : '';
+    const askTitle = about && ask ? `${about}: ${lower(ask)} Guess before the answer` : ask && !GENERIC_ASK.test(ASK) ? `${ask} Guess before the answer` : '';
+    const generic = who ? `Can you beat ${who}? This week's news quiz` : '';
+    // (each cover beside its title adds to it: the question's cover beside the challenge, the challenge beside the question)
+    titles = [...(cover ? [challengeTitle || generic, askTitle] : [askTitle, challengeTitle]), q.title && chars(q.title) <= LIMITS.title.max ? q.title : '', about ? `${ask || 'News quiz:'} A question about ${about} from this week's news` : '', generic, `News quiz: ${kindWords}`, `Play along: a ${prog} question on this week's news`];
+    thumbs = [cover, who ? `BEAT ${q.players[0].toUpperCase()}?` : 'CAN YOU?', about && chars(about) <= 16 ? `${about.toUpperCase()}?` : 'YOUR GUESS?'];
+    // a whole round (TikTok's longer clip): how many questions it plays, the challenge beside it
+    const round = facts.kind === 'quiz-round' && /^\d+ questions\b/.test(q.title || '') ? q.title.match(/^\d+ questions/)[0] : '';
+    // (3 QUESTIONS on the cover beside the challenge's title, BEAT PACO? beside the round's)
+    if (round) {
+      titles = [who ? `Can you beat ${who}? This week's news quiz` : '', `News quiz: ${q.title}`, ...titles];
+      thumbs = [round.toUpperCase(), ...thumbs];
+    }
+    const hooks = [round ? `${q.title.charAt(0).toUpperCase()}${q.title.slice(1)}: ${challenge}` : '', about && ask ? `${about}: ${lower(ask)} ${challenge}` : '', ask && !round ? `${ask} ${challenge}` : '', who ? `Can you beat ${who}? Play along with a question on this week's news.` : 'Play along with a question on this week\'s news.'];
+    hook = hooks.find((h) => h && chars(h) <= LIMITS.hook.max && checkHook(h, facts).length === 0) || hooks[hooks.length - 1];
     lead = `A question from ${prog}, the quiz on stories GLOBIT 24 told this week.`;
   } else if (facts.weather) {
     const fig = figureWords(facts, 12);
@@ -675,7 +721,7 @@ export function packagePrompt(facts) {
     '- Never make it sound worse or better than the facts: no exaggeration of harm, no false hope. A curiosity gap only when the clip closes it.',
     '- lead: one sentence for the description, at most 160 characters.',
     facts.grave ? '- This is grave news (deaths, disaster or conflict): plain, factual and respectful. No question, no emotional or dramatic word, no emoji.' : null,
-    facts.quiz ? '- A quiz: invite the viewer to play along; never give or hint at the answer. The first thumbnail text shows what the question is about (TSMC: HOW MUCH?, FROM $8 TO ?); a challenge to a player (BEAT PENNY?) only after it, or when nothing of the question can be shown without its answer.' : null,
+    facts.quiz ? `- A quiz: invite the viewer to play along; never give or hint at the answer. Every title and the hook name the question's topic first (NASA, TSMC); one title and the hook ask the board's own question in plain words${facts.quizInfo?.ask ? ` (here: ${facts.quizInfo.ask})` : ''} (NASA: how many light-years?). The first thumbnail text is that question when it fits (HOW MANY PONIES?), else the topic with it (TSMC: HOW MUCH?, FROM $8 TO ?); a challenge to a player (BEAT PENNY?) only after it, or when nothing of the question can be shown without its answer.` : null,
     '- The presenters are the channel\'s own AI characters: their names are never a thumbnail\'s words outside a quiz (they are not the story).',
     facts.kind === 'programme' ? `- The first thumbnail text goes on the lead story's picture: it must be about the lead story (${facts.lead?.headline || 'the first story'}) and nothing else.` : null,
     '',

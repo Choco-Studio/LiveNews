@@ -246,14 +246,25 @@ band, a fog rim, a chase of gold lamps stepping every 0.12 s), bare, inside the 
   offer) are settled from their first frame (`SETTLED`); what follows the voice and the plan (the locks, the countdown,
   the reveal, the pick) keeps the board's own clock.
 
-HOW MANY? gives the space under the players' guesses a job all question long, because the board is on screen while
-the host reads and the countdown often runs over the players' faces: YOUR GUESS? at 2x over an empty answer box at 3x
-height, its cursor blinking on the bed's half notes, and the countdown under it while it runs. At the reveal the box
-reads THE ANSWER and the figure lands in it at 3x in the reveal's yellow, its label under it, the credit at the foot.
-The box is one width whatever the answer, so it gives nothing away. On a board too short for all of it (a long
-question on the glass), the module is compact: a 21-row box with the answer at 2x, the countdown at the foot; with a
-question of five lines, only its words stay in the strip (YOUR GUESS? at 2x, the answer at 2x in yellow at the reveal).
-On the glass the module is settled from the board's first frame, like its header.
+HOW MANY? asks its question in big type on the glass from its first frame (`shorts-v2.md` A3, 25 Oct): where the
+kicker and FILL IN THE NUMBER stood, the kicker names the game (GUESS THE NUMBER · 2 OF 3) and the question asks what
+it counts at 2x on up to two lines, from the question's figure (`scenes/quiz-ask.js` `askOf`: HOW MANY PONIES?, HOW
+MANY LIGHT-YEARS?, HOW MUCH? for a sum, WHAT PERCENT? for a share; a label that is no plain plural, STEAM from "the
+$789 Steam Deck", gives HOW MANY?). Never its answer: the words are the label's alone. The room comes first from the
+guess boxes (21 rows instead of 25 when the sentence is long), then from the shorter question (HOW MANY?); a question
+that still does not fit keeps the frame. Off the glass the board is as it was.
+
+The space under the players' guesses has a job all question long, because the board is on screen while the host reads
+and the countdown often runs over the players' faces: YOUR GUESS? at 2x over an empty answer box at 3x height, its
+cursor blinking on the bed's half notes, and the countdown under it while it runs. At the reveal the box reads THE
+ANSWER and the figure lands in it at 3x in the reveal's yellow, its label under it, the credit at the foot. The box is
+one width whatever the answer, so it gives nothing away. On a board too short for all of it (a long question on the
+glass), the module is compact: a 21-row box with the answer at 2x, the countdown at the foot; with a longer question
+only its words stay in the strip (YOUR GUESS? at 2x, THE ANSWER over the figure at 3x or 2x at the reveal). A question
+that leaves no strip at all (five lines under a two-line ask) gives its answer where it asked: at the reveal the
+question turns to the answer in the reveal's yellow (THE ANSWER over ABOUT 100 PONIES), the peak where the eye already
+is. The plan picks the question's own words first, then the answer's size, then the guess boxes' (`howManyPlan`). On
+the glass the module is settled from the board's first frame, like its header.
 
 ### 3.6 WORLD WEATHER (`vweather.js`)
 
@@ -386,8 +397,10 @@ label (AND FINALLY, NUMBER OF THE DAY) is never a hook. Placement:
 
 - Vertical: in the title band on a black plate as large as its lines, beside an accent bar, all clip long. The card is
   clear everywhere else (round 10; it was a black band over the whole top), so the programme's set shows round it.
-- PAY ATTENTION's tall stage: one line in the mast on a black plate, where the programme's tag would be ("PLAY ALONG",
-  "FULL ROUND").
+- PAY ATTENTION's tall stage: one line in the mast on a black plate, where the programme's tag would be: a
+  question's topic from the words its board shows (NASA, EXMOOR PONY HERD: `quizTopic`, never its answer; since 25 Oct,
+  `shorts-v2.md` A3), PLAY ALONG where it has none (LETTER BY LETTER, whose headline is its answer), FULL ROUND for a
+  whole round.
 - Horizontal: a plate under the top row for the first four seconds, or for the quiz, whose boards own the top, one
   line at the top row's right end. A horizontal WORLD WEATHER board has no hook plate: its heading (HOT & COLD, THE
   NEXT THREE DAYS) is in the plate's place and says the same.
@@ -402,6 +415,10 @@ The hook is drawn by the channel's own code (`/lab/clip.html`) and laid over the
   so the card shows one globe);
 - THE WORLD, PIXEL BY PIXEL;
 - FROM, then the programme on its accent plate at 2x (its tag beside the bug, made large);
+- PAY ATTENTION only (`shorts-v2.md` A5): FOLLOW FOR THE over NEXT QUESTION at 2x, the series asking for its next one
+  at the moment the viewer has played one (`END_CTAS`, `&cta=next-question`); the emblem stands at 3x and the slogan
+  gives its row, so the invitation sits inside the quiz's marquee and the notice under it is unchanged. One card goes
+  to every feed, so it says FOLLOW (a feed's own button says FOLLOW or SUBSCRIBE);
 - where to watch only when there is a stream (`airmode.js` `streamOf`, from `CHANNEL_LIVE_URL`): NEWS 24/7 at 2x for
   the pre-rendered stream, NEWS 24/7 · WATCH LIVE in the body face for a live one, nothing without a stream (the manual
   beta). A clip never points to a stream that does not exist;

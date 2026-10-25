@@ -137,19 +137,73 @@ test('Phase 1 publishes light moments only; Phase 2 anything not grave; demo dat
   assert.equal(publishable(news, { phase: 1 }).length, 0);
 });
 
-test('PAY ATTENTION: a question from its round title to its reveal and the reaction, and the whole round', () => {
+test('PAY ATTENTION: a question from its frame to its reveal and the reaction, never from the round\'s card; the whole round from it', () => {
   const ms = detectMoments(QUIZ);
   const qs = ms.filter((m) => m.kind === 'quiz-question').sort((a, b) => a.from - b.from);
   assert.equal(qs.length, 2);
-  assert.equal(qs[0].from, 1, 'the round opens on its title card');
+  // (shorts-v2.md A2: the round's card, its name and its rules, was the first four seconds of its first question)
+  assert.equal(qs[0].from, 2, 'the round\'s first question opens on its own frame, not on the round\'s card');
+  assert.equal(qs[0].quiz.opensRound, true);
   assert.equal(qs[0].to, 5, 'the reaction after the reveal is in');
   assert.equal(qs[1].from, 6);
   assert.deepEqual(qs[0].hook, ['HOW MANY?', 'PLAY ALONG']);
   assert.ok(qs[0].hookTall?.length === 1);
   assert.ok(qs[0].sources.includes('Euronews Business'));
   const round = ms.find((m) => m.kind === 'quiz-round');
-  assert.ok(round && round.from === 1 && round.to === 8);
+  assert.ok(round && round.from === 1 && round.to === 8, 'the whole round still opens on its card');
+  assert.equal(round.quiz.title, "2 questions from this week's news", 'its words: how many questions it plays');
   for (const m of ms) assert.ok(m.light, 'the quiz is light');
+});
+
+test('PAY ATTENTION: a HOW MANY? question asks what it counts, never its answer (scenes/quiz-ask.js)', async () => {
+  const { askOf, askLines, askSentence } = await import('../public/js/scenes/quiz-ask.js');
+  const { quizWords } = await import('../server/publish/moments.js');
+  // the questions of 24 Oct
+  const ponies = { type: 'howmany', masked: 'Tippbarlake Exmoor Pony Herd has about ▮▮▮ ponies, which are being gathered in Brendon Barton on Sunday, BBC Science reports.', figure: { value: '100', label: 'PONIES', qualifier: 'ABOUT', exact: false } };
+  const webb = { type: 'howmany', masked: 'NASA’s Webb has revealed the wild weather of a mysterious world ▮▮ light-years away.', figure: { value: '20', label: 'LIGHT-YEARS', qualifier: '', exact: true } };
+  const legion = { type: 'howmany', masked: 'The Legion Go S with SteamOS is a pretty solid alternative to the ▮▮▮▮ Steam Deck OLED, according to The Verge.', figure: { value: '$789', label: 'STEAM', qualifier: '', exact: true } };
+  assert.deepEqual(askOf(ponies.figure), { ask: 'HOW MANY PONIES?', short: 'HOW MANY?', answer: 'ABOUT 100 PONIES', value: 'ABOUT 100', counted: 'PONIES' });
+  assert.equal(askOf(webb.figure).ask, 'HOW MANY LIGHT-YEARS?');
+  assert.equal(askOf(legion.figure).ask, 'HOW MUCH?', 'a sum is HOW MUCH?, whatever its label (STEAM, from "the $789 Steam Deck")');
+  assert.equal(askOf({ value: '68.7%', label: 'NET PROFIT UP' }).short, 'WHAT PERCENT?');
+  // a label that is no plain plural gives the round's own question
+  for (const label of ['STEAM', 'MAGNITUDE', '-YEAR-OLD', 'NEWS', '', 'MILLION CONSOLES SOLD']) assert.equal(askOf({ value: '42', label }).ask, 'HOW MANY?', label);
+  for (const label of ['RED SQUIRRELS', 'PASSENGERS A DAY', 'YEARS AGO', 'PEOPLE']) assert.equal(askOf({ value: '42', label }).ask, `HOW MANY ${label}?`, label);
+  assert.equal(askOf({ value: 'many' }), null);
+  // never the figure: no digit of the answer in the ask
+  for (const q of [ponies, webb, legion]) assert.ok(!/\d/.test(askOf(q.figure).ask));
+  // the board's lines at 2x in the glass's column (156 px), whole words, else null
+  assert.deepEqual(askLines('HOW MANY PONIES?', 156), ['HOW MANY', 'PONIES?']);
+  assert.equal(askLines('HOW MANY PASSENGERS A DAY?', 156), null, 'three lines: the board asks HOW MANY? instead');
+  // the words for the posts: the counted words as the sentence writes them after its mask
+  assert.equal(askSentence(askOf(webb.figure), webb.masked), 'How many light-years?');
+  assert.equal(askSentence(askOf({ value: '3', label: 'EVS' }), 'it sold ▮ EVs last year'), 'How many EVs?');
+  const w = quizWords(ponies);
+  assert.equal(w.ask, 'How many ponies?');
+  assert.match(w.title, /^How many ponies\? Tippbarlake Exmoor Pony Herd has about ___ ponies/);
+  assert.ok(!/100/.test(JSON.stringify(w)), 'never the answer');
+  assert.equal(quizWords(legion).ask, 'How much?');
+  // the topic: the first name the board's words give, never the outlet, a day or a title case headline's words
+  const { quizTopic } = await import('../public/js/scenes/quiz-ask.js');
+  const topics = {
+    'NASA’s Webb has revealed the wild weather of a mysterious world ___ light-years away.': 'NASA’s Webb',
+    'Elon Musk reveals ‘world’s first flying car’': 'Elon Musk',
+    'Tippbarlake Exmoor Pony Herd has about ___ ponies, which are being gathered in Brendon Barton on Sunday, BBC Science reports.': 'Exmoor Pony Herd',
+    'The Legion Go S with SteamOS is a pretty solid alternative to the ___ Steam Deck OLED, according to The Verge.': 'Legion Go',
+    'Taiwanese chip giant TSMC said on Thursday that net profit soared ___ to a record high in the third quarter.': 'TSMC',
+    'Lufthansa is buying a 44.9% stake in TAP Air Portugal in a deal valued at ___ dollars.': 'TAP Air Portugal',
+    'The new ___ HomePod mini with Siri AI and a ‘SoundGlow’ visual feature will be available starting October 30.': 'HomePod',
+    'A barn owl and ___ chicks are ringed to see if conservation-focused farming is working, according to BBC Science.': '',
+    'Apple Refreshes Its HomePod Mini With New Colors': '',
+    'Two damselfly species return to restored woodland.': '',
+    'Shares fell on Monday after the bank cut its forecast.': '',
+  };
+  for (const [text, topic] of Object.entries(topics)) assert.equal(quizTopic(text), topic, text);
+  // the horizontal clip's hook: the question when it fits a line of the hook
+  const ep = { ...QUIZ, segments: QUIZ.segments.map((s, i) => (i === 2 ? { ...s, quiz: { question: { ...s.quiz.question, masked: ponies.masked, figure: ponies.figure } } } : s)) };
+  const q0 = detectMoments(ep).find((m) => m.kind === 'quiz-question' && m.from === 2);
+  assert.deepEqual(q0.hook, ['HOW MANY PONIES?', 'PLAY ALONG']);
+  assert.equal(q0.quiz.ask, 'How many ponies?');
 });
 
 test('a moment whose story copies its source is not publishable in any phase (the gate would hold its clip)', () => {

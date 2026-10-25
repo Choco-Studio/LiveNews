@@ -5,10 +5,9 @@
 // picture under them.
 //
 //   drawHook(ctx, { format, lines, programme, accent, profile })   transparent everywhere but the title's own pixels
-//   drawEndCard(ctx, t, { format, programme, accent, stream, backdrop })   t: seconds since the card's first frame; it
-//                                                                carries the channel ident's AI notice (graphics/disclosure.js)
-//   endCardText({ format, programme, stream })   the words it shows, in order
-//   END_CARD_SECONDS, END_CARD_NOTICE
+//   drawEndCard(ctx, t, { format, programme, accent, stream, backdrop, cta })   t: seconds since the card's first frame;
+//                                                                it carries the channel ident's AI notice (graphics/disclosure.js)
+//   endCardText({ format, programme, stream, cta })   the words it shows, in order (cta: an END_CTAS name)
 //   END_CARD_SECONDS, END_CARD_NOTICE
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
@@ -132,16 +131,24 @@ function rise(ctx, text, x, y, p, style, align = 'left') {
 }
 
 /**
- * The words an end card shows, in order: { slogan, from, watch, rows }. `stream` (airmode.js streamOf): 'live' says
- * WATCH LIVE, 'recorded' that the channel airs 24 hours a day, 'none' (no stream, the manual beta) says nothing about
- * where to watch: `watch` is null.
+ * An end card's invitation, by name (docs/publishing/shorts-v2.md A5): a series asks for the next one at the moment the
+ * viewer has just played one (PAY ATTENTION: FOLLOW FOR THE NEXT QUESTION). `lead` in the small face over `big`, as
+ * FROM stands over the programme's plate. A feed's own button says FOLLOW or SUBSCRIBE: one card goes to every feed.
  */
-export function endCardText({ format = 'vertical', programme = '', stream = 'none' } = {}) {
+export const END_CTAS = Object.freeze({ 'next-question': Object.freeze({ lead: 'FOLLOW FOR THE', big: 'NEXT QUESTION' }) });
+
+/**
+ * The words an end card shows, in order: { slogan, from, watch, cta, rows }. `stream` (airmode.js streamOf): 'live'
+ * says WATCH LIVE, 'recorded' that the channel airs 24 hours a day, 'none' (no stream, the manual beta) says nothing
+ * about where to watch: `watch` is null. `cta`: an END_CTAS name, or none.
+ */
+export function endCardText({ format = 'vertical', programme = '', stream = 'none', cta = null } = {}) {
   const vertical = format === 'vertical';
   return {
     slogan: 'THE WORLD, PIXEL BY PIXEL',
     from: programme ? `FROM ${String(programme).toUpperCase()}` : null,
     watch: watchLine(stream, { vertical }),
+    cta: END_CTAS[cta] || null,
     rows: vertical ? noticeParts('NEWS') : [...IDENT_ROWS],
   };
 }
@@ -155,8 +162,8 @@ export function endCardText({ format = 'vertical', programme = '', stream = 'non
  * to watch at 2x when it fits, the notice in three rows at the foot of the safe area. No URL is drawn (the post carries
  * the links), so a card never goes stale.
  */
-export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, stream = 'none', backdrop = null } = {}) {
-  const text = endCardText({ format, programme, stream });
+export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accent = P.red, stream = 'none', backdrop = null, cta = null } = {}) {
+  const text = endCardText({ format, programme, stream, cta });
   const { w, h } = sizeOf(format);
   const vertical = format === 'vertical';
   if (vertical && backdrop?.glass) ctx.drawImage(backdrop.glass, 0, 0);
@@ -177,8 +184,10 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
   }
   // the logo: horizontal, the full lock-up at 3x; vertical (216 wide: the lock-up at 2x is 250), the emblem at 4x over
   // the wordmark's plate at 2x (the bug without its own small globe: one globe on the card)
+  // (with an invitation the emblem stands at 3x: its rows hold the invitation inside the marquee, over the notice)
+  const mark = vertical && text.cta ? 3 : 4;
   const parts = vertical
-    ? [{ variant: 'mark', scale: 4, y: 46 }, { variant: 'wordmark', scale: 2, y: 46 + 27 * 4 + 10 }]
+    ? [{ variant: 'mark', scale: mark, y: 46 }, { variant: 'wordmark', scale: 2, y: 46 + 27 * mark + 10 }]
     : [{ variant: 'full', scale: 3, y: 34 }];
   const p = easeOutQuint(seg(t, 0.05, 0.45));
   let bottom = 0;
@@ -197,7 +206,10 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
     }
   }
   let y = bottom + (vertical ? 6 : 10);
-  rise(ctx, text.slogan, cx, y, seg(t, 0.45, 0.35), S.silver, 'center');
+  // (a vertical card with an invitation gives it the slogan's row too: the emblem, the wordmark and the programme say
+  // whose it is, and the marquee holds the invitation clear of its frame only so)
+  const slogan = !(vertical && text.cta);
+  if (slogan) rise(ctx, text.slogan, cx, y, seg(t, 0.45, 0.35), S.silver, 'center');
   if (!vertical) {
     y += 18;
     const rw = Math.round(40 * easeOutQuint(seg(t, 0.65, 0.3)));
@@ -211,14 +223,18 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
       y += 14;
     }
     // where to watch, only when the channel streams (airmode.js watchLine: WATCH LIVE for a live stream alone)
-    if (text.watch) rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
+    if (text.watch) {
+      rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), S.fog, 'center');
+      y += 14;
+    }
+    if (text.cta) rise(ctx, `${text.cta.lead} ${text.cta.big}`, cx, y, seg(t, 1.0, 0.35), S.white, 'center');
     // the AI notice, in the ident's type, at the frame's foot: the ident's two rows
     text.rows.forEach((row, i) => rise(ctx, row, cx, h - 30 + 11 * i, seg(t, 1.1 + 0.1 * i, 0.3), IDENT_STYLES[i === 0 ? 0 : 1], 'center'));
     if (seg(t, 1.1, 0.3) > 0) NOTICE_DRAWS.n++;
     return;
   }
   // FROM, the programme on its accent plate at 2x (as its tag beside the bug, made large)
-  y += 13;
+  if (slogan) y += 13;
   if (programme) {
     const name = String(programme).toUpperCase();
     rise(ctx, 'FROM', cx, y, seg(t, 0.7, 0.3), S.fog, 'center');
@@ -251,12 +267,21 @@ export function drawEndCard(ctx, t, { format = 'vertical', programme = '', accen
     }
     y += ph + 5;
   }
+  // the invitation under the programme, as FROM over its plate: FOLLOW FOR THE in the small face, NEXT QUESTION at 2x,
+  // inside the marquee (the emblem at 3x made the room); where to watch then stands under the stage
+  if (text.cta) {
+    rise(ctx, text.cta.lead, cx, y, seg(t, 1.0, 0.3), S.fog, 'center');
+    const big = measureText(text.cta.big, 2) <= SAFE.w - 12;
+    rise(ctx, text.cta.big, cx, y + 10, seg(t, 1.05, 0.35), big ? S.white2 : S.white, 'center');
+    // (what follows, under the stage: clear of the marquee's frame)
+    y = Math.max(y + 10 + (big ? 14 : 7) + 4, V.stage.y + V.stage.h + 2);
+  }
   // where to watch, only when the channel streams (NEWS 24/7 at 2x; with WATCH LIVE, too wide for 2x, the body face)
   if (text.watch) {
     const big = measureText(text.watch, 2) <= SAFE.w - 12;
     rise(ctx, text.watch, cx, y, seg(t, 0.95, 0.35), big ? S.white2 : S.white, 'center');
     y += big ? 20 : 12;
-  } else y += 8;
+  } else if (!text.cta) y += 8;
   // the AI notice in the ident's type, three rows at the foot of the safe area (never under the feeds' band)
   const rows = text.rows;
   const dy = Math.min(V.caps.y + V.caps.h - 1 - rows.length * 11 + 3, y);

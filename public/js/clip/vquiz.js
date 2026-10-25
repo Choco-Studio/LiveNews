@@ -18,6 +18,7 @@ import { clamp, seg, easeOutQuint, easeInOutSine, clipRect, balanceLines, textW,
 import { drawWorldMap } from '../scenes/worldmap.js';
 import { drawSeat, drawMark, creditOf, creditLines, countdownCells, stakeOf, frameOf, kickerOf, preparePicture, pictureStepAt, mapView, mapPoint, framePins, tableRows, HALF_NOTE, layoutText, lettersShown, tileLayout, TILE_TEXT_W } from '../scenes/cards-quiz.js';
 import { LINE, SPACE } from '../scenes/quiz-fit.js';
+import { askOf, askLines } from '../scenes/quiz-ask.js';
 
 const S = {
   white: { color: P.white },
@@ -28,6 +29,7 @@ const S = {
   white3: { color: P.white, scale: 3 },
   silver3: { color: P.silver, scale: 3 },
   yellow3: { color: P.yellow, scale: 3 },
+  yellow2: { color: P.yellow, scale: 2 },
   yellow: { color: P.yellow },
   microFog: { color: P.fog, font: 'micro' },
   microWhite: { color: P.white, font: 'micro' },
@@ -239,6 +241,77 @@ const doubleName = (o) => (o.double ? nameOf(o.players, o.double) : null);
 
 // ---------------------------------------------------------------- HOW MANY?
 
+// the guess boxes: on the glass 25 px (the guess at 2x), 21 px where the question needs the room; off it 17 px
+const GUESS_BOX = Object.freeze({ glass: { h: 25, pitch: 29, gy: 9, gap: 10 }, tight: { h: 21, pitch: 24, gy: 7, gap: 6 }, flat: { h: 17, pitch: 21, gy: 5, gap: 10 } });
+// the room the answer's own box needs under the guesses: YOUR GUESS? over a 27 px box (full), over 21 px (compact);
+// on the glass its words alone (strip): THE ANSWER over the figure at 3x (big), over it at 2x (label), the figure alone
+const MODULE = Object.freeze({ full: 58, compact: 42, big: 32, label: 25, strip: 16 });
+const moduleLevel = (midH) => [MODULE.strip, MODULE.label, MODULE.big, MODULE.compact, MODULE.full].filter((m) => midH >= m).length;
+const ASK_TOP = 24; // the ask's first line under the panel's top (the frame's own place: header)
+const ASK_PITCH = 18; // its lines at 2x: 14 px of capitals, 4 between
+const askBottom = (C, n) => C.py + ASK_TOP + 14 + (n - 1) * ASK_PITCH + 7;
+const PLANS = new WeakMap();
+/**
+ * On the glass the question is asked in big type from its first frame (docs/publishing/shorts-v2.md A3): HOW MANY
+ * PONIES? at 2x on up to two lines where the kicker and the frame stood, the kicker naming the game (GUESS THE NUMBER
+ * · 2 OF 3), never its answer (scenes/quiz-ask.js). The room it takes comes from the guess boxes (21 px, not 25) when
+ * the sentence is long, then from the round's shorter ask (HOW MANY?); a question that still does not fit keeps the
+ * frame (FILL IN THE NUMBER). Where nothing is left under the guesses for the answer's own box, the answer lands where
+ * the question was, at the reveal (`flip`). Null: the board as off the glass.
+ */
+function howManyPlan(q, C, kicker) {
+  const key = `${C.cw}:${C.py}:${C.ph}:${kicker || ''}`;
+  const hit = PLANS.get(q);
+  if (hit?.key === key) return hit.plan;
+  let plan = null;
+  const a = askOf(q.figure);
+  if (a) {
+    const L = layoutText(q.masked, C.cw, 12);
+    const footY = C.py + C.ph - 14;
+    const room = (n, gb) => askBottom(C, n) + 2 + L.h + gb.gap + gb.pitch + gb.h <= footY - 3;
+    // (the fewest lines that say the same first: WHAT PERCENT? on one line before WHAT PERCENTAGE? on two)
+    const own = a.counted ? askLines(a.ask, C.cw) : askLines(a.short, C.cw, 2, 1) || askLines(a.ask, C.cw);
+    const short = askLines(a.short, C.cw, 2, 1);
+    // the question's own words first, then the answer's own box under the guesses (MODULE: full, compact, its words
+    // alone), then the guess boxes' size
+    let best = null;
+    [own, short].forEach((lines, li) => {
+      if (!lines) return;
+      [GUESS_BOX.glass, GUESS_BOX.tight].forEach((gb, gi) => {
+        if (!room(lines.length, gb)) return;
+        const midH = footY - 6 - (askBottom(C, lines.length) + 2 + L.h + gb.gap + 2 * gb.pitch + 2);
+        const level = moduleLevel(midH);
+        const rank = li * 100 + (5 - level) * 10 + gi;
+        if (!best || rank < best.rank) best = { rank, lines, gb, level };
+      });
+    });
+    if (best) {
+      // the answer where the question was, in as many lines: whole (ABOUT 100 PONIES), else the figure (ABOUT 100)
+      const answer = askLines(a.answer, C.cw, 2, best.lines.length) || askLines(a.value, C.cw, 2, best.lines.length);
+      plan = { lines: best.lines, gb: best.gb, flip: best.level === 0 ? answer : null, kicker: String(kicker || kickerOf({ type: 'howmany' })).replace(/^HOW MANY\?/, 'GUESS THE NUMBER') };
+    }
+  }
+  PLANS.set(q, { key, plan });
+  return plan;
+}
+/** The plan's header: the kicker and the ask (at the reveal, where `flip`, THE ANSWER over the answer). Returns the y under it. */
+function askHeader(ctx, dt0, C, plan, revealAt) {
+  const dt = entry(C, dt0);
+  const flip = plan.flip && dt0 >= revealAt;
+  const kicker = flip ? 'THE ANSWER' : plan.kicker;
+  if (flip) rise(ctx, kicker, C.x, C.py + 6, seg(dt0, revealAt, 0.3), S.fog);
+  else rise(ctx, ellipsis(up(kicker), C.cw, 1), C.x, C.py + 6, seg(dt, 0.2, 0.35), S.fog);
+  // (an answer shorter than its question stands in the middle of the question's lines)
+  const lines = flip ? plan.flip : plan.lines;
+  const dy = ((plan.lines.length - lines.length) * ASK_PITCH) >> 1;
+  lines.forEach((l, i) => {
+    const y = C.py + ASK_TOP + dy + i * ASK_PITCH;
+    if (flip) rise(ctx, l, C.x, y, seg(dt0, revealAt + 0.15 + i * 0.06, 0.3), S.yellow2);
+    else rise(ctx, l, C.x, y, seg(dt, 0.25 + i * 0.06, 0.35), S.white2);
+  });
+  return askBottom(C, plan.lines.length);
+}
+
 function vHowMany(ctx, dt, o, box) {
   const q = o.question;
   if (!q?.masked) return;
@@ -248,13 +321,14 @@ function vHowMany(ctx, dt, o, box) {
   ctx.save();
   try {
     if (!panel(ctx, dt, C.px, C.py, C.pw, C.ph, C.bare)) return;
-    let y = header(ctx, dt, C, o.kicker || kickerOf({ type: 'howmany' }), o.frame || frameOf('howmany'));
+    const plan = C.bare && !o.frame ? howManyPlan(q, C, o.kicker) : null;
+    let y = plan ? askHeader(ctx, dt, C, plan, revealAt) : header(ctx, dt, C, o.kicker || kickerOf({ type: 'howmany' }), o.frame || frameOf('howmany'));
     const L = revealed ? layoutText(q.masked, C.cw, 12, q.sentence) : layoutText(q.masked, C.cw, 12);
     drawLines(ctx, L, C.x, y + 2, P.white, revealed ? dt : entry(C, dt), revealed ? revealAt : 0.35);
-    y += 2 + L.h + 10;
     // the desks' guess boxes, one under the other, up from the first moments (empty: three slate dots)
     // (on the glass a guess box is 25 px and the guess stands at 2x when it fits: the game's own numbers large)
-    const GB = C.bare ? { h: 25, pitch: 29, gy: 9 } : { h: 17, pitch: 21, gy: 5 };
+    const GB = plan ? plan.gb : C.bare ? GUESS_BOX.glass : GUESS_BOX.flat;
+    y += 2 + L.h + GB.gap;
     ['A', 'B'].forEach((seat, i) => {
       const bp = ease(entry(C, dt), 0.45 + 0.1 * i, 0.3);
       if (bp <= 0) return;
@@ -338,8 +412,8 @@ function vHowMany(ctx, dt, o, box) {
     const fig = q.figure || null;
     const value = up(fig ? `${fig.qualifier ? `${fig.qualifier} ` : ''}${fig.value}` : '');
     // (a short board keeps the module, compact: a 21-row box, the answer at 2x, the countdown at the foot)
-    const full = midH >= 58;
-    const compact = !full && midH >= 42;
+    const full = midH >= MODULE.full;
+    const compact = !full && midH >= MODULE.compact;
     const big = full && value && textW(value, 3) <= C.cw - 10 ? 3 : 2;
     // (on the glass the module is settled from the board's first frame, like its header: nothing half open)
     const me = C.bare ? settled(C, dt) : entry(C, dt);
@@ -383,12 +457,12 @@ function vHowMany(ctx, dt, o, box) {
     } else {
       // a long question leaves a strip under the guesses: on the glass it still has a job, the module's words alone
       // (YOUR GUESS? at 2x; at the reveal the answer at 2x in the reveal's yellow), centred in it
-      if (C.bare && midH >= 16) {
+      if (C.bare && midH >= MODULE.strip) {
         if (revealed && value) {
           // THE ANSWER over the figure when the strip has room for both (the figure at 3x when it has more), else
           // the figure alone at 2x
-          const labelled = midH >= 25;
-          const vs = labelled && midH >= 32 && textW(value, 3) <= C.cw ? 3 : textW(value, 2) <= C.cw ? 2 : 1;
+          const labelled = midH >= MODULE.label;
+          const vs = labelled && midH >= MODULE.big && textW(value, 3) <= C.cw ? 3 : textW(value, 2) <= C.cw ? 2 : 1;
           const bh = (labelled ? 11 : 0) + 7 * vs;
           const my = midTop + ((midH - bh) >> 1);
           if (labelled) drawText(ctx, 'THE ANSWER', cx - (textW('THE ANSWER', 1) >> 1), my, S.silver);

@@ -590,7 +590,7 @@ describe('the vertical picture', () => {
     assert.equal(accentWords([row('Northgate', 'Saltmarsh', 3, 2)]), 2, 'a win: the title and the winner\'s score');
   });
 
-  test('the hook and the end card stay inside the frame; the vertical end card\'s words inside the platforms\' safe area', () => {
+  test('the hook and the end card stay inside the frame; the vertical end card\'s words inside the platforms\' safe area', async () => {
     for (const profile of ['normal', 'tall']) {
       for (const lines of [['HOW MANY?', 'PLAY ALONG'], ['FULL ROUND'], ['UNIT-8 HAS A', 'THOUGHT']]) {
         const v = fakeCanvas(216, 384).getContext('2d');
@@ -621,6 +621,23 @@ describe('the vertical picture', () => {
         cards.drawEndCard(h, t, { format: 'horizontal', programme: 'COSMOS DESK', stream });
         inside(h, { x: 0, y: 0, w: 384, h: 216 }, `horizontal end card at ${t} (${stream})`);
       }
+    }
+    // PAY ATTENTION's card asks for the next question (shorts-v2.md A5): FOLLOW FOR THE over NEXT QUESTION at 2x,
+    // inside the quiz's marquee (the tall stage, to row 247), the AI notice whole under it, with or without a stream
+    assert.deepEqual(cards.endCardText({ format: 'vertical', programme: 'PAY ATTENTION', cta: 'next-question' }).cta, { lead: 'FOLLOW FOR THE', big: 'NEXT QUESTION' });
+    assert.equal(cards.endCardText({ format: 'vertical', programme: 'COSMOS DESK' }).cta, null, 'no invitation unless asked');
+    const { noticeParts } = await import('../public/js/graphics/disclosure.js');
+    for (const stream of ['none', 'recorded']) {
+      const v = fakeCanvas(216, 384).getContext('2d');
+      cards.drawEndCard(v, 2.5, { format: 'vertical', programme: 'PAY ATTENTION', stream, backdrop, cta: 'next-question' });
+      inside(v, { x: 0, y: 0, w: 216, h: 384 }, `quiz end card (${stream})`);
+      wordsSafe(v, `quiz end card (${stream})`);
+      const big = v.images.filter((im) => Math.round(im.h / 12) === 2 && im.y > 150);
+      const nextQ = big.find((im) => im.y < L.V.stage.y + L.V.stage.h - im.h);
+      assert.ok(nextQ, `NEXT QUESTION at 2x inside the marquee (${stream}): ${JSON.stringify(big)}`);
+      const rows = v.images.filter((im) => im.y >= L.V.stage.y + L.V.stage.h && Math.round(im.h / 12) <= 1);
+      assert.ok(rows.length >= noticeParts('NEWS').length, `the notice's ${noticeParts('NEWS').length} rows under the marquee (${stream}): ${rows.length}`);
+      // (wordsSafe above: none of them under the feeds' band)
     }
   });
 

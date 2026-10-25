@@ -106,8 +106,49 @@ describe('the deterministic writer', () => {
     const p = fallbackPackage(packFacts(q, { program: { id: 'pay-attention', title: 'PAY ATTENTION' }, segments: [] }, { presenters: { unit8: { name: 'UNIT-8' }, penny: { name: 'Penny Sterling' } } }));
     const all = JSON.stringify(p);
     assert.ok(!/1\.2B/.test(all), all);
-    assert.ok(p.titles.some((t) => /Can you beat UNIT-8 and Penny\?/.test(t)), p.titles.join(' / '));
-    assert.deepEqual(p.hashtags, ['newsquiz', 'quiz', 'news', 'pixelart']);
+    // (shorts-v2.md A4) the topic first in every title; with no cover for its question (TAP AIR PORTUGAL: HOW MANY? is
+    // over 22 characters) the question's title first, beside the challenge's cover, then the challenge
+    assert.equal(p.titles[0], 'TAP Air Portugal: how many? Guess before the answer');
+    assert.equal(p.titles[1], 'TAP Air Portugal: can you beat UNIT-8 and Penny?');
+    assert.equal(p.thumbs[0], 'BEAT UNIT-8?');
+    assert.match(p.hook, /^TAP Air Portugal: how many\? UNIT-8 and Penny guess; can you beat them\?$/);
+    assert.deepEqual(p.hashtags, ['TAPAirPortugal', 'newsquiz', 'quiz', 'news'], 'the topic, then the quiz\'s own');
+    assert.deepEqual(checkPackage(p, packFacts(q, { program: { id: 'pay-attention', title: 'PAY ATTENTION' }, segments: [] }, { presenters: { unit8: { name: 'UNIT-8' }, penny: { name: 'Penny Sterling' } } })).faults, []);
+    // a question the board asks from its figure (moments.js quizWords): the question itself on the first cover, and in
+    // the second title and the hook; never its answer
+    const ponies = { ...q, headline: null, quiz: { type: 'howmany', title: 'How many ponies? Tippbarlake Exmoor Pony Herd has about ___ ponies, which are being gathered in Brendon Barton on Sunday, BBC Science reports.', tease: 'Tippbarlake Exmoor Pony Herd has about ___ ponies, which are being gathered in Brendon Barton on Sunday, BBC Science reports.', ask: 'How many ponies?', players: ['paco', 'penny'] } };
+    const pf = packFacts(ponies, { program: { id: 'pay-attention', title: 'PAY ATTENTION' }, segments: [] }, { presenters: { paco: { name: 'Paco Pixel' }, penny: { name: 'Penny Sterling' } } });
+    const pp = fallbackPackage(pf);
+    // the question on the first cover, the challenge in the title beside it (each adds to the other)
+    assert.equal(pp.titles[0], 'Exmoor Pony Herd: can you beat Paco and Penny?');
+    assert.equal(pp.titles[1], 'Exmoor Pony Herd: how many ponies? Guess before the answer');
+    assert.deepEqual(pp.thumbs, ['HOW MANY PONIES?', 'BEAT PACO?', 'EXMOOR PONY HERD?'], 'a grid shows the cover alone: the question itself');
+    assert.equal(pp.hook, 'Exmoor Pony Herd: how many ponies? Paco and Penny guess; can you beat them?');
+    assert.deepEqual(pp.hashtags, ['ExmoorPonyHerd', 'newsquiz', 'quiz', 'news']);
+    assert.deepEqual(checkPackage(pp, pf).faults, []);
+    assert.ok(!/100/.test(JSON.stringify(pp)), 'never the answer');
+    // the AI writer is asked the same
+    assert.match(packagePrompt(pf), /name the question's topic first.*\(here: How many ponies\?\)/s);
+    // a question too long for a cover (LIGHT-YEARS: ten letters) takes its topic with the round's own question
+    const webb = { ...ponies, quiz: { type: 'howmany', title: 'How many light-years? NASA’s Webb has revealed the wild weather of a mysterious world ___ light-years away.', tease: 'NASA’s Webb has revealed the wild weather of a mysterious world ___ light-years away.', ask: 'How many light-years?', players: ['paco', 'penny'] } };
+    const wf = packFacts(webb, { program: { id: 'pay-attention', title: 'PAY ATTENTION' }, segments: [] }, { presenters: { paco: { name: 'Paco Pixel' }, penny: { name: 'Penny Sterling' } } });
+    const wp = fallbackPackage(wf);
+    assert.equal(wp.thumbs[0], 'NASA’S WEBB: HOW MANY?');
+    assert.equal(wp.titles[0], 'NASA’s Webb: can you beat Paco and Penny?');
+    assert.equal(wp.hook, 'NASA’s Webb: how many light-years? Paco and Penny guess; can you beat them?');
+    assert.equal(wp.hashtags[0], 'NASA', 'a possessive\'s owner as the topic\'s hashtag');
+    assert.deepEqual(checkPackage(wp, wf).faults, []);
+    // a cover is the board's question or its topic with it, nothing looser: a made-up question is checked as words
+    assert.deepEqual(checkThumb('NASA’S WEBB: HOW MANY?', wf), []);
+    assert.ok(checkThumb('HOW FAR AWAY?', wf).length > 0);
+    // a whole round: how many questions it plays on its cover, beside the challenge's title (moments.js gives the count)
+    const round = { ...ponies, kind: 'quiz-round', quiz: { type: 'howmany', round: 'HOW MANY?', players: ['paco', 'penny'], questions: 3, title: "3 questions from this week's news", tease: null, ask: null } };
+    const rf = packFacts(round, { program: { id: 'pay-attention', title: 'PAY ATTENTION' }, segments: [] }, { presenters: { paco: { name: 'Paco Pixel' }, penny: { name: 'Penny Sterling' } } });
+    const rp = fallbackPackage(rf);
+    assert.deepEqual(rp.thumbs, ['3 QUESTIONS', 'BEAT PACO?', 'BEAT PENNY?']);
+    assert.equal(rp.titles[0], "Can you beat Paco and Penny? This week's news quiz");
+    assert.equal(rp.hook, "3 questions from this week's news: Paco and Penny guess; can you beat them?");
+    assert.deepEqual(checkPackage(rp, rf).faults, []);
   });
 
   test('every package the deterministic writer makes passes the gate\'s own checks, as a whole (each thumbnail beside its title)', () => {

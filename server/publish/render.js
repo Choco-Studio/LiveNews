@@ -4,7 +4,9 @@
 // runs them.
 //
 //   clipWindow(moment, timeline, { fps, wipeIn }) -> { start, end, duration, snappedStart, snappedEnd, hold }
-//   composeArgs({ master, hook, endcard, window, format, out, hookSeconds }) -> ffmpeg argv
+//   composeArgs({ master, hook, endcard, window, format, out, hookSeconds, gain }) -> ffmpeg argv
+//   loudnessArgs({ master, endcard, window }) / measureArgs(file) -> ffmpeg argv that measure a clip's sound
+//   parseLoudness(stderr) -> { lufs, truePeak };  loudnessGain(measure) -> the dB that bring it to LOUDNESS.target
 //   srtFor(timeline, window) / vttFor(timeline, window) -> caption files' text (the voice's own word times)
 //   contactArgs({ clip, format, times, out }) -> ffmpeg argv for the clip's contact sheet
 import { cutsAround } from './timeline.js';
@@ -81,20 +83,44 @@ export function clipWindow(moment, timeline, { fps = FPS, lead = LEAD, tail = TA
 }
 
 /**
+ * The feeds' loudness (docs/publishing/shorts-v2.md A1). YouTube plays a video at about -14 LUFS: it turns a louder one
+ * down and never a quieter one up; TikTok and Instagram publish no target, and the videos around ours sit about there.
+ * The house mixes its voices at -16 LUFS (public/js/audio/loudness.js) and the clips measured -15.7 to -17.1 (24 Oct):
+ * each played softer than the video before it. A clip is brought to `target` by one linear gain on its whole sound (no
+ * compressor and no limiter: the mix keeps its own dynamics), never past `ceiling` true peak: half a decibel under the
+ * feeds' -1 dBTP, for the AAC encoder's overshoot. `max`: the most a gain may move a clip, either way.
+ */
+export const LOUDNESS = Object.freeze({ target: -14, ceiling: -1.5, max: 12 });
+
+/** The clip's sound: the window's (faded in over 0.12 s and out over its last 0.35 s), then the end card's (input `end`). */
+function soundParts(window, end) {
+  const D = window.duration;
+  return {
+    cut: `[0:a]asetpts=PTS-STARTPTS,aresample=48000,afade=t=in:st=0:d=0.12,afade=t=out:st=${Math.max(0, D - 0.35).toFixed(3)}:d=0.35[a]`,
+    card: end === null ? null : `[${end}:a]aresample=48000[ea]`,
+  };
+}
+const volume = (gain) => (Number.isFinite(gain) && Math.abs(gain) >= 0.05 ? `volume=${gain.toFixed(1)}dB` : 'anull');
+
+/**
  * The ffmpeg graph of one clip: [master window] + hook overlay (vertical: the whole clip; horizontal: its first
  * `hookSeconds`) + the end card (its own picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18,
- * a keyframe a second) + AAC 160k, faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut.
+ * a keyframe a second) + AAC 160k, faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut,
+ * and `gain` dB lift the whole (loudnessGain: the clip at the feeds' loudness).
  * A window with a `hold` shows its frame at `hold` from the start until then (the sound runs on underneath).
  */
-export function composeArgs({ master, hook, endcard, window, format, out, hookSeconds = 4, crf = 18 }) {
+export function composeArgs({ master, hook, endcard, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
   const D = window.duration;
   const enable = format === 'vertical' ? '' : `:enable='lt(t,${hookSeconds})'`;
   const hold = window.hold > 0 ? `,trim=start=${window.hold.toFixed(3)},setpts=PTS-STARTPTS,tpad=start_duration=${window.hold.toFixed(3)}:start_mode=clone` : '';
+  const end = endcard ? (hook ? 2 : 1) : null;
+  const sound = soundParts(window, end);
   const graph = [
     `[0:v]setpts=PTS-STARTPTS,fps=${FPS}${hold}[c]`,
     hook ? `[c][1:v]overlay=0:0${enable}:eof_action=repeat[o]` : '[c]null[o]',
-    `[0:a]asetpts=PTS-STARTPTS,aresample=48000,afade=t=in:st=0:d=0.12,afade=t=out:st=${Math.max(0, D - 0.35).toFixed(3)}:d=0.35[a]`,
-    endcard ? `[${hook ? 2 : 1}:v]fps=${FPS},setsar=1[ev];[${hook ? 2 : 1}:a]aresample=48000[ea];[o][a][ev][ea]concat=n=2:v=1:a=1[v][aa]` : '[o]null[v];[a]anull[aa]',
+    sound.cut,
+    endcard ? `[${end}:v]fps=${FPS},setsar=1[ev];${sound.card};[o][a][ev][ea]concat=n=2:v=1:a=1[v][ac]` : '[o]null[v];[a]anull[ac]',
+    `[ac]${volume(gain)}[aa]`,
     `[v]scale=iw*${SCALE}:ih*${SCALE}:flags=neighbor,setsar=1,format=yuv420p[vv]`,
   ].join(';');
   const args = ['-v', 'error', '-y', '-ss', window.start.toFixed(3), '-t', D.toFixed(3), '-i', master];
@@ -102,6 +128,46 @@ export function composeArgs({ master, hook, endcard, window, format, out, hookSe
   if (endcard) args.push('-i', endcard);
   args.push('-filter_complex', graph, '-map', '[vv]', '-map', '[aa]', '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'medium', '-crf', String(crf), '-g', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', out);
   return args;
+}
+
+// (EBU R128 as ffmpeg's ebur128 filter reports it: the summary at the end of its log, on stderr)
+const EBUR128 = 'ebur128=peak=true:framelog=quiet';
+
+/** ffmpeg argv that measure a clip's sound before it is made: the same window, fades and end card as composeArgs mixes. */
+export function loudnessArgs({ master, endcard = null, window }) {
+  const sound = soundParts(window, endcard ? 1 : null);
+  const graph = [sound.cut, endcard ? `${sound.card};[a][ea]concat=n=2:v=0:a=1[ac]` : '[a]anull[ac]', `[ac]${EBUR128}[m]`].join(';');
+  const args = ['-hide_banner', '-nostats', '-ss', window.start.toFixed(3), '-t', window.duration.toFixed(3), '-i', master];
+  if (endcard) args.push('-i', endcard);
+  args.push('-filter_complex', graph, '-map', '[m]', '-f', 'null', '-');
+  return args;
+}
+
+/** ffmpeg argv that measure a made file's sound (what the feeds will play). */
+export const measureArgs = (file) => ['-hide_banner', '-nostats', '-i', file, '-map', '0:a', '-af', EBUR128, '-f', 'null', '-'];
+
+/** The integrated loudness (LUFS) and true peak (dBTP) in an ebur128 log; null for one it does not give (-inf: silence). */
+export function parseLoudness(log) {
+  const at = String(log || '').lastIndexOf('Summary:');
+  if (at < 0) return { lufs: null, truePeak: null };
+  const sum = String(log).slice(at);
+  const num = (re) => {
+    const m = re.exec(sum);
+    return m && Number.isFinite(Number(m[1])) ? Number(m[1]) : null;
+  };
+  return { lufs: num(/\bI:\s+(-?[\d.]+|-inf) LUFS/), truePeak: num(/\bPeak:\s+(-?[\d.]+|-inf) dBFS/) };
+}
+
+/**
+ * The gain (dB, a tenth at most under the exact figure) that brings a measured clip to LOUDNESS.target without its true
+ * peak passing LOUDNESS.ceiling: 0 for silence or a sound too faint to measure (nothing worth lifting).
+ */
+export function loudnessGain({ lufs, truePeak } = {}, { target = LOUDNESS.target, ceiling = LOUDNESS.ceiling, max = LOUDNESS.max } = {}) {
+  if (!Number.isFinite(lufs) || lufs < -60) return 0;
+  let g = target - lufs;
+  if (Number.isFinite(truePeak)) g = Math.min(g, ceiling - truePeak);
+  g = Math.max(-max, Math.min(max, g));
+  return Math.floor(g * 10 + 1e-9) / 10 || 0;
 }
 
 const srtTime = (t, sep = ',') => {

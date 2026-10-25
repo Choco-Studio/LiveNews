@@ -5,8 +5,8 @@
 //   detectMoments(episode, { timeline }) -> [moment] best first
 //
 // The kinds (each from the structure, never from a guess at the words):
-//   quiz-question  PAY ATTENTION: a question from its frame to its reveal (the round's title first when it opens a round),
-//                  and the winner's one-line reaction when it follows
+//   quiz-question  PAY ATTENTION: a question from its frame to its reveal, and the winner's one-line reaction when it
+//                  follows (never from the round's title card: docs/publishing/shorts-v2.md A2)
 //   quiz-round     a whole round, title to last reveal: TikTok's longer clip (over a minute)
 //   weather-board  WORLD WEATHER: HOT AND COLD, THE NEXT THREE DAYS
 //   weather-story  WORLD WEATHER's big story: its headline segment and its warning
@@ -28,6 +28,7 @@ import { dangling, backReference, endsClean, quotesBalanced, graveText, interest
 import { severity } from '../facts.js';
 import { excludedKind } from '../quiz/desk.js';
 import { ownWords, storyLabel } from './wording.js';
+import { askOf, askSentence, quizTopic } from '../../public/js/scenes/quiz-ask.js';
 
 // Phase 1's light programmes (docs/publishing/plan.md §2): the quiz, the weather, sport and the light desks (science,
 // technology, games). SEVEN DAYS and the news programmes come in Phase 2, hard news gradually after.
@@ -279,20 +280,25 @@ export function ownHook(m, story = {}, sources = []) {
  * A quiz question's words for its posts, which never give its answer away: the question as the board asks it (its
  * blank as ___, a running-order label such as "And finally:" left out), or, where the headline is the answer itself
  * (LETTER BY LETTER, WHICH STORY?), only what the board shows at once (a headline's first letters). `title` tells one
- * question from another; `tease` is the question for the caption (null when there is none to give).
+ * question from another; `tease` is the question for the caption (null when there is none to give); `ask` the board's
+ * own question in plain words (HOW MANY?'s from its figure, scenes/quiz-ask.js: "How many ponies?"), or null.
  */
 export function quizWords(q = {}, type = q.type) {
   const blank = (t) => String(t || '').replace(/\s+/g, ' ').trim().replace(/^(?:and finally|finally|now|next|and)\s*[:,–—-]\s*/i, '').replace(/▮+/g, '___');
   if ((type === 'howmany' || type === 'where') && q.masked && /▮/.test(q.masked)) {
     const tease = blank(q.masked);
-    return { title: `${type === 'where' ? 'Where is it?' : 'How many?'} ${tease}`, tease };
+    // (WHERE IN THE WORLD?'s three pins are countries: "Which country?" says it in words that are no stop words)
+    const ask = type === 'where' ? 'Which country?' : askSentence(askOf(q.figure), q.masked) || 'How many?';
+    return { title: `${ask} ${tease}`, tease, ask };
   }
   if (type === 'letters' && q.words) {
     const initials = String(q.words).split(/\s+/).filter(Boolean).map((w) => (/^\d+$/.test(w) ? w : `${w.replace(/^[^\p{L}\p{N}]+/u, '').charAt(0).toUpperCase()}.`)).join(' ');
-    return { title: `Name the headline: ${initials}`, tease: null };
+    return { title: `Name the headline: ${initials}`, tease: null, ask: null };
   }
-  if (type === 'today' && q.words) return { title: `Today or not today? ${blank(q.words)}`, tease: blank(q.words) };
-  return { title: type === 'picture' ? 'Which story is this picture?' : 'Play along', tease: null };
+  if (type === 'today' && q.words) return { title: `Today or not today? ${blank(q.words)}`, tease: blank(q.words), ask: 'Today or not today?' };
+  // (WHERE IN THE WORLD? with its headline whole: the place is not in it, the three pins ask it)
+  if (type === 'where' && q.words) return { title: `Which country? ${blank(q.words)}`, tease: blank(q.words), ask: 'Which country?' };
+  return { title: type === 'picture' ? 'Which story is this picture?' : 'Play along', tease: null, ask: null };
 }
 
 const QUIZ_HOOK = { howmany: ['HOW MANY?', 'PLAY ALONG'], where: ['WHERE IN', 'THE WORLD?'], letters: ['NAME THE', 'HEADLINE'], today: ['TODAY OR', 'NOT TODAY?'], picture: ['WHICH STORY?', 'PLAY ALONG'] };
@@ -318,26 +324,36 @@ function quizMoments(episode, timeline) {
     if (segs[j]?.part !== 'reveal') continue;
     let end = j;
     if (segs[j + 1]?.part === 'react' && ['A', 'B'].includes(segs[j + 1].anchor)) end = j + 1;
+    // every question opens on its own frame (shorts-v2.md A2): until 25 Oct a round's first question opened on the
+    // round's title card, four seconds of its name and its rules before anything was asked, in the seconds a viewer
+    // decides to stay; the board the question opens on names the game (GUESS THE NUMBER, TODAY OR NOT TODAY?), and the
+    // whole round's clip still opens on the card
     const first = round && round.questions.length === 0 && round.at === i - 1;
-    const from = first ? round.at : i;
+    const from = i;
     const q = s.quiz?.question || {};
     const type = q.type || round?.type || s.quiz?.round;
     const story = q.key ? q.key : null;
     const credits = q.aired?.source ? [{ outlet: q.aired.source, programme: q.aired.programme || null, storyId: story }] : [];
     const players = Object.entries(episode.cast || {}).filter(([k]) => k === 'A' || k === 'B').map(([, id]) => id);
+    // (the horizontal clip's hook: the board's own question when it fits a line of the hook, HOW MANY PONIES?)
+    const ask = type === 'howmany' ? askOf(q.figure)?.ask : null;
     const m = makeMoment(episode, timeline, 'quiz-question', from, end, {
       keepStart: true,
       board: true,
-      hook: pickHook([QUIZ_HOOK[type]], 'PLAY ALONG'),
+      hook: pickHook([ask && ask.length <= MAX_LINE ? [ask, 'PLAY ALONG'] : null, QUIZ_HOOK[type]], 'PLAY ALONG'),
       headline: q.words || null,
       credits,
     });
     if (m) {
-      m.hookTall = ['PLAY ALONG'];
       m.quiz = { type, round: round?.title || null, players, opensRound: first, ...quizWords(q, type) };
+      // the mast beside the bug: the question's topic (shorts-v2.md A3: the board asks the question, the mast says what
+      // it is about), from the words the board shows, never its answer; PLAY ALONG where there is none (LETTER BY
+      // LETTER's headline is its answer) or it is too long for the mast
+      const topic = quizTopic(m.quiz.tease || '').toUpperCase();
+      m.hookTall = [topic && topic.length <= MAX_LINE ? topic : 'PLAY ALONG'];
       if (story) m.storyIds = [...new Set([story, ...m.storyIds])];
       if (q.aired?.source) m.sources = [...new Set([q.aired.source, ...m.sources])];
-      // the round's first question opens on its title card: the clearest start; a "next headline" frame reads mid-way
+      // a "next headline" frame reads mid-way (a round's first question has none)
       if (!first && /^(?:next|another|and one more|one more)\b/i.test(norm(s.text))) {
         m.scores.sense = +(m.scores.sense - 1.5).toFixed(1);
         m.scores.reasons.push('opens on "next": mid-round');
@@ -354,7 +370,8 @@ function quizMoments(episode, timeline) {
     const m = makeMoment(episode, timeline, 'quiz-round', r.at, last.to, { keepStart: true, board: true, hook: pickHook([QUIZ_HOOK[r.type] ? [QUIZ_HOOK[r.type][0] === 'HOW MANY?' || QUIZ_HOOK[r.type][0] === 'WHICH STORY?' ? QUIZ_HOOK[r.type][0] : QUIZ_HOOK[r.type].join(' '), 'A WHOLE ROUND'] : null, ['PAY ATTENTION', 'A WHOLE ROUND']], 'PLAY ALONG'), credits: r.questions.flatMap((q) => q.credits) });
     if (m) {
       m.hookTall = ['FULL ROUND'];
-      m.quiz = { type: r.type, round: r.title, players: r.questions[0].quiz.players, questions: r.questions.length };
+      // (its words: how many questions it plays, which no single question's clip can say)
+      m.quiz = { type: r.type, round: r.title, players: r.questions[0].quiz.players, questions: r.questions.length, title: `${r.questions.length} questions from this week's news`, tease: null, ask: null };
       m.storyIds = [...new Set(r.questions.flatMap((q) => q.storyIds))];
       m.sources = [...new Set(r.questions.flatMap((q) => q.sources))];
       out.push(m);

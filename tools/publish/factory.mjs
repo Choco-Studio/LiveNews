@@ -36,7 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
 import { detectMoments, publishable, markCopied, markUncleared, ownHook, hookLines } from '../../server/publish/moments.js';
-import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE } from '../../server/publish/render.js';
+import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, LOUDNESS, loudnessArgs, measureArgs, parseLoudness, loudnessGain } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
 import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf, coverCast } from './packager.mjs';
@@ -259,7 +259,9 @@ async function endCard(fmt) {
   if (endcards[fmt]) return endcards[fmt];
   const f = path.join(cardsDir, `endcard-${prog}-${fmt}-${stream}.mkv`);
   if (!fs.existsSync(f)) {
-    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1&stream=${stream}`;
+    // (a series asks for its next one: PAY ATTENTION's card says FOLLOW FOR THE NEXT QUESTION, cards.js END_CTAS)
+    const cta = prog === 'pay-attention' ? '&cta=next-question' : '';
+    const url = `${base}/lab/clip.html?run=end&format=${fmt}&programme=${encodeURIComponent(episode.program?.title || '')}&theme=${theme}&sting=1&stream=${stream}${cta}`;
     await run('node', ['tools/record.mjs', '--url', url, '--seconds', '2.6', '--fps', '30', '--scale', '1', '--lossless', '--seed', '1', '--out', f], { env: { TMPDIR: tmpDir }, quiet: true });
   }
   endcards[fmt] = f;
@@ -355,8 +357,15 @@ for (const m of chosen) {
       const file = path.join(clipsDir, `${name}.mp4`);
       const hook = await hookPng(m, fmt);
       const end = await endCard(fmt);
-      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''})`);
-      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, endcard: end, window, format: fmt, out: file }), { quiet: true });
+      // the clip at the feeds' loudness (docs/publishing/shorts-v2.md A1): its sound measured as it will be mixed, then
+      // one gain on the whole, and the made file measured again (what the feeds will play)
+      const measured = parseLoudness((await run('ffmpeg', loudnessArgs({ master: masters[fmt].file, endcard: end, window }), { quiet: true })).err);
+      const gain = loudnessGain(measured);
+      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''})`);
+      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, endcard: end, window, format: fmt, out: file, gain }), { quiet: true });
+      const heard = parseLoudness((await run('ffmpeg', measureArgs(file), { quiet: true })).err);
+      const loudness = { target: LOUDNESS.target, gain, before: measured, lufs: heard.lufs, truePeak: heard.truePeak };
+      if (heard.truePeak !== null && heard.truePeak > LOUDNESS.ceiling + 0.5) say(`clip ${name}: true peak ${heard.truePeak} dBTP, over the feeds' -1 dBTP`);
       const duration = await probeDuration(file);
       const endSeconds = duration - window.duration;
       // what the clip's end card says and how long it holds (the gate holds a clip without it)
@@ -380,7 +389,7 @@ for (const m of chosen) {
       const labelFrames = await labelEvidence(file, fmt, window, tl);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, loudness, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt });
         meta.texts[p] = t;

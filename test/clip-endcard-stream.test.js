@@ -101,7 +101,9 @@ test('the factory and the whole-programme upload ask for the card with the strea
 
 test('the vertical end card shows one globe: the emblem over the wordmark\'s plate, not over the bug and its own globe', async () => {
   const src = fs.readFileSync(new URL('../public/js/clip/cards.js', import.meta.url), 'utf8');
-  assert.match(src, /\{ variant: 'mark', scale: 4, y: 46 \}, \{ variant: 'wordmark', scale: 2,/);
+  assert.match(src, /\{ variant: 'mark', scale: mark, y: 46 \}, \{ variant: 'wordmark', scale: 2,/);
+  // (the emblem at 4x; at 3x when the card carries an invitation: shorts-v2.md A5)
+  assert.match(src, /const mark = vertical && text\.cta \? 3 : 4;/);
   const { measureLogo } = await import('../public/js/logo.js');
   assert.ok(measureLogo({ variant: 'wordmark' }).w < measureLogo({ variant: 'bug' }).w, 'the bug without its globe');
   assert.equal(measureLogo({ variant: 'wordmark' }).h, measureLogo({ variant: 'bug' }).h);

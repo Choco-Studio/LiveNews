@@ -443,7 +443,7 @@ describe('PAY ATTENTION graphics', () => {
     const { quizCases, MOMENTS } = await import('../public/lab/quiz-cases.js');
     const pics = Object.fromEntries(['device', 'ice', 'corridor', 'rocket', 'owl', 'phone'].map((k) => [k, fakeCanvas(512, 288)]));
     const cases = quizCases({ Q: G, pics, HN, NOW });
-    assert.equal(cases.length, 27, 'every board of the lab');
+    assert.equal(cases.length, 29, 'every board of the lab');
     const faults = [];
     let checked = 0;
     for (const [id, , def] of cases) {

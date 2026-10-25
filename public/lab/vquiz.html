@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>PAY ATTENTION's boards set again for the vertical picture (clip/vquiz.js), the quiz lab's real cases</h1>
-<p>Each board in the tall stage (216 x 216) at the moment ?moment= (open, reading, countdown, locks, step4, reveal, settled; default reveal) or ?t=, ?scale=1|2|4, ?only=id.</p>
+<p>Each board in the tall stage (216 x 216) at the moment ?moment= (open, reading, countdown, locks, step4, reveal, settled; default reveal) or ?t=, ?scale=1|2|4, ?only=id; ?glass=1 sets each board as a clip and the vertical live show it, bare on the glass in the quiz's marquee (clip/vquiz.js installQuiz: the box 180 x 208 at x 18, 4 rows into the stage).</p>
 <div class="grid" id="grid"></div>
 <script type="module">
 import { P } from '/js/palette.js';
@@ -31,7 +31,9 @@ const moment = qs.get('moment') || 'reveal';
 const tOverride = qs.get('t') !== null ? Number(qs.get('t')) : null;
 const only = qs.get('only');
 const NOW = Date.parse('2026-10-13T20:20:00Z');
-const BOX = { x: 0, y: 0, w: 216, h: 216 };
+// (?glass=1: the compositor's box on the tall stage, layout.js quizBox inside the marquee: { x: 18, y: 36 - 32, w: 180, h: 208 })
+const glass = qs.get('glass') === '1';
+const BOX = glass ? { x: 18, y: 4, w: 180, h: 208, bare: true } : { x: 0, y: 0, w: 216, h: 216 };
 
 // generated test pictures (the lab only): a dark field and a few shapes per kind
 function picture(kind) {
