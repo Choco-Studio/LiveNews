@@ -65,6 +65,8 @@ const KEYS = [
   'KOKORO_THREADS',
   'VOICE_MODEL',
   'VOICE_PHRASE_CACHE_MB',
+  'VOICE_PRO',
+  'VOICE_PRO_MONTHLY_CHARS',
   'VOICE_PYTHON',
   'VOICE_WORKERS',
   'VOICE_BUDGET_S',
@@ -221,8 +223,13 @@ describe('config from the environment', () => {
       firstBudgetSeconds: 480,
       cacheMb: 300,
       phraseCacheMb: 64,
+      pro: '',
+      proMonthlyChars: 6_500_000,
       dir: path.join(REPO, 'data', 'voice'),
     });
+    // the professional engine: off unless named (docs/roadmap/critique/voices-pro.md)
+    const pro = (await loadConfig({ VOICE_PRO: ' Inworld ', VOICE_PRO_MONTHLY_CHARS: '13000000' })).voice;
+    assert.deepEqual([pro.pro, pro.proMonthlyChars], ['inworld', 13_000_000]);
     assert.equal((await loadConfig({ VOICE_ENGINE: ' Kokoro ' })).voice.engine, 'kokoro');
     for (const value of ['browser', 'tts', 'off', 'none']) assert.equal((await loadConfig({ VOICE_ENGINE: value })).voice.engine, 'browser', value);
     const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots', VOICE_MODEL: ' FP16 ', VOICE_PHRASE_CACHE_MB: '0' })).voice;
@@ -298,7 +305,7 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'ANTHROPIC_EFFORT', 'ANTHROPIC_MAX_TOKENS', 'ANTHROPIC_TIMEOUT_MS', 'ANTHROPIC_MAX_RETRIES', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_MODEL', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB', 'VOICE_PHRASE_CACHE_MB'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'ANTHROPIC_EFFORT', 'ANTHROPIC_MAX_TOKENS', 'ANTHROPIC_TIMEOUT_MS', 'ANTHROPIC_MAX_RETRIES', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_MODEL', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB', 'VOICE_PHRASE_CACHE_MB', 'VOICE_PRO', 'VOICE_PRO_MONTHLY_CHARS'].map((k) => [k, example[k]]))
     );
     // A .env made from the example turns the neural voices on; everything else about them is the default.
     assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });
