@@ -36,7 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
 import { detectMoments, publishable, markCopied, markUncleared, ownHook, hookLines } from '../../server/publish/moments.js';
-import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, LOUDNESS, loudnessArgs, measureArgs, parseLoudness, loudnessGain } from '../../server/publish/render.js';
+import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, LOUDNESS, loudnessArgs, measureArgs, parseLoudness, loudnessGain, FACES } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
 import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf, coverCast } from './packager.mjs';
@@ -46,6 +46,7 @@ import * as compliance from '../../server/publish/compliance.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { masterRoots, renderedMaster, useRenderedMaster } from '../../server/publish/masters.js';
 import { streamOf } from '../../public/js/airmode.js';
+import { runningFor, assignArm, armStore } from '../../server/publish/experiments.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -254,6 +255,27 @@ async function hookPng(m, fmt) {
   fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
   return f;
 }
+// the face hook's strip (docs/publishing/shorts-v2.md B1): the two players over the desk, under the question board
+let facesFile;
+async function facesPng() {
+  if (facesFile !== undefined) return facesFile;
+  facesFile = null;
+  if (!episode.cast?.A || !episode.cast?.B) return null;
+  const url = await page.evaluate((spec) => window.__clipLab.faces(spec), { A: episode.cast.A, B: episode.cast.B, emotion: 'happy', pitch: -0.5, look: { x: 0.7, y: -1 } });
+  const f = path.join(cardsDir, `faces-${prog}.png`);
+  fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
+  facesFile = f;
+  return f;
+}
+/**
+ * How long the face hook may stay: until FACES.until, or a tenth of a second before the clip's first cut away from the
+ * board it opens on (the master's own shot events), whichever is first; null when that leaves under a second.
+ */
+function facesUntil(report, window) {
+  const cut = (report?.events || []).filter((e) => e.type === 'shot' && Number.isFinite(e.v) && e.v > window.start + 0.05).map((e) => e.v - window.start).sort((a, b) => a - b)[0];
+  const until = Math.min(FACES.until, Number.isFinite(cut) ? cut - 0.1 : FACES.until);
+  return until >= 1 ? +until.toFixed(2) : null;
+}
 const endcards = {};
 async function endCard(fmt) {
   if (endcards[fmt]) return endcards[fmt];
@@ -326,7 +348,12 @@ try {
 }
 const made = [];
 const failed = [];
+// the experiments' turns (server/publish/experiments.js): kept beside the queue; a run that queues nothing keeps its own
+const arms = armStore(flag('no-queue') ? null : path.join(queueDir, 'experiments.json'));
 for (const m of chosen) {
+  // the clip's experiment and its arm, for a clip that will be offered (the turns alternate among those alone)
+  const exp = pub.has(m.id) && !m.uncleared ? runningFor(m) : null;
+  const experiment = exp ? { id: exp.id, arm: assignArm(arms, exp, m.id) } : null;
   // the clip's words, once for both formats and every network (the same story, the same facts)
   const facts = packFacts(m, episode, { stories: storiesById, presenters, airedAt, live });
   let pack;
@@ -357,12 +384,15 @@ for (const m of chosen) {
       const file = path.join(clipsDir, `${name}.mp4`);
       const hook = await hookPng(m, fmt);
       const end = await endCard(fmt);
+      // the face hook, on its experiment's arm: the players rise in under the question for its first seconds
+      const until = experiment?.arm === 'face' && fmt === 'vertical' ? facesUntil(reports[fmt], window) : null;
+      const faces = until ? { file: await facesPng(), until } : null;
       // the clip at the feeds' loudness (docs/publishing/shorts-v2.md A1): its sound measured as it will be mixed, then
       // one gain on the whole, and the made file measured again (what the feeds will play)
       const measured = parseLoudness((await run('ffmpeg', loudnessArgs({ master: masters[fmt].file, endcard: end, window }), { quiet: true })).err);
       const gain = loudnessGain(measured);
-      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''})`);
-      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, endcard: end, window, format: fmt, out: file, gain }), { quiet: true });
+      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''}${experiment ? `; ${experiment.id}: ${experiment.arm}${faces ? ` (faces to ${faces.until} s)` : ''}` : ''})`);
+      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, faces: faces?.file ? faces : null, endcard: end, window, format: fmt, out: file, gain }), { quiet: true });
       const heard = parseLoudness((await run('ffmpeg', measureArgs(file), { quiet: true })).err);
       const loudness = { target: LOUDNESS.target, gain, before: measured, lufs: heard.lufs, truePeak: heard.truePeak };
       if (heard.truePeak !== null && heard.truePeak > LOUDNESS.ceiling + 0.5) say(`clip ${name}: true peak ${heard.truePeak} dBTP, over the feeds' -1 dBTP`);
@@ -389,7 +419,7 @@ for (const m of chosen) {
       const labelFrames = await labelEvidence(file, fmt, window, tl);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, loudness, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, loudness, experiment: experiment ? { ...experiment, faces: faces?.file ? faces.until : null } : null, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt });
         meta.texts[p] = t;
@@ -425,6 +455,8 @@ for (const m of chosen) {
             compliance: meta.compliance[p],
             score: m.scores.total,
             priority: m.kind.startsWith('quiz') ? 2 : 1,
+            // (its experiment's arm: the numbers are read by arm, tools/publish/metrics.mjs)
+            ...(experiment ? { experiment } : {}),
             // (--sources: the item's stories are measured against that folder at every later check too: the re-check, the page)
             gate: { episodeFile: path.resolve(epFile), reportFile: masters[fmt].report, range: { start: window.start, end: window.end }, labelFrames, cards, frame: fmt === 'vertical' ? { layout: 'vertical-216x384', crop: { x: 0, y: 0, w: 216, h: 384 }, output: { w: 1080, h: 1920 } } : null, ...(opt('sources') ? { sourcesDir: path.resolve(opt('sources')) } : {}) },
             dryRun: true,

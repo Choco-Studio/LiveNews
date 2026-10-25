@@ -4,7 +4,7 @@
 // runs them.
 //
 //   clipWindow(moment, timeline, { fps, wipeIn }) -> { start, end, duration, snappedStart, snappedEnd, hold }
-//   composeArgs({ master, hook, endcard, window, format, out, hookSeconds, gain }) -> ffmpeg argv
+//   composeArgs({ master, hook, faces, endcard, window, format, out, hookSeconds, gain }) -> ffmpeg argv
 //   loudnessArgs({ master, endcard, window }) / measureArgs(file) -> ffmpeg argv that measure a clip's sound
 //   parseLoudness(stderr) -> { lufs, truePeak };  loudnessGain(measure) -> the dB that bring it to LOUDNESS.target
 //   srtFor(timeline, window) / vttFor(timeline, window) -> caption files' text (the voice's own word times)
@@ -103,21 +103,41 @@ function soundParts(window, end) {
 const volume = (gain) => (Number.isFinite(gain) && Math.abs(gain) >= 0.05 ? `volume=${gain.toFixed(1)}dB` : 'anull');
 
 /**
+ * The face hook's strip (docs/publishing/shorts-v2.md B1): a picture twice the band's height, its top half clear and its
+ * bottom half the players over the desk, laid at `y` (the band's top) through a window the band's height that slides
+ * down it: the players rise in over `rise` s from `from`, stay, and sink out over `rise` s until `until`.
+ */
+export const FACES = Object.freeze({ y: 240, band: 60, from: 0.15, rise: 0.3, until: 2.6 });
+function facesFilter(input, faces) {
+  const f = { ...FACES, ...faces };
+  const up = `clip((t-${f.from.toFixed(2)})/${f.rise.toFixed(2)},0,1)`;
+  const down = `clip((${f.until.toFixed(2)}-t)/${f.rise.toFixed(2)},0,1)`;
+  return { strip: `[${input}:v]format=rgba,crop=w=iw:h=${f.band}:x=0:y='${f.band}*min(${up},${down})'[fc]`, enable: `lt(t,${f.until.toFixed(2)})`, y: f.y };
+}
+
+/**
  * The ffmpeg graph of one clip: [master window] + hook overlay (vertical: the whole clip; horizontal: its first
- * `hookSeconds`) + the end card (its own picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18,
- * a keyframe a second) + AAC 160k, faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut,
- * and `gain` dB lift the whole (loudnessGain: the clip at the feeds' loudness).
+ * `hookSeconds`) + the face hook's strip (`faces`: { file, until }, its first seconds) + the end card (its own picture
+ * and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18, a keyframe a second) + AAC 160k, faststart. The
+ * sound fades in over 0.12 s and out over the last 0.35 s of the cut, and `gain` dB lift the whole (loudnessGain: the
+ * clip at the feeds' loudness).
  * A window with a `hold` shows its frame at `hold` from the start until then (the sound runs on underneath).
  */
-export function composeArgs({ master, hook, endcard, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
+export function composeArgs({ master, hook, faces = null, endcard, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
   const D = window.duration;
   const enable = format === 'vertical' ? '' : `:enable='lt(t,${hookSeconds})'`;
   const hold = window.hold > 0 ? `,trim=start=${window.hold.toFixed(3)},setpts=PTS-STARTPTS,tpad=start_duration=${window.hold.toFixed(3)}:start_mode=clone` : '';
-  const end = endcard ? (hook ? 2 : 1) : null;
+  // the inputs: the master, then the hook, the face hook's strip and the end card, each when there is one
+  let n = 1;
+  const hookIn = hook ? n++ : null;
+  const facesIn = faces?.file ? n++ : null;
+  const end = endcard ? n++ : null;
   const sound = soundParts(window, end);
+  const fc = facesIn !== null ? facesFilter(facesIn, faces) : null;
   const graph = [
     `[0:v]setpts=PTS-STARTPTS,fps=${FPS}${hold}[c]`,
-    hook ? `[c][1:v]overlay=0:0${enable}:eof_action=repeat[o]` : '[c]null[o]',
+    hook ? `[c][${hookIn}:v]overlay=0:0${enable}:eof_action=repeat[h]` : '[c]null[h]',
+    fc ? `${fc.strip};[h][fc]overlay=0:${fc.y}:enable='${fc.enable}'[o]` : '[h]null[o]',
     sound.cut,
     endcard ? `[${end}:v]fps=${FPS},setsar=1[ev];${sound.card};[o][a][ev][ea]concat=n=2:v=1:a=1[v][ac]` : '[o]null[v];[a]anull[ac]',
     `[ac]${volume(gain)}[aa]`,
@@ -125,6 +145,7 @@ export function composeArgs({ master, hook, endcard, window, format, out, hookSe
   ].join(';');
   const args = ['-v', 'error', '-y', '-ss', window.start.toFixed(3), '-t', D.toFixed(3), '-i', master];
   if (hook) args.push('-loop', '1', '-t', D.toFixed(3), '-i', hook);
+  if (facesIn !== null) args.push('-loop', '1', '-t', D.toFixed(3), '-i', faces.file);
   if (endcard) args.push('-i', endcard);
   args.push('-filter_complex', graph, '-map', '[vv]', '-map', '[aa]', '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'medium', '-crf', String(crf), '-g', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', out);
   return args;

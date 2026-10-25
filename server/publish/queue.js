@@ -133,7 +133,7 @@ export class PublishQueue {
   }
 
   record(item, result, { dry = false } = {}) {
-    const e = { at: this.now(), key: item.key, id: item.id, platform: item.platform, kind: item.kind, storyIds: item.source?.storyIds || [], momentId: item.source?.momentId || null, sha256: item.media?.sha256 || null, remoteId: result?.remoteId || null, url: result?.url || null, dryRun: !!dry };
+    const e = { at: this.now(), key: item.key, id: item.id, platform: item.platform, kind: item.kind, storyIds: item.source?.storyIds || [], momentId: item.source?.momentId || null, sha256: item.media?.sha256 || null, remoteId: result?.remoteId || null, url: result?.url || null, dryRun: !!dry, ...(item.experiment ? { experiment: item.experiment } : {}) };
     fs.mkdirSync(this.dir, { recursive: true });
     fs.appendFileSync(this.ledgerFile(dry), `${JSON.stringify(e)}\n`);
     return e;

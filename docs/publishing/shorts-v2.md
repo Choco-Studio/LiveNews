@@ -24,7 +24,7 @@ measured. The server had published for a week when it was written; its numbers d
 7. **Familiar faces build a bond, a series builds a habit** (Tukachinsky et al. 2020; Montoya et al. 2017).
 8. **Test, do not guess**: one change at a time, alternated clip by clip, kept only when it wins (§4).
 
-## 2. Phase A (this change)
+## 2. Phase A
 
 | # | Change | Principle | Where |
 |---|---|---|---|
@@ -34,12 +34,28 @@ measured. The server had published for a week when it was written; its numbers d
 | A4 | The words around a quiz clip lead with its topic and say the board's question in plain words ("How many ponies?"; WHERE IN THE WORLD? asks "Which country?"). The first cover is the question itself (HOW MANY PONIES?), else the topic with it (NASA: HOW MANY?); the title beside it the challenge ("Exmoor Pony Herd: can you beat Paco and Penny?"), the second title the question ("…: how many ponies? Guess before the answer"), the caption's first line both; one topic hashtag before #newsquiz #quiz #news. The AI writer is told the same. | 3, search | `server/publish/packaging.js` `fallbackPackage`, `quizCovers`, `hashtagsFor`, `packagePrompt`; `server/publish/moments.js` `quizWords` |
 | A5 | The quiz's end card asks for the next question: FOLLOW FOR THE over NEXT QUESTION at 2x under the programme's plate, inside the quiz's marquee (the emblem at 3x and the slogan's row make the room); the AI notice under it is unchanged, and so are the card's 2.6 s. One card goes to every feed, so it says FOLLOW. | 5, 7 | `public/js/clip/cards.js` `END_CTAS`; `tools/publish/factory.mjs` (`&cta=next-question`) |
 
-## 3. Phase B (next)
+## 3. Phase B
 
-- **B1, the face hook** (an experiment, §4): the question's host as a cut-out sliding in under the board in the first
-  0.25 s, looking up at the question, gone by 2.5 s (motion onset, a face, a gaze cue: principles 1 and 2).
-- **B2, the numbers**: a free reader of each published clip's figures (YouTube's views, engaged views, average viewed
-  and retention; Instagram's skip rate, watch time and sends; TikTok's counts), by experiment arm.
+- **B1, the face hook** (an experiment, §4; running from 25 Oct): on half the quiz questions' clips, alternated clip by
+  clip, the two players rise from behind their desk under the question board in the first quarter second, eyes and
+  heads turned up toward the question, and sink back by 2.6 s (or a tenth of a second before the clip's first cut):
+  motion where the eye starts, two faces, their gaze on the words (principles 1 and 2). Not the host: the host's voice
+  reads the question, and a still face under a speaking voice reads as wrong. The strip is the players' own cut-outs
+  (`clip/sprite.js`, now with a head's pitch and the eyes' direction), drawn by `/lab/clip.html` `__clipLab.faces` and
+  laid over the band above the desk by the clip's graph (`render.js` `FACES`); the arm is in the clip's JSON, its queue
+  item and its ledger line (`server/publish/experiments.js`, the turns in `data/publish/experiments.json`).
+- **B2, the numbers** (built): `node tools/publish/metrics.mjs` reads back every clip the ledger says went out, by API
+  or marked "Ya lo he publicado" by hand, and writes `data/publish/metrics/latest.json` (and a dated copy) with the
+  owner's summary in Spanish: by network and kind, by experiment arm, each experiment's verdict
+  (`server/publish/metrics.js`). A clip published by hand without its link is found by its title among the channel's
+  uploads. What each network gives with the credentials the uploads already use, and what the owner grants once:
+  - YouTube: views, likes and comments now; the average viewed, its minutes and the shares with the scope
+    `yt-analytics.readonly` in a new `YOUTUBE_REFRESH_TOKEN`. The share that stayed to watch rather than swiped away
+    is in YouTube Studio alone: copied by hand, weekly.
+  - Instagram: views, reach, likes, comments, shares, saves and the average watch time with
+    `instagram_business_manage_insights` on `INSTAGRAM_ACCESS_TOKEN`.
+  - TikTok: views, likes, comments and shares with the scope `video.list` and each post's link (an inbox upload's id
+    is not its video's).
 - **B3, the series**: already there on YouTube: every upload joins its programme's playlist (`adapters/youtube.js`:
   "PAY ATTENTION · Shorts"); TikTok's playlists are made in its app, by hand.
 - **B4, captions clear of TikTok's button column** once a phone screenshot of a published Short shows where it falls.
@@ -48,9 +64,11 @@ measured. The server had published for a week when it was written; its numbers d
 
 The study's rule (its §11): one experiment at a time, its two arms alternated clip by clip on the same days, at least
 20 clips an arm; a change stays only when the share that stayed to watch (or, on Instagram, the skip rate) improves by
-5 points or more and neither the average viewed nor the sends fall. Phase A's changes are not experiments: each fixes a
-measured fault (the sound, a generic first frame, a start on rules) or follows a platform's own advice (search); they
-are judged on the week before against the weeks after.
+5 points or more and neither the average viewed nor the sends fall. The metrics tool applies the half it can read:
+"collecting" until 20 clips an arm, "drop" when the average viewed or the sends a thousand views fall, else "check
+Studio" (the owner reads the share that stayed to watch there: no tool declares a win alone). Phase A's changes are
+not experiments: each fixes a measured fault (the sound, a generic first frame, a start on rules) or follows a
+platform's own advice (search); they are judged on the week before against the weeks after.
 
 ## 5. The samples (25 Oct)
 

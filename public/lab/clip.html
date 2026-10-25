@@ -52,7 +52,27 @@ function endCanvas(spec, t) {
   drawEndCard(g, t, { format: spec.format, programme: spec.programme, accent: accentOf(spec), stream: spec.stream || 'none', backdrop: backdropOf(spec), cta: spec.cta || null });
   return c;
 }
+// the players watching the question (shorts-v2.md B1, the face hook): their cut-outs in a strip 216 x 120, the top
+// half clear and the bottom half the band over the desk (y 240-299 of the frame), A at the left and B at the right,
+// each turned toward the board above them; factory.mjs slides the strip's window to raise them in and out
+async function facesCanvas(spec) {
+  const { presenterSprite } = await import('/js/clip/sprite.js');
+  const c = mk(216, 120);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const seats = [['A', spec.A, 1, 52], ['B', spec.B, -1, 164]];
+  for (const [, id, side, cx] of seats) {
+    if (!id) continue;
+    const sp = presenterSprite(id, { emotion: spec.emotion || 'thinking', scale: spec.scale || 1.5, side, yaw: side * (spec.yaw ?? 0.35), pitch: spec.pitch ?? -0.25, look: spec.look ? { x: side * spec.look.x, y: spec.look.y } : null, t: 1.4 });
+    if (!sp) continue;
+    // head and shoulders over the desk's edge: the sprite's top 60 rows at most, its middle on the seat's column
+    const h = Math.min(60, sp.h);
+    g.drawImage(sp.canvas, 0, 0, sp.w, h, Math.round(cx - sp.w / 2), 120 - h, sp.w, h);
+  }
+  return c;
+}
 window.__clipLab = {
+  faces: async (spec) => (await facesCanvas(spec)).toDataURL('image/png'),
   seconds: END_CARD_SECONDS,
   hook: (spec) => hookCanvas(spec).toDataURL('image/png'),
   end: (spec, t) => endCanvas(spec, t).toDataURL('image/png'),

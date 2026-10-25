@@ -3,7 +3,7 @@
 // presenter in front of the story's picture. Nothing new is drawn: the look, the face and the gestures are the cast's
 // (public/js/v2/canvas25d), the expression one of the channel's six (cues.js EMOTIONS).
 //
-//   presenterSprite(id, { emotion, gesture, scale, side, t }) -> { canvas, w, h, head } | null
+//   presenterSprite(id, { emotion, gesture, scale, side, t, yaw, pitch, look }) -> { canvas, w, h, head } | null
 //     canvas: the figure cropped to its pixels (transparent around it); head: the head's box in the canvas
 import { frame, parts, actor } from '../v2/canvas25d/scene.js';
 import { drawCharacter } from '../v2/canvas25d/character.js';
@@ -18,7 +18,7 @@ const EMOTIONS = new Set(['neutral', 'happy', 'serious', 'surprised', 'sad', 'th
  * caught `t` seconds in, the head turned by `yaw` (radians; negative turns the face to screen-left, toward a
  * thumbnail's words). Drawn on a cleared (transparent) frame: every pixel the renderer writes is the figure.
  */
-export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale = 3.4, side = 1, t = 2.6, yaw = 0 } = {}) {
+export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale = 3.4, side = 1, t = 2.6, yaw = 0, pitch = 0, look = null } = {}) {
   if (!id || typeof document === 'undefined') return null;
   const perf = { side, seed: 11, emotions: EMOTIONS.has(emotion) ? [{ t0: 0, name: emotion }] : [], gestures: gesture ? [{ name: gesture, t0: 0.2 }] : [] };
   let head = null;
@@ -29,6 +29,12 @@ export function presenterSprite(id, { emotion = 'neutral', gesture = null, scale
     const sk = poseAt(a, t);
     // (a head turned toward the words: a face's gaze carries the viewer's eye where it looks; cast-a lab's yaw offset)
     if (yaw) sk.head.yaw += yaw;
+    // (and lifted toward something above it, the eyes on it: a clip's question over the players, shorts-v2.md B1)
+    if (pitch) sk.head.pitch += pitch;
+    if (look && sk.face) {
+      sk.face.lookX = Math.max(-1, Math.min(1, look.x ?? sk.face.lookX ?? 0));
+      sk.face.lookY = Math.max(-1, Math.min(1, look.y ?? sk.face.lookY ?? 0));
+    }
     // the neck where a close single keeps it: the head in the upper part of the frame, the body to the bottom edge
     head = drawCharacter(parts, a.look, sk, { x: W >> 1, y: Math.round(30 + 26 * scale), s: scale, gb: 0, clip: false });
     parts.resolve(frame);
