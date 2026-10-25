@@ -12,8 +12,8 @@
 // Needs YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN (scope youtube) and YOUTUBE_STREAM_KEY (to find
 // the stream; never printed). Refused unless PUBLISH_LIVE=1 (or --live). YouTube takes one live broadcast per stream
 // at a time, and a new one bound to a stream that stays connected is refused too (403 "Invalid transition", tried
-// 24 Oct): it starts (auto start) only after the encoder has been off for about a minute. So: the old block ended, the
-// next one taken from YouTube Studio's waiting broadcast (the dual format lives there) or else made and bound, the playout told to let go of the RTMP connection for 75 s (SIGUSR2 to air.mjs), and
+// 24 Oct): it starts (auto start) only after the encoder has been off for about a minute. So: the next block made
+// and bound, the old one ended, the playout told to let go of the RTMP connection for 75 s (SIGUSR2 to air.mjs), and
 // the new block goes live when it reconnects: about 1.5 minutes off air, at a break. Quota: about 300 of the 10,000
 // daily units a rotation.
 import fs from 'node:fs';
@@ -171,8 +171,8 @@ function holdEncoder() {
     /* no vertical playout */
   }
 }
-/** Any other broadcast waiting on our stream could take the auto start from `keep`, so it goes: a block left by a
- * rotation cut short, or a second Studio broadcast. */
+/** Any other broadcast waiting on our stream could take the auto start from `keep`, so it goes: the ready
+ * "Emisión en directo de …" YouTube Studio makes after each end, or a block left by a rotation cut short. */
 async function dropOtherUpcoming(stream, keep) {
   for (const b of await broadcasts('upcoming', stream.id)) {
     if (b.id !== keep.id) {
@@ -181,33 +181,9 @@ async function dropOtherUpcoming(stream, keep) {
     }
   }
 }
-/**
- * YouTube's dual format (the vertical feed beside the horizontal one) is a setting of the broadcast YouTube Studio
- * makes in Live Control Room > Stream, and the API can neither see it nor set it: a broadcast made here airs the
- * horizontal feed only (25 Oct: the vertical key connected, nothing on the Shorts feed). So Studio's waiting
- * broadcast on our stream ("Emisión en directo de …", made after each end) is taken as the next block and given the
- * block's title; one is made here only when Studio has none.
- */
-async function studioBroadcast(stream, like, waitMs = 0) {
-  const t0 = Date.now();
-  for (;;) {
-    const b = (await broadcasts('upcoming', stream.id)).find((x) => !/^GLOBIT 24 ·/.test(x.snippet.title));
-    if (b) {
-      const title = blockTitle();
-      await yt('PUT', 'liveBroadcasts?part=snippet', {
-        id: b.id,
-        snippet: { title, description: b.snippet.description || like?.snippet?.description || '', scheduledStartTime: b.snippet.scheduledStartTime || new Date().toISOString() },
-      });
-      say(`using YouTube Studio's ${b.id} (its Stream settings, the dual format with them) as "${title}" (${b.status.privacyStatus})`);
-      return { ...b, snippet: { ...b.snippet, title } };
-    }
-    if (Date.now() - t0 >= waitMs) return null;
-    await sleep(5000);
-  }
-}
 async function rotate(stream, live) {
+  const fresh = await prepareBlock(stream, live[0] || null);
   for (const b of live) await endBlock(b);
-  const fresh = (await studioBroadcast(stream, live[0], 30_000)) || (say('no Studio broadcast waiting: making one (horizontal only)'), await prepareBlock(stream, live[0] || null));
   await dropOtherUpcoming(stream, fresh);
   holdEncoder();
   await goLive(fresh);
@@ -242,7 +218,7 @@ if (mode === '--clean-probes') {
     // a block made but not taken live (a rotation cut short) is used first
     const waiting = (await broadcasts('upcoming', stream.id)).find((b) => b.status.privacyStatus === 'public' && /^GLOBIT 24/.test(b.snippet.title));
     say(`the stream is up with no live broadcast: ${waiting ? `taking ${waiting.id} live` : 'starting a block'}`);
-    const b = (await studioBroadcast(stream, null)) || waiting || (await prepareBlock(stream, (await yt('GET', 'liveBroadcasts?part=id,snippet,status,contentDetails&broadcastStatus=completed&broadcastType=all&maxResults=1')).items?.[0]));
+    const b = waiting || (await prepareBlock(stream, (await yt('GET', 'liveBroadcasts?part=id,snippet,status,contentDetails&broadcastStatus=completed&broadcastType=all&maxResults=1')).items?.[0]));
     await dropOtherUpcoming(stream, b);
     holdEncoder();
     await goLive(b);
