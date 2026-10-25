@@ -1,0 +1,284 @@
+{
+ "_about": [
+  "The professional voices (docs/roadmap/critique/voices-pro.md): for each character, the description its voice is designed from (a vendor's voice design, never a copy of a real person), and the voice id each engine gave it once the owner chose it by ear. VOICE_PRO picks the engine (inworld | elevenlabs; empty: Kokoro for everyone). A character whose id is null keeps its Kokoro voice (server/voice/casting.json), as do the recreated public figures and the adverts.",
+  "`speed` is the engine's own speaking rate (1 = the voice's natural pace); the pauses stay the programme's (the planner's, as with Kokoro)."
+ ],
+ "voices": {
+  "paco": {
+   "design": "A veteran British male news anchor in his late fifties. Deep, steady, warm authority; standard Southern British accent; low pitch with little wander; measured, unhurried newsreader delivery with clear consonants. Calm, trustworthy, never theatrical. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "lola": {
+   "design": "An American female news co-anchor in her mid thirties. Warm, curious and bright; General American accent; medium-high pitch; friendly and engaged but professional, a natural conversational newsreader rhythm. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "max": {
+   "design": "An American male technology correspondent in his early thirties. Quick, keen and upbeat but adult; General American accent; light baritone with lively melody; energy in the intonation, never shouty. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "ada": {
+   "design": "A British female technology analyst in her forties. Clear, precise, gently sceptical explainer; standard Southern British accent; medium pitch; crisp diction, dry wit, even pace. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "nova": {
+   "design": "An American female astrophysicist presenter in her forties. Warm, precise and calm; General American accent; low, dark alto, the deepest of the women; unhurried with thoughtful pauses; quietly enthusiastic about science. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "unit8": {
+   "design": "A gentle synthetic-sounding male co-host for a science show: deadpan, polite and charming; neutral American accent; even, slightly flat intonation and very clear consonants; calm and deliberate pace. (A soft machine effect is added afterwards.) Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 0.95,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "penny": {
+   "design": "A British female markets correspondent in her thirties. Clear, confident, numbers first; standard Southern British accent; bright medium pitch; brisk and exact, every figure crisp. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "sam": {
+   "design": "An American male rolling-news anchor in his fifties. Relaxed, reassuring and grounded; General American accent; the lowest, darkest voice of the cast; easy, conversational authority. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "rhea": {
+   "design": "A British female foreign correspondent in her thirties reporting from Europe and Africa. Clear, composed, warm; standard British accent; medium-high pitch; on-location reporter rhythm, concise. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "vic": {
+   "design": "An American male correspondent in his thirties covering the Americas. Brisk, concrete and direct; General American accent; light, lively baritone; a field reporter delivery, to the point. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "mika": {
+   "design": "An American female correspondent in her late twenties covering Asia and the Middle East. Bright, attentive and clear; General American accent; medium-high pitch; a calm, informed field-reporter delivery. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "continuity": {
+   "design": "A British female continuity announcer for a TV channel. Smooth, friendly and polished; standard Southern British accent; medium pitch; short lines delivered warmly and unhurried. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "omar": {
+   "design": "A British male economics editor in his fifties. Measured, plain and authoritative; standard British accent; low, steady voice; explains clearly without hurry or drama. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "clara": {
+   "design": "A British female diplomatic correspondent in her forties. Calm, exact and composed; standard British accent; medium-low pitch; careful, deliberate phrasing. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "dev": {
+   "design": "An American male climate correspondent in his early thirties. Keen, clear and engaged; General American accent; medium baritone; earnest, steady energy. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "tomas": {
+   "design": "An American male planetary scientist in his fifties. Warm, kind and unhurried; General American accent; low, gentle voice; slow, wondering delivery. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 0.95,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "june": {
+   "design": "An American female security and hardware analyst in her early thirties. Quick, precise and bright; General American accent; medium-high pitch; fast, confident delivery that stays clear. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "amara": {
+   "design": "A British female health correspondent, a doctor in her forties. Calm, reassuring and kind; standard British accent; low, soft alto; careful and clear, reassuring where the facts allow. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "leo": {
+   "design": "A British male culture correspondent in his forties. Lively, warm and generous; standard British accent; medium-high baritone with a smile in the voice; expressive but never theatrical. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "ines": {
+   "design": "An American female legal affairs correspondent in her forties. Careful, level and precise; General American accent; medium pitch with a light airy quality; even, measured delivery. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "kai": {
+   "design": "A British male sports presenter in his thirties. Quick, warm and energetic; standard British accent; bright baritone; a lively sports-desk rhythm, clear and friendly. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "rosa": {
+   "design": "A British female sports analyst in her forties, a former international footballer. Calm, dry and knowledgeable; standard British accent; low alto; understated, matter-of-fact. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  },
+  "qm": {
+   "design": "An American male quiz show host in his thirties. Light, lively and playful baritone; General American accent; quick, inviting rhythm; warm and fun but clear on every word. Studio-quality broadcast recording, close microphone, no background noise, no breaths, no laughter.",
+   "speed": 1,
+   "inworld": {
+    "voiceId": null,
+    "model": "inworld-tts-2"
+   },
+   "elevenlabs": {
+    "voiceId": null,
+    "model": "eleven_v4_turbo"
+   }
+  }
+ }
+}

@@ -123,7 +123,7 @@ export function planPhrases(text, { speech, persona, personaId, lang, seg, minRe
  * phrases the text itself), `presets` the tools/voice/presets.json presets
  * (their processing-chain tweaks apply when the cast uses the same voice).
  */
-export function segmentRequest(seg, { presenterId, presenter, casting, presets = {}, speech = null }) {
+export function segmentRequest(seg, { presenterId, presenter, casting, presets = {}, speech = null, pro = null }) {
   const cast = castFor(presenterId, presenter, casting);
   const speed = Number(cast.speed) || 1;
   // 'robot' or one of its softer variants (tools/voice/dsp.py ROBOT_PRESETS; owner 3 Oct)
@@ -148,6 +148,8 @@ export function segmentRequest(seg, { presenterId, presenter, casting, presets =
   const preset = presets[presenterId];
   if (preset?.chain && preset.voice === cast.voice) req.chain = preset.chain;
   if (phrases) req.phrases = phrases;
+  // a professional engine reads it when the character has a voice there (tools/voice/pro.py; Kokoro if it fails)
+  if (pro) req.pro = pro;
   return req;
 }
 
@@ -174,8 +176,14 @@ export function adLineRequest(text, { cast, speech = null }) {
 }
 
 /** Stable clip id for a request (+ the engine fingerprint, so engine changes re-render). */
+/** What names a professional reading: the engine, its voice and model, and how it reads (never the fallback flag). */
+export const proKey = (pro) => [PRO_RECIPE, pro.engine, pro.voiceId, pro.model || null, pro.speed ?? null, pro.delivery || null, pro.settings || null, pro.chain || null];
+// bumped when tools/voice/pro.py changes how a professional reading is cut, timed or finished
+export const PRO_RECIPE = 'pro-1';
+
 export function clipId(req, fingerprint = '') {
-  const body = JSON.stringify([RECIPE, fingerprint, req.text, req.voice, req.speed, req.lang, req.effect, req.pauses || null, req.chain || null, req.phrases || null]);
+  // (a professional voice is part of the clip's name; without one, the names stay what they were)
+  const body = JSON.stringify([RECIPE, fingerprint, req.text, req.voice, req.speed, req.lang, req.effect, req.pauses || null, req.chain || null, req.phrases || null, ...(req.pro ? [proKey(req.pro)] : [])]);
   return `v${crypto.createHash('sha256').update(body).digest('hex').slice(0, 20)}`;
 }
 

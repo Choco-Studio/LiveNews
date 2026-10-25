@@ -56,6 +56,7 @@ def main():
     try:
         from audio_io import FORMATS, write_audio
         from engine import SAMPLE_RATE, VoiceEngine, log
+        from pro import speak_any
         engine = VoiceEngine()
     except Exception as error:  # noqa: BLE001 - report any start-up failure
         traceback.print_exc()
@@ -95,11 +96,12 @@ def main():
                 if ext not in FORMATS:
                     raise ValueError(f'unsupported output format {ext!r}')
                 t0 = time.time()
-                audio, sr, reply = engine.speak(req)
+                # a professional engine when the request names one (pro.py), Kokoro otherwise or when it fails
+                audio, sr, reply = speak_any(engine, req, log=log)
                 write_audio(out, audio, sr)
                 reply['elapsed'] = round(time.time() - t0, 2)
                 send({'id': rid, 'ok': True, 'out': out, **reply})
-                log(f'{rid}: {reply["duration"]:.2f}s audio in {reply["elapsed"]:.2f}s '
+                log(f'{rid}: {reply["duration"]:.2f}s audio in {reply["elapsed"]:.2f}s by {reply.get("engine", "kokoro")} '
                     f'({reply.get("lufs")} LUFS, {reply.get("truePeak")} dBTP)')
             else:
                 raise ValueError(f'unknown cmd {cmd!r}')

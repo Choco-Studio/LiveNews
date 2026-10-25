@@ -388,3 +388,20 @@ details, threats and hate; it times out or bans the authors who keep at it.
    for more quota with the YouTube API Services form (never a second project).
 5. **YouTube's own filters** (chat-moderation.md §5) are the owner's to set in YouTube Studio. Remind them once, and send
    the blocked words from `config/chat-blocklist.json`.
+
+## 12. Professional voices: ready on pull, off until the owner chooses (25 Oct)
+
+`docs/roadmap/critique/voices-pro.md`. A commercial engine (Inworld or ElevenLabs) reads the presenters. Kokoro stays
+the fallback, and keeps the recreated public figures and the adverts.
+
+1. **Nothing changes on deploy.** Without `VOICE_PRO`, every voice is Kokoro's as before, and no clip is voiced again.
+2. **When the owner has chosen** (a budget, an engine, the voices by ear), the owner types the key on their own screen
+   into `/etc/globit24.env`: `INWORLD_API_KEY=…` or `ELEVENLABS_API_KEY=…`. Then add `VOICE_PRO=inworld` (or
+   `elevenlabs`) and `VOICE_PRO_MONTHLY_CHARS=` the budget's characters (about 1.6 million a month per hour of speech
+   a day), and restart the station.
+3. **Watch the first day:**
+   - `/api/voice/status` → `pro`: the characters spent, the clips, the fallbacks and the last fallback's reason;
+   - `data/voice/pro-usage.json`.
+   - A fallback now and then is the vendor's hiccup. Many mean a key, quota or network problem: tell the owner,
+     plainly.
+4. **Report to the owner** in Spanish: how the voices sound on air, the month's spend so far, and any fallbacks.

@@ -5,6 +5,11 @@
 //
 //   node tools/voice/audit-requests.mjs --out reqs.jsonl [--set common|own|all] [--variants variants.json]
 //        [--casting server/voice/casting.json] [--lines tools/voice/audit-lines.json] [--only id,id]
+//        [--pro inworld|elevenlabs]
+//
+// --pro: each character read by that professional engine with its chosen voice (server/voice/procast.json; a
+// character without one there is left out), labelled as itself, so `audit.py compare --a kokoro --b inworld` and the
+// bake-off page (tools/voice/bakeoff-page.mjs) set the same lines side by side (docs/roadmap/critique/voices-pro.md).
 //
 // variants.json (optional, for auditions): { "<label>": { "id": "<presenter id>", "cast": { voice, speed, lang, ... },
 // "lines": "<programme key of audit-lines.json>" } }. Without it every entry of the casting sheet is audited as
@@ -33,6 +38,15 @@ const lines = readJson(opt('lines', path.join(REPO, 'tools/voice/audit-lines.jso
 const set = opt('set', 'all');
 const only = new Set((opt('only', '') || '').split(',').filter(Boolean));
 const out = opt('out');
+const proEngine = opt('pro');
+const procast = proEngine ? readJson(path.join(REPO, 'server/voice/procast.json')) : null;
+/** The professional voice of a character for --pro, or null. */
+function proOf(id) {
+  const v = procast?.voices?.[id];
+  const e = v?.[proEngine];
+  if (!e?.voiceId) return null;
+  return { engine: proEngine, voiceId: e.voiceId, ...(e.model ? { model: e.model } : {}), ...((e.speed ?? v.speed) ? { speed: e.speed ?? v.speed } : {}), ...(e.delivery ? { delivery: e.delivery } : {}), ...(e.settings ? { settings: e.settings } : {}), ...(e.chain ? { chain: e.chain } : {}), fallback: false };
+}
 if (!out) {
   console.error('usage: audit-requests.mjs --out reqs.jsonl [--set common|own|all] [--variants f] [--previous]');
   process.exit(2);
@@ -71,6 +85,8 @@ const rows = [];
 for (const [label, v] of Object.entries(variants)) {
   const id = v.id || label;
   if (only.size && !only.has(label) && !only.has(id)) continue;
+  const pro = proEngine ? proOf(id) : null;
+  if (proEngine && !pro) continue;
   const cast = { ...bare(casting[id]), ...bare(v.cast) };
   const own = lines.programmes[v.lines || lines.who[id]] || [];
   const list = set === 'common' ? lines.common : set === 'own' ? own : [...lines.common, ...own];
@@ -79,7 +95,7 @@ for (const [label, v] of Object.entries(variants)) {
     if (ln.type === 'ad') req = plan.adLineRequest(ln.text, { cast, speech });
     else {
       const seg = { type: ln.type, text: ln.text, emotion: ln.emotion || 'neutral', anchor: 'A', cues: [], ...(ln.sport ? { sport: ln.sport } : {}) };
-      req = plan.segmentRequest(seg, { presenterId: id, presenter: channel.presenters[id], casting: { [id]: cast }, presets, speech });
+      req = plan.segmentRequest(seg, { presenterId: id, presenter: channel.presenters[id], casting: { [id]: cast }, presets, speech, pro });
     }
     rows.push({ label, id, line: ln.id, set: lines.common.includes(ln) ? 'common' : 'own', text: ln.text, req });
   }

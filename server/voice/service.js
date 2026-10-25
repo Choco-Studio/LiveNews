@@ -10,6 +10,10 @@
 //
 // Nothing here may stop the channel: without Python, the model or the worker
 // script the service logs once and every presenter keeps the browser voice.
+//
+// A professional engine (VOICE_PRO=inworld | elevenlabs; docs/roadmap/critique/voices-pro.md) reads the presenters
+// whose voice it has (server/voice/procast.json), within VOICE_PRO_MONTHLY_CHARS a month (data/voice/pro-usage.json);
+// the worker falls back to Kokoro when it cannot, and such a clip is voiced again later rather than kept.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -23,6 +27,8 @@ const VOICE_BUDGET_SPEECH_S = 180;
 const VOICE_BUDGET_MAX_SCALE = 4;
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
+const PRO_ENGINES = ['inworld', 'elevenlabs'];
+const PRO_RETRY_MS = 30 * 60_000; // a clip Kokoro read in place of the professional engine is voiced again after this
 const RETRY_MS = 10 * 60_000; // after the engine failed, try again this much later
 const PIN_MS = 6 * 3600_000; // clips of recent episodes are never pruned within this time
 const FINGERPRINT_FILES = ['engine.py', 'dsp.py', 'textnorm.py', 'loudness.py', 'audio_io.py', 'tone.json', 'presets.json'];
@@ -49,7 +55,7 @@ export class VoiceService {
    * @param {Function} [o.loadSpeech]   () => speechtext module (tests may pass one)
    * @param {Function} [o.loadAds]      () => array of ad modules ({ id, voice, script })
    */
-  constructor({ config = {}, root, log = console, createWorker, loadSpeech, loadAds, castingFile, adcastFile } = {}) {
+  constructor({ config = {}, root, log = console, createWorker, loadSpeech, loadAds, castingFile, adcastFile, procastFile } = {}) {
     this.cfg = {
       engine: config.engine === 'kokoro' ? 'kokoro' : 'browser',
       python: config.python || 'python3',
@@ -62,12 +68,17 @@ export class VoiceService {
       maxBytes: Math.max(10, Number(config.cacheMb ?? 300)) * 1024 * 1024,
       phraseCacheMb: Math.max(0, Number(config.phraseCacheMb ?? 64) || 0),
       workers: Math.max(1, Math.min(8, Math.floor(Number(config.workers) || 1))),
+      pro: PRO_ENGINES.includes(String(config.pro || '')) ? String(config.pro) : '',
+      proMonthlyChars: Math.max(0, Number(config.proMonthlyChars ?? 6_500_000) || 0),
     };
     this.root = root || path.resolve(HERE, '..', '..');
     this.log = log;
     this.script = path.join(this.root, 'tools', 'voice', 'kokoro_worker.py');
     this.speechFile = path.join(this.root, 'public', 'js', 'voice', 'speechtext.js');
     this.castingFile = castingFile || path.join(HERE, 'casting.json');
+    this.procastFile = procastFile || path.join(HERE, 'procast.json');
+    this.proUsageFile = path.join(this.cfg.dir, 'pro-usage.json');
+    this.proUsage = readJson(this.proUsageFile, null);
     this.adcastFile = adcastFile || path.join(HERE, 'adcast.json');
     this.createWorker =
       createWorker ||
@@ -119,7 +130,45 @@ export class VoiceService {
       stats: this.stats,
       ads: Object.fromEntries(Object.entries(this.ads).map(([id, lines]) => [id, Object.keys(lines).length])),
       adFit: this.adFit,
+      pro: this.cfg.pro ? { engine: this.cfg.pro, cap: this.cfg.proMonthlyChars, ...this.usage() } : null,
     };
+  }
+
+  // ------------------------------------------------------------------ the professional engine
+
+  /** This month's use of the professional engine: { month, chars, clips, fallbacks, lastFallback }. */
+  usage() {
+    const month = new Date().toISOString().slice(0, 7);
+    if (this.proUsage?.month !== month) this.proUsage = { month, chars: 0, clips: 0, fallbacks: 0, lastFallback: null };
+    return this.proUsage;
+  }
+  recordPro(reply) {
+    const u = this.usage();
+    if (reply.fallback) Object.assign(u, { fallbacks: u.fallbacks + 1, lastFallback: { at: new Date().toISOString(), why: String(reply.fallback).slice(0, 200) } });
+    else if (PRO_ENGINES.includes(reply.engine)) Object.assign(u, { chars: u.chars + (Number(reply.chars) || 0), clips: u.clips + 1 });
+    try {
+      fs.mkdirSync(path.dirname(this.proUsageFile), { recursive: true });
+      fs.writeFileSync(this.proUsageFile, JSON.stringify(u));
+    } catch {
+      /* the ledger is a guide: it never stops a voice */
+    }
+  }
+  /**
+   * The professional voice of a presenter, or null (Kokoro): the engine on, the character given a voice there, and
+   * the month's characters not spent.
+   */
+  proFor(presenterId, procast) {
+    if (!this.cfg.pro) return null;
+    const v = procast?.voices?.[presenterId];
+    const e = v?.[this.cfg.pro];
+    if (!e?.voiceId) return null;
+    if (this.cfg.proMonthlyChars && this.usage().chars >= this.cfg.proMonthlyChars) {
+      if (!this.proCapLogged) this.log.warn?.(`[voice] ${this.cfg.pro}: this month's ${this.cfg.proMonthlyChars} characters are spent; Kokoro until the month turns`);
+      this.proCapLogged = true;
+      return null;
+    }
+    this.proCapLogged = false;
+    return { engine: this.cfg.pro, voiceId: e.voiceId, ...(e.model ? { model: e.model } : {}), ...(e.speed ?? v.speed ? { speed: e.speed ?? v.speed } : {}), ...(e.delivery ? { delivery: e.delivery } : {}), ...(e.settings ? { settings: e.settings } : {}), ...(e.chain ? { chain: e.chain } : {}) };
   }
 
   // ------------------------------------------------------------------ setup
@@ -302,8 +351,11 @@ export class VoiceService {
         effect: reply.effect || null,
         lufs: reply.lufs ?? null,
         truePeak: reply.truePeak ?? null,
+        engine: reply.engine || 'kokoro',
+        fallback: reply.fallback || null,
         createdAt: new Date().toISOString(),
       };
+      if (job.req.pro) this.recordPro(reply);
       if (!Number.isFinite(meta.duration) || meta.duration <= 0) throw new Error('worker returned no audio');
       this.cache.put(job.id, meta);
       this.stats.synthesised++;
@@ -353,6 +405,7 @@ export class VoiceService {
     if (!this.prunedAt) this.prune();
     const speech = await this.speechModule();
     const casting = readJson(this.castingFile, {});
+    const procast = this.cfg.pro ? readJson(this.procastFile, {}) : null;
     const presets = readJson(path.join(this.root, 'tools', 'voice', 'presets.json'), {}).presets || {};
     const fp = this.engineFingerprint();
     const segments = ctx.episode?.segments || [];
@@ -368,7 +421,7 @@ export class VoiceService {
       if (!presenter?.id) continue;
       let req;
       try {
-        req = segmentRequest(seg, { presenterId: presenter.id, presenter, casting, presets, speech });
+        req = segmentRequest(seg, { presenterId: presenter.id, presenter, casting, presets, speech, pro: this.proFor(presenter.id, procast) });
       } catch (err) {
         this.log.warn?.(`[voice] cannot plan a segment: ${err.message}`);
         continue;
@@ -377,7 +430,9 @@ export class VoiceService {
       seg.voiceId = id;
       this.pin(id);
       clips++;
-      const meta = this.cache.get(id);
+      const cachedMeta = this.cache.get(id);
+      // (a clip Kokoro read when the professional engine could not is kept a while, then voiced again)
+      const meta = cachedMeta?.fallback && req.pro && Date.now() - Date.parse(cachedMeta.createdAt || 0) > PRO_RETRY_MS ? null : cachedMeta;
       if (meta) {
         seg.audio = clientAudio(id, meta);
         cached++;

@@ -69,6 +69,7 @@ def plan_recipe():
 def cmd_render(a):
     from audio_io import write_audio
     from engine import VoiceEngine
+    from pro import speak_any
     extra = json.loads(a.extra)
     only = set(filter(None, a.only.split(',')))
     eng = VoiceEngine()
@@ -90,7 +91,9 @@ def cmd_render(a):
                     continue
             except ValueError:
                 pass
-        audio, sr, reply = eng.speak(req)
+        # (a request with `pro` goes to its professional engine, as on air: pro.py; the audit's requests ask it never
+        # to fall back, so a clip of the professional engine is never Kokoro's in disguise)
+        audio, sr, reply = speak_any(eng, req, log=print)
         write_audio(wav, audio, sr)
         reply.pop('levels', None)
         with open(meta, 'w', encoding='utf-8') as f:
