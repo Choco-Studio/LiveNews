@@ -186,6 +186,19 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 46. ✅ **Botón «Uso de IA» de YouTube, bien contestado (24 oct).** Tenías razón: lo usábamos mal. YouTube pregunta si parece que una persona real dice o hace algo que no hizo, si se ha alterado una grabación real, si hay escenas realistas inventadas o si la música de IA es lo principal. En lo nuestro no pasa nada de eso: personajes animados, voces sintéticas que no imitan a nadie, fotos reales sin cambiar lo que muestran. Ahora contestamos **No** en todos los vídeos y en el directo, y el control de publicación frena un Sí equivocado. Antes salía «contenido alterado o sintético» en el reproductor de cada noticia, como si las fotos estuvieran falseadas. Que es IA lo siguen diciendo la cabecera del canal antes de cada programa, la primera línea de la descripción y la firma digital. TikTok e Instagram mantienen su etiqueta de IA, porque sus normas sí incluyen las voces sintéticas realistas. Detalle en `docs/publishing/compliance.md` §2.5.
 
+47. 🟡 **Moderador del chat del directo (25 oct).** Lee el chat de YouTube al instante y quita enlaces, estafas, teléfonos y correos, spam sexual, autopromoción, insultos de odio, amenazas, mensajes repetidos y a quien se hace pasar por el canal. Al que insiste lo expulsa un rato (5 minutos, luego una hora, luego un día). A los robots de estafas los expulsa para siempre. Las amenazas, el odio y las suplantaciones te los apunta para que los mires. Nunca quita críticas, opiniones, política ni tacos que no sean insultos de odio: lo comprobé con 82 mensajes normales y no tocó ninguno. Al empezar cada directo deja un mensaje con las normas. Gasta poca cuota de YouTube (lee el chat por una conexión que se queda abierta). Cada día hay un resumen en español. Está probado con una imitación local de YouTube, sin tocar nada real. Falta: probarlo un día en modo prueba (solo apunta lo que haría), tu visto bueno para que actúe, y que actives en YouTube Studio sus filtros propios (palabras bloqueadas, bloquear enlaces, retener mensajes dudosos y el modo lento). TikTok no deja moderar desde fuera: allí se usan sus propios ajustes. Detalle en `docs/publishing/chat-moderation.md`.
+
+48. 🟡 **Voces profesionales (25 oct).** Investigado con fuentes: nuestro motor actual (Kokoro, gratuito) está en el puesto 57 del ranking a ciegas. Los diez primeros se prefieren a él entre 3 y 4 veces de cada 5. Ninguna alternativa gratuita que funcione en tu servidor lo mejora: lo profesional es de pago. Recomendación: Inworld TTS-2 (6.º del ranking, unos 100 € al mes con 4 horas de voz nueva al día, 200 € con 8) o ElevenLabs v4 Turbo (el 1.º, unos 230 € y 460 €). Todo lo de dentro está hecho y probado:
+    - El motor profesional lee cada bloque entero, de corrido. Da los tiempos exactos de cada palabra para los subtítulos y la boca, y respeta las pausas de cada programa.
+    - Pasa por la misma cadena de sonido que ahora y no deja respiraciones.
+    - Si falla algo, vuelve solo a la voz actual.
+    - Hay un tope de gasto al mes.
+    - Las recreaciones de personajes públicos y los anuncios siguen con la voz actual, a propósito.
+    - Cada uno de los 23 personajes tiene ya su descripción para diseñarle la voz desde cero, sin copiar a nadie. Para cada uno salen tres candidatas y tú eliges de oído.
+    - Hay una página para comparar a ciegas las mismas frases leídas por cada motor.
+
+    Falta de ti: el presupuesto, abrir la cuenta y poner tú la clave en la configuración del entorno (para las muestras) y en el servidor (para el canal), nunca en el chat. Después, elegir las voces de oído. Detalle en `docs/roadmap/critique/voices-pro.md`.
+
 ## No tocar (te gusta así)
 - El mapa que señala dónde ocurren las noticias.
 - El anuncio de Cloudbrella.

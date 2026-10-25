@@ -161,6 +161,12 @@ export const config = {
     // Short phrases said again inside new clips (greetings, hand-overs, sign-offs), kept as Kokoro made them in
     // data/voice/phrases (MB; 0 = off): the same samples, without the model pass
     phraseCacheMb: num('VOICE_PHRASE_CACHE_MB', 64),
+    // A professional engine for the presenters (docs/roadmap/critique/voices-pro.md): inworld | elevenlabs (its key
+    // in INWORLD_API_KEY or ELEVENLABS_API_KEY); empty: Kokoro for everyone. The voices: server/voice/procast.json
+    pro: env('VOICE_PRO', '').trim().toLowerCase(),
+    // Characters a month it may read (the bill's ceiling: about 1.6 million an hour of speech a day); past it, Kokoro
+    // until the month turns
+    proMonthlyChars: num('VOICE_PRO_MONTHLY_CHARS', 6_500_000),
     dir: path.join(ROOT, 'data', 'voice'),
   },
   // WORLD WEATHER's data (server/weather.js): 'auto' = Open-Meteo live, or the offline demo data (DEMO DATA on
