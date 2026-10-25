@@ -796,7 +796,7 @@ export class Producer {
 
   async write(ctx) {
     const recent = this.recentText();
-    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [] });
+    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [], articleMax: this.config.articleTextMax });
     // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
     // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
     const request = { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [], analysisTurn: this.analysisTurn };
@@ -877,7 +877,7 @@ export class Producer {
         const c = checks.get(id);
         return { storyId: id, story: storyOf(id), current: currentLines(seg), copied: copiedPassages(c.report), faults: c.faults.map((f) => `"${f.sentence}" ${f.message}`) };
       });
-      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
+      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items, articleMax: this.config.articleTextMax }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
       let reply;
       let provider;
       try {
@@ -1074,7 +1074,7 @@ export class Producer {
   async review(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     const script = this.scriptOf(ctx.episode);
-    const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
+    const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories, articleMax: this.config.articleTextMax });
     try {
       const { provider, value } = await this.chain.generate(
         { stage: 'review', prompt, script, stories, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters },
@@ -1175,7 +1175,7 @@ export class Producer {
     if (typeof this.news.readArticles !== 'function') return pictures;
     // (every candidate: a story the writer picks without its article is told from its headline alone, as TECH BYTES'
     // ninth and tenth stories once were, 4 Oct)
-    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? Math.max(8, ctx.candidates.length), concurrency: 6 });
+    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? Math.max(8, ctx.candidates.length), concurrency: 6, textMax: this.config.articleTextMax });
     return { ...pictures, ...articles };
   }
 

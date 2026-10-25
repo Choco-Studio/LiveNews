@@ -412,10 +412,11 @@ describe('FULL TIME: the first real matchday (17 Oct)', () => {
     shapeEpisode(ep, { candidates: cands, program: { title: 'FULL TIME', headlineMax: 45 }, presenters, now: SAT, tz: 'Europe/London', seed: 'r' });
     const story = (id) => ep.segments.find((s) => s.storyId === id && s.type === 'story');
     const words = (id) => story(id).text.replace(/\[[^\]]*\]\s*/g, '');
-    assert.doesNotMatch(words('mart'), /Both players/, 'the collision it points back to was never told');
-    assert.match(words('mart'), /^Emi Martínez suffered a worrying-looking head injury[^.]*\. Chelsea coach Xabi Alonso/, 'a story that opened on what leans on its lede gets the lede back');
+    // (a story that opened on what leans on its lede once got the outlet's lede pasted back; since 25 Oct only a short
+    // one is, the rest is the channel's own words or nothing: the long one copied the outlet and held the programme)
+    if (story('mart')) assert.doesNotMatch(words('mart'), /Both players|^Emi Martínez suffered a worrying-looking head injury/, 'the collision it points back to was never told; the outlet\'s lede is not pasted');
     assert.match(words('lough'), /Billy Loughnane, 20, has become/);
-    assert.match(words('cam'), /1-1 draw/, 'a result story says its score when the source has it');
+    assert.match(words('cam'), /drew 1-1 with/, 'a result story says its score when the source has it (in the desk\'s words)');
     assert.doesNotMatch(sentencesIn(words('golf'))[0], /The Spaniard/, 'never "The Spaniard" before his name');
     assert.equal(story('rl').kicker, 'RUGBY LEAGUE');
     assert.match(`${words('rl')} ${ep.segments[ep.segments.indexOf(story('rl')) - 1].text}`, /rugby league/i);
@@ -448,7 +449,7 @@ describe('FULL TIME: the first real matchday (17 Oct)', () => {
     shapeEpisode(ep, { candidates: cands, program: { title: 'FULL TIME', headlineMax: 45 }, presenters, now: SAT, tz: 'Europe/London', seed: 'o' });
     assert.ok(!ep.segments.some((s) => s.storyId === 'lough' && s.type === 'story'), 'the headline alone is no story');
     // (a result story's headline alone takes its score's sentence, and is told)
-    assert.match(ep.segments.find((s) => s.storyId === 'mares' && s.type === 'story').text, /3-2 win over Ipswich/);
+    assert.match(ep.segments.find((s) => s.storyId === 'mares' && s.type === 'story').text, /beat Ipswich 3-2/, 'the score in the desk\'s words, not the outlet\'s sentence');
   });
 
   test("the women's game named when the copy never says it; a whole name before a headline's noun takes an article", () => {
