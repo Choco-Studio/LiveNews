@@ -25,6 +25,7 @@
 // the process it came from; the playout's state is in data/playout/*-status.json and events.jsonl.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { envFile } from '../../server/playout/destinations.js';
@@ -58,11 +59,14 @@ const vairArgs = [
   ...pass(['segment']),
   ...(opt('for') ? ['--for', opt('for')] : []),
 ];
+// Priorities (25 Oct, owner: "las voces suenan como chispazos" with both pictures rendering on 3 cores): the
+// playouts feed YouTube in real time, so they go first; the renderer, an hour ahead, can wait. Their own children
+// (the browser, the encoders, each segment's ffmpeg) inherit it. Raising one needs root (the service runs as root).
 const procs = {
-  station: { argv: [path.join(root, 'tools', 'playout', 'station.mjs')], env: { PORT: String(port) } },
-  render: { argv: [path.join(root, 'tools', 'playout', 'render.mjs'), ...renderArgs], after: 'station' },
-  air: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...airArgs] },
-  ...(VERTICAL ? { vair: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...vairArgs] } } : {}),
+  station: { argv: [path.join(root, 'tools', 'playout', 'station.mjs')], env: { PORT: String(port) }, nice: 5 },
+  render: { argv: [path.join(root, 'tools', 'playout', 'render.mjs'), ...renderArgs], after: 'station', nice: 10 },
+  air: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...airArgs], nice: -10 },
+  ...(VERTICAL ? { vair: { argv: [path.join(root, 'tools', 'playout', 'air.mjs'), ...vairArgs], nice: -10 } } : {}),
 };
 const BACKOFF = [2, 5, 15, 30, 60];
 let stopping = false;
@@ -74,6 +78,11 @@ function start(name) {
   const child = spawn(process.execPath, p.argv, { cwd: root, env: { ...process.env, ...(p.env || {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
   p.child = child;
   p.startedAt = Date.now();
+  try {
+    if (p.nice) os.setPriority(child.pid, p.nice);
+  } catch (err) {
+    say(name, `priority ${p.nice} not set (${err.code || err.message})`);
+  }
   say(name, `started (pid ${child.pid})`);
   for (const s of [child.stdout, child.stderr]) {
     let buf = '';
