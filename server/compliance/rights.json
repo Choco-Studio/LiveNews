@@ -143,6 +143,10 @@
       "class": "channel-data"
     },
     {
+      "glob": "config/chat-blocklist.json",
+      "class": "channel-data"
+    },
+    {
       "glob": "config/feeds.fixture.json",
       "class": "fixture-art"
     },

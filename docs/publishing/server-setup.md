@@ -364,3 +364,27 @@ the horizontal one (no second writer, no second set of voices).
      playout.md §13.6 point 2.
 4. **Report to the owner** in Spanish, plainly: the buffer over a day with both on, any filler, each destination's
    restarts, and how the vertical stream looks on a phone (YouTube's vertical feed and TikTok).
+
+## 11. The live chat's moderator: ready on pull, it acts only on the owner's word (25 Oct)
+
+`docs/publishing/chat-moderation.md`. It reads the live broadcast's chat and removes spam, scams, links, contact
+details, threats and hate; it times out or bans the authors who keep at it.
+
+1. **Deploy:** `npm install` (it adds `@grpc/grpc-js` and `@grpc/proto-loader`). It uses the same OAuth token as the
+   uploads and the rotation (`YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` in
+   `/etc/globit24.env`), so the owner has nothing new to type.
+2. **A unit**, `globit24-chatmod`: `WorkingDirectory=` the checkout, `EnvironmentFile=/etc/globit24.env`,
+   `ExecStart=/usr/bin/node tools/publish/chatmod.mjs`, `Restart=always`, `RestartSec=30`, `Nice=10`. Without
+   `CHAT_MOD=1` it is a dry run: it reads and logs, and touches nothing. Leave it so for a day while the live stream is
+   on, then `node tools/publish/chatmod.mjs --summary` and send the owner the summary in Spanish.
+3. **On the owner's word:** add `Environment=PUBLISH_LIVE=1 CHAT_MOD=1` to the unit, `systemctl daemon-reload`,
+   `systemctl restart globit24-chatmod`. Watch `node tools/publish/chatmod.mjs --status` for its first removals.
+   - `via` should read `grpc` (the stream). If it reads `poll`, the gRPC stream was refused: say so to the owner; it
+     still works, more slowly.
+   - Check its quota share against the day's other uses: `data/publish/chatmod-quota.json`, and the project's total in
+     the Google Cloud console.
+4. **Every day:** the summary (`--summary`) to the owner, with the messages flagged for them (threats, slurs,
+   impersonation). If the chat outgrows its quota (lines marked "habría quitado"), tell the owner they can ask Google
+   for more quota with the YouTube API Services form (never a second project).
+5. **YouTube's own filters** (chat-moderation.md §5) are the owner's to set in YouTube Studio. Remind them once, and send
+   the blocked words from `config/chat-blocklist.json`.

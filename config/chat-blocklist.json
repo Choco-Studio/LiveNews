@@ -1,0 +1,8 @@
+{
+  "_about": "Words the live chat's moderator removes as hate (whole words, any case, accents and leetspeak read back: server/publish/chat/rules.js). 'extra' is for the owner's own blocked words. The same lists can go in YouTube Studio's own blocked words (docs/publishing/chat-moderation.md). Kept short and unambiguous on purpose: a word that is also an everyday word does not belong here.",
+  "hate": [
+    "nigger", "niggers", "nigga", "niggas", "faggot", "faggots", "fag", "fags", "kike", "kikes", "spic", "spics", "chink", "chinks", "gook", "gooks", "wetback", "wetbacks", "raghead", "ragheads", "towelhead", "towelheads", "tranny", "trannies", "retard", "retards", "coon", "coons", "paki", "pakis", "sandnigger", "beaner", "beaners", "kaffir",
+    "maricon", "maricones", "sudaca", "sudacas", "panchito", "panchitos", "moro de mierda", "negro de mierda", "puto negro", "puta negra", "mongolo", "subnormal", "travelo", "bollera", "bolleras", "machorra"
+  ],
+  "extra": []
+}
