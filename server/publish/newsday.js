@@ -37,6 +37,10 @@ import { currentRights } from '../rights.js';
 
 /** How long the day waits for picture decisions, a programme's candidates and again its stories (paced Wikimedia). */
 export const PICTURE_BUDGET_MS = 120_000;
+// The published programmes read their sources more fully than the live station (owner, 25 Oct: "mejores
+// investigaciones para explicar bien las noticias"): every candidate's page given time to be read (the station's
+// 6 s served 3 of WORLD NOW's 11 stories), and more of each page kept and shown to the writer and its editor.
+export const RESEARCH = { articleBudgetMs: 90_000, articleTextMax: 4000 };
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
 
 /**
@@ -162,7 +166,7 @@ export async function makeNewsDay({ desk, chain, channel, programmes = BETA_NEWS
   // each picture before it is used
   const budget = pictures?.budgetMs ?? PICTURE_BUDGET_MS;
   const producer = new Producer({
-    config: { ...config, dataDir: path.join(sourcesDir, 'state'), pictureBudgetMs: pictures?.desk ? budget : 0, pictureVerifyMs: pictures?.desk ? Math.min(budget, 60_000) : 0, pictures: { ...(config.pictures || {}), rights: pictures?.desk?.mode || config.pictures?.rights || 'cleared' } },
+    config: { ...config, ...RESEARCH, dataDir: path.join(sourcesDir, 'state'), pictureBudgetMs: pictures?.desk ? budget : 0, pictureVerifyMs: pictures?.desk ? Math.min(budget, 60_000) : 0, pictures: { ...(config.pictures || {}), rights: pictures?.desk?.mode || config.pictures?.rights || 'cleared' } },
     newsDesk: desk,
     chain,
     voice,

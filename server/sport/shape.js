@@ -11,6 +11,12 @@ import { resultLine, chalkOf } from './scores.js';
 import { standingOf, formOf } from './stats.js';
 import { sportLeans } from './leans.js';
 import { hasFiniteVerb, shortHeadline } from '../writer.js';
+import { MAX_RUN } from '../compliance/verbatim.js';
+
+// An outlet's sentence the shaper may air as it is: short enough not to copy it (the own-words check has run by then,
+// server/ownwords.js; the publish gate, server/compliance/verbatim.js). A longer one is said in the desk's words (the
+// result line) or left out (25 Oct: FULL TIME held every day for "Two own goals helped Falkirk climb to seventh…").
+const quotable = (x) => String(x).split(/\s+/).filter(Boolean).length <= Math.floor(MAX_RUN / 2);
 
 const HOUR = 3600_000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -527,7 +533,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       // "Emi Martínez suffered a worrying-looking head injury…" before "Chelsea coach Xabi Alonso told reporters that the
       // Argentina international was conscious", 17 Oct)
       if (parts.length && sportLeans(bare(parts[0]), '', { people: story.people })) {
-        const lede = sentencesIn(String(story.summary || ''))[0];
+        const lede = [sentencesIn(String(story.summary || ''))[0]].find((x) => x && quotable(x));
         const key = (x) => String(x).toLowerCase().replace(/[^\p{L}\d ]+/gu, ' ').split(/\s+/).slice(0, 8).join(' ');
         if (lede && !sportLeans(lede, '', { people: story.people }) && !parts.some((x) => key(bare(x)) === key(lede))) parts = [parts[0].match(cue)[1] + lede, bare(parts[0]), ...parts.slice(1)];
       }
@@ -547,7 +553,7 @@ export function shapeEpisode(episode, { candidates = [], program = {}, presenter
       if (own && !parts.some((x) => saysScore(x, own))) {
         // (a sentence of the story with the score, else its result line as SCORE CENTRE reads it: "WXV: Canada 24-21 England."
         // heads the Red Roses report and no sentence of it says the score but "The 24-21 scoreline is correct", Guardian 17 Oct)
-        const said = sentencesIn(`${story.summary || ''} ${story.body || ''}`).find((x) => saysScore(x, own) && !sportLeans(x, '') && !/^["“‘]/.test(x) && hasFiniteVerb(x.replace(/[.!?]+$/, '')));
+        const said = sentencesIn(`${story.summary || ''} ${story.body || ''}`).find((x) => quotable(x) && saysScore(x, own) && !sportLeans(x, '') && !/^["“‘]/.test(x) && hasFiniteVerb(x.replace(/[.!?]+$/, '')));
         const withScore = said || resultLine(own);
         if (withScore) {
           const words = (x) => new Set(String(x).toLowerCase().match(/[\p{L}\d]{4,}/gu) || []);

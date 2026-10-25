@@ -244,7 +244,7 @@ export const OWN_WORDS = `IN OUR OWN WORDS (mandatory)
  * @param program     programme definition from config/channel.json
  * @param presenters  { A: presenter, B?: presenter } with name + personality
  */
-export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date(), recentLines = [], experts = [] }) {
+export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date(), recentLines = [], experts = [], articleMax = ARTICLE_MAX }) {
   const when = now.toLocaleString('en-GB', {
     timeZone: 'UTC',
     weekday: 'long',
@@ -265,7 +265,7 @@ export function buildPrompt({ channelName, program, presenters, stories, count, 
     headline: s.title,
     summary: s.summary.slice(0, 700),
     // the story dossier (wave 3 §3.1): the article's own text, for the depth a programme of 8-10 minutes needs
-    ...(s.body ? { article: s.body.slice(0, ARTICLE_MAX) } : {}),
+    ...(s.body ? { article: s.body.slice(0, articleMax) } : {}),
     ...(isBreaking(s.title) ? { breaking: true } : {}),
     ...(s.live ? { liveBlog: true } : {}),
     // The picture desk ran before the writer: a story with a picture can be shown, not only told.
@@ -365,8 +365,8 @@ ${JSON.stringify(input, null, 2)}`;
 }
 
 /** Second pass: an editor checks the script against the sources and fixes it. */
-export function buildReviewPrompt({ channelName, program, script, stories }) {
-  const sources = stories.map((s) => ({ id: s.id, outlet: s.source, headline: s.title, summary: s.summary.slice(0, 700), ...(s.body ? { article: s.body.slice(0, ARTICLE_MAX) } : {}) }));
+export function buildReviewPrompt({ channelName, program, script, stories, articleMax = ARTICLE_MAX }) {
+  const sources = stories.map((s) => ({ id: s.id, outlet: s.source, headline: s.title, summary: s.summary.slice(0, 700), ...(s.body ? { article: s.body.slice(0, articleMax) } : {}) }));
   return `You are the standards editor of "${channelName}", checking a script for the programme "${program.title}" before it goes on air.
 
 Check every story segment against its SOURCE (matched by storyId):

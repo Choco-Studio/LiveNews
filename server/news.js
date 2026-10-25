@@ -1639,12 +1639,12 @@ export class NewsDesk {
    * story is read once (a page without article text is remembered too). The text lands in `story.body`, which
    * the writer reads beside the summary and the validator checks facts against. Returns counts for the log.
    */
-  async readArticles(stories, { budgetMs = 6000, max = 8, concurrency = 4 } = {}) {
+  async readArticles(stories, { budgetMs = 6000, max = 8, concurrency = 4, textMax } = {}) {
     const todo = stories.filter((s) => s && !s.bodyChecked && (s.local ? !!s.page : /^https?:\/\//i.test(s.link || ''))).slice(0, max);
     const deadline = Date.now() + budgetMs;
     let next = 0;
     const worker = async () => {
-      while (next < todo.length && Date.now() < deadline) await this.readArticle(todo[next++]);
+      while (next < todo.length && Date.now() < deadline) await this.readArticle(todo[next++], { textMax });
     };
     const left = deadline - Date.now();
     if (todo.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(left)]);
@@ -1653,12 +1653,27 @@ export class NewsDesk {
     return { articles: stories.filter((s) => s?.body).length, read: todo.filter((s) => s.body).length, of: todo.length, ...(refused ? { refused } : {}) };
   }
 
-  async readArticle(s) {
+  /** The feed's full text as the story's body until the page gives one (only when it says more than the summary). */
+  feedBody(s, max) {
+    const feed = String(s.feedText || '').trim();
+    if (!s.body && feed.length > String(s.summary || '').length + 200) {
+      s.body = feed.slice(0, max);
+      s.bodyVia = 'feed';
+    }
+  }
+
+  /**
+   * `textMax` (the published programmes, server/publish/newsday.js): more of the page kept, and a story whose page gave
+   * nothing (refused, a paywall, a script-only shell) told from its feed's full text when the feed has more than its
+   * summary (25 Oct: 8 of WORLD NOW's 11 stories were written from a two-sentence summary).
+   */
+  async readArticle(s, { textMax } = {}) {
     s.bodyChecked = true;
+    if (textMax) this.feedBody(s, textMax);
     if (s.pageRefused === 'robots') return;
     try {
       const html = s.local ? (await this.localPageHtml(s)).html : await this.fetchText(s.link, { timeoutMs: 8000, maxBytes: 600_000 });
-      const a = extractArticle(html);
+      const a = extractArticle(html, textMax ? { max: textMax } : undefined);
       if (a) {
         s.body = a.text;
         s.bodyVia = a.via;

@@ -22,6 +22,7 @@ import { airable, compactRights, currentRights, pictureMode } from './rights.js'
 import { locate, lookupPlace, placeSupported, institutionPlace } from './gazetteer.js';
 import { boardSpec } from '../public/js/boardspec.js';
 import { airedText } from './compliance/verbatim.js';
+import { loadCalendar, silenceHold } from './compliance/elections.js';
 import { MAX_REWRITES, checkScore, copiedPassages, currentLines, dropStory, editorChanges, mergeRewrite, parseRewrite, rewriteFaults, rewritePrompt, storyCheck, storySources, trimStory } from './ownwords.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -322,6 +323,24 @@ export class Producer {
     return this.stock(program).length >= this.floorOf(program);
   }
 
+  /**
+   * A story about a vote in a country now in its legal silence never reaches the writer: the gate holds the whole
+   * programme for one such story (server/compliance/elections.js silenceHold), and the station tried the slot again and
+   * again (25 Oct, Brazil's run-off: WORLD NOW held or short of stories for over an hour, filler on air).
+   */
+  outOfSilence(list) {
+    let calendar;
+    try {
+      calendar = loadCalendar({ dataDir: this.config.dataDir || null });
+    } catch {
+      return list;
+    }
+    const now = Date.now();
+    const kept = list.filter((s) => !silenceHold({ text: `${s.title || ''}. ${s.summary || ''} ${s.body || ''}`, now, calendar }).hold);
+    if (kept.length < list.length) this.log.info?.(`[producer] ${list.length - kept.length} stories left out: about a vote in its silence`);
+    return kept;
+  }
+
   async produce(channel, programId, { upcoming = [] } = {}) {
     const program = { id: programId, ...channel.programs[programId] };
     const cast = castOf(channel, programId);
@@ -329,7 +348,7 @@ export class Producer {
     if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
     if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
     if (program.kind === 'quiz') return this.produceQuiz(channel, program);
-    const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    const candidates = this.outOfSilence(this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) }));
     // (the programmes after this one, and the clock's pinned bulletin: their candidates are the picture desk's next work)
     this.lookAhead(channel, [...upcoming, ...(channel.clock?.pins || []).map((p) => p.program)]);
     if (candidates.length < this.floorOf(program)) return null;
@@ -796,7 +815,7 @@ export class Producer {
 
   async write(ctx) {
     const recent = this.recentText();
-    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [] });
+    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [], articleMax: this.config.articleTextMax });
     // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
     // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
     const request = { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [], analysisTurn: this.analysisTurn };
@@ -877,7 +896,7 @@ export class Producer {
         const c = checks.get(id);
         return { storyId: id, story: storyOf(id), current: currentLines(seg), copied: copiedPassages(c.report), faults: c.faults.map((f) => `"${f.sentence}" ${f.message}`) };
       });
-      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
+      const request = { stage: 'rewrite', prompt: rewritePrompt({ channelName: ctx.channelName, program: ctx.program, items, articleMax: this.config.articleTextMax }), storyIds: failing, stories: failing.map(storyOf).filter(Boolean), channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, round, phase };
       let reply;
       let provider;
       try {
@@ -1074,7 +1093,7 @@ export class Producer {
   async review(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     const script = this.scriptOf(ctx.episode);
-    const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
+    const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories, articleMax: this.config.articleTextMax });
     try {
       const { provider, value } = await this.chain.generate(
         { stage: 'review', prompt, script, stories, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters },
@@ -1175,7 +1194,7 @@ export class Producer {
     if (typeof this.news.readArticles !== 'function') return pictures;
     // (every candidate: a story the writer picks without its article is told from its headline alone, as TECH BYTES'
     // ninth and tenth stories once were, 4 Oct)
-    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? Math.max(8, ctx.candidates.length), concurrency: 6 });
+    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? Math.max(8, ctx.candidates.length), concurrency: 6, textMax: this.config.articleTextMax });
     return { ...pictures, ...articles };
   }
 

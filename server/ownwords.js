@@ -297,13 +297,13 @@ export function currentLines(seg) {
  * The rewrite prompt: each failing story with its lines, the passages that copy the source, the faults found and its
  * source; the reply is the stories' new lines only.
  */
-export function rewritePrompt({ channelName, program, items }) {
+export function rewritePrompt({ channelName, program, items, articleMax = ARTICLE_MAX }) {
   const stories = items.map((it) => ({
     storyId: it.storyId,
     current: it.current,
     ...(it.copied?.length ? { copiedFromSource: it.copied } : {}),
     ...(it.faults?.length ? { faults: it.faults } : {}),
-    source: { outlet: it.story?.source || null, headline: it.story?.title || '', summary: String(it.story?.summary || '').slice(0, 700), ...(it.story?.body ? { article: String(it.story.body).slice(0, ARTICLE_MAX) } : {}) },
+    source: { outlet: it.story?.source || null, headline: it.story?.title || '', summary: String(it.story?.summary || '').slice(0, 700), ...(it.story?.body ? { article: String(it.story.body).slice(0, articleMax) } : {}) },
   }));
   return `You are the writer of "${channelName}", putting right stories of a script for the programme "${program.title}" before it airs.
 
