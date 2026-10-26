@@ -194,3 +194,44 @@ luma from frame to frame at most).
 The logotype: TECH at four times the channel's face, its blocks filled from white through cyan and blue to navy, a
 white edge along its tops, a black outline and a navy glow; BYTES at twice the size, spaced, between two cyan rules. The
 same family as COSMOS DESK's (the programme's word large, its second word small between rules in its colour).
+
+The owner approved TECH BYTES' drone ("perfecto") and went on: "ahora pasemos al de World Now", then, on the plan, "tiene
+que ser un hook, que se vea espectacular", "ten cuidado con no poner luces ni carreteras en el agua" and, between a climb
+from the streets and a start in orbit, "prefiero la versión que sale desde la tierra".
+
+**WORLD NOW** (`public/js/scenes/opens/worldintro.js`, its theme `audio/themes.js` `worldIntro`, both on
+`INTRO_CUES['world-now']`): six beats at 96 BPM, 3.75 s (113 frames). TECH BYTES' flies into its city; WORLD NOW's
+leaves one, and never stops climbing until the whole world is in the frame:
+
+| Beats | The picture | The theme (D major) |
+|---|---|---|
+| 0-1.5 | A kilometre and a half over the Thames by Tower Bridge at night, looking down the river past Canary Wharf: the river black and winding under its lit bridges, the streets lines of sodium lamps (each lamp a point close to), the main roads and the arterials bright, the parks dark, the City brightest, the traffic's head and tail lights moving on the big roads, the sky over the city glowing from below. The camera climbs fast (an eighth higher every frame), on along the river and turning a little: the streets run together into the city's glow, the M25 and the towns come in, then the south-east, the sea, the Continent's lights to the horizon, which curves and glows with the coming dawn | On the first frame the pips (London's time signal, a short one each half beat), a felt thump, a pluck chord, the pad's Bm7 over the D pedal, the bass in eighths and the strings in sixteenths (D A D E), climbing an octave; a timpani roll and an air swell into... |
+| 1.5 | (the stroke) the sun clears the earth's edge ahead: a white core, its rays and a streak across the lens, the air along the edge gold | ...the long pip and a wide Gmaj9: the strings, the bells, the timpani |
+| 1.5-3.5 | The camera climbs away and swings round, its look turning down onto the planet as it comes level, the day coming round onto it from the dawn side; from London the emblem's three routes take off a quarter beat apart (New York, New Delhi, Nairobi) and arc out over it, each landing with a ring; at rest on the emblem's globe, straight down on 24 N 12 W, north up, 56 px in radius, the graticule and the red equator coming in | The strings and the bass in eighths on G; a bell as each route takes off (the signature's notes) |
+| 3.75-4.5 | A red bar sweeps across under the globe and leaves WORLD in its wake; NOW between two red rules under it | The signature at double speed on the brass (the horn an octave up), its DAH as the bar sweeps; its colour (F#, the 3rd) |
+| 4.5-6 | The emblem and the logotype, a shine running across WORLD on the hit; from beat 5 the intro's pixels dissolve away along the diagonal | D add9 on the hit, ringing on into the clip; a low air swell under the dissolve |
+
+How it is drawn: the earth is a unit sphere seen through one lens (260 px) from a camera over a point of it, looking
+along a heading at a pitch from straight down (turned by a roll), each pixel's ray met with the sphere. The height is one
+smooth curve in log space, 1.4 km to the emblem's distance; the camera goes on along its heading in proportion to the
+height it gains, keeping the horizon 20 degrees over its look, then drifts to the emblem's face as its look turns
+straight down, its heading to north and its roll to level (each one smooth curve; the checks hold the climb and the turns
+to no jolt from frame to frame). The ground is the channel's land mask at the level each pixel's footprint wants,
+filtered so a coast is never a staircase, lit by the sun as the emblem's globe is (its ramps; a warm band where the sun
+is low); the sun is set in the camera's frame, just behind the earth's edge ahead until the stroke, then coming round to
+the emblem's light. London is drawn from its plan to a hundred kilometres round: the Thames rounded through its points,
+black, under its bridges; the districts a jittered grid's cells, each with its own street grid of lamps, every sixth
+street a main road and the cells' edges main roads too; the arterials out and the rings round; the parks dark; the
+towns round it; each line spread over the pixels it crosses by the share of them it covers, so one plan draws a street
+lamp close to and the city's glow from a hundred kilometres up. Above that, London and its towns, and every city of the
+world map's night lights with the towns scattered round each, are points of light spread by their distance. No light is
+ever on the water: every point is on the land mask, the glow is kept off the sea and the Thames, and the check runs
+through all 27,000 of them. The air is a glow over the earth's edge by its angle (from close by the sky's lower reaches
+glow, warm over the city; from far a thin ring): navy by night, blue by day, gold looking toward the low sun. The stars
+are fixed in the sky and turn as the camera turns. Brightness never jumps (a couple of points of luma from frame to
+frame at most).
+
+The logotype: WORLD at four times the channel's face, its blocks filled from white through silver and fog to steel (the
+emblem's chrome), a white edge along its tops, a black outline; NOW at twice the size, spaced, between two red rules,
+opening from its middle; the red bar that sweeps WORLD in is the programme's accent. The same family as COSMOS DESK's and
+TECH BYTES' (the programme's word large, its second word small between rules in its colour).

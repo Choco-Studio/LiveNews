@@ -14,8 +14,9 @@
 //   drawIntro(ctx, t, { programId })   the whole frame at t seconds; false when the programme has none
 import { COSMOS_INTRO } from '../scenes/opens/cosmosintro.js';
 import { TECH_INTRO } from '../scenes/opens/techintro.js';
+import { WORLD_INTRO } from '../scenes/opens/worldintro.js';
 
-export const INTROS = Object.freeze({ cosmos: COSMOS_INTRO, 'tech-bytes': TECH_INTRO });
+export const INTROS = Object.freeze({ cosmos: COSMOS_INTRO, 'tech-bytes': TECH_INTRO, 'world-now': WORLD_INTRO });
 
 export const introFor = (programId) => INTROS[programId] || null;
 export const introSeconds = (programId) => {

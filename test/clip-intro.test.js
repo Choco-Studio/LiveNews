@@ -1,7 +1,8 @@
 // A vertical clip's intro (docs/publishing/shorts-v2.md §6; public/js/clip/intro.js): the owner, 26 Oct, "espectacular…
 // y con una música que mantenga atención", four seconds at most; for COSMOS DESK "un acercamiento desde fuera de la
 // galaxia… que lleve hasta Saturno", its letters worked for, no boxes of text; then TECH BYTES's ("hagamos primero Tech
-// Bytes"), a flight over a motherboard to its processor. The picture and the theme read one cue sheet (cues.js INTRO_CUES); the clip's
+// Bytes"), a drone's flight down a city's avenue to its processor; then WORLD NOW's, a climb from London's streets to the
+// whole world. The picture and the theme read one cue sheet (cues.js INTRO_CUES); the clip's
 // graph puts the intro first and lays its theme's tail, dipped, under the clip's first words (server/publish/render.js).
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,7 +31,7 @@ function fakeCanvas() {
   return cv;
 }
 
-let cues, themes, tune, intro, cosmos, tech, font;
+let cues, themes, tune, intro, cosmos, tech, world, font;
 before(async () => {
   globalThis.document = { createElement: () => fakeCanvas() };
   cues = await import('../public/js/scenes/opens/cues.js');
@@ -39,6 +40,7 @@ before(async () => {
   intro = await import('../public/js/clip/intro.js');
   cosmos = await import('../public/js/scenes/opens/cosmosintro.js');
   tech = await import('../public/js/scenes/opens/techintro.js');
+  world = await import('../public/js/scenes/opens/worldintro.js');
   font = await import('../public/js/font.js');
 });
 
@@ -50,10 +52,10 @@ test('every intro lasts four seconds at most, on its cue sheet; a programme with
     // the factory makes it frame by frame: whole frames at 30 a second, still under four seconds
     assert.ok(Math.round(s * 30) / 30 <= 4, `${id}: ${Math.round(s * 30)} frames`);
   }
-  assert.deepEqual(Object.keys(intro.INTROS), ['cosmos', 'tech-bytes']);
-  assert.equal(intro.introFor('world-now'), null);
-  assert.equal(intro.introSeconds('world-now'), 0);
-  assert.equal(intro.drawIntro(fakeCanvas().getContext('2d'), 1, { programId: 'world-now' }), false);
+  assert.deepEqual(Object.keys(intro.INTROS), ['cosmos', 'tech-bytes', 'world-now']);
+  assert.equal(intro.introFor('money-minute'), null);
+  assert.equal(intro.introSeconds('money-minute'), 0);
+  assert.equal(intro.drawIntro(fakeCanvas().getContext('2d'), 1, { programId: 'money-minute' }), false);
 });
 
 test('COSMOS DESK\'s theme is heard from the first frame, climbs, lands the signature\'s DAH as Saturn comes in, resolves on the lock-up, and leaves the cut to the clip', () => {
@@ -63,7 +65,7 @@ test('COSMOS DESK\'s theme is heard from the first frame, climbs, lands the sign
   assert.ok(near(t.meta.peakAt, cues.introAt('cosmos', Q.sun)));
   assert.ok(near(t.meta.hitAt, cues.introAt('cosmos', Q.lock)));
   assert.ok(near(t.meta.cutAt, intro.introSeconds('cosmos')));
-  assert.equal(themes.introTheme('world-now'), null);
+  assert.equal(themes.introTheme('money-minute'), null);
   const song = tune.parseTune(t);
   assert.equal(song.bpm, Q.bpm);
   const events = song.tracks.flatMap((tr) => tr.events);
@@ -131,7 +133,7 @@ test('the intro dissolves into the programme over its last beats, never a hard c
   const way = intro.introTransition('cosmos');
   assert.ok(Math.abs(way.seconds - cues.introAt('cosmos', Q.cut - Q.push)) < 1e-9);
   assert.ok(way.seconds > 0.3 && way.seconds < 0.8, `${way.seconds} s`);
-  assert.equal(intro.introTransition('world-now'), null);
+  assert.equal(intro.introTransition('money-minute'), null);
   // the camera is still easing back from Saturn as it dissolves: never a still frame, never a jolt
   const drift = cosmos.cosmosIntroSaturn(Q.cut) / cosmos.cosmosIntroSaturn(Q.push);
   assert.ok(drift > 0.8 && drift < 0.98, `Saturn drifts back (x${drift.toFixed(2)})`);
@@ -250,6 +252,79 @@ test('TECH BYTES\'s intro dissolves into the programme over its last beat', () =
   const Q = cues.INTRO_CUES['tech-bytes'];
   const way = intro.introTransition('tech-bytes');
   assert.ok(Math.abs(way.seconds - cues.introAt('tech-bytes', Q.cut - Q.push)) < 1e-9);
+  assert.ok(way.seconds > 0.3 && way.seconds < 0.8, `${way.seconds} s`);
+});
+
+test('WORLD NOW\'s theme is heard from the first frame, strikes as the sun rises, lands the signature\'s DAH as WORLD sweeps in, resolves on the lock-up, and leaves the cut to the clip', () => {
+  const Q = cues.INTRO_CUES['world-now'];
+  const t = themes.introTheme('world-now');
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert.ok(near(t.meta.peakAt, cues.introAt('world-now', Q.sun)));
+  assert.ok(near(t.meta.hitAt, cues.introAt('world-now', Q.lock)));
+  assert.ok(near(t.meta.cutAt, intro.introSeconds('world-now')));
+  const song = tune.parseTune(t);
+  assert.equal(song.bpm, Q.bpm);
+  const events = song.tracks.flatMap((tr) => tr.events);
+  assert.ok(events.filter((e) => e.at === 0).length >= 5, 'the pips, the strings, the pad, the bass and a pluck chord on the first frame');
+  // the lead (the brass): the signature, its DAH as the bar sweeps WORLD in, its colour (the 3rd), the tonic on the hit
+  const lead = song.tracks[0].events;
+  const tonic = lead[1].midis[0];
+  assert.deepEqual(lead.slice(0, 4).map((e) => e.midis[0] - tonic), themes.MOTIF.map(([st]) => st));
+  assert.equal(lead[3].at, Q.title);
+  assert.equal(lead[4].midis[0] - tonic, themes.COLOURS.home);
+  assert.equal(lead[5].at, Q.lock);
+  // something sounds on every half beat up to the title (no hole in the climb)
+  for (let b = 0; b < Q.title; b += 0.5) assert.ok(events.some((e) => e.at <= b + 1e-9 && e.at + (e.dur ?? e.len ?? 0.25) >= b), `beat ${b}`);
+  assert.ok(!events.some((e) => Math.abs(e.at - Q.cut) < 1e-6), 'no button on the cut');
+});
+
+test('WORLD NOW\'s picture draws every instant without throwing; one climb from over London to the emblem\'s globe, the sun clearing the earth\'s edge on the stroke, every light on land, the logotype in the safe column', () => {
+  const ctx = fakeCanvas().getContext('2d');
+  const secs = intro.introSeconds('world-now');
+  assert.ok(secs > 3 && secs <= 4, `${secs} s`);
+  for (let t = 0; t <= secs + 0.5; t += 3 / 30) assert.doesNotThrow(() => intro.drawIntro(ctx, t, { programId: 'world-now' }), `at ${t.toFixed(3)} s`);
+  const Q = cues.INTRO_CUES['world-now'];
+  const FR = 1 / 30 / (60 / Q.bpm);
+  const at = (b) => world.worldIntroCamera(b);
+  // from a kilometre or two over London, climbing fast from the first frame (an eighth higher every frame)
+  const c0 = at(0);
+  assert.ok(c0.h * 6371 < 3 && Math.abs(c0.lat - 51.5) < 0.1 && Math.abs(c0.lon) < 0.15, `starts at ${(c0.h * 6371).toFixed(1)} km over ${c0.lat.toFixed(2)}, ${c0.lon.toFixed(2)}`);
+  assert.ok(Math.log(at(FR).h / c0.h) > 0.1, 'climbing on the first frame');
+  // only ever climbing; never a jolt in its climb, its look or its turn (each frame's change close to the last's)
+  let most = { h: 0, pitch: 0, head: 0, roll: 0 };
+  for (let b = FR; b <= Q.cut; b += FR) {
+    const [a, m, c] = [at(b - FR), at(b), at(b + FR)];
+    assert.ok(c.h >= m.h - 1e-12, `always climbing (beat ${b.toFixed(2)})`);
+    most.h = Math.max(most.h, Math.abs(Math.log(c.h) - 2 * Math.log(m.h) + Math.log(a.h)));
+    for (const k of ['pitch', 'head', 'roll']) most[k] = Math.max(most[k], Math.abs(c[k] - 2 * m[k] + a[k]));
+  }
+  assert.ok(most.h < 0.015 && most.pitch < 0.015 && most.head < 0.015 && most.roll < 0.015, JSON.stringify(most));
+  // the sun behind the earth's edge until the stroke, clear of it just after
+  assert.ok(at(Q.sun - 0.25).over < 0 && at(Q.sun + 0.25).over > 0, 'the sun clears the edge on the stroke');
+  // at rest on the emblem's camera by the settle: straight down on 24 N 12 W, north up, the globe 56 px in radius
+  const s = at(Q.settle);
+  assert.ok(Math.abs(s.pitch) < 1e-9 && Math.abs(s.head) < 1e-9 && Math.abs(s.roll) < 1e-9, 'straight down, north up');
+  assert.ok(Math.abs(s.lat - 24) < 1e-6 && Math.abs(s.lon + 12) < 1e-6, 'over the emblem\'s face');
+  assert.ok(Math.abs(world.worldIntroRadius(Q.title + 0.5) - 56) < 0.01 && Math.abs(world.worldIntroRadius(Q.cut) - 56) < 1e-6, 'the globe at the emblem\'s size');
+  // no light on the water (the owner: "ten cuidado con no poner luces ni carreteras en el agua")
+  const lights = world.worldIntroLights();
+  assert.ok(lights.length > 5000, `${lights.length} lights`);
+  for (const [x, y, z] of lights) {
+    const lat = (Math.asin(y) * 180) / Math.PI;
+    const lon = (Math.atan2(x, z) * 180) / Math.PI;
+    assert.ok(world.worldIntroLand(lat, lon) >= 0.55, `a light on the water at ${lat.toFixed(2)}, ${lon.toFixed(2)}`);
+  }
+  // the logotype: WORLD over NOW, inside the column the feeds leave clear, above their caption, under the globe
+  const box = world.worldIntroTitle();
+  assert.ok(box.x0 >= 28 && box.x1 <= 188, `x ${box.x0}-${box.x1}`);
+  assert.ok(box.y0 > 150 + 56 + 4 && box.y1 < 300, `y ${box.y0}-${box.y1}`);
+  assert.equal(box.x1 - box.x0, font.textPixels('WORLD', 'body').width * 4 + 1, 'WORLD at four times the channel\'s face');
+});
+
+test('WORLD NOW\'s intro dissolves into the programme over its last beat', () => {
+  const Q = cues.INTRO_CUES['world-now'];
+  const way = intro.introTransition('world-now');
+  assert.ok(Math.abs(way.seconds - cues.introAt('world-now', Q.cut - Q.push)) < 1e-9);
   assert.ok(way.seconds > 0.3 && way.seconds < 0.8, `${way.seconds} s`);
 });
 

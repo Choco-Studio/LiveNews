@@ -155,6 +155,22 @@ export const INTRO_CUES = Object.freeze({
     push: 6, // the intro's pixels dissolve away, top right to bottom left, into the programme
     cut: 7, // the intro's last frame, on the next downbeat
   }),
+  // WORLD NOW (the owner, 26 Oct, after TECH BYTES' drone: "ahora pasemos al de World Now", then "tiene que ser un hook,
+  // que se vea espectacular"): low over Europe at night, flying fast toward London, its lights streaming under the
+  // camera and the earth's curve across the frame; the sun bursts over the earth's edge; the camera climbs away and
+  // swings round onto the whole planet as the day comes round onto it and the emblem's three routes take off from London;
+  // it settles on the emblem's globe; a red bar sweeps WORLD in under it, NOW between two red rules; the intro's pixels
+  // dissolve away into the programme
+  'world-now': Object.freeze({
+    bpm: 96,
+    sun: 1.5, // the stroke: the sun clears the earth's edge ahead of the camera, high over Europe at night
+    launch: Object.freeze([2, 2.25, 2.5]), // the routes take off from London as the camera pulls back, one a quarter beat
+    settle: 3.5, // the camera at rest on the emblem's globe
+    title: 3.75, // the red bar sweeps WORLD in; NOW after it
+    lock: 4.5, // the emblem and the title whole (the theme's hit); a shine runs across the letters
+    push: 5, // the intro's pixels dissolve away, top right to bottom left, into the programme
+    cut: 6, // the intro's last frame, on the next downbeat
+  }),
 });
 
 /** Seconds of an intro's beat, and its length (the cut). */

@@ -1505,7 +1505,87 @@ function techIntro() {
     ],
   };
 }
-const INTRO_THEMES = { cosmos: cosmosIntro, 'tech-bytes': techIntro };
+// WORLD NOW: the climb from London's streets to the whole world (cues.js INTRO_CUES['world-now']), D major at 96 BPM
+// (the titles' key and tempo). On the first frame the pips (London's time signal: a short one each half beat, the long
+// one on the stroke), a felt thump, a pluck chord, the pad's Bm7 over the D pedal (night), the bass in eighths and the
+// strings in sixteenths (D A D E, the signature's head), climbing an octave with the camera; a timpani roll into the stroke: the sun clears
+// the earth's edge on a wide Gmaj9 (the strings, the bells, the timpani, an air swell); the routes take off on the bells
+// (the signature's first notes, as in the titles); the signature at double speed on the brass (the horn an octave up),
+// its DAH as the red bar sweeps WORLD in, its colour (F#, the 3rd) to the hit; D add9 on the hit as the title locks,
+// ringing on into the clip. No whoosh: the climb is in the strings.
+function worldIntro() {
+  const Q = INTRO_CUES['world-now'];
+  const k = D4;
+  const C = Q.cut;
+  const S = Q.sun;
+  const H = Q.lock;
+  const T = Q.title;
+  const total = C + 2.5;
+  const ch = {
+    bm7: [k - 3, k, k + 4, k + 7], // B3 D4 F#4 A4 over the D pedal: night
+    g9: [k - 7, k - 3, k, k + 4, k + 9], // G3 B3 D4 F#4 B4: Gmaj9, the sun
+    open: [k - 5, k, k + 7], // A3 D4 A4: the open fifth, the colour decides
+    hit: [k - 12, k - 5, k + 2, k + 4, k + 7], // D3 A3 E4 F#4 A4: D add9
+  };
+  // the signature twice as fast, its DAH as the bar sweeps WORLD in; its colour held to the hit
+  const sig = motif(k - 12, COLOURS.home, T - 0.75, { scale: 0.5, colourBeats: (H - T - 0.5) * 2 });
+  const PIP = { wave: 'sine', preset: 'sine', a: 0.003, d: 0.2, s: 0.85, r: 0.03, vib: false, legato: 1 };
+  const pips = [...range(0, S, 0.5).map((b) => [b, k + 21, 0.1, 0.46]), [S, k + 21, 0.55, 0.52]];
+  // the strings' climb: sixteenths to the stroke, an octave up from the first beat, louder as it goes
+  const climb = [
+    ...range(0, S, 0.25).map((b, i) => [b, [k, k + 7, k + 12, k + 14][i % 4] + (b >= 1 ? 12 : 0), 0.25, 0.4 + (0.25 * b) / S + (i % 2 ? 0 : 0.06)]),
+    // then eighths high over the sunrise and the routes (the pull-back keeps moving), resting for the title
+    ...range(S + 0.5, T, 0.5).map((b, i) => [b, [k + 19, k + 24, k + 26, k + 24][i % 4], 0.5, 0.44]),
+  ];
+  const roll = range(S - 0.75, S, 0.125).map((b, i, a) => [b, k - 24, 0.125, 0.14 + (0.34 * i) / Math.max(1, a.length - 1)]);
+  return {
+    bpm: Q.bpm,
+    room: 0.26,
+    hall: 0.3,
+    echo: { amount: 0.8, beats: 0.75, feedback: 0.3 },
+    fadeOut: 1.2,
+    loudness: -1.6, // level with the voice, as the opens (themeFor)
+    tracks: [
+      { kind: 'lead', inst: 'brass', notes: part([...sig, [H, k - 12, total - H, 0.9]], total), gain: 0.95 },
+      { kind: 'lead', inst: LEAD.horn, notes: part([...motif(k, COLOURS.home, T - 0.75, { scale: 0.5, colourBeats: (H - T - 0.5) * 2, vel: 0.8 }), [H, [k - 3, k + 2, k + 4], total - H, 0.6]], total), gain: 0.8, pan: 0.18, echo: 0.3 },
+      { kind: 'lead', inst: PIP, notes: part(pips, total), gain: 0.4, echo: 0.2 },
+      { kind: 'harmony', inst: ENS.orbit, notes: part(climb, total), gain: 1.3, echo: 0.35, pan: 0.25 },
+      // the bells: the stroke as the sun clears the edge, then one as each route takes off (D A B: the signature's notes)
+      { kind: 'harmony', inst: 'bell', notes: part([
+        [S, [k + 16, k + 21], 1.5, 0.5],
+        [Q.launch[0], k + 19, 1, 0.52], [Q.launch[1], k + 24, 1, 0.54], [Q.launch[2], k + 26, 1, 0.56],
+        [H, [k + 19, k + 26], 1.5, 0.5],
+      ], total), gain: 1.45, echo: 0.55, pan: -0.25 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, ch.bm7, S, 0.5], // (the pad speaks at once: an intro has no bar to swell in)
+        [S, ch.g9, T - S, 0.72],
+        [T, ch.open, H - T, 0.64],
+        [H, ch.hit, total - H, 0.78],
+      ], total), pan: -0.15 },
+      { kind: 'harmony', inst: LEAD.strings, notes: part([
+        [S, [k + 7, k + 14], T - S, 0.5], // the strings rise with the sun
+        [T, [k + 9, k + 14], H - T, 0.46],
+        [H, [k + 12, k + 16, k + 21], total - H, 0.55],
+      ], total), gain: 0.6, pan: 0.3 },
+      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 24, 0.5, 0.6], [1, k - 24, 0.5, 0.36], ...roll, [S, k - 24, 1.5, 0.78], [T, k - 24, 0.5, 0.5], [H, k - 24, 1.5, 0.7]], total), gain: 0.85 },
+      // the bass in eighths from the first frame (D, D, the octave, D; on G from the sunrise), resting for the title
+      { kind: 'bass', inst: 'synthbass', notes: part([
+        ...range(0, S, 0.5).map((b, i) => [b, [k - 24, k - 24, k - 12, k - 24][i % 4], 0.5, i % 2 ? 0.45 : 0.66]),
+        ...range(S, T, 0.5).map((b, i) => [b, [k - 29, k - 29, k - 17, k - 29][i % 4], 0.5, i % 2 ? 0.48 : 0.7]),
+        [H, k - 24, total - H, 0.8],
+      ], total), gain: 0.6 },
+      // the D pedal, held under it all
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 24, S, 0.5], [S, k - 24, H - S, 0.62], [H, k - 24, total - H, 0.82]], total), gain: 0.45 },
+      // the first frame's attack (no button on the cut: the clip's first words are there, and the hit rings under them)
+      { kind: 'harmony', inst: 'pluck', notes: part([[0, [k - 12, k - 5, k + 4], 0.5, 0.8]], total), gain: 1.5 },
+      { drums: drums([[0, 'F', 0.75], [S, 'F', 0.8], [T, 'F', 0.5], [H, 'F', 0.62]], total), gain: 1.8 },
+      { drums: drums(range(S + 0.5, T, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.12 : 0.2]), total) },
+      // an air swell cresting on the sunrise, and a low one as the intro dissolves into the programme
+      { drums: drums([[S - 0.75, 'A', 0.42], [Q.push, 'A', 0.3], [C + 0.5, 'F', 0.01]], total), gain: 1.6 },
+    ],
+  };
+}
+const INTRO_THEMES = { cosmos: cosmosIntro, 'tech-bytes': techIntro, 'world-now': worldIntro };
 /** The theme of a programme's clip intro (null when it has none); meta: { programId, bpm, peakAt, hitAt, cutAt } (s). */
 export function introTheme(programId) {
   const build = INTRO_THEMES[programId];
@@ -1513,7 +1593,7 @@ export function introTheme(programId) {
   const tune = build();
   const Q = INTRO_CUES[programId];
   const s = (b) => (b * 60) / Q.bpm;
-  // (the peak: COSMOS DESK's stroke as Saturn swells in, TECH BYTES's as the die boots)
+  // (the peak: COSMOS DESK's stroke as Saturn swells in, TECH BYTES's as the die boots, WORLD NOW's as the sun rises)
   return { ...tune, meta: { programId, bpm: Q.bpm, peakAt: s(Q.sun ?? Q.boot), hitAt: s(Q.lock), cutAt: s(Q.cut) } };
 }
 
