@@ -5,6 +5,7 @@
 // red digital "24", "THE WORLD, PIXEL BY PIXEL") and the channel palette (public/js/palette.js, ENDESGA 32).
 //
 //   window.brand.avatar()  -> canvas 100x100 (x8 = 800)
+//   window.brand.icon()  -> the avatar as a 1024x1024 icon (x10, centred on its ink)
 //   await window.brand.banner()  -> canvas 640x360 (x4 = 2560x1440)
 //   window.brand.scaled(c, k) -> the canvas enlarged k times, nearest neighbour
 import { P } from '/js/palette.js';
@@ -297,6 +298,21 @@ export function scaled(src, k) {
   return c;
 }
 
+/**
+ * The avatar as a square icon of `size` px (1024 for app stores and profiles that ask for it): enlarged by the
+ * largest whole factor (x10 = 1000) and centred on the field's ink, so every pixel stays a sharp square. The
+ * avatar's edges are flat ink, so the border is seamless.
+ */
+export function icon(size = 1024) {
+  const a = avatar();
+  const k = Math.floor(size / a.width);
+  const [c, g] = canvas(size, size);
+  rect(g, 0, 0, size, size, P.ink);
+  const o = (size - a.width * k) >> 1;
+  g.drawImage(scaled(a, k), o, o);
+  return c;
+}
+
 /** Review sheets (the critique looks at these): the avatar as YouTube shows it, the banner with its crops. */
 function preview(which) {
   document.body.innerHTML = '';
@@ -348,4 +364,4 @@ function preview(which) {
   }
 }
 
-window.brand = { avatar, banner, bannerFull, scaled, preview };
+window.brand = { avatar, icon, banner, bannerFull, scaled, preview };

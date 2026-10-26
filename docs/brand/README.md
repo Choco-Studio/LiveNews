@@ -3,6 +3,7 @@
 | Archivo | Uso |
 |---|---|
 | `globit24-avatar-800.png` | Foto del canal (800×800; YouTube la recorta en círculo y la muestra hasta 48 px) |
+| `globit24-icon-1024.png` | El mismo avatar como icono de 1024×1024 (×10, centrado sobre su tinta: cada píxel, un cuadrado nítido de 10 px) |
 | `globit24-banner-2560x1440.png` | Banner (zona segura del móvil: el centro 1546×423) |
 | `review-avatar.png`, `review-banner.png` | Hojas de revisión: el círculo a 176/98/48/32 px sobre fondo claro y oscuro; los recortes de TV, escritorio y móvil |
 

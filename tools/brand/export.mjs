@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Exports the channel's YouTube avatar and banner (public/lab/brand.js) as PNG files, plus review sheets:
 //   docs/brand/globit24-avatar-800.png       800x800 (YouTube crops it to a circle)
+//   docs/brand/globit24-icon-1024.png        1024x1024 (the avatar x10, centred on its ink)
 //   docs/brand/globit24-banner-2560x1440.png 2560x1440 (safe band: the centre 1546x423)
 //   docs/brand/review-avatar.png              the avatar as YouTube shows it (circle, 176 / 98 / 48 / 32 px, light
 //                                             and dark pages)
@@ -31,6 +32,7 @@ await page.waitForFunction(() => !!window.brand);
 const png = async (fn) => Buffer.from((await page.evaluate(fn)).split(',')[1], 'base64');
 
 fs.writeFileSync(path.join(out, 'globit24-avatar-800.png'), await png(() => window.brand.scaled(window.brand.avatar(), 8).toDataURL('image/png')));
+fs.writeFileSync(path.join(out, 'globit24-icon-1024.png'), await png(() => window.brand.icon(1024).toDataURL('image/png')));
 fs.writeFileSync(path.join(out, 'globit24-banner-2560x1440.png'), await png(async () => (await window.brand.bannerFull()).toDataURL('image/png')));
 
 // review sheets, drawn at their real sizes
