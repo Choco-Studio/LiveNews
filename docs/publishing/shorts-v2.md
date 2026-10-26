@@ -157,27 +157,34 @@ programme's intro is its own idea for a phone, ending on its own emblem and logo
 graph.
 
 **TECH BYTES** (`public/js/scenes/opens/techintro.js`, its theme `audio/themes.js` `techIntro`, both on
-`INTRO_CUES['tech-bytes']`): seven beats at 112 BPM, 3.75 s (113 frames), one flight over a motherboard at night to its
-processor:
+`INTRO_CUES['tech-bytes']`): seven beats at 112 BPM, 3.75 s (113 frames). The first cut was a flight over a motherboard
+lit like a city; the owner: "va muy bien, pero necesita algo para parecer mucho más impresionante, por ejemplo la
+transición de una ciudad a una placa madre". So it opens on a real city at night and turns it into the board:
 
 | Beats | The picture | The theme (A dorian) |
 |---|---|---|
-| 0-2 | Low over the board, the processor far ahead, the horizon high in the frame: the board laid out like a city, avenues of traces on a grid lit along their length, blocks of parts between them (chips, banks of memory, rows of capacitors, heatsinks) with their status lights, signals racing along every trace toward the processor; the far reaches a haze of light under the horizon; the camera closing in from the first frame | On the first frame a soft kick, a pluck chord and the data already running (a pulse12 in sixteenths, E A B), a glass blip on each beat; the saw bass in eighths and a light hat from the second beat |
-| 2-3.5 | The camera noses down and comes round over the processor, the parts rushing up past it, the horizon gone over the top of the frame; it slows a little every frame (a glide); the processor's own traces light as their signals run in from the edges of the frame | The data climbs an octave of D9; a snare run into the stroke |
+| 0-1 | Low over a city at night, toward its heart, the horizon high in the frame: towers with their windows lit (cream, yellow, a few white and orange), avenues of orange street lamps with cars' lights along them (headlights, red tail lights), the city's glow on the haze over the horizon, red beacons on the tallest roofs; at the heart its tallest tower lights cyan from the top down | On the first frame a soft kick, a pluck chord, the warm pad's Am9 and a low pulse on each beat; three glass notes up as the tower lights |
+| 1-2.6 | The tower sinks into the ground and a ring of cyan light runs out across the city from where it stood: as it passes, the towers' lights go out and they sink, their roofs' edges lit cyan, the parts of a motherboard rise in their places (chips, banks of memory, rows of capacitors, heatsinks, their status lights), the avenues turn to buses of traces and the cars' lights to signals racing toward the processor; the ring runs under the camera and on to the horizon (a line of light, never a flash: the frame's brightness never jumps) | On the wave a wide stab and a kick, and the data comes in (a pulse12 in sixteenths, E A B), the saw bass in eighths and a light hat |
+| 1.2-3.5 | The camera noses down at the processor, where the tower stood, and comes round over it, the parts rushing up past it, slowing a little every frame (a glide); the processor's own traces light as their signals run in from the edges of the frame | The data climbs an octave of D9; a snare run into the stroke |
 | 3.5 | Overhead (the stroke): every signal reaches the pins together, the die's cyan outline has drawn round, and the byte boots a cell at a time: the emblem | The signature at double speed on the techPluck, its DAH here, a wide Am stab, a double kick and a clap |
 | 4-5.5 | TECH types in under the processor, a letter a quarter beat, each printed down in two frames, a cyan cursor running ahead and blinking after the last; BYTES between two cyan rules; the lower traces drop through vias above the logotype (no trace runs through it or boxes it in) | The colour (G, the b7) over G/A; a key tick on each letter |
 | 5.5-7 | The emblem and the logotype, a scan running down the letters on the hit, pulses still running in along the traces; from beat 6 the intro's pixels dissolve away along the diagonal | The A on Am6/9, ringing on into the clip; a low air swell under the dissolve |
 
-How it is drawn: the board is a plane seen through one lens from a camera on a logarithmic track (2,600 units from the
-processor to 185 above it: overhead a unit of the package is a pixel), pitched back 72 degrees at the start and turned
-38 degrees about the board's upright, both easing to straight down; the distance's rate is one swell over the way in,
-so it never brakes. Its traces are lines of two kinds of light, the copper's glint and the signals' cyan, each spread
-over the pixels it crosses by the share of them it covers (a far bus is a faint haze, never a shimmer of whole pixels;
-a signal keeps a share of its light however thin its trace, as a lamp does), the cyan given a lens's glow; both are
-brought to the palette on two ramps through the screen's Bayer matrix. The parts are boxes lit from the upper left,
-drawn far to near (a part a few pixels across is its top alone). The processor is the emblem's own chip (`tech.js`: the
-epoxy package and its bevel, the pin-1 dimple, the recessed die and its grid, four pins a side, the byte 0xB5) drawn
-from its true shapes at any size and angle, so overhead it is crisp to the pixel.
+How it is drawn: the board is a plane seen through one lens from a camera on a logarithmic track (2,200 units from the
+processor to 185 above it: overhead a unit of the package is a pixel), pitched back 64 degrees at the start and turned
+38 degrees about the board's upright, both easing to straight down; the distance's rate is one swell over the way in
+(gentle over the city, fastest in the dive), so it never brakes. The city and the board share one plan: each block
+between the avenues holds the city's towers (taller toward the heart) and the board's parts, and each pixel of a street
+or trace, each tower and each part, is the city's or the board's by where the wave has got to (it leaves the heart on
+beat 1 at 700 units a beat; a place turns over half a beat). The traces are lines of light, the city's warm lamps and
+cars and red tail lights and the board's copper glint and cyan, each spread over the pixels it crosses by the share of
+them it covers (a far street is a faint haze, never a shimmer of whole pixels; a car's or a signal's light keeps a share
+however thin its line, as a lamp does); the warm and the cyan get a lens's glow, and all go to the palette on their
+ramps through the screen's Bayer matrix. The towers and the parts are boxes lit from the upper left, drawn far to near;
+a tower's windows are a grid of floors and bays, never closer than two pixels on the frame (far off, every second or
+third of them), some lit. The processor is the emblem's own chip (`tech.js`: the epoxy package and its bevel, the pin-1
+dimple, the recessed die and its grid, four pins a side, the byte 0xB5) drawn from its true shapes at any size and
+angle, so overhead it is crisp to the pixel.
 
 The logotype: TECH at four times the channel's face, its blocks filled from white through cyan and blue to navy, a
 white edge along its tops, a black outline and a navy glow; BYTES at twice the size, spaced, between two cyan rules. The

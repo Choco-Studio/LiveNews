@@ -162,7 +162,7 @@ test('COSMOS DESK\'s light: the Sun behind Saturn the whole way in (a crescent, 
   assert.ok(most < (2 * total) / frames, `the most in a frame ${((most * 180) / Math.PI).toFixed(1)}°, the average ${((total / frames) * 180 / Math.PI).toFixed(1)}°`);
 });
 
-test('TECH BYTES\'s theme is heard from the first frame, climbs through the dive, lands the signature\'s DAH as the die boots, resolves on the lock-up, and leaves the cut to the clip', () => {
+test('TECH BYTES\'s theme is heard from the first frame, brings the data in with the wave, climbs through the dive, lands the signature\'s DAH as the die boots, resolves on the lock-up, and leaves the cut to the clip', () => {
   const Q = cues.INTRO_CUES['tech-bytes'];
   const t = themes.introTheme('tech-bytes');
   const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -172,7 +172,7 @@ test('TECH BYTES\'s theme is heard from the first frame, climbs through the dive
   const song = tune.parseTune(t);
   assert.equal(song.bpm, Q.bpm);
   const events = song.tracks.flatMap((tr) => tr.events);
-  assert.ok(events.filter((e) => e.at === 0).length >= 4, 'the data, the pad, a pluck chord and a kick on the first frame');
+  assert.ok(events.filter((e) => e.at === 0).length >= 4, 'a kick, a pluck chord, the pad and the bass on the first frame');
   // the lead: the signature (low 5, 1, 2, high 5), its DAH on the boot, then the colour (the b7), then the tonic on the hit
   const lead = song.tracks[0].events;
   const tonic = lead[1].midis[0];
@@ -181,9 +181,10 @@ test('TECH BYTES\'s theme is heard from the first frame, climbs through the dive
   assert.equal(lead[4].midis[0] - tonic, themes.COLOURS.tech);
   assert.equal(lead[5].at, Q.lock);
   assert.equal(lead[5].midis[0] - tonic, 12);
-  // the data climbs in level into the boot
+  // the data comes in with the wave and climbs in level into the boot
   const data = song.tracks[2].events.filter((e) => e.at < Q.boot);
-  assert.ok(data.length >= 12 && data.at(-1).vel > data[0].vel, 'the data climbs');
+  assert.equal(data[0].at, Q.wave);
+  assert.ok(data.length >= 8 && data.at(-1).vel > data[0].vel, 'the data climbs');
   assert.ok(!events.some((e) => Math.abs(e.at - Q.cut) < 1e-6), 'no button on the cut');
 });
 
@@ -197,7 +198,7 @@ test('TECH BYTES\'s picture draws every instant without throwing; one glide in t
   // moving from the first frame; the camera only ever closes in, and each frame's change of distance is close to the
   // last's (a glide down to rest, never a brake: the owner's "demasiado brusca" on COSMOS's first tries)
   const d = (b) => tech.techIntroCamera(b).d;
-  assert.ok(Math.log(d(0) / d(FR)) > 0.03, 'already closing in on the first frame');
+  assert.ok(Math.log(d(0) / d(FR)) > 0.012, 'already closing in on the first frame');
   let prev = null;
   let jolt = 0;
   for (let b = FR; b <= Q.cut; b += FR) {

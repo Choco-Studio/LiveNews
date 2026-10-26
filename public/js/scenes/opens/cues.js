@@ -139,13 +139,17 @@ export const INTRO_CUES = Object.freeze({
     // drifting back (the clip's graph: render.js introParts)
     cut: 6, // the intro's last frame, on the next downbeat
   }),
-  // TECH BYTES (the owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito"): one flight over a
-  // motherboard at night, its traces lit like a city's streets and signals racing along them, its parts standing like
-  // towers; the camera dives at the processor and comes over it as every signal reaches its pins and its die boots the
-  // byte; TECH types in under it, BYTES between two rules; the intro's pixels dissolve away into the programme
+  // TECH BYTES (the owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito", then "necesita algo para
+  // parecer mucho más impresionante, por ejemplo la transición de una ciudad a una placa madre"): one flight over a city
+  // at night, its towers lit, its streets full of cars' lights; a wave of cyan light runs out from its heart and the city
+  // turns into a motherboard as it passes (the towers sink into its parts, the streets become its traces, the cars its
+  // signals); the camera dives at the processor, which the city's tallest tower stood over, and comes over it as every
+  // signal reaches its pins and its die boots the byte; TECH types in under it, BYTES between two rules; the intro's
+  // pixels dissolve away into the programme
   'tech-bytes': Object.freeze({
     bpm: 112,
-    blips: Object.freeze([0, 1, 2]), // a data blip on each beat of the run
+    blips: Object.freeze([0.5, 0.67, 0.83]), // three glass notes up as the city's tallest tower lights cyan, top down...
+    wave: 1, // ...and the wave leaves it (the tower sinking into the processor) and runs out across the city: the data in
     dive: 2, // the camera noses down at the processor, the parts rushing up past it; a snare run...
     boot: 3.5, // ...into the stroke: overhead, every signal reaches the processor's pins and the die boots the byte
     title: 4, // TECH types in under it, a letter a quarter beat, the cursor running ahead; BYTES after it
