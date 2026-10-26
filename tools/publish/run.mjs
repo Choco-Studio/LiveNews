@@ -15,6 +15,7 @@ import { Publisher, liveBlockers } from '../../server/publish/publisher.js';
 import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { usingStub } from '../../server/publish/compliance.js';
 import { isManual } from '../../server/publish/mode.js';
+import { AUTO_DEFAULTS, stale } from '../../server/publish/autoplan.js';
 import { root, argsOf } from './lib.mjs';
 
 const { opt, flag } = argsOf();
@@ -32,7 +33,26 @@ if (isManual()) {
   console.log('PUBLISH_MODE=manual: nothing is scheduled or published from here (not even a dry run); the owner publishes by hand from the approval page (docs/publishing/beta.md)');
   process.exit(0);
 }
+// news a day late is not news (the owner, 26 Oct: "nada que tenga + de 24 horas se publica"): what aired more than a
+// day ago, or would go out more than a day after it aired, leaves the queue, before and after scheduling
+// (a fresh piece whose slot is only too late goes back to be scheduled again, in the room the others leave)
+const letGo = ({ again = false } = {}) => {
+  for (const it of queue.list({})) {
+    const why = stale(it, now(), { freshHours: AUTO_DEFAULTS.freshHours });
+    if (!why) continue;
+    if (again && it.status === 'scheduled' && !stale({ ...it, schedule: null }, now(), { freshHours: AUTO_DEFAULTS.freshHours })) {
+      it.status = 'approved';
+      it.schedule = null;
+      queue.save(queue.note(it, 'unscheduled', 'desk', { reason: why }));
+      continue;
+    }
+    queue.reject(it.id, 'desk', `stale: ${why}`);
+    console.log(`  let go (${why}): ${it.platform} ${it.title}`);
+  }
+};
+letGo({ again: true });
 const scheduled = queue.schedule(now());
+letGo();
 console.log(`${scheduled.length} newly scheduled · compliance: ${usingStub ? 'the stub (dry run only)' : 'the real module'}`);
 let due = queue.due(now());
 if (flag('all-due')) {
