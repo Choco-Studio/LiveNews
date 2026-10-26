@@ -162,7 +162,11 @@ A second instance of the v2 stage (`runtime/stage.js`) draws the speaker's own s
   - while one voice goes on, the single recuts between the wide single and a tighter one (camera.js `tall-tight`,
     the tall single at 1.22× its scale) at the first caption page turn `RECUT_AFTER` (4 s) or more after the last
     cut, so the cut lands on a pause in the sentence, never mid-phrase;
-  - a change of voice cuts back to the wide single. PAY ATTENTION's quiz host and players keep their framing, still.
+  - a change of voice cuts back to the wide single. PAY ATTENTION's quiz host and players keep their framing, still;
+  - **the story's picture under the voice** (round 2, `storyPicture`): while the studio talks over a story that has a
+    picture (the horizontal frame shows it on the wall behind the presenter, which the tall single leaves out), every
+    other one of those cuts is to the picture, the stage's width of it, panning, its credit over it: wide, picture,
+    close, picture. Never over the programme's chat, open or close.
 - The studio wall behind the single is at rest (`wall.js` 'rest'): the programme's art without its words. A plate, map
   label or wordmark would be cut in half by the tall crop.
 

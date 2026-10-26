@@ -271,6 +271,7 @@ export class VerticalCompositor {
       this.shownPicture = null; // the story whose picture this frame's stage shows (its credit is drawn over it)
       if (STUDIO.has(shot)) {
         if (this.tall) this.nameTag(t, scene, this.speaker);
+        else if (this.cutaway && this.storyPicture(scene)) this.picture(t, scene, t - this.cutAt);
         else this.middle(scene);
       } else if (shot === 'fact') {
         if (!this.board(t, scene, dt)) this.middle(scene);
@@ -381,6 +382,19 @@ export class VerticalCompositor {
   }
 
   /**
+   * The story's picture while the studio talks over that story (the horizontal frame shows it on the wall behind the
+   * presenter: wall.js wallFromScene's story segment), else null: never over the programme's chat, open or close.
+   */
+  storyPicture(scene) {
+    const sid = scene.storyId;
+    const img = sid != null ? scene.images?.get?.(sid) : null;
+    if (!img?.full) return null;
+    const seg = scene.segPlan?.ctx?.seg;
+    if (seg ? seg.storyId !== sid || seg.type === 'chat' || seg.type === 'intro' || seg.type === 'outro' : scene.wall?.mode && scene.wall.mode !== 'picture') return null;
+    return img;
+  }
+
+  /**
    * The presenter's single made tall: the Stage's own frame (216 rows, the speaker centred over the safe column), and
    * above and below it the set from the very same camera (clip/vset.js single), so the presenter sits in the studio:
    * the wall rises behind the head to the set's top, the desk runs on to the frame's foot. Returns { top, sx } or null
@@ -393,18 +407,26 @@ export class VerticalCompositor {
     // (the captions' page as last drawn: it turns where the sentence pauses)
     const said = this.caps?.active ? `${this.caps.text}|${this.caps.page}` : null;
     const quiz = !!(scene.cast?.H && scene.cast?.A && scene.cast?.B);
+    const pic = !quiz && !!this.storyPicture(scene);
     if (slot !== this.speaker) {
       this.speaker = slot;
       this.cutAt = t;
-      this.tight = false;
+      this.beat = 0;
     } else if (!quiz && said && said !== this.lastSaid && t - this.cutAt >= RECUT_AFTER) {
       // a long turn: where the words pause (a new sentence, a comma: the captions turn their page there) the camera
       // cuts in closer, or back out, as a studio's two cameras would (the owner, of COSMOS's shorts: one presenter held
-      // still in one frame for fifteen seconds loses the viewer)
-      this.tight = !this.tight;
+      // still in one frame for fifteen seconds loses the viewer); with the story's picture, every other cut is to the
+      // picture under the voice, as the horizontal frame shows it on the wall behind the presenter: wide, picture,
+      // close, picture
+      this.beat = (this.beat || 0) + 1;
       this.cutAt = t;
     }
     if (said) this.lastSaid = said;
+    const beat = this.beat || 0;
+    this.tight = pic ? beat % 4 === 2 : beat % 2 === 1;
+    this.cutaway = pic && beat % 2 === 1;
+    // (the picture's beat: no single this frame, the stage shows the picture: drawStage)
+    if (this.cutaway) return null;
     if (!this.proxy || Object.getPrototypeOf(this.proxy) !== scene) this.proxy = Object.create(scene);
     const p = this.proxy;
     p.shot = 'close';

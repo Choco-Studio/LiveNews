@@ -991,3 +991,29 @@ test('COSMOS round 2: its tall single and its boards stand before the sky, not i
   assert.ok(styleFor('cosmos').skyWall, 'only a sky wall can lose its screen');
   assert.ok(!styleFor('world-now').skyWall);
 });
+
+test('a long turn over a story with its picture cuts to the picture every other time: wide, picture, close, picture', async () => {
+  globalThis.document ||= { createElement: () => fakeCanvas(300, 150) };
+  const { VerticalCompositor, RECUT_AFTER } = await import('../public/js/clip/vertical.js');
+  const comp = new VerticalCompositor({ canvas: fakeCanvas(216, 384), source: fakeCanvas(384, 216), renderer: { graphics: { strap: { cur: null, outAt: null } } }, channel: { name: 'GLOBIT 24' }, makeStage: () => ({ frame: () => true, vis: [] }) });
+  comp.profile = { name: 'normal' };
+  const seg = { type: 'story', storyId: 's1' };
+  const scene = { shot: 'close', focus: 'A', storyId: 's1', images: new Map([['s1', { full: fakeCanvas(416, 234) }]]), cast: { A: 'nova', B: 'unit8' }, program: { id: 'cosmos' }, segPlan: { ctx: { seg } } };
+  const seen = [];
+  for (let k = 0; k < 5; k++) {
+    // a caption page turning once a beat after the last cut
+    comp.caps = { active: true, text: 'the story', page: k };
+    const tall = comp.tallSingle(k * (RECUT_AFTER + 0.5), scene);
+    seen.push(comp.cutaway ? 'picture' : comp.tight ? 'close' : 'wide');
+    assert.equal(!!tall, !comp.cutaway, 'no single on the picture\'s beat');
+  }
+  assert.deepEqual(seen, ['wide', 'picture', 'close', 'picture', 'wide']);
+  // over the programme's chat, and for a story without a picture, the single only recuts (wide, close)
+  seg.type = 'chat';
+  assert.equal(comp.storyPicture(scene), null, 'never over the chat');
+  seg.type = 'story';
+  scene.images = new Map();
+  comp.caps = { active: true, text: 'the story', page: 9 };
+  comp.tallSingle(30, scene);
+  assert.equal(comp.cutaway, false);
+});
