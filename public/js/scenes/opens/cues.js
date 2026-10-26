@@ -139,6 +139,20 @@ export const INTRO_CUES = Object.freeze({
     // drifting back (the clip's graph: render.js introParts)
     cut: 6, // the intro's last frame, on the next downbeat
   }),
+  // TECH BYTES (the owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito"): one flight over a
+  // motherboard at night, its traces lit like a city's streets and signals racing along them, its parts standing like
+  // towers; the camera dives at the processor and comes over it as every signal reaches its pins and its die boots the
+  // byte; TECH types in under it, BYTES between two rules; the intro's pixels dissolve away into the programme
+  'tech-bytes': Object.freeze({
+    bpm: 112,
+    blips: Object.freeze([0, 1, 2]), // a data blip on each beat of the run
+    dive: 2, // the camera noses down at the processor, the parts rushing up past it; a snare run...
+    boot: 3.5, // ...into the stroke: overhead, every signal reaches the processor's pins and the die boots the byte
+    title: 4, // TECH types in under it, a letter a quarter beat, the cursor running ahead; BYTES after it
+    lock: 5.5, // the emblem and the title whole (the theme's hit); a scan runs across the letters
+    push: 6, // the intro's pixels dissolve away, top right to bottom left, into the programme
+    cut: 7, // the intro's last frame, on the next downbeat
+  }),
 });
 
 /** Seconds of an intro's beat, and its length (the cut). */

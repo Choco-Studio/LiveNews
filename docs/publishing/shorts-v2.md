@@ -148,5 +148,37 @@ channel's music dips so under a voice) and fading over `INTRO_TAIL` (2.2 s), lie
 set on the whole (`loudnessArgs` mixes the same sound). Everything timed on the clip's own clock moves by where the clip
 comes in, in the made file (the intro's length less the dissolve): the caption files (`srtFor`/`vttFor` `offset`), the RECREATION label's evidence, TikTok's cover
 frame (`coverAt`); the overlays (the hook, the face hook) are laid on the clip before the intro is put in front.
-`--no-intro` makes clips without it. Horizontal clips have none. The other programmes' intros follow once the owner has
-signed off COSMOS's: each its own idea for a phone, ending on its own emblem and logotype.
+`--no-intro` makes clips without it. Horizontal clips have none.
+
+The owner signed off COSMOS's on 26 Oct ("sube esta versión"), kept it whole before every clip ("es algo bonito que
+hace mantener la atención; la gente no suele pasar de animaciones o movimientos rápidos hasta que los entiende"), and
+chose the next: "hagamos primero Tech Bytes, han tenido mucho más éxito" (PAY ATTENTION left out for now). Each
+programme's intro is its own idea for a phone, ending on its own emblem and logotype, on the same rules and the same
+graph.
+
+**TECH BYTES** (`public/js/scenes/opens/techintro.js`, its theme `audio/themes.js` `techIntro`, both on
+`INTRO_CUES['tech-bytes']`): seven beats at 112 BPM, 3.75 s (113 frames), one flight over a motherboard at night to its
+processor:
+
+| Beats | The picture | The theme (A dorian) |
+|---|---|---|
+| 0-2 | Low over the board, the processor far ahead, the horizon high in the frame: the board laid out like a city, avenues of traces on a grid lit along their length, blocks of parts between them (chips, banks of memory, rows of capacitors, heatsinks) with their status lights, signals racing along every trace toward the processor; the far reaches a haze of light under the horizon; the camera closing in from the first frame | On the first frame a soft kick, a pluck chord and the data already running (a pulse12 in sixteenths, E A B), a glass blip on each beat; the saw bass in eighths and a light hat from the second beat |
+| 2-3.5 | The camera noses down and comes round over the processor, the parts rushing up past it, the horizon gone over the top of the frame; it slows a little every frame (a glide); the processor's own traces light as their signals run in from the edges of the frame | The data climbs an octave of D9; a snare run into the stroke |
+| 3.5 | Overhead (the stroke): every signal reaches the pins together, the die's cyan outline has drawn round, and the byte boots a cell at a time: the emblem | The signature at double speed on the techPluck, its DAH here, a wide Am stab, a double kick and a clap |
+| 4-5.5 | TECH types in under the processor, a letter a quarter beat, each printed down in two frames, a cyan cursor running ahead and blinking after the last; BYTES between two cyan rules; the lower traces drop through vias above the logotype (no trace runs through it or boxes it in) | The colour (G, the b7) over G/A; a key tick on each letter |
+| 5.5-7 | The emblem and the logotype, a scan running down the letters on the hit, pulses still running in along the traces; from beat 6 the intro's pixels dissolve away along the diagonal | The A on Am6/9, ringing on into the clip; a low air swell under the dissolve |
+
+How it is drawn: the board is a plane seen through one lens from a camera on a logarithmic track (2,600 units from the
+processor to 185 above it: overhead a unit of the package is a pixel), pitched back 72 degrees at the start and turned
+38 degrees about the board's upright, both easing to straight down; the distance's rate is one swell over the way in,
+so it never brakes. Its traces are lines of two kinds of light, the copper's glint and the signals' cyan, each spread
+over the pixels it crosses by the share of them it covers (a far bus is a faint haze, never a shimmer of whole pixels;
+a signal keeps a share of its light however thin its trace, as a lamp does), the cyan given a lens's glow; both are
+brought to the palette on two ramps through the screen's Bayer matrix. The parts are boxes lit from the upper left,
+drawn far to near (a part a few pixels across is its top alone). The processor is the emblem's own chip (`tech.js`: the
+epoxy package and its bevel, the pin-1 dimple, the recessed die and its grid, four pins a side, the byte 0xB5) drawn
+from its true shapes at any size and angle, so overhead it is crisp to the pixel.
+
+The logotype: TECH at four times the channel's face, its blocks filled from white through cyan and blue to navy, a
+white edge along its tops, a black outline and a navy glow; BYTES at twice the size, spaced, between two cyan rules. The
+same family as COSMOS DESK's (the programme's word large, its second word small between rules in its colour).

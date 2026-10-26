@@ -1,6 +1,7 @@
 // A vertical clip's intro (docs/publishing/shorts-v2.md §6; public/js/clip/intro.js): the owner, 26 Oct, "espectacular…
 // y con una música que mantenga atención", four seconds at most; for COSMOS DESK "un acercamiento desde fuera de la
-// galaxia… que lleve hasta Saturno", its letters worked for, no boxes of text. The picture and the theme read one cue sheet (cues.js INTRO_CUES); the clip's
+// galaxia… que lleve hasta Saturno", its letters worked for, no boxes of text; then TECH BYTES's ("hagamos primero Tech
+// Bytes"), a flight over a motherboard to its processor. The picture and the theme read one cue sheet (cues.js INTRO_CUES); the clip's
 // graph puts the intro first and lays its theme's tail, dipped, under the clip's first words (server/publish/render.js).
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +30,7 @@ function fakeCanvas() {
   return cv;
 }
 
-let cues, themes, tune, intro, cosmos, font;
+let cues, themes, tune, intro, cosmos, tech, font;
 before(async () => {
   globalThis.document = { createElement: () => fakeCanvas() };
   cues = await import('../public/js/scenes/opens/cues.js');
@@ -37,6 +38,7 @@ before(async () => {
   tune = await import('../public/js/audio/tune.js');
   intro = await import('../public/js/clip/intro.js');
   cosmos = await import('../public/js/scenes/opens/cosmosintro.js');
+  tech = await import('../public/js/scenes/opens/techintro.js');
   font = await import('../public/js/font.js');
 });
 
@@ -48,6 +50,7 @@ test('every intro lasts four seconds at most, on its cue sheet; a programme with
     // the factory makes it frame by frame: whole frames at 30 a second, still under four seconds
     assert.ok(Math.round(s * 30) / 30 <= 4, `${id}: ${Math.round(s * 30)} frames`);
   }
+  assert.deepEqual(Object.keys(intro.INTROS), ['cosmos', 'tech-bytes']);
   assert.equal(intro.introFor('world-now'), null);
   assert.equal(intro.introSeconds('world-now'), 0);
   assert.equal(intro.drawIntro(fakeCanvas().getContext('2d'), 1, { programId: 'world-now' }), false);
@@ -157,6 +160,83 @@ test('COSMOS DESK\'s light: the Sun behind Saturn the whole way in (a crescent, 
     frames++;
   }
   assert.ok(most < (2 * total) / frames, `the most in a frame ${((most * 180) / Math.PI).toFixed(1)}°, the average ${((total / frames) * 180 / Math.PI).toFixed(1)}°`);
+});
+
+test('TECH BYTES\'s theme is heard from the first frame, climbs through the dive, lands the signature\'s DAH as the die boots, resolves on the lock-up, and leaves the cut to the clip', () => {
+  const Q = cues.INTRO_CUES['tech-bytes'];
+  const t = themes.introTheme('tech-bytes');
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert.ok(near(t.meta.peakAt, cues.introAt('tech-bytes', Q.boot)));
+  assert.ok(near(t.meta.hitAt, cues.introAt('tech-bytes', Q.lock)));
+  assert.ok(near(t.meta.cutAt, intro.introSeconds('tech-bytes')));
+  const song = tune.parseTune(t);
+  assert.equal(song.bpm, Q.bpm);
+  const events = song.tracks.flatMap((tr) => tr.events);
+  assert.ok(events.filter((e) => e.at === 0).length >= 4, 'the data, the pad, a pluck chord and a kick on the first frame');
+  // the lead: the signature (low 5, 1, 2, high 5), its DAH on the boot, then the colour (the b7), then the tonic on the hit
+  const lead = song.tracks[0].events;
+  const tonic = lead[1].midis[0];
+  assert.deepEqual(lead.slice(0, 4).map((e) => e.midis[0] - tonic), themes.MOTIF.map(([st]) => st));
+  assert.equal(lead[3].at, Q.boot);
+  assert.equal(lead[4].midis[0] - tonic, themes.COLOURS.tech);
+  assert.equal(lead[5].at, Q.lock);
+  assert.equal(lead[5].midis[0] - tonic, 12);
+  // the data climbs in level into the boot
+  const data = song.tracks[2].events.filter((e) => e.at < Q.boot);
+  assert.ok(data.length >= 12 && data.at(-1).vel > data[0].vel, 'the data climbs');
+  assert.ok(!events.some((e) => Math.abs(e.at - Q.cut) < 1e-6), 'no button on the cut');
+});
+
+test('TECH BYTES\'s picture draws every instant without throwing; one glide in to overhead the processor at the emblem\'s scale, the logotype in the safe column and clear of every trace', () => {
+  const ctx = fakeCanvas().getContext('2d');
+  const secs = intro.introSeconds('tech-bytes');
+  assert.ok(secs > 3 && secs <= 4, `${secs} s`);
+  for (let t = 0; t <= secs + 0.5; t += 3 / 30) assert.doesNotThrow(() => intro.drawIntro(ctx, t, { programId: 'tech-bytes' }), `at ${t.toFixed(3)} s`);
+  const Q = cues.INTRO_CUES['tech-bytes'];
+  const FR = 1 / 30 / (60 / Q.bpm);
+  // moving from the first frame; the camera only ever closes in, and each frame's change of distance is close to the
+  // last's (a glide down to rest, never a brake: the owner's "demasiado brusca" on COSMOS's first tries)
+  const d = (b) => tech.techIntroCamera(b).d;
+  assert.ok(Math.log(d(0) / d(FR)) > 0.03, 'already closing in on the first frame');
+  let prev = null;
+  let jolt = 0;
+  for (let b = FR; b <= Q.cut; b += FR) {
+    const g = Math.log(d(b - FR) / d(b));
+    assert.ok(g >= -1e-9, `never backs off (beat ${b.toFixed(2)})`);
+    if (prev !== null) jolt = Math.max(jolt, Math.abs(g - prev));
+    prev = g;
+  }
+  assert.ok(jolt < 0.01, `the most a frame's change of distance differs from the last's: ${jolt.toFixed(4)}`);
+  // overhead by the boot, at rest at the emblem's scale (a unit of the package a pixel) by the title
+  const boot = tech.techIntroCamera(Q.boot);
+  assert.ok(boot.pitch < 0.02 && Math.abs(boot.yaw) < 0.06, `overhead on the stroke (pitch ${boot.pitch}, yaw ${boot.yaw})`);
+  assert.ok(Math.abs(tech.techIntroScale(Q.title + 0.5) - 1) < 0.01, `${tech.techIntroScale(Q.title + 0.5)} px a unit under the title`);
+  assert.ok(Math.abs(tech.techIntroScale(Q.cut) - 1) < 1e-6, 'still at the cut');
+  // the logotype: TECH over BYTES, inside the column the feeds leave clear, above their caption
+  const box = tech.techIntroTitle();
+  assert.ok(box.x0 >= 28 && box.x1 <= 188, `x ${box.x0}-${box.x1}`);
+  assert.ok(box.y0 > 210 && box.y1 < 300, `y ${box.y0}-${box.y1}`);
+  assert.equal(box.x1 - box.x0, font.textPixels('TECH', 'body').width * 4 + 1, 'TECH at four times the channel\'s face');
+  // no trace of the processor's runs through the logotype or boxes it in (the owner: no boxes of text): on the frame at
+  // rest (a unit a pixel, the processor at 108, 150), every trace keeps out of the logotype's box widened by 6 px
+  const inBox = (x, y) => x > box.x0 - 6 && x < box.x1 + 6 && y > box.y0 - 6 && y < box.y1 + 6;
+  for (const tr of tech.techIntroTraces()) {
+    for (let s = 0; s <= tr.len; s += 1) {
+      let i = 1;
+      while (i < tr.cum.length - 1 && tr.cum[i] < s) i++;
+      const f = Math.min(1, Math.max(0, (s - tr.cum[i - 1]) / (tr.cum[i] - tr.cum[i - 1] || 1)));
+      const x = 108 + tr.xs[i - 1] + (tr.xs[i] - tr.xs[i - 1]) * f;
+      const y = 150 - (tr.ys[i - 1] + (tr.ys[i] - tr.ys[i - 1]) * f);
+      assert.ok(!inBox(x, y), `a trace at (${x.toFixed(0)}, ${y.toFixed(0)}) in the logotype`);
+    }
+  }
+});
+
+test('TECH BYTES\'s intro dissolves into the programme over its last beat', () => {
+  const Q = cues.INTRO_CUES['tech-bytes'];
+  const way = intro.introTransition('tech-bytes');
+  assert.ok(Math.abs(way.seconds - cues.introAt('tech-bytes', Q.cut - Q.push)) < 1e-9);
+  assert.ok(way.seconds > 0.3 && way.seconds < 0.8, `${way.seconds} s`);
 });
 
 test('composeArgs puts the intro first and dissolves it into the clip: the intro\'s sound to that point, its tail dipped and fading under the clip; the overlays keep the clip\'s clock', () => {
