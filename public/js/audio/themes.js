@@ -1442,23 +1442,23 @@ function techIntro() {
     if (b < H) return [k + 7, k + 10, k + 14]; // E5 G5 B5: over the colour
     return [k + 7, k + 12, k + 14]; // E5 A5 B5
   };
-  const data = range(Q.wave, C, 0.25).map((b, i) => {
+  const data = range(Q.morph, C, 0.25).map((b, i) => {
     const onBeat = Math.abs(b - Math.round(b)) < 1e-6;
-    const v = b < B ? 0.2 + (0.18 * (b - Q.wave)) / (B - Q.wave) : b < H ? 0.3 : 0.24;
+    const v = b < B ? 0.2 + (0.18 * (b - Q.morph)) / (B - Q.morph) : b < H ? 0.3 : 0.24;
     return [b, cellAt(b)[i % 3], 0.25, Math.min(0.42, v + (onBeat ? 0.06 : 0))];
   });
   // the saw bass: a low pulse on each beat over the city, eighths from the wave, on D through the dive, the boot's pickup
   const D3 = k - 19;
   const bass = [
-    ...range(0, Q.wave, 1).map((b) => [b, A2, 0.75, 0.5]),
-    ...range(Q.wave, Q.dive, 0.5).map((b, i) => [b, [A2, A2, A2 + 12, A2][i % 4], 0.5, i % 2 ? 0.45 : 0.7]),
+    ...range(0, Q.morph, 1).map((b) => [b, A2, 0.75, 0.5]),
+    ...range(Q.morph, Q.dive, 0.5).map((b, i) => [b, [A2, A2, A2 + 12, A2][i % 4], 0.5, i % 2 ? 0.45 : 0.7]),
     ...range(Q.dive, B, 0.5).map((b, i, a) => [b, D3, 0.5, 0.45 + (0.35 * i) / Math.max(1, a.length - 1)]),
     [B, A2, 0.5, 0.9],
     ...range(B + 1, H, 0.5).map((b, i) => [b, [A2, A2 + 12][i % 2], 0.5, i % 2 ? 0.45 : 0.62]),
   ];
   // the hat: sixteenths on the run, eighths through the dive, sixteenths again after the boot
   const hat = [
-    ...range(Q.wave, Q.dive, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.6 : i % 2 ? 0.3 : 0.44]),
+    ...range(Q.morph, Q.dive, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.6 : i % 2 ? 0.3 : 0.44]),
     ...range(Q.dive, B, 0.5).map((b) => [b, 'H', 0.4]),
     ...range(B + 0.5, H, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.56 : i % 2 ? 0.26 : 0.4]),
   ];
@@ -1496,9 +1496,9 @@ function techIntro() {
       { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 36, Q.dive, 0.6], [Q.dive, k - 31, B - Q.dive, 0.7], [B, k - 36, total - B, 0.82]], total), gain: 0.31 },
       // the first frame's attack (no button on the cut: the clip's first words are there, and the hit rings under them)
       { kind: 'harmony', inst: 'pluck', notes: part([[0, [k - 12, k - 5, k], 0.5, 0.8]], total), gain: 1.4 },
-      { drums: drums([[0, 'K', 0.6], [Q.wave, 'K', 0.56], [2, 'K', 0.46], [3, 'K', 0.3], [B, 'K', 0.68], [B + 0.25, 'K', 0.4], [B + 2, 'K', 0.42], [H, 'K', 0.62]], total), gain: 0.95 },
+      { drums: drums([[0, 'K', 0.6], [Q.morph, 'K', 0.56], [2, 'K', 0.46], [3, 'K', 0.3], [B, 'K', 0.68], [B + 0.25, 'K', 0.4], [B + 2, 'K', 0.42], [H, 'K', 0.62]], total), gain: 0.95 },
       // the wave: a wide stab as it leaves the tower
-      { kind: 'harmony', inst: ENS.stab, notes: part([[Q.wave, [k - 12, k - 5, k + 2], 0.5, 0.5]], total), gain: 1 },
+      { kind: 'harmony', inst: ENS.stab, notes: part([[Q.morph, [k - 12, k - 5, k + 2], 0.5, 0.5]], total), gain: 1 },
       { drums: drums([[2, 'S', 0.2], ...run, [B + 1, 'S', 0.26]], total), gain: 2 },
       { drums: drums([[B, 'P', 0.42], [H, 'P', 0.4]], total), gain: 2 },
       { drums: drums(hat, total) },

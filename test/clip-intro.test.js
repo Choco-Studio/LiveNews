@@ -183,7 +183,7 @@ test('TECH BYTES\'s theme is heard from the first frame, brings the data in with
   assert.equal(lead[5].midis[0] - tonic, 12);
   // the data comes in with the wave and climbs in level into the boot
   const data = song.tracks[2].events.filter((e) => e.at < Q.boot);
-  assert.equal(data[0].at, Q.wave);
+  assert.equal(data[0].at, Q.morph);
   assert.ok(data.length >= 8 && data.at(-1).vel > data[0].vel, 'the data climbs');
   assert.ok(!events.some((e) => Math.abs(e.at - Q.cut) < 1e-6), 'no button on the cut');
 });
