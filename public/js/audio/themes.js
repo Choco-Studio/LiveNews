@@ -23,7 +23,7 @@
 
 import { midiToName } from './tune.js';
 import { WN_CUES, WN_BPM } from '../scenes/opens/worldcues.js';
-import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
+import { CUES as SEQ_CUES, INTRO_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
@@ -1322,6 +1322,99 @@ export function themeFor(programId, { duration = 4 } = {}) {
 }
 
 export const THEME_IDS = Object.keys(OPENS);
+
+// ------------------------------------------------------------ clip intros
+
+// The vertical clips' intros (clip/intro.js, cues.js INTRO_CUES; docs/publishing/shorts-v2.md §6): the programme's
+// title theme told again in four beats, under three seconds. It is heard from the first frame (a felt thump, a bell and
+// the strings at once: a feed gives a clip a second, and silence is a swipe), runs in sixteenths that climb in level
+// into the picture's peak (anticipation that pays off), lands the channel's signature there, and resolves on the
+// lock-up; its tail rings under the clip's first words (lower, as the channel's music dips under a voice), as an open's
+// does under the programme's.
+
+// COSMOS DESK: the fall from outside the galaxy to Saturn (cues.js INTRO_CUES.cosmos), E lydian, 92 BPM (the titles'
+// voyage, quicker: four seconds). On the first frame a felt thump, a timpani stroke and a pluck chord over the deep
+// field's Emaj7 (strings, a sine sub); the orbit in sixteenths (E B F# B), climbing for three beats while the camera
+// falls, a bell on each of the galaxy's stars that catches the light, a felt pulse on each beat; a timpani roll, the
+// strings louder and a low air swell as the stars stream past, into the stroke as the camera passes the Sun; the signature at double speed, its DAH on the stroke over
+// E add9; its colour (A#, the #4) over F#/E while Saturn swells, a chime as each letter of the logotype lands; the 5 on
+// Emaj9#11 as the title locks, ringing on into the clip.
+function cosmosIntro() {
+  const Q = INTRO_CUES.cosmos;
+  const k = 64; // E4
+  const C = Q.cut;
+  const B = Q.sun;
+  const H = Q.lock;
+  const total = C + 2.5;
+  const ch = {
+    emaj7: [k - 12, k - 5, k + 4, k + 11], // E3 B3 G#4 D#5
+    add9: [k - 12, k - 8, k - 5, k + 2], // E3 G#3 B3 F#4: under the DAH
+    two: [k - 10, k - 3, k + 2, k + 6], // F#3 C#4 F#4 A#4: F#/E, under the colour
+    hit: [k - 12, k - 5, k - 1, k + 4], // E3 B3 D#4 G#4 (+ F#5 A#5 above: Emaj9#11)
+  };
+  // the signature twice as fast, its DAH on the stroke (B3 E4 F#4 in the three sixteenths before it); its colour held
+  // half a beat after the DAH to the hit; the 5 on the hit, held into the tail
+  const sig = motif(k, COLOURS.cosmos, B - 0.75, { scale: 0.5, colourBeats: (H - B - 0.5) * 2 });
+  // the orbit: sixteenths to the stroke (the level climbs), then eighths an octave up, voiced clear of the colour
+  const orbit = [
+    ...range(0, B, 0.25).map((b, i) => [b, [k, k + 7, k + 14, k + 7][i % 4], 0.25, 0.42 + (0.22 * b) / B + (i % 2 ? 0 : 0.06)]),
+    ...range(B, H, 0.5).map((b, i) => [b, (b < B + 0.5 ? [k + 12, k + 19] : [k + 18, k + 21])[i % 2], 0.5, 0.26]),
+  ];
+  // the timpani roll from a beat before the air swell, growing into the stroke
+  const roll = range(Q.roll - 0.5, B, 0.125).map((b, i, a) => [b, k - 24, 0.125, 0.12 + (0.36 * i) / Math.max(1, a.length - 1)]);
+  // a chime as each letter of the logotype lands (cosmosintro.js: one every 0.09 beat from the title cue, landing about
+  // a quarter beat after it rises), up the hit's chord
+  const chimes = [k + 19, k + 23, k + 26, k + 28, k + 30, k + 31].map((m, i) => [Q.title + 0.25 + 0.09 * i, m, 0.25, 0.22 + 0.02 * i]);
+  return {
+    bpm: Q.bpm,
+    room: 0.3,
+    hall: 0.4,
+    echo: { amount: 1, beats: 0.5, feedback: 0.36 },
+    fadeOut: 1.2,
+    loudness: -1.6, // level with the voice, as the opens (themeFor)
+    tracks: [
+      { kind: 'lead', inst: 'softtri', notes: part([...sig, [H, k + 7, C - H + 1.5, 0.8]], total), gain: 1 },
+      { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, B - 0.75, { scale: 0.5, colourBeats: (H - B - 0.5) * 2, vel: 0.5 }), total), gain: 0.9, echo: 0.55, pan: -0.25 },
+      { kind: 'harmony', inst: ENS.orbit, notes: part(orbit, total), gain: 1.6, echo: 0.45, pan: 0.3 },
+      { kind: 'harmony', inst: ENS.bell, notes: part([
+        [Q.glints[0], k + 19, 0.5, 0.5], [Q.glints[1], k + 23, 0.5, 0.48], [Q.glints[2], k + 26, 0.5, 0.46], // the stars: B, D#, F#
+        [B, [k + 20, k + 27], 1, 0.6], // the Sun: G# and D#
+        [B + 1, k + 18, 0.5, 0.4], // the colour, high (A#)
+        [H, [k + 20, k + 27], 1.5, 0.52],
+      ], total), gain: 2, echo: 0.6, pan: 0.35 },
+      { kind: 'harmony', inst: ENS.bell, notes: part(chimes, total), gain: 1.4, echo: 0.5, pan: -0.3 },
+      // (the strings speak at once: an intro has no bar to swell in)
+      { kind: 'harmony', inst: { preset: 'strings', wave: 'saw', a: 0.05 }, notes: part([
+        [0, ch.emaj7, 1.5, 0.52],
+        [1.5, ch.emaj7, B - 1.5, 0.66], // (louder as the stars stream past)
+        [B, ch.add9, 0.5, 0.56],
+        [B + 0.5, ch.two, H - B - 0.5, 0.6],
+        [H, ch.hit, total - H, 0.72],
+      ], total), gain: 1.8, pan: -0.1 },
+      { kind: 'harmony', inst: 'strings', notes: part([[0, [k - 24, k - 17], H, 0.52], [H, [k - 24, k - 17], total - H, 0.58]], total), gain: 1.45 },
+      // the Sun's light: a warm chord high while Saturn swells, and the #11 over the hit
+      { kind: 'harmony', inst: 'warm', notes: part([[B + 0.5, [k + 9, k + 14, k + 18], H - B - 0.5, 0.4], [H, [k + 14, k + 18], total - H, 0.46]], total), gain: 1.35, pan: 0.2 },
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.78], [H, k - 24, total - H, 0.85]], total), gain: 0.62 },
+      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 24, 0.5, 0.7], ...roll, [B, k - 24, 1.5, 0.75], [H, k - 24, 1, 0.58]], total), gain: 0.95 },
+      // the first frame's attack (no button on the cut: the clip's first words are there, and the hit rings under them)
+      { kind: 'harmony', inst: 'pluck', notes: part([[0, [k - 12, k - 5, k + 4], 0.5, 0.85]], total), gain: 1.6 },
+      // a felt thump on the first frame and a pulse on each beat of the fall (the heart of the climb), the stroke, the hit
+      { drums: drums([[0, 'F', 0.8], [1, 'F', 0.36], [Q.roll, 'A', 0.46], [B, 'F', 0.75], [H, 'F', 0.55]], total), gain: 1.9 },
+      { drums: drums([[2, 'F', 0.44]], total), gain: 1.9 },
+    ],
+  };
+}
+const INTRO_THEMES = { cosmos: cosmosIntro };
+/** The theme of a programme's clip intro (null when it has none); meta: { programId, bpm, peakAt, hitAt, cutAt } (s). */
+export function introTheme(programId) {
+  const build = INTRO_THEMES[programId];
+  if (!build) return null;
+  const tune = build();
+  const Q = INTRO_CUES[programId];
+  const s = (b) => (b * 60) / Q.bpm;
+  return { ...tune, meta: { programId, bpm: Q.bpm, peakAt: s(Q.sun), hitAt: s(Q.lock), cutAt: s(Q.cut) } };
+}
+
 
 // -------------------------------------------------------------- channel cues
 

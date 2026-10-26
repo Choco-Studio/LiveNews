@@ -116,30 +116,57 @@ function facesFilter(input, faces) {
 }
 
 /**
- * The ffmpeg graph of one clip: [master window] + hook overlay (vertical: the whole clip; horizontal: its first
- * `hookSeconds`) + the face hook's strip (`faces`: { file, until }, its first seconds) + the end card (its own picture
- * and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18, a keyframe a second) + AAC 160k, faststart. The
- * sound fades in over 0.12 s and out over the last 0.35 s of the cut, and `gain` dB lift the whole (loudnessGain: the
- * clip at the feeds' loudness).
+ * A vertical clip's intro (docs/publishing/shorts-v2.md §6; public/js/clip/intro.js): a recording at the clip's own
+ * pixels whose picture lasts `seconds` and whose sound runs on past it (the theme's tail). Its picture goes before the
+ * clip's; its sound up to the cut goes before the clip's sound, and its tail is laid under the clip's first seconds, as
+ * an open's ring under a programme's first words, dipped under them and fading (input `input`).
+ */
+/**
+ * Seconds of the intro's theme laid under the clip's first words (its tail: the hit ringing out), and how far it dips
+ * there (the channel's music dips 6 dB under a voice: public/js/audio/synth.js), fading out over them.
+ */
+export const INTRO_TAIL = 2.2;
+const INTRO_DUCK = -6;
+function introParts(input, seconds) {
+  const S = seconds.toFixed(3);
+  return {
+    video: `[${input}:v]trim=duration=${S},setpts=PTS-STARTPTS,fps=${FPS},setsar=1[iv]`,
+    sound: `[${input}:a]aresample=48000,asplit=2[ia0][ia1];[ia0]atrim=end=${S},asetpts=PTS-STARTPTS[ih];[ia1]atrim=start=${S},asetpts=PTS-STARTPTS,volume=${INTRO_DUCK}dB,afade=t=out:st=0:d=${INTRO_TAIL}[it];[a][it]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[am]`,
+  };
+}
+
+/**
+ * The ffmpeg graph of one clip: [intro] + [master window] + hook overlay (vertical: the whole clip; horizontal: its
+ * first `hookSeconds`) + the face hook's strip (`faces`: { file, until }, its first seconds) + the end card (its own
+ * picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18, a keyframe a second) + AAC 160k,
+ * faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut, and `gain` dB lift the whole
+ * (loudnessGain: the clip at the feeds' loudness). `intro`: { file, seconds } (introParts): the overlays keep the
+ * clip's own clock, after it.
  * A window with a `hold` shows its frame at `hold` from the start until then (the sound runs on underneath).
  */
-export function composeArgs({ master, hook, faces = null, endcard, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
+export function composeArgs({ master, hook, faces = null, endcard, intro = null, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
   const D = window.duration;
   const enable = format === 'vertical' ? '' : `:enable='lt(t,${hookSeconds})'`;
   const hold = window.hold > 0 ? `,trim=start=${window.hold.toFixed(3)},setpts=PTS-STARTPTS,tpad=start_duration=${window.hold.toFixed(3)}:start_mode=clone` : '';
-  // the inputs: the master, then the hook, the face hook's strip and the end card, each when there is one
+  // the inputs: the master, then the hook, the face hook's strip, the end card and the intro, each when there is one
   let n = 1;
   const hookIn = hook ? n++ : null;
   const facesIn = faces?.file ? n++ : null;
   const end = endcard ? n++ : null;
+  const introIn = intro?.file ? n++ : null;
   const sound = soundParts(window, end);
   const fc = facesIn !== null ? facesFilter(facesIn, faces) : null;
+  const ip = introIn !== null ? introParts(introIn, intro.seconds) : null;
+  // the pieces in order, each a picture and its sound: the intro, the clip, the end card
+  const parts = [...(ip ? [['[iv]', '[ih]']] : []), ['[o]', ip ? '[am]' : '[a]'], ...(endcard ? [['[ev]', '[ea]']] : [])];
   const graph = [
     `[0:v]setpts=PTS-STARTPTS,fps=${FPS}${hold}[c]`,
     hook ? `[c][${hookIn}:v]overlay=0:0${enable}:eof_action=repeat[h]` : '[c]null[h]',
     fc ? `${fc.strip};[h][fc]overlay=0:${fc.y}:enable='${fc.enable}'[o]` : '[h]null[o]',
     sound.cut,
-    endcard ? `[${end}:v]fps=${FPS},setsar=1[ev];${sound.card};[o][a][ev][ea]concat=n=2:v=1:a=1[v][ac]` : '[o]null[v];[a]anull[ac]',
+    ...(ip ? [ip.video, ip.sound] : []),
+    ...(endcard ? [`[${end}:v]fps=${FPS},setsar=1[ev]`, sound.card] : []),
+    parts.length > 1 ? `${parts.map(([v, a]) => v + a).join('')}concat=n=${parts.length}:v=1:a=1[v][ac]` : '[o]null[v];[a]anull[ac]',
     `[ac]${volume(gain)}[aa]`,
     `[v]scale=iw*${SCALE}:ih*${SCALE}:flags=neighbor,setsar=1,format=yuv420p[vv]`,
   ].join(';');
@@ -147,6 +174,7 @@ export function composeArgs({ master, hook, faces = null, endcard, window, forma
   if (hook) args.push('-loop', '1', '-t', D.toFixed(3), '-i', hook);
   if (facesIn !== null) args.push('-loop', '1', '-t', D.toFixed(3), '-i', faces.file);
   if (endcard) args.push('-i', endcard);
+  if (introIn !== null) args.push('-i', intro.file);
   args.push('-filter_complex', graph, '-map', '[vv]', '-map', '[aa]', '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'medium', '-crf', String(crf), '-g', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', out);
   return args;
 }
@@ -154,12 +182,21 @@ export function composeArgs({ master, hook, faces = null, endcard, window, forma
 // (EBU R128 as ffmpeg's ebur128 filter reports it: the summary at the end of its log, on stderr)
 const EBUR128 = 'ebur128=peak=true:framelog=quiet';
 
-/** ffmpeg argv that measure a clip's sound before it is made: the same window, fades and end card as composeArgs mixes. */
-export function loudnessArgs({ master, endcard = null, window }) {
+/** ffmpeg argv that measure a clip's sound before it is made: the same window, fades, intro and end card as composeArgs mixes. */
+export function loudnessArgs({ master, endcard = null, intro = null, window }) {
   const sound = soundParts(window, endcard ? 1 : null);
-  const graph = [sound.cut, endcard ? `${sound.card};[a][ea]concat=n=2:v=0:a=1[ac]` : '[a]anull[ac]', `[ac]${EBUR128}[m]`].join(';');
+  const ip = intro?.file ? introParts(endcard ? 2 : 1, intro.seconds) : null;
+  const parts = [...(ip ? ['[ih]'] : []), ip ? '[am]' : '[a]', ...(endcard ? ['[ea]'] : [])];
+  const graph = [
+    sound.cut,
+    ...(ip ? [ip.sound] : []),
+    ...(endcard ? [sound.card] : []),
+    parts.length > 1 ? `${parts.join('')}concat=n=${parts.length}:v=0:a=1[ac]` : '[a]anull[ac]',
+    `[ac]${EBUR128}[m]`,
+  ].join(';');
   const args = ['-hide_banner', '-nostats', '-ss', window.start.toFixed(3), '-t', window.duration.toFixed(3), '-i', master];
   if (endcard) args.push('-i', endcard);
+  if (ip) args.push('-i', intro.file);
   args.push('-filter_complex', graph, '-map', '[m]', '-f', 'null', '-');
   return args;
 }
@@ -233,12 +270,13 @@ export function cuesFor(timeline, window, { maxLine = 42, lines = 2 } = {}) {
   return cues.filter((c) => c.end > c.start);
 }
 
-export function srtFor(timeline, window) {
-  return cuesFor(timeline, window).map((c, i) => `${i + 1}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`).join('\n');
+/** The clip's caption file (`offset`: seconds of intro before the clip's own first frame). */
+export function srtFor(timeline, window, { offset = 0 } = {}) {
+  return cuesFor(timeline, window).map((c, i) => `${i + 1}\n${srtTime(c.start + offset)} --> ${srtTime(c.end + offset)}\n${c.text}\n`).join('\n');
 }
 
-export function vttFor(timeline, window) {
-  return `WEBVTT\n\n${cuesFor(timeline, window).map((c) => `${srtTime(c.start, '.')} --> ${srtTime(c.end, '.')}\n${c.text}\n`).join('\n')}`;
+export function vttFor(timeline, window, { offset = 0 } = {}) {
+  return `WEBVTT\n\n${cuesFor(timeline, window).map((c) => `${srtTime(c.start + offset, '.')} --> ${srtTime(c.end + offset, '.')}\n${c.text}\n`).join('\n')}`;
 }
 
 /** The times of a contact sheet: the first frames (the hook), evenly through the cut, and the end card. */

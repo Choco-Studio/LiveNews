@@ -36,7 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { createPlaybackServer } from '../../server/publish/playback.js';
 import { buildTimeline, estimateTimeline } from '../../server/publish/timeline.js';
 import { detectMoments, publishable, markCopied, markUncleared, ownHook, hookLines } from '../../server/publish/moments.js';
-import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, LOUDNESS, loudnessArgs, measureArgs, parseLoudness, loudnessGain, FACES } from '../../server/publish/render.js';
+import { clipWindow, composeArgs, srtFor, vttFor, contactTimes, contactArgs, WEATHER_WIPE, LOUDNESS, loudnessArgs, measureArgs, parseLoudness, loudnessGain, FACES, INTRO_TAIL } from '../../server/publish/render.js';
 import { clipTexts } from '../../server/publish/clipmeta.js';
 import { packFacts, writePackage, checkPackage } from '../../server/publish/packaging.js';
 import { packagingChain, pickFrames, grabFrame, renderCovers, pictureOf, coverCast } from './packager.mjs';
@@ -47,6 +47,7 @@ import { makeAdapter } from '../../server/publish/adapters/index.js';
 import { masterRoots, renderedMaster, useRenderedMaster } from '../../server/publish/masters.js';
 import { streamOf } from '../../public/js/airmode.js';
 import { runningFor, assignArm, armStore } from '../../server/publish/experiments.js';
+import { writeWav } from '../recorder/page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -290,12 +291,46 @@ async function endCard(fmt) {
   return f;
 }
 
+// a vertical clip's intro (docs/publishing/shorts-v2.md §6; public/js/clip/intro.js): the programme's sequence for a
+// phone, made once a run, frame by frame from the lab page and its theme rendered offline from its first beat (so the
+// sound lands on the picture to the sample), then kept lossless as the masters are; null for a programme without one,
+// a horizontal clip, or --no-intro
+let introMade;
+async function introClip(fmt) {
+  if (fmt !== 'vertical' || flag('no-intro')) return null;
+  if (introMade !== undefined) return introMade;
+  introMade = null;
+  const seconds = await page.evaluate((id) => window.__clipLab.introSeconds(id), prog);
+  if (!seconds) return null;
+  const dir = path.join(tmpDir, `intro-${prog}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const n = Math.round(seconds * 30);
+  for (let i = 0; i < n; i++) {
+    const url = await page.evaluate(([id, t]) => window.__clipLab.intro({ programId: id }, t), [prog, i / 30]);
+    fs.writeFileSync(path.join(dir, `f${String(i).padStart(4, '0')}.png`), Buffer.from(url.split(',')[1], 'base64'));
+  }
+  const snd = await page.evaluate(([id, s]) => window.__clipLab.introSound(id, s), [prog, n / 30 + INTRO_TAIL]);
+  if (!snd) return null;
+  const pcm = (b64) => {
+    const b = Buffer.from(b64, 'base64');
+    return new Float32Array(b.buffer, b.byteOffset, b.length / 4);
+  };
+  const wav = path.join(dir, 'sound.wav');
+  writeWav(wav, [pcm(snd.L), pcm(snd.R)], snd.rate);
+  const f = path.join(cardsDir, `intro-${prog}-vertical.mkv`);
+  await run('ffmpeg', ['-v', 'error', '-y', '-framerate', '30', '-i', path.join(dir, 'f%04d.png'), '-i', wav, '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-c:a', 'flac', '-ar', '48000', f], { quiet: true });
+  introMade = { file: f, seconds: +(n / 30).toFixed(4) };
+  say(`intro: ${prog}'s, ${introMade.seconds.toFixed(2)} s before every vertical clip, its theme's tail under the clip's first ${INTRO_TAIL} s`);
+  return introMade;
+}
+
 // ---------------------------------------------------------------- 5. the clips
 
 /** Frames of the clip (at the channel's own pixels) where the RECREATION label stands at its place, of those it must. */
-async function labelEvidence(clip, fmt, window, tl) {
+async function labelEvidence(clip, fmt, window, tl, lead = 0) {
   const recSegs = tl.segments.filter((s) => s.seg.kind === 'restage' || s.seg.recreation);
-  const spans = recSegs.map((s) => ({ a: Math.max(0, s.start - window.start), b: Math.min(window.duration, s.end - window.start) })).filter((x) => x.b > x.a);
+  // (in the made file: after the intro, `lead` seconds)
+  const spans = recSegs.map((s) => ({ a: lead + Math.max(0, s.start - window.start), b: lead + Math.min(window.duration, s.end - window.start) })).filter((x) => x.b > x.a);
   if (!spans.length) return null;
   const W = fmt === 'vertical' ? 216 : 384;
   const H = fmt === 'vertical' ? 384 : 216;
@@ -384,24 +419,26 @@ for (const m of chosen) {
       const file = path.join(clipsDir, `${name}.mp4`);
       const hook = await hookPng(m, fmt);
       const end = await endCard(fmt);
+      const intro = await introClip(fmt);
+      const lead = intro ? intro.seconds : 0; // the clip's own first frame, in the made file
       // the face hook, on its experiment's arm: the players rise in under the question for its first seconds
       const until = experiment?.arm === 'face' && fmt === 'vertical' ? facesUntil(reports[fmt], window) : null;
       const faces = until ? { file: await facesPng(), until } : null;
       // the clip at the feeds' loudness (docs/publishing/shorts-v2.md A1): its sound measured as it will be mixed, then
       // one gain on the whole, and the made file measured again (what the feeds will play)
-      const measured = parseLoudness((await run('ffmpeg', loudnessArgs({ master: masters[fmt].file, endcard: end, window }), { quiet: true })).err);
+      const measured = parseLoudness((await run('ffmpeg', loudnessArgs({ master: masters[fmt].file, endcard: end, intro, window }), { quiet: true })).err);
       const gain = loudnessGain(measured);
-      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''}${experiment ? `; ${experiment.id}: ${experiment.arm}${faces ? ` (faces to ${faces.until} s)` : ''}` : ''})`);
-      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, faces: faces?.file ? faces : null, endcard: end, window, format: fmt, out: file, gain }), { quiet: true });
+      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}${intro ? `; after the ${intro.seconds.toFixed(2)} s intro` : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''}${experiment ? `; ${experiment.id}: ${experiment.arm}${faces ? ` (faces to ${faces.until} s)` : ''}` : ''})`);
+      await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, faces: faces?.file ? faces : null, endcard: end, intro, window, format: fmt, out: file, gain }), { quiet: true });
       const heard = parseLoudness((await run('ffmpeg', measureArgs(file), { quiet: true })).err);
       const loudness = { target: LOUDNESS.target, gain, before: measured, lufs: heard.lufs, truePeak: heard.truePeak };
       if (heard.truePeak !== null && heard.truePeak > LOUDNESS.ceiling + 0.5) say(`clip ${name}: true peak ${heard.truePeak} dBTP, over the feeds' -1 dBTP`);
       const duration = await probeDuration(file);
-      const endSeconds = duration - window.duration;
+      const endSeconds = duration - window.duration - lead;
       // what the clip's end card says and how long it holds (the gate holds a clip without it)
       const cards = compliance.clipCards({ endCard: +endSeconds.toFixed(2) });
-      fs.writeFileSync(path.join(clipsDir, `${name}.srt`), srtFor(tl, window));
-      fs.writeFileSync(path.join(clipsDir, `${name}.vtt`), vttFor(tl, window));
+      fs.writeFileSync(path.join(clipsDir, `${name}.srt`), srtFor(tl, window, { offset: lead }));
+      fs.writeFileSync(path.join(clipsDir, `${name}.vtt`), vttFor(tl, window, { offset: lead }));
       const contact = path.join(clipsDir, `${name}.contact.png`);
       await run('ffmpeg', contactArgs({ clip: file, format: fmt, times: contactTimes(duration, endSeconds), out: contact }), { quiet: true });
       // the covers (vertical) or thumbnails (horizontal): three variants, from the story's cleared picture (never one
@@ -416,10 +453,10 @@ for (const m of chosen) {
       const when = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(new Date(airedAt)).toUpperCase();
       const covers = await renderCovers({ page: coverPage, fmt, pkg: pack, frames, picture: m.uncleared ? null : pictureOf(episode, m.storyIds, pictureDir), programme: episode.program?.title || 'GLOBIT 24', theme, kicker: `${episode.program?.title || 'GLOBIT 24'} · ${when}`, grave: facts.grave, ...coverCast(episode, m), out: clipsDir, name });
       const thumb = covers[0];
-      const labelFrames = await labelEvidence(file, fmt, window, tl);
+      const labelFrames = await labelEvidence(file, fmt, window, tl, lead);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, loudness, experiment: experiment ? { ...experiment, faces: faces?.file ? faces.until : null } : null, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, loudness, intro: intro ? { programId: prog, seconds: intro.seconds } : null, experiment: experiment ? { ...experiment, faces: faces?.file ? faces.until : null } : null, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt });
         meta.texts[p] = t;
@@ -446,7 +483,7 @@ for (const m of chosen) {
             hashtags: t.hashtags,
             tags: ['GLOBIT 24', episode.program?.title, ...t.hashtags].filter(Boolean),
             links: t.links,
-            media: { video: file, thumb, thumbs: covers, contact, captions: meta.files.srt, duration, sha256: hash, coverAt: 1 },
+            media: { video: file, thumb, thumbs: covers, contact, captions: meta.files.srt, duration, sha256: hash, coverAt: lead + 1 },
             // the packaging: what the owner chooses from (three titles, three covers) and what every later check
             // measures them against (manual.js packageFaults)
             package: { titles: pack.titles, thumbs: pack.thumbs, hook: pack.hook, lead: pack.lead, hashtags: pack.hashtags, writer: pack.writer, facts: { ...facts, sources: [] } },

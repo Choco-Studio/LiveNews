@@ -23,6 +23,7 @@ import { THEME_ACCENT } from '/js/cast.js';
 import { drawHook, drawEndCard, sizeOf, END_CARD_SECONDS } from '/js/clip/cards.js';
 import { VerticalSet } from '/js/clip/vset.js';
 import { setKit } from '/js/clip/index.js';
+import { drawIntro, introFor, introSeconds } from '/js/clip/intro.js';
 
 // the programme's set for the vertical end card (the theme names the programme: one theme, one programme)
 const THEME_PROGRAMME = { world: 'world-now', tech: 'tech-bytes', space: 'cosmos', money: 'money-minute', flash: 'news-60', weather: 'world-weather', week: 'seven-days', sport: 'full-time', quiz: 'pay-attention' };
@@ -71,15 +72,69 @@ async function facesCanvas(spec) {
   }
   return c;
 }
+// a vertical clip's intro (clip/intro.js): the programme's sequence for a phone at t
+function introCanvas(spec, t) {
+  const c = mk(216, 384);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  drawIntro(g, t, { programId: spec.programId });
+  return c;
+}
 window.__clipLab = {
   faces: async (spec) => (await facesCanvas(spec)).toDataURL('image/png'),
+  intro: (spec, t) => introCanvas(spec, t).toDataURL('image/png'),
+  introSeconds: (programId) => introSeconds(programId),
+  // the intro's theme rendered offline with the channel's own mixer (audio/synth.js renderTune), from its first beat at
+  // 0: { rate, L, R } (base64 of Float32 samples), `seconds` long (the picture's length and the tail under the clip)
+  introSound: async (programId, seconds) => {
+    const { renderTune } = await import('/js/audio/synth.js');
+    const { introTheme } = await import('/js/audio/themes.js');
+    const tune = introTheme(programId);
+    if (!tune) return null;
+    const r = await renderTune(tune, { seconds, volume: 0.5, startAt: 0 });
+    if (!r) return null;
+    const b64 = (f) => {
+      const u = new Uint8Array(f.buffer, f.byteOffset, f.byteLength);
+      let s = '';
+      for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+      return btoa(s);
+    };
+    return { rate: r.buffer.sampleRate, L: b64(r.buffer.getChannelData(0)), R: b64(r.buffer.getChannelData(Math.min(1, r.buffer.numberOfChannels - 1))) };
+  },
   seconds: END_CARD_SECONDS,
   hook: (spec) => hookCanvas(spec).toDataURL('image/png'),
   end: (spec, t) => endCanvas(spec, t).toDataURL('image/png'),
 };
 
 const run = qs.get('run');
-if (run === 'end') {
+if (run === 'intro') {
+  // a vertical clip's intro on the page's clock, to watch and hear (&programId= the programme, &music=1 its theme); the
+  // factory renders it frame by frame instead (__clipLab.intro, __clipLab.introSound), so its sound starts on its first
+  // frame exactly
+  const spec = { programId: qs.get('programId') || '' };
+  const it = introFor(spec.programId);
+  it?.warm?.();
+  const screen = mk(216, 384);
+  screen.id = 'screen';
+  document.body.append(screen);
+  const g = screen.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  let audio = null;
+  if (qs.get('music') === '1') {
+    const { AudioEngine } = await import('/js/audio.js');
+    const { introTheme } = await import('/js/audio/themes.js');
+    audio = new AudioEngine({ lang: 'en' });
+    await audio.unlock();
+    audio.tune = introTheme(spec.programId);
+  }
+  const t0 = performance.now();
+  if (audio?.tune) audio.playTune(audio.tune, { volume: 0.5, startAt: t0 });
+  const frame = () => {
+    requestAnimationFrame(frame);
+    drawIntro(g, (performance.now() - t0) / 1000, { programId: spec.programId });
+  };
+  frame();
+} else if (run === 'end') {
   // the end card on its own clock, as a recording sees it: #screen, the channel's ident at its first frame
   // (&stream=live|recorded|none, airmode.js streamOf: WATCH LIVE only for a live stream, "24 hours a day" for the
   // pre-rendered one, nothing about where to watch without a stream; none unless the factory says otherwise;

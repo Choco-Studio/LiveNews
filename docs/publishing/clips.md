@@ -4,7 +4,8 @@ One aired episode goes in. Its best moments come out as finished clips, each one
 
 - the vertical picture (Shorts, Reels, TikTok) and the horizontal one (Facebook, X);
 - burned-in captions in the channel's own type;
-- a hook title and an end card;
+- an intro before the vertical clip, the programme's own spectacle in under three seconds, with its theme
+  (`shorts-v2.md` §6; COSMOS DESK's first), a hook title and an end card;
 - a caption file (`.srt` and `.vtt`), a contact sheet and a cover frame;
 - the text for every network;
 - the compliance desk's verdict.
@@ -148,7 +149,8 @@ exact transcript in recording time: every segment, sentence and word.
   - the master's window (with its `hold`: the frame at `hold` cloned over the frames before it);
   - the hook laid over it (vertical: the whole clip; horizontal: the first four seconds; never on a horizontal WORLD
     WEATHER board, whose own heading is the hook and sits where the plate would);
-  - the end card concatenated (its own picture and sting);
+  - the end card concatenated (its own picture and sting), and before the clip its intro (vertical, a programme that
+    has one: its picture, its theme to the cut, the theme's tail 6 dB down under the clip's first words; `shorts-v2.md` §6);
   - a 5x nearest-neighbour scale;
   - H.264 High (yuv420p, CRF 18, a keyframe a second), AAC 160k, faststart;
   - the sound faded in over 0.12 s and out over 0.35 s;

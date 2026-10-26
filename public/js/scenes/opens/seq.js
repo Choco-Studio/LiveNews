@@ -52,21 +52,26 @@ export function sequence({ hit, before, reveal, handAt = TL.glide }) {
   };
 }
 
-/** A full-frame pixel layer: begin() clears it, plot*() write palette colours (u32), end() blits it. */
+/**
+ * A full-frame pixel layer: begin() clears it, plot*() write palette colours (u32), end() blits it. The frame is the
+ * horizontal channel's unless a size is given (the vertical clips' intros: 216 x 384).
+ */
 export class Layer {
-  constructor(key) {
+  constructor(key, w = W, h = H) {
     this.key = key;
+    this.w = w;
+    this.h = h;
     this.fb = null;
     this.d = null;
   }
   begin(fill = 0) {
-    this.fb = frameBuffer(this.key, W, H);
+    this.fb = frameBuffer(this.key, this.w, this.h);
     this.d = this.fb.d;
     this.d.fill(fill);
     return this.d;
   }
   plot(x, y, c) {
-    if (x >= 0 && x < W && y >= 0 && y < H) this.d[y * W + x] = c;
+    if (x >= 0 && x < this.w && y >= 0 && y < this.h) this.d[y * this.w + x] = c;
   }
   /** Plot through the screen-fixed Bayer matrix (anchored where the emblems stand): drawn where a > threshold. */
   plotA(x, y, c, a) {

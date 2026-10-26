@@ -84,3 +84,59 @@ study's audit made it the day before; the gate holds every clip here only for th
 | Its words | "How many? A question about Exmoor Pony Herd from this week's news", covers BEAT PACO? | "Exmoor Pony Herd: can you beat Paco and Penny?", covers HOW MANY PONIES? / BEAT PACO? / EXMOOR PONY HERD?, #ExmoorPonyHerd |
 | The DOUBLE OR NOTHING question's words | "Can you beat Paco and Penny? This week's news quiz", no cover | "Elon Musk: can you beat Paco and Penny?", cover WHICH COUNTRY? |
 | The end card | the programme and the AI notice | the same, with FOLLOW FOR THE NEXT QUESTION |
+
+## 6. The intro: the hook is the programme's own spectacle (26 Oct)
+
+The owner, 26 Oct, after the quiz clips of §2 ("Sinceramente eso es una caca"): "necesitamos el hook. Podemos usar la
+intro para ello como en los programas: espectacular, que dure 3 segundos como máximo y con una música que mantenga
+atención. Empieza con el de cosmos". On the tries that followed: "para este formato vertical sería mejor hacer un
+acercamiento desde fuera de la galaxia, con todas las estrellas y puntitos moviéndose dando un efecto potente"; "evita
+recuadros con texto; si lo haces, que sean letras que tengan que ver con el estilo metidas dentro; no hace falta tampoco
+muchísimo texto"; "mejor que lleve hasta Saturno, que es el icono… que parezca una galaxia de verdad cuando te acercas,
+como el espacio real. Y las letras currátelas, puntitos no queda muy creativo"; "puedes usar 4 segundos de intro si
+quieres. Por lo que he visto es buen gancho".
+
+So every vertical clip of a programme that has one opens on its intro, then cuts to the clip's first frame, where the
+story's words, the bug and the programme's tag are. COSMOS DESK's (`public/js/scenes/opens/cosmosintro.js`, its theme
+`audio/themes.js` `introTheme`, both on `cues.js` `INTRO_CUES.cosmos`): six beats at 92 BPM, 3.9 s (117 frames), one
+unbroken fall from outside a spiral galaxy down to Saturn:
+
+| Beats | The picture | The theme (E lydian) |
+|---|---|---|
+| 0-1.75 | A spiral galaxy seen from outside it, tilted: a cream core, two blue-white arms threaded with pink nebulae and cut by dark dust lanes, its older disc a warm glow; the camera already falling toward a point in its near arm; three of its giants catch the light | On the first frame a felt thump, a timpani stroke and a pluck chord over the strings' Emaj7 and a sine sub; the orbit in sixteenths, climbing; a bell on each giant; a felt pulse on each beat |
+| 1.75-2.6 | The glow resolves into stars as the camera reaches the arm, and they stream past it, filling the frame; the camera swings round as it falls, so the galaxy it leaves becomes a band across the sky | A timpani roll, the strings louder, an air swell |
+| 3 | The camera passes the Sun: it grows from a star to a disc of light and flares | The stroke; the channel's signature at double speed, its DAH here |
+| 3-5 | Saturn swells out of the glare to the emblem's place (the title sequence's own planet, 38 px across the radius on the hit), lit from the Sun behind the camera, its moon running a last orbit; COSMOS rises in under it letter by letter, then DESK between two magenta rules | The signature's colour (A#, the #4); a chime as each letter lands |
+| 5-6 | The emblem and the logotype over the galaxy's band, a shine across the letters on the hit | The 5 on Emaj9#11, ringing on into the clip |
+
+How the picture is drawn: about 80,000 points in space (the galaxy's core, disc, arms, nebulae and dust; the stars of
+the arm round Saturn and of the Sun's neighbourhood, at every distance; a backdrop of sky) seen through one lens, the
+camera's distance on a logarithmic track (powers of ten, from 57 units to 0.0003), the world turning about Saturn.
+Each point gives the light a star at its distance would (falling as the square of the distance, so the galaxy's glow
+holds its brightness as it resolves into stars) into three light buffers by colour and one of dust; a point that
+moves draws its travel since the last frame, its light spread along it; an adaptation like the eye's brings the light
+down when the frame fills with it. The light is then brought to the palette on three ramps (warm, blue, pink) through
+the screen's Bayer matrix: a photograph's gradients in the channel's 32 colours.
+
+The logotype: COSMOS in the channel's 5x7 face at four times its size, each pixel a 4 x 4 block with its outer corners
+rounded where the letter turns, filled from white through cream and pink to magenta (Saturn's light over the
+programme's colour), a white edge along its tops and a purple one under them, a black outline and a violet glow; the
+letters rise in one after another with a little overshoot. DESK at twice the size, its letters spaced, between two
+magenta rules. No plate, no box.
+
+The rules it keeps, from §1 and the study: motion where the eye starts, on the first frame (principle 1); the rhythm
+and the light climbing toward one peak, the Sun, on the music's stroke (anticipation that pays off; a feed's silence
+is a swipe, so the theme sounds from the first frame); the icon the viewer will know the programme by at the end; few
+words, the programme's name alone; the clip's own words take over at the cut, in the title band where they stay.
+
+How it is made (`tools/publish/factory.mjs` `introClip`, once a run): `/lab/clip.html` draws it frame by frame
+(`__clipLab.intro`) and renders its theme offline from its first beat (`__clipLab.introSound`, the channel's own mixer),
+so the sound lands on the picture to the sample (the deterministic recorder runs a second of the page before its first
+frame); the two go into a lossless file as the masters do. The clip's graph (`server/publish/render.js` `composeArgs`,
+`introParts`) puts its picture and its sound to the cut first and lays the theme's tail, 6 dB down (the channel's music
+dips so under a voice) and fading over `INTRO_TAIL` (2.2 s), under the clip's first words; the loudness is measured and
+set on the whole (`loudnessArgs` mixes the same sound). Everything timed on the clip's own clock moves by the intro's
+length in the made file: the caption files (`srtFor`/`vttFor` `offset`), the RECREATION label's evidence, TikTok's cover
+frame (`coverAt`); the overlays (the hook, the face hook) are laid on the clip before the intro is put in front.
+`--no-intro` makes clips without it. Horizontal clips have none. The other programmes' intros follow once the owner has
+signed off COSMOS's: each its own idea for a phone, ending on its own emblem and logotype.

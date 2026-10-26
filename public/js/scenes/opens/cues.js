@@ -113,3 +113,30 @@ export const cueAt = (id, beat) => (beat * 60) / CUES[id].bpm;
 /** The lock-up's still frame and the cut of a programme's sequence. */
 export const hitOf = (id) => cueAt(id, CUES[id].hit);
 export const durationOf = (id) => hitOf(id) + 0.8;
+
+// The vertical clips' intros (docs/publishing/shorts-v2.md §6: the owner, 26 Oct, "necesitamos el hook… la intro como
+// en los programas: espectacular… y con una música que mantenga atención", four seconds at most). The programme's own
+// sequence for a phone on its own grid (public/js/clip/intro.js): motion from the first frame, one peak on a stroke,
+// the programme's emblem and title on the hit, the cut on the next downbeat. The picture and the theme
+// (audio/themes.js introTheme) read the same sheet.
+export const INTRO_CUES = Object.freeze({
+  // COSMOS DESK (the owner, 26 Oct: "un acercamiento desde fuera de la galaxia, con todas las estrellas y puntitos
+  // moviéndose dando un efecto potente", then "que lleve hasta Saturno, que es el icono… que parezca una galaxia de
+  // verdad cuando te acercas, como el espacio real", the letters worked for, up to four seconds). One unbroken fall from
+  // outside a spiral galaxy down to Saturn: the galaxy, its arm resolving into stars, the stars of the Sun's
+  // neighbourhood streaming past, the Sun close by (the stroke), Saturn swelling out of its glare to the emblem's place;
+  // COSMOS DESK under it as the programme's logotype; the cut
+  cosmos: Object.freeze({
+    bpm: 92,
+    glints: Object.freeze([0, 0.5, 1]), // bells: the galaxy's first stars catching the light
+    roll: 2, // the timpani roll and an air swell as the stars stream past...
+    sun: 3, // ...into the stroke: the camera passes the Sun
+    title: 4.1, // the logotype's letters rise in, one after another
+    lock: 5, // the emblem and the title whole (the theme's hit); a shine runs across the letters
+    cut: 6, // the cut, on the next downbeat
+  }),
+});
+
+/** Seconds of an intro's beat, and its length (the cut). */
+export const introAt = (id, beat) => (beat * 60) / INTRO_CUES[id].bpm;
+export const introDuration = (id) => introAt(id, INTRO_CUES[id].cut);

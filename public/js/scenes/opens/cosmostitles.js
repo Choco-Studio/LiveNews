@@ -70,8 +70,11 @@ function planetAt(b) {
 
 const LAYER = new Layer('cosmos-titles');
 const RINGLETS = (R) => smoothstep(70, 150, R); // fine ringlets only a close camera resolves
-function planet(L, cx, cy, R, light, back) {
+/** The planet into a layer of any size (back: the rings' far half, drawn before the disc; else the disc and the near half). */
+export function planet(L, cx, cy, R, light, back) {
   const d = L.d;
+  const W = L.w;
+  const H = L.h;
   const RR = R + 0.5;
   const RR2 = RR * RR;
   const limb2 = (RR - 1.15) * (RR - 1.15);
@@ -150,7 +153,7 @@ function planet(L, cx, cy, R, light, back) {
 
 // the moon on the emblem's orbit (k: the orbit's size factor; ZOOM at centre stage)
 const OP = [0, 0, 0];
-function orbit(th, k, out) {
+export function orbit(th, k, out) {
   const ex = Math.cos(th) * ORX * k;
   const ey = Math.sin(th) * ORY * k;
   out[0] = ex * CTL - ey * STL;
@@ -158,7 +161,7 @@ function orbit(th, k, out) {
   out[2] = Math.sin(th);
   return out;
 }
-function moon(L, x, y) {
+export function moon(L, x, y) {
   const put = (xx, yy, w, h, c) => {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) L.plot(x + xx + i, y + yy + j, c);
   };
@@ -402,7 +405,11 @@ function burst(L, b, pl, light) {
   const n = Math.hypot(light[0], light[1]) || 1;
   const sx = Math.round(pl.cx + (light[0] / n) * (pl.R + 1));
   const sy = Math.round(pl.cy - (light[1] / n) * (pl.R + 1));
-  const len = Math.round(6 + 46 * a);
+  sunBurst(L, sx, sy, a);
+}
+/** A star's eight-point burst at (sx, sy) in a layer of any size, at strength a (0..1); reach: its arms at full strength. */
+export function sunBurst(L, sx, sy, a, reach = 46) {
+  const len = Math.round(6 + reach * a);
   const dl = Math.round(len * 0.42);
   for (let i = 1; i <= len; i++) {
     const c = i < len * 0.25 ? C.white : i < len * 0.55 ? C.cream : C.yellow;
