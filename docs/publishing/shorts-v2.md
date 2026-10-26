@@ -105,18 +105,25 @@ unbroken fall from outside a spiral galaxy down to Saturn:
 |---|---|---|
 | 0-1.75 | A spiral galaxy seen from outside it, tilted: a cream core, two blue-white arms threaded with pink nebulae and cut by dark dust lanes, its older disc a warm glow; the camera already falling toward a point in its near arm; three of its giants catch the light | On the first frame a felt thump, a timpani stroke and a pluck chord over the strings' Emaj7 and a sine sub; the orbit in sixteenths, climbing; a bell on each giant; a felt pulse on each beat |
 | 1.75-2.6 | The glow resolves into stars as the camera reaches the arm, and they stream past it, filling the frame; the camera swings round as it falls, so the galaxy it leaves becomes a band across the sky | A timpani roll, the strings louder, an air swell |
-| 3 | The camera passes the Sun: it grows from a star to a disc of light and flares | The stroke; the channel's signature at double speed, its DAH here |
-| 3-5 | Saturn swells out of the glare to the emblem's place (the title sequence's own planet, 38 px across the radius on the hit), lit from the Sun behind the camera, its moon running a last orbit; COSMOS rises in under it letter by letter, then DESK between two magenta rules | The signature's colour (A#, the #4); a chime as each letter lands |
-| 5-6 | The emblem and the logotype over the galaxy's band, a shine across the letters on the hit | The 5 on Emaj9#11, ringing on into the clip |
+| 2.6-3 | Saturn: a point of light at the middle of the frame, where the streaming stars come from, swelling head on into a ringed planet as the camera closes in and slows (each frame's growth a little less than the last's: a glide, never a brake; the owner found the earlier stop "demasiado brusca"). The Sun is behind it the whole way and is never seen (the owner: "que no meta un destello"): Saturn comes in dark, a thin crescent and a bright line of light along its upper right limb, its rings lit | |
+| 3-4.4 | From the stroke the camera swings round Saturn to the right, fifteen degrees, the sky sliding behind the planet (the owner: "si quieres que la luz se tape puedes hacer una rotación alrededor de Saturno de unos grados"), and day comes round onto it at an even pace (the title sequence's own dawn: the crescent widening to the key light, which it reaches on the hit); the camera still closing in, slowly, to a little past the emblem's size | The stroke; the channel's signature at double speed, its DAH here; then the signature's colour (A#, the #4) |
+| 4.4-5 | The camera eases back to the emblem's size (the owner: "puedes hacer el acercamiento y que se aleje para colocarse donde quiere. Pero hazlo fluido": one turn, no stop, no jolt), its moon running a last orbit; COSMOS rises in under it letter by letter, then DESK between two magenta rules | A chime as each letter lands |
+| 5-6 | The emblem and the logotype over the galaxy's band, a shine across the letters on the hit; from beat 5.2, the camera still drifting back, the intro's pixels dissolve away from the top right corner to the bottom left, the clip showing through (the owner: "prefiero un difuminado en el que desaparecen los píxeles en diagonal", "de arriba derecha a abajo izquierda") | The 5 on Emaj9#11, ringing on into the clip; a low air swell under the dissolve |
 
 How the picture is drawn: about 80,000 points in space (the galaxy's core, disc, arms, nebulae and dust; the stars of
 the arm round Saturn and of the Sun's neighbourhood, at every distance; a backdrop of sky) seen through one lens, the
-camera's distance on a logarithmic track (powers of ten, from 57 units to 0.0003), the world turning about Saturn.
+camera's distance on a logarithmic track (powers of ten, from 57 units down to Saturn a little past the emblem's size,
+slowing all the way, and gently back to it), the world turning about Saturn (a pitch and a roll through the arm, so the
+galaxy ends as a slanting band; a swing round the planet at the end).
 Each point gives the light a star at its distance would (falling as the square of the distance, so the galaxy's glow
 holds its brightness as it resolves into stars) into three light buffers by colour and one of dust; a point that
 moves draws its travel since the last frame, its light spread along it; an adaptation like the eye's brings the light
-down when the frame fills with it. The light is then brought to the palette on three ramps (warm, blue, pink) through
-the screen's Bayer matrix: a photograph's gradients in the channel's 32 colours.
+down when the frame fills with it. A lens's glow is laid over it (the light at a quarter of the frame's size, blurred and added back: the
+core's halo, the band's haze). The light is then brought to the palette on three ramps (warm, blue, pink) through the
+screen's Bayer matrix, black below a toe: a photograph's gradients in the channel's 32 colours. Saturn is the title
+sequence's own planet (`cosmostitles.js` `planet()`), lit along one path from behind (the Sun up and to its right) round
+to the emblem's key light at an even angular pace; while the Sun is behind it, a line of light runs along the limb toward
+it (the light through the edge of its air, as the probes see a backlit Saturn), never over the front of its rings.
 
 The logotype: COSMOS in the channel's 5x7 face at four times its size, each pixel a 4 x 4 block with its outer corners
 rounded where the letter turns, filled from white through cream and pink to magenta (Saturn's light over the
@@ -125,7 +132,7 @@ letters rise in one after another with a little overshoot. DESK at twice the siz
 magenta rules. No plate, no box.
 
 The rules it keeps, from §1 and the study: motion where the eye starts, on the first frame (principle 1); the rhythm
-and the light climbing toward one peak, the Sun, on the music's stroke (anticipation that pays off; a feed's silence
+and the light climbing toward one peak, Saturn swelling in on the music's stroke (anticipation that pays off; a feed's silence
 is a swipe, so the theme sounds from the first frame); the icon the viewer will know the programme by at the end; few
 words, the programme's name alone; the clip's own words take over at the cut, in the title band where they stay.
 
@@ -133,10 +140,13 @@ How it is made (`tools/publish/factory.mjs` `introClip`, once a run): `/lab/clip
 (`__clipLab.intro`) and renders its theme offline from its first beat (`__clipLab.introSound`, the channel's own mixer),
 so the sound lands on the picture to the sample (the deterministic recorder runs a second of the page before its first
 frame); the two go into a lossless file as the masters do. The clip's graph (`server/publish/render.js` `composeArgs`,
-`introParts`) puts its picture and its sound to the cut first and lays the theme's tail, 6 dB down (the channel's music
-dips so under a voice) and fading over `INTRO_TAIL` (2.2 s), under the clip's first words; the loudness is measured and
-set on the whole (`loudnessArgs` mixes the same sound). Everything timed on the clip's own clock moves by the intro's
-length in the made file: the caption files (`srtFor`/`vttFor` `offset`), the RECREATION label's evidence, TikTok's cover
+`introParts`) puts the intro first and dissolves it into the clip over its last 0.52 s (a custom `xfade` at the clip's
+own pixels, before the 5x scale: each pixel goes at its place along the diagonal, held back by the screen's 4 x 4 Bayer
+matrix, so the front is a band of pixels dissolving; written without the expression's registers, which the filter's
+threads share). The intro's sound up to where the clip comes in goes first, and the theme's tail, 6 dB down (the
+channel's music dips so under a voice) and fading over `INTRO_TAIL` (2.2 s), lies under the clip's first words; the loudness is measured and
+set on the whole (`loudnessArgs` mixes the same sound). Everything timed on the clip's own clock moves by where the clip
+comes in, in the made file (the intro's length less the dissolve): the caption files (`srtFor`/`vttFor` `offset`), the RECREATION label's evidence, TikTok's cover
 frame (`coverAt`); the overlays (the hook, the face hook) are laid on the clip before the intro is put in front.
 `--no-intro` makes clips without it. Horizontal clips have none. The other programmes' intros follow once the owner has
 signed off COSMOS's: each its own idea for a phone, ending on its own emblem and logotype.

@@ -150,7 +150,8 @@ exact transcript in recording time: every segment, sentence and word.
   - the hook laid over it (vertical: the whole clip; horizontal: the first four seconds; never on a horizontal WORLD
     WEATHER board, whose own heading is the hook and sits where the plate would);
   - the end card concatenated (its own picture and sting), and before the clip its intro (vertical, a programme that
-    has one: its picture, its theme to the cut, the theme's tail 6 dB down under the clip's first words; `shorts-v2.md` §6);
+    has one: its picture dissolving into the clip's first frames along the diagonal, its theme to there, the theme's
+    tail 6 dB down under the clip's first words; `shorts-v2.md` §6);
   - a 5x nearest-neighbour scale;
   - H.264 High (yuv420p, CRF 18, a keyframe a second), AAC 160k, faststart;
   - the sound faded in over 0.12 s and out over 0.35 s;

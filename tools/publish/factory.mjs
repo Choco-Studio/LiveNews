@@ -319,8 +319,10 @@ async function introClip(fmt) {
   writeWav(wav, [pcm(snd.L), pcm(snd.R)], snd.rate);
   const f = path.join(cardsDir, `intro-${prog}-vertical.mkv`);
   await run('ffmpeg', ['-v', 'error', '-y', '-framerate', '30', '-i', path.join(dir, 'f%04d.png'), '-i', wav, '-c:v', 'libx264rgb', '-crf', '0', '-preset', 'veryfast', '-pix_fmt', 'rgb24', '-c:a', 'flac', '-ar', '48000', f], { quiet: true });
-  introMade = { file: f, seconds: +(n / 30).toFixed(4) };
-  say(`intro: ${prog}'s, ${introMade.seconds.toFixed(2)} s before every vertical clip, its theme's tail under the clip's first ${INTRO_TAIL} s`);
+  // the way in: the intro's pixels dissolving away over its last beats, top right to bottom left (render.js introParts)
+  const way = await page.evaluate((id) => window.__clipLab.introTransition(id), prog);
+  introMade = { file: f, seconds: +(n / 30).toFixed(4), overlap: way ? +way.seconds.toFixed(4) : 0 };
+  say(`intro: ${prog}'s, ${introMade.seconds.toFixed(2)} s before every vertical clip, dissolving into it over its last ${introMade.overlap.toFixed(2)} s, its theme's tail under the clip's first ${INTRO_TAIL} s`);
   return introMade;
 }
 
@@ -420,7 +422,7 @@ for (const m of chosen) {
       const hook = await hookPng(m, fmt);
       const end = await endCard(fmt);
       const intro = await introClip(fmt);
-      const lead = intro ? intro.seconds : 0; // the clip's own first frame, in the made file
+      const lead = intro ? intro.seconds - intro.overlap : 0; // the clip's own first frame, in the made file
       // the face hook, on its experiment's arm: the players rise in under the question for its first seconds
       const until = experiment?.arm === 'face' && fmt === 'vertical' ? facesUntil(reports[fmt], window) : null;
       const faces = until ? { file: await facesPng(), until } : null;
@@ -428,7 +430,7 @@ for (const m of chosen) {
       // one gain on the whole, and the made file measured again (what the feeds will play)
       const measured = parseLoudness((await run('ffmpeg', loudnessArgs({ master: masters[fmt].file, endcard: end, intro, window }), { quiet: true })).err);
       const gain = loudnessGain(measured);
-      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}${intro ? `; after the ${intro.seconds.toFixed(2)} s intro` : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''}${experiment ? `; ${experiment.id}: ${experiment.arm}${faces ? ` (faces to ${faces.until} s)` : ''}` : ''})`);
+      say(`clip ${name}: ${window.start.toFixed(2)}-${window.end.toFixed(2)} s (${window.duration.toFixed(1)} s${window.snappedStart ? ', opens on a cut' : ''}${window.hold ? `, holds the board over its wipe for ${window.hold.toFixed(2)} s` : ''}${window.snappedEnd ? ', ends before the next cut' : ''}${intro ? `; after the ${intro.seconds.toFixed(2)} s intro, from ${lead.toFixed(2)} s` : ''}; sound ${measured.lufs ?? '?'} LUFS${gain ? `, ${gain > 0 ? '+' : ''}${gain} dB` : ''}${experiment ? `; ${experiment.id}: ${experiment.arm}${faces ? ` (faces to ${faces.until} s)` : ''}` : ''})`);
       await run('ffmpeg', composeArgs({ master: masters[fmt].file, hook, faces: faces?.file ? faces : null, endcard: end, intro, window, format: fmt, out: file, gain }), { quiet: true });
       const heard = parseLoudness((await run('ffmpeg', measureArgs(file), { quiet: true })).err);
       const loudness = { target: LOUDNESS.target, gain, before: measured, lufs: heard.lufs, truePeak: heard.truePeak };
@@ -456,7 +458,7 @@ for (const m of chosen) {
       const labelFrames = await labelEvidence(file, fmt, window, tl, lead);
       // the networks this clip fits (a YouTube clip is a Short: vertical only; its horizontal uploads are whole programmes)
       const platforms = PHASE_PLATFORMS[3].filter((p) => fitsPlatform({ format: fmt, duration }, p).ok && PLATFORMS[p].kind === 'video' && !(PLATFORMS[p].clip === 'shorts' && fmt !== 'vertical'));
-      const meta = { name, moment: m, format: fmt, window, duration, loudness, intro: intro ? { programId: prog, seconds: intro.seconds } : null, experiment: experiment ? { ...experiment, faces: faces?.file ? faces.until : null } : null, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
+      const meta = { name, moment: m, format: fmt, window, duration, loudness, intro: intro ? { programId: prog, seconds: intro.seconds, overlap: intro.overlap, clipFrom: lead } : null, experiment: experiment ? { ...experiment, faces: faces?.file ? faces.until : null } : null, files: { video: file, thumb, thumbs: covers, contact, srt: path.join(clipsDir, `${name}.srt`), vtt: path.join(clipsDir, `${name}.vtt`), hook }, package: pack, frames: picks, labelFrames, cards, platforms, texts: {}, compliance: {} };
       for (const p of platforms) {
         const t = clipTexts(m, episode, { platform: p, stories: storiesById, presenters, channelUrl: process.env.CHANNEL_LIVE_URL || null, recorded, pack, airedAt });
         meta.texts[p] = t;

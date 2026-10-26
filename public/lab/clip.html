@@ -23,7 +23,7 @@ import { THEME_ACCENT } from '/js/cast.js';
 import { drawHook, drawEndCard, sizeOf, END_CARD_SECONDS } from '/js/clip/cards.js';
 import { VerticalSet } from '/js/clip/vset.js';
 import { setKit } from '/js/clip/index.js';
-import { drawIntro, introFor, introSeconds } from '/js/clip/intro.js';
+import { drawIntro, introFor, introSeconds, introTransition } from '/js/clip/intro.js';
 
 // the programme's set for the vertical end card (the theme names the programme: one theme, one programme)
 const THEME_PROGRAMME = { world: 'world-now', tech: 'tech-bytes', space: 'cosmos', money: 'money-minute', flash: 'news-60', weather: 'world-weather', week: 'seven-days', sport: 'full-time', quiz: 'pay-attention' };
@@ -84,6 +84,7 @@ window.__clipLab = {
   faces: async (spec) => (await facesCanvas(spec)).toDataURL('image/png'),
   intro: (spec, t) => introCanvas(spec, t).toDataURL('image/png'),
   introSeconds: (programId) => introSeconds(programId),
+  introTransition: (programId) => introTransition(programId),
   // the intro's theme rendered offline with the channel's own mixer (audio/synth.js renderTune), from its first beat at
   // 0: { rate, L, R } (base64 of Float32 samples), `seconds` long (the picture's length and the tail under the clip)
   introSound: async (programId, seconds) => {

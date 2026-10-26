@@ -117,23 +117,27 @@ export const durationOf = (id) => hitOf(id) + 0.8;
 // The vertical clips' intros (docs/publishing/shorts-v2.md §6: the owner, 26 Oct, "necesitamos el hook… la intro como
 // en los programas: espectacular… y con una música que mantenga atención", four seconds at most). The programme's own
 // sequence for a phone on its own grid (public/js/clip/intro.js): motion from the first frame, one peak on a stroke,
-// the programme's emblem and title on the hit, the cut on the next downbeat. The picture and the theme
+// the programme's emblem and title on the hit, then the intro dissolving into the programme (from `push` to `cut`:
+// the clip's first frames come in through it, never a hard cut). The picture and the theme
 // (audio/themes.js introTheme) read the same sheet.
 export const INTRO_CUES = Object.freeze({
   // COSMOS DESK (the owner, 26 Oct: "un acercamiento desde fuera de la galaxia, con todas las estrellas y puntitos
   // moviéndose dando un efecto potente", then "que lleve hasta Saturno, que es el icono… que parezca una galaxia de
   // verdad cuando te acercas, como el espacio real", the letters worked for, up to four seconds). One unbroken fall from
-  // outside a spiral galaxy down to Saturn: the galaxy, its arm resolving into stars, the stars of the Sun's
-  // neighbourhood streaming past, the Sun close by (the stroke), Saturn swelling out of its glare to the emblem's place;
-  // COSMOS DESK under it as the programme's logotype; the cut
+  // outside a spiral galaxy down to Saturn: the galaxy, its arm resolving into stars streaming past, Saturn coming in
+  // head on out of them, backlit (the Sun behind it the whole way: a crescent, never a glare), the camera swinging round
+  // it a few degrees as day comes round onto the planet, a little past the emblem's size and gently back to it; COSMOS
+  // DESK under it as the programme's logotype; the intro's pixels dissolve away into the programme
   cosmos: Object.freeze({
     bpm: 92,
     glints: Object.freeze([0, 0.5, 1]), // bells: the galaxy's first stars catching the light
     roll: 2, // the timpani roll and an air swell as the stars stream past...
-    sun: 3, // ...into the stroke: the camera passes the Sun
-    title: 4.1, // the logotype's letters rise in, one after another
+    sun: 3, // ...into the stroke: Saturn, a ringed crescent, swelling in head on; from here day comes round onto it
+    title: 4.5, // the logotype's letters rise in, one after another, as the camera eases back from Saturn
     lock: 5, // the emblem and the title whole (the theme's hit); a shine runs across the letters
-    cut: 6, // the cut, on the next downbeat
+    push: 5.2, // the intro's pixels dissolve away, top right to bottom left, into the programme, the camera still
+    // drifting back (the clip's graph: render.js introParts)
+    cut: 6, // the intro's last frame, on the next downbeat
   }),
 });
 

@@ -117,9 +117,13 @@ function facesFilter(input, faces) {
 
 /**
  * A vertical clip's intro (docs/publishing/shorts-v2.md §6; public/js/clip/intro.js): a recording at the clip's own
- * pixels whose picture lasts `seconds` and whose sound runs on past it (the theme's tail). Its picture goes before the
- * clip's; its sound up to the cut goes before the clip's sound, and its tail is laid under the clip's first seconds, as
- * an open's ring under a programme's first words, dipped under them and fading (input `input`).
+ * pixels whose picture lasts `seconds` and whose sound runs on past it (the theme's tail). The clip comes in over the
+ * intro's last `overlap` seconds (the owner, 26 Oct: "prefiero un difuminado en el que desaparecen los píxeles en
+ * diagonal", "de arriba derecha a abajo izquierda"): the intro's pixels go one by one, a front sweeping from the top
+ * right corner to the bottom left, each pixel's moment set by its place along the diagonal and by the screen's 4 x 4 Bayer
+ * matrix (so the front is a band of pixels dissolving, never a line); with no overlap, a cut. The intro's sound up to
+ * where the clip comes in goes first; its tail is laid under the clip's first seconds, dipped under them and fading, as
+ * an open's rings under a programme's first words (input `input`).
  */
 /**
  * Seconds of the intro's theme laid under the clip's first words (its tail: the hit ringing out), and how far it dips
@@ -127,11 +131,20 @@ function facesFilter(input, faces) {
  */
 export const INTRO_TAIL = 2.2;
 const INTRO_DUCK = -6;
-function introParts(input, seconds) {
+function introParts(input, { seconds, overlap = 0 }) {
   const S = seconds.toFixed(3);
+  const A = Math.max(0, seconds - overlap).toFixed(3); // where the clip comes in
+  // each pixel's moment: its place along the diagonal (0 top right, 1 bottom left), held back by up to `band` by its
+  // Bayer threshold (written out in full: the expression's own registers, st()/ld(), are shared by the filter's slice
+  // threads, and the colour planes trampled each other)
+  const band = 0.35;
+  const bayer = '(8*abs(mod(X,2)-mod(Y,2))+4*mod(Y,2)+2*abs(mod(floor(X/2),2)-mod(floor(Y/2),2))+mod(floor(Y/2),2))';
+  const dissolve = `if(gt((1-P)*${(1 + band).toFixed(2)},(W-X+Y)/(W+H)+${band}*(${bayer}+0.5)/16),B,A)`;
   return {
-    video: `[${input}:v]trim=duration=${S},setpts=PTS-STARTPTS,fps=${FPS},setsar=1[iv]`,
-    sound: `[${input}:a]aresample=48000,asplit=2[ia0][ia1];[ia0]atrim=end=${S},asetpts=PTS-STARTPTS[ih];[ia1]atrim=start=${S},asetpts=PTS-STARTPTS,volume=${INTRO_DUCK}dB,afade=t=out:st=0:d=${INTRO_TAIL}[it];[a][it]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[am]`,
+    video: `[${input}:v]trim=duration=${S},setpts=PTS-STARTPTS,fps=${FPS},setsar=1,format=gbrp[iv]`,
+    // [o] (the clip) joins the intro: a cut, or the intro's pixels dissolving away along the diagonal
+    join: overlap > 0 ? `[o]format=gbrp[og];[iv][og]xfade=transition=custom:duration=${overlap.toFixed(3)}:offset=${A}:expr='${dissolve}'[vi]` : `[iv][o]concat=n=2:v=1:a=0[vi]`,
+    sound: `[${input}:a]aresample=48000,asplit=2[ia0][ia1];[ia0]atrim=end=${A},asetpts=PTS-STARTPTS[ih];[ia1]atrim=start=${A},asetpts=PTS-STARTPTS,volume=${INTRO_DUCK}dB,afade=t=out:st=0:d=${INTRO_TAIL}[it];[a][it]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[am];[ih][am]concat=n=2:v=0:a=1[ai]`,
   };
 }
 
@@ -140,8 +153,8 @@ function introParts(input, seconds) {
  * first `hookSeconds`) + the face hook's strip (`faces`: { file, until }, its first seconds) + the end card (its own
  * picture and sound) -> nearest-neighbour 5x -> H.264 (High, yuv420p, CRF 18, a keyframe a second) + AAC 160k,
  * faststart. The sound fades in over 0.12 s and out over the last 0.35 s of the cut, and `gain` dB lift the whole
- * (loudnessGain: the clip at the feeds' loudness). `intro`: { file, seconds } (introParts): the overlays keep the
- * clip's own clock, after it.
+ * (loudnessGain: the clip at the feeds' loudness). `intro`: { file, seconds, overlap } (introParts): the clip
+ * comes in over its last `overlap` seconds; the overlays keep the clip's own clock.
  * A window with a `hold` shows its frame at `hold` from the start until then (the sound runs on underneath).
  */
 export function composeArgs({ master, hook, faces = null, endcard, intro = null, window, format, out, hookSeconds = 4, crf = 18, gain = 0 }) {
@@ -156,17 +169,17 @@ export function composeArgs({ master, hook, faces = null, endcard, intro = null,
   const introIn = intro?.file ? n++ : null;
   const sound = soundParts(window, end);
   const fc = facesIn !== null ? facesFilter(facesIn, faces) : null;
-  const ip = introIn !== null ? introParts(introIn, intro.seconds) : null;
-  // the pieces in order, each a picture and its sound: the intro, the clip, the end card
-  const parts = [...(ip ? [['[iv]', '[ih]']] : []), ['[o]', ip ? '[am]' : '[a]'], ...(endcard ? [['[ev]', '[ea]']] : [])];
+  const ip = introIn !== null ? introParts(introIn, intro) : null;
+  // the pieces in order, each a picture and its sound: the intro and the clip (joined), the end card
+  const parts = [ip ? ['[vi]', '[ai]'] : ['[o]', '[a]'], ...(endcard ? [['[ev]', '[ea]']] : [])];
   const graph = [
     `[0:v]setpts=PTS-STARTPTS,fps=${FPS}${hold}[c]`,
     hook ? `[c][${hookIn}:v]overlay=0:0${enable}:eof_action=repeat[h]` : '[c]null[h]',
     fc ? `${fc.strip};[h][fc]overlay=0:${fc.y}:enable='${fc.enable}'[o]` : '[h]null[o]',
     sound.cut,
-    ...(ip ? [ip.video, ip.sound] : []),
-    ...(endcard ? [`[${end}:v]fps=${FPS},setsar=1[ev]`, sound.card] : []),
-    parts.length > 1 ? `${parts.map(([v, a]) => v + a).join('')}concat=n=${parts.length}:v=1:a=1[v][ac]` : '[o]null[v];[a]anull[ac]',
+    ...(ip ? [ip.video, ip.join, ip.sound] : []),
+    ...(endcard ? [`[${end}:v]fps=${FPS},setsar=1${ip ? ',format=gbrp' : ''}[ev]`, sound.card] : []),
+    parts.length > 1 ? `${parts.map(([v, a]) => v + a).join('')}concat=n=${parts.length}:v=1:a=1[v][ac]` : `${parts[0][0]}null[v];${parts[0][1]}anull[ac]`,
     `[ac]${volume(gain)}[aa]`,
     `[v]scale=iw*${SCALE}:ih*${SCALE}:flags=neighbor,setsar=1,format=yuv420p[vv]`,
   ].join(';');
@@ -185,13 +198,13 @@ const EBUR128 = 'ebur128=peak=true:framelog=quiet';
 /** ffmpeg argv that measure a clip's sound before it is made: the same window, fades, intro and end card as composeArgs mixes. */
 export function loudnessArgs({ master, endcard = null, intro = null, window }) {
   const sound = soundParts(window, endcard ? 1 : null);
-  const ip = intro?.file ? introParts(endcard ? 2 : 1, intro.seconds) : null;
-  const parts = [...(ip ? ['[ih]'] : []), ip ? '[am]' : '[a]', ...(endcard ? ['[ea]'] : [])];
+  const ip = intro?.file ? introParts(endcard ? 2 : 1, intro) : null;
+  const parts = [ip ? '[ai]' : '[a]', ...(endcard ? ['[ea]'] : [])];
   const graph = [
     sound.cut,
     ...(ip ? [ip.sound] : []),
     ...(endcard ? [sound.card] : []),
-    parts.length > 1 ? `${parts.join('')}concat=n=${parts.length}:v=0:a=1[ac]` : '[a]anull[ac]',
+    parts.length > 1 ? `${parts.join('')}concat=n=${parts.length}:v=0:a=1[ac]` : `${parts[0]}anull[ac]`,
     `[ac]${EBUR128}[m]`,
   ].join(';');
   const args = ['-hide_banner', '-nostats', '-ss', window.start.toFixed(3), '-t', window.duration.toFixed(3), '-i', master];

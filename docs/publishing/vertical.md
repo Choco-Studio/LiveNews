@@ -390,9 +390,10 @@ crisp, but it is a crop, and §8 lists what remains.
   label is there (on air nothing covers it). Then they go to the top of the frame, if the label leaves room there.
   The map reports where it drew its label (`worldmap.js` `takeMapLabel`).
 
-**The intro** (`clip/intro.js`, `shorts-v2.md` §6) comes before the clip's first frame: the programme's own spectacle
-for a phone, under three seconds, with its theme; its title is made of the picture's own stuff (COSMOS DESK's of its
-stars), never a plate. The clip's mast, title band and captions start at the cut.
+**The intro** (`clip/intro.js`, `shorts-v2.md` §6) comes before the clip: the programme's own spectacle for a phone,
+four seconds at most, with its theme, ending on its emblem and logotype (never a plate), then dissolving into the
+clip's first frames pixel by pixel along the diagonal, top right to bottom left. The clip's mast, title band and
+captions come in through it.
 
 **The hook** is the clip's title: two lines at 2x of at most 16 characters ("HOW MANY? / PLAY ALONG", "4 STORIES / IN
 55 SECONDS"), or, for a story whose headline is longer, **the whole headline** in the body face on up to three lines.

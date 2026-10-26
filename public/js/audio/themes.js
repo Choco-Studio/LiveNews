@@ -1336,9 +1336,10 @@ export const THEME_IDS = Object.keys(OPENS);
 // voyage, quicker: four seconds). On the first frame a felt thump, a timpani stroke and a pluck chord over the deep
 // field's Emaj7 (strings, a sine sub); the orbit in sixteenths (E B F# B), climbing for three beats while the camera
 // falls, a bell on each of the galaxy's stars that catches the light, a felt pulse on each beat; a timpani roll, the
-// strings louder and a low air swell as the stars stream past, into the stroke as the camera passes the Sun; the signature at double speed, its DAH on the stroke over
-// E add9; its colour (A#, the #4) over F#/E while Saturn swells, a chime as each letter of the logotype lands; the 5 on
-// Emaj9#11 as the title locks, ringing on into the clip.
+// strings louder and a low air swell as the stars stream past, into the stroke as Saturn swells in out of them; the
+// signature at double speed, its DAH on the stroke over E add9; its colour (A#, the #4) over F#/E while day comes round
+// onto Saturn, a chime as each letter of the logotype lands; the 5 on Emaj9#11 as the title locks, ringing on into the
+// clip.
 function cosmosIntro() {
   const Q = INTRO_CUES.cosmos;
   const k = 64; // E4
@@ -1362,9 +1363,9 @@ function cosmosIntro() {
   ];
   // the timpani roll from a beat before the air swell, growing into the stroke
   const roll = range(Q.roll - 0.5, B, 0.125).map((b, i, a) => [b, k - 24, 0.125, 0.12 + (0.36 * i) / Math.max(1, a.length - 1)]);
-  // a chime as each letter of the logotype lands (cosmosintro.js: one every 0.09 beat from the title cue, landing about
-  // a quarter beat after it rises), up the hit's chord
-  const chimes = [k + 19, k + 23, k + 26, k + 28, k + 30, k + 31].map((m, i) => [Q.title + 0.25 + 0.09 * i, m, 0.25, 0.22 + 0.02 * i]);
+  // a chime as each letter of the logotype lands (cosmosintro.js: one every 0.06 beat from the title cue, landing about
+  // a fifth of a beat after it rises), up the hit's chord
+  const chimes = [k + 19, k + 23, k + 26, k + 28, k + 30, k + 31].map((m, i) => [Q.title + 0.2 + 0.06 * i, m, 0.25, 0.22 + 0.02 * i]);
   return {
     bpm: Q.bpm,
     room: 0.3,
@@ -1378,7 +1379,7 @@ function cosmosIntro() {
       { kind: 'harmony', inst: ENS.orbit, notes: part(orbit, total), gain: 1.6, echo: 0.45, pan: 0.3 },
       { kind: 'harmony', inst: ENS.bell, notes: part([
         [Q.glints[0], k + 19, 0.5, 0.5], [Q.glints[1], k + 23, 0.5, 0.48], [Q.glints[2], k + 26, 0.5, 0.46], // the stars: B, D#, F#
-        [B, [k + 20, k + 27], 1, 0.6], // the Sun: G# and D#
+        [B, [k + 20, k + 27], 1, 0.6], // the stroke, Saturn ringing in: G# and D#
         [B + 1, k + 18, 0.5, 0.4], // the colour, high (A#)
         [H, [k + 20, k + 27], 1.5, 0.52],
       ], total), gain: 2, echo: 0.6, pan: 0.35 },
@@ -1401,6 +1402,8 @@ function cosmosIntro() {
       // a felt thump on the first frame and a pulse on each beat of the fall (the heart of the climb), the stroke, the hit
       { drums: drums([[0, 'F', 0.8], [1, 'F', 0.36], [Q.roll, 'A', 0.46], [B, 'F', 0.75], [H, 'F', 0.55]], total), gain: 1.9 },
       { drums: drums([[2, 'F', 0.44]], total), gain: 1.9 },
+      // a low air swell as the intro dissolves into the programme
+      { drums: drums([[Q.push, 'A', 0.34], [C + 0.5, 'F', 0.01]], total), gain: 1.6 },
     ],
   };
 }
