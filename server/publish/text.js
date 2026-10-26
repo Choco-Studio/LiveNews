@@ -41,6 +41,12 @@ export function teaseText(sentence) {
   return /^(?:still to come|coming up|later in the (?:programme|show)|after the break|stay with us|next on)\b/i.test(norm(sentence).replace(/^["“‘'(]+/, ''));
 }
 
+/** A hand-over to the co-host with nothing else in it ("Over to you, Nova.", "Back to you, Dr Reyes."): never a clip's end. */
+export function handoverOnly(sentence) {
+  const t = norm(sentence).replace(/^["“‘'(]+/, '');
+  return t.split(' ').length <= 8 && /\b(?:over to you|back to you|handing (?:you )?(?:over|back)|i'll hand (?:you )?(?:over|back))\b/i.test(t);
+}
+
 /** A greeting or sign-off line with nothing else in it. */
 export function greetingOnly(sentence) {
   const s = norm(sentence);

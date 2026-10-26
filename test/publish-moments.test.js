@@ -273,8 +273,12 @@ test('a clip\'s burned-in title is never the outlet\'s headline passed off as th
   const kind = { headline: title, hook: ['4 STORIES', 'IN 55 SECONDS'], programme: 'COSMOS DESK' };
   assert.deepEqual(ownHook(kind, story, sources), kind.hook);
   assert.deepEqual(ownHook(copied, story, []), copied.hook);
-  // no label the story bears out: the programme's name
-  assert.deepEqual(ownHook(copied, { kicker: 'VOLCANO' }, sources), ['COSMOS DESK']);
+  // no label the story bears out: the longest run of the things it names, never the headline (and never the programme's
+  // name, which says nothing of the clip: the owner's COSMOS shorts titled COSMOS DESK)
+  assert.deepEqual(ownHook(copied, { kicker: 'VOLCANO' }, sources), ['CALIFORNIA', 'WILDFIRE']);
+  // nothing named twice over: the programme's name
+  const bare = 'Fire forces families out as it spreads';
+  assert.deepEqual(ownHook({ ...copied, headline: bare, hook: headlineHook(bare) }, { kicker: 'VOLCANO' }, [bare, `${bare} across the valley.`]), ['COSMOS DESK']);
 });
 
 test('the 10-second floor: a moment shorter than YouTube\'s and TikTok\'s minimum is never published (round 7: a 3-second story)', () => {

@@ -46,9 +46,11 @@ export function wordsOf(text) {
 
 const PAGES = new Map();
 /**
- * The sentence's pages: [{ start (char), lines: [{ text, words: [{ w, at, x }] , width }] }], cached. Lines fill to
- * `maxW` px at `scale`; a weak last word moves down when the line has two or more words; a line that reaches a
- * comma past half its width ends there; pages hold `perPage` lines.
+ * The sentence's pages: [{ start (char), lines: [{ text, words: [{ w, at, x }] , width }] }], cached. Each page is
+ * `perPage` lines of `maxW` px at `scale` at most, its words and its turns chosen together over the whole sentence: a
+ * page turns where the sentence pauses (a full stop, a comma, else before a little word), never inside a phrase or
+ * after a little word ("TO THE LUNAR | SURFACE" is two pages that read as none), a one-word page only when nothing else
+ * fits; a running-order label ends a page of its own.
  */
 export function pagesOf(text, maxW, scale = 2, perPage = 2) {
   const key = `${maxW}|${scale}|${perPage}|${text}`;
@@ -59,47 +61,83 @@ export function pagesOf(text, maxW, scale = 2, perPage = 2) {
   const labelEnd = head ? head[0].trimEnd().length : -1;
   const width = (w) => measureText(w, scale);
   const sp = SPACE_1X * scale;
-  const lines = [];
-  let cur = [];
-  let curW = 0;
-  const flush = () => {
-    if (cur.length) lines.push(cur);
-    cur = [];
-    curW = 0;
+  const N = words.length;
+  const ww = words.map((x) => width(x.w));
+  const bare = (i) => words[i].w.toUpperCase().replace(/[^A-Z]/g, '');
+  // the width of words [a, b) on one line
+  const span = (a, b) => {
+    let w = 0;
+    for (let i = a; i < b; i++) w += ww[i] + (i > a ? sp : 0);
+    return w;
   };
-  for (let i = 0; i < words.length; i++) {
-    const wd = words[i];
-    const ww = width(wd.w);
-    if (cur.length && curW + sp + ww > maxW) {
-      // weak words at the end go down with the word they belong to ("gathering | in the park"), as many as end
-      // the line, one word always staying
-      const moved = [];
-      while (cur.length - moved.length >= 2 && WEAK.has(cur[cur.length - 1 - moved.length].w.toUpperCase().replace(/[^A-Z]/g, ''))) moved.unshift(cur[cur.length - 1 - moved.length]);
-      const carry = moved.length && moved.reduce((w, m, k) => w + width(m.w) + (k ? sp : 0), 0) + sp + ww <= maxW ? moved : [];
-      cur.length -= carry.length;
-      flush();
-      for (const m of carry) {
-        curW = cur.length ? curW + sp + width(m.w) : width(m.w);
-        cur.push(m);
+  // how awkward a break before word b is: none after a full stop, little after a comma, some before a little word
+  // that starts a phrase, most inside a phrase; a break after a little word is worse still ("THE | LUNAR")
+  const pause = (b) => {
+    const last = words[b - 1].w;
+    if (/[.!?;:]["'’”)]*$/.test(last)) return 0;
+    if (/,["'’”)]*$/.test(last)) return 0.2;
+    return (WEAK.has(bare(b)) ? 1 : 3) + (WEAK.has(bare(b - 1)) ? 4 : 0);
+  };
+  // a page of words [a, b): its lines (one, or two split where it reads best) and what that split costs, or null
+  const layout = (a, b) => {
+    if (span(a, b) <= maxW) return { cost: 0, splits: [] };
+    if (perPage < 2) return null;
+    let bestS = -1;
+    let bestC = Infinity;
+    for (let s2 = a + 1; s2 < b; s2++) {
+      if (span(a, s2) > maxW || span(s2, b) > maxW) continue;
+      // (a line ending inside the page costs a third of a page's turn: both lines are read together)
+      const c = pause(s2) / 3 + Math.abs(span(a, s2) - span(s2, b)) / (maxW * 8);
+      if (c < bestC) {
+        bestC = c;
+        bestS = s2;
       }
     }
-    cur.push(wd);
-    curW = cur.length === 1 ? ww : curW + sp + ww;
-    // a phrase ends the line once the line is past half full (and more words follow)
-    if (labelEnd > 0 && wd.end === labelEnd && i < words.length - 1) {
-      flush();
-      lines[lines.length - 1].pageEnd = true;
-    } else if (PUNCT_END.test(wd.w) && /[,;:]$/.test(wd.w) && curW >= maxW * 0.5 && i < words.length - 1) flush();
+    return bestS < 0 ? null : { cost: bestC, splits: [bestS] };
+  };
+  // a running-order label ends a page of its own
+  const labelWord = labelEnd > 0 ? words.findIndex((x) => x.end === labelEnd) : -1;
+  const best = new Array(N + 1).fill(Infinity);
+  const from = new Array(N + 1).fill(-1);
+  const lay = new Array(N + 1).fill(null);
+  best[0] = 0;
+  for (let b = 1; b <= N; b++) {
+    for (let a = b - 1; a >= 0; a--) {
+      if (labelWord >= 0 && a <= labelWord && labelWord < b - 1) break; // (the label's last word inside the page)
+      const L = layout(a, b);
+      if (!L) {
+        if (span(a, b) > maxW * perPage) break;
+        continue;
+      }
+      let c = best[a] + L.cost;
+      if (b < N) {
+        c += pause(b);
+        // a page of one word flashes by; a page of one short line, a little
+        if (b - a === 1) c += 2.5;
+        else if (!L.splits.length && span(a, b) < maxW * 0.6) c += 0.6;
+      }
+      if (labelWord >= 0 && b - 1 === labelWord) c -= 10;
+      if (c < best[b]) {
+        best[b] = c;
+        from[b] = a;
+        lay[b] = L;
+      }
+    }
+    if (!Number.isFinite(best[b])) {
+      // (a word wider than a line: a page of its own)
+      best[b] = best[b - 1] + 5;
+      from[b] = b - 1;
+      lay[b] = { cost: 0, splits: [] };
+    }
   }
-  flush();
+  const groups = [];
+  for (let b = N; b > 0; b = from[b]) groups.unshift([from[b], b, lay[b]]);
   const pages = [];
-  for (let i = 0; i < lines.length; ) {
-    // (a page holds `perPage` lines, or ends early on a label's own line)
-    let j = i;
-    while (j < lines.length && j - i < perPage && !(j > i && lines[j - 1].pageEnd)) j++;
-    const group = lines.slice(i, j);
-    i = j;
-    const ls = group.map((ws) => {
+  for (const [a, b, L] of groups) {
+    const cuts = [a, ...L.splits, b];
+    const ls = [];
+    for (let q = 0; q < cuts.length - 1; q++) {
+      const ws = words.slice(cuts[q], cuts[q + 1]);
       const text = ws.map((x) => x.w).join(' ');
       let x = 0;
       const placed = ws.map((x0, k) => {
@@ -107,8 +145,8 @@ export function pagesOf(text, maxW, scale = 2, perPage = 2) {
         x += width(x0.w) + (k < ws.length - 1 ? sp : 0);
         return o;
       });
-      return { text, words: placed, width: width(text) };
-    });
+      ls.push({ text, words: placed, width: width(text) });
+    }
     pages.push({ start: ls[0].words[0].at, end: ls.at(-1).words.at(-1).end, lines: ls });
   }
   const frozen = Object.freeze(pages);

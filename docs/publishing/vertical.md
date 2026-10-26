@@ -142,6 +142,12 @@ A second instance of the v2 stage (`runtime/stage.js`) draws the speaker's own s
   rasteriser leaves a frame's first and last rows to the set, and a body crossing the join would otherwise show a
   line of wall.
 - It cuts when the voice changes hands, as a director would, and the speaker's name tag rises for 4.5 s after each cut.
+- **It never holds still** (COSMOS round 1). One presenter reading for 20 s was a still picture on a phone, so:
+  - each shot pushes in slowly from its cut (`SINGLE_PUSH`: the camera's push dolly, 5% over 6 s);
+  - while one voice goes on, the single recuts between the wide single and a tighter one (camera.js `tall-tight`,
+    the tall single at 1.22× its scale) at the first caption page turn `RECUT_AFTER` (4 s) or more after the last
+    cut, so the cut lands on a pause in the sentence, never mid-phrase;
+  - a change of voice cuts back to the wide single. PAY ATTENTION's quiz host and players keep their framing, still.
 - The studio wall behind the single is at rest (`wall.js` 'rest'): the programme's art without its words. A plate, map
   label or wordmark would be cut in half by the tall crop.
 
@@ -361,9 +367,13 @@ crisp, but it is a crop, and §8 lists what remains.
 ## 4. Captions (`captions.js`)
 
 - The channel's 5×7 face at 2x: white caps on solid black line boxes, as the channel's subtitles.
-- Pages of one or two lines break between words only:
-  - a comma past half the width ends a line;
-  - weak words ("in the") never end a line when they can go down with their noun;
+- Pages of one or two lines break between words only. Where the lines break and where the pages turn are chosen
+  together, over the whole sentence (`pagesOf`), so a phrase is not cut where it need not be:
+  - a page turns after a full stop, a colon or a comma before anywhere else, and never after a weak word ("in the")
+    when it can go on with its noun;
+  - a page's two lines break as evenly as they can, at the same kind of pause;
+  - a page of one word, or a short lone line, is avoided when a better turn exists; a running-order label (AND
+    FINALLY:) ends a page of its own;
   - a page turns on its first word, so it never shows a word before it is said.
 - The word being said is lit yellow, from the recorded voice's word marks. **Over grave news nothing is lit.**
 - No caption is drawn when the voice reads what the board shows: the quiz's "here's the sentence as it aired", a quote

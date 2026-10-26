@@ -24,7 +24,7 @@
 // A moment never starts on a sentence that leans on an earlier one (text.js dangling: the start moves to the first
 // sentence that stands alone, inside its first segment), never ends inside a sentence, never cuts a quote.
 import { estimateTimeline } from './timeline.js';
-import { dangling, backReference, endsClean, quotesBalanced, graveText, interestCues, greetingOnly, teaseText } from './text.js';
+import { dangling, backReference, endsClean, quotesBalanced, graveText, interestCues, greetingOnly, teaseText, handoverOnly } from './text.js';
 import { severity } from '../facts.js';
 import { excludedKind } from '../quiz/desk.js';
 import { ownWords, storyLabel } from './wording.js';
@@ -71,10 +71,19 @@ export function placeRun(timeline, from, to, { keepStart = false } = {}) {
   }
   const s0 = first.sentences[startSentence] || { start: first.start, from: 0 };
   const last = segs[segs.length - 1];
-  const lastSentence = last.sentences[last.sentences.length - 1];
+  // the run ends on the news, never on a hand-over to the co-host ("Over to you, Nova."): a closing sentence that only
+  // hands over is left out when the run has a sentence of its own before it
+  let li = last.sentences.length - 1;
+  const firstOfLast = segs.length === 1 ? startSentence : 0;
+  while (li > firstOfLast && handoverOnly(last.sentences[li].text)) li--;
+  const lastSentence = last.sentences[li];
+  const cutTo = li < last.sentences.length - 1 ? lastSentence.to : null;
   const end = lastSentence?.end ?? last.end;
   const from0 = lead ? lead.from : s0.from || 0;
-  const text = segs.map((s, i) => (i === 0 ? s.seg.text.slice(from0) : s.seg.text)).map(norm).join(' ');
+  const text = segs.map((s, i) => {
+    const t = i === segs.length - 1 && cutTo !== null ? s.seg.text.slice(0, cutTo) : s.seg.text;
+    return i === 0 ? t.slice(from0) : t;
+  }).map(norm).join(' ');
   return { start: lead ? lead.start : s0.start ?? first.start, end, text, trimmed: startSentence > 0 || !!lead, leadIn: !!lead, segs };
 }
 
@@ -121,6 +130,22 @@ function leadIn(seg, sentence) {
   return Number.isFinite(t0) && Number.isFinite(t1) ? { from: at, start: t0 + ((t1 - t0) * cut) / len } : null;
 }
 
+// What a programme's own viewers come for (the owner, of COSMOS's shorts, 26 Oct: a science desk's clip of a storm
+// warning or a pylon ban is nobody's reason to follow it): a story in the desk's own field scores higher, space the
+// highest for COSMOS DESK; a desk without its list scores nothing either way.
+const BRAND = {
+  cosmos: [
+    [/\b(?:nasa|esa|spacex|space|spacecraft|astronauts?|moon|lunar|mars|martian|jupiter|saturn|venus|mercury|neptune|uranus|pluto|planets?|exoplanets?|asteroids?|comets?|galax\w*|stars?|sun's|solar|eclipse|meteor\w*|telescopes?|astronom\w*|orbit\w*|rockets?|satellites?|black holes?|universe|cosmic|nebula\w*|supernova\w*|artemis|hubble|webb)\b/i, 1.4],
+    [/\b(?:scientists?|researchers?|study|discover\w*|species|fossils?|dinosaurs?|evolution|dna|genes?|genetic|vaccines?|cells?|brain|quantum|physics|chemistry|el ni[ñn]o|glaciers?|ice sheets?|ocean|volcan\w*|climate|antarctic\w*|arctic)\b/i, 0.7],
+  ],
+};
+function brandFit(programId, text) {
+  const list = BRAND[programId];
+  if (!list) return 0;
+  for (const [re, v] of list) if (re.test(String(text || ''))) return v;
+  return -0.4;
+}
+
 function score(m, { grave: g, board = false, light = true }) {
   const reasons = [];
   let sense = 10;
@@ -152,6 +177,7 @@ function score(m, { grave: g, board = false, light = true }) {
   }
   let interest = KIND_BASE[m.kind] ?? 4;
   interest += 2 * interestCues(m.text);
+  interest += brandFit(m.programId, m.text);
   if (board) interest += 0.8;
   if (dur >= 20 && dur <= 75) interest += 0.7;
   if (!light) interest -= 1.5;
@@ -206,9 +232,27 @@ function makeMoment(episode, timeline, kind, from, to, extra = {}) {
 // ---------------------------------------------------------------- hooks: the clip's title (2 lines of 2x type, ≤ 16 characters each)
 
 const MAX_LINE = 16;
-/** Split a hook into at most two lines of ≤16 characters, whole words; null when it does not fit. */
+const HOOK_WEAK = new Set('A AN THE OF TO IN ON AT BY FOR FROM WITH AND OR BUT AS'.split(' '));
+/**
+ * Split a hook into at most two lines of ≤16 characters, whole words; null when it does not fit. Two lines are
+ * balanced (the split that makes the longer line shortest), so a hook that fits at 2x is never set small for a full
+ * first line and a lone word under it ("EL NIÑO THEN AND / NOW"): ties go to a split after punctuation, then to one
+ * before a little word.
+ */
 export function hookLines(text, { chars = MAX_LINE, max = 2 } = {}) {
   const words = upper(text).split(' ').filter(Boolean);
+  if (max === 2 && words.length >= 2 && words.join(' ').length > chars) {
+    let best = null;
+    for (let k = 1; k < words.length; k++) {
+      const a = words.slice(0, k).join(' ');
+      const b = words.slice(k).join(' ');
+      if (a.length > chars || b.length > chars) continue;
+      const tie = /[,:;.?!]$/.test(words[k - 1]) ? 0 : HOOK_WEAK.has(words[k].replace(/[^A-Z]/g, '')) ? 0.5 : 1;
+      const cost = Math.max(a.length, b.length) + tie * 0.1;
+      if (!best || cost < best.cost) best = { cost, lines: [a, b] };
+    }
+    return best ? best.lines : null;
+  }
   const lines = [''];
   for (const w of words) {
     const cur = lines[lines.length - 1];
@@ -273,7 +317,45 @@ export function ownHook(m, story = {}, sources = []) {
   const src = (sources || []).filter((x) => typeof x === 'string' && x.trim());
   if (!src.length || ownWords(m.headline, src)) return m.hook;
   const label = storyLabel(story, src);
-  return pickHook([label ? label.replace(/ · /g, ': ') : null, kickerHook(upper(story.kicker || '')) && storyLabel({ kicker: story.kicker }, src) ? story.kicker : null], m.programme || 'GLOBIT 24');
+  return pickHook([label ? label.replace(/ · /g, ': ') : null, kickerHook(upper(story.kicker || '')) && storyLabel({ kicker: story.kicker }, src) ? story.kicker : null, keyTerms(m.headline, src)], m.programme || 'GLOBIT 24');
+}
+
+// The story's subject in a few of its own words when there is no label (a programme's name says nothing of a clip): the
+// longest run of words the headline names one after another and its sources name too, up to three (no little words,
+// no adverbs, no verbs of the news's own: RESTORE, REDUCES, HITS; a run with a name in it first), as a label, never the
+// headline: "Project to restore
+// rare native trees with DNA testing" is RARE NATIVE TREES, "'Bespoke' mRNA vaccine significantly reduces risk of
+// melanoma recurrence" is BESPOKE MRNA VACCINE.
+const TERM_STOP = new Set('a an the of to in on at by for from with and or but is are was were be been being has have had it its this that these those as into than then so not no new more most over after before about up down out off his her their our your my we you they he she who what why how when where which says said say may could would will can set make makes made gets get got takes take took warns warned raises raised cuts cut boosts boost launches launched restore restored ban bans banned plans plan planned hits hit reduces reduce reduced shows show showed finds find found tests test tested reveals reveal revealed calls call called seeks seek hopes hope backs back sees see seen burns burn burned forces force forced moves move moved lifts lift lifted flies fly flew kills kill killed destroys destroy destroyed opens open opened closes close closed wins win won loses lose lost beats beat rises rise rose falls fall fell grows grow grew drops drop dropped'.split(' '));
+function keyTerms(headline, sources) {
+  const hay = ` ${sources.join(' ').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')} `;
+  // (a run's worth: its words, and a little more for each name in it, a capital past the headline's first word)
+  let best = [];
+  let bestV = 0;
+  let run = [];
+  let v = 0;
+  const words = String(headline || '').split(/\s+/);
+  for (let i = 0; i <= words.length; i++) {
+    const w = (words[i] || '').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    const lw = w.toLowerCase();
+    if (w && w.length >= 2 && !TERM_STOP.has(lw) && !/ly$/.test(lw) && hay.includes(` ${lw.replace(/[^\p{L}\p{N}]+/gu, ' ')} `)) {
+      if (run.length < 3) {
+        run.push(w);
+        v += 1 + (i > 0 && /\p{Lu}/u.test(w) ? 0.5 : 0);
+      }
+      continue;
+    }
+    if (run.length >= 2 && v > bestV) {
+      best = run;
+      bestV = v;
+    }
+    run = [];
+    v = 0;
+  }
+  // (as many of its words as the hook's two lines hold, the last ones: the thing itself comes last, FAST-MOVING
+  // CALIFORNIA WILDFIRE is CALIFORNIA WILDFIRE)
+  while (best.length > 2 && !hookLines(best.join(' '))) best = best.slice(1);
+  return best.length >= 2 && hookLines(best.join(' ')) ? best.join(' ') : null;
 }
 
 /**
@@ -499,12 +581,14 @@ function newsMoments(episode, timeline) {
       if (segs[a - 1]?.type === 'story' && segs[a - 1].storyId) a = storyStart(segs, a - 1);
       else if (segs[a].type === 'chat' && segs[a].anchor === unitSlot && segs[a - 1]?.storyId) a = storyStart(segs, a - 1);
       if (!out.some((m) => m.kind === 'unit8' && m.from === a)) {
-        // the robot's own words: a line worth its hook ("UNIT-8 HAS A THOUGHT") has some; a two-word filing quip
-        // ("Texas. Logged.") is a payoff, not a promise, so the clip is titled by its story and scored as one
+        // titled by its story, topic first (docs/publishing/shorts-v2.md A4: a stranger scrolling decides on the subject,
+        // and "UNIT-8 HAS A THOUGHT" says nothing of it), the robot's label only when there is no story; the robot's
+        // own words still score it: a line with something in it holds, a two-word filing quip ("Texas. Logged.") is a
+        // payoff, not a promise
         const said = segs.slice(i, b + 1).filter((x) => x.anchor === unitSlot).map((x) => norm(x.text)).join(' ');
         const words = said.split(' ').filter(Boolean).length;
         const story = segs[a]?.type === 'story' ? segs[a] : null;
-        const m = makeMoment(episode, timeline, 'unit8', a, b, { hook: words >= 6 || !story ? pickHook(['UNIT-8 HAS A THOUGHT', 'UNIT-8, COSMOS DESK'], 'UNIT-8') : pickHook([headlineHook(story.headline), kickerHook(story.kicker)], 'COSMOS DESK') });
+        const m = makeMoment(episode, timeline, 'unit8', a, b, { hook: story ? pickHook([headlineHook(story.headline), kickerHook(story.kicker), 'UNIT-8 HAS A THOUGHT'], 'COSMOS DESK') : pickHook(['UNIT-8 HAS A THOUGHT', 'UNIT-8, COSMOS DESK'], 'UNIT-8') });
         if (m) {
           m.unitWords = words;
           if (words < 6) {

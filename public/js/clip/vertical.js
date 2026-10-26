@@ -48,6 +48,10 @@ const ST = V.stage;
 // a third of the way down the picture), the set above and below it from the same camera
 export const SINGLE_TOP = Object.freeze({ normal: 58, tall: 40 });
 const REST_WALL = Object.freeze({ mode: 'rest' });
+// a single's slow push in (v2 camera.js MOVES: a dolly, 5 % over six seconds from the cut), and how long one speaker's
+// shot runs before the words' next pause cuts it in closer (or back out)
+const SINGLE_PUSH = Object.freeze({ type: 'push', amount: 0.05, delay: 0, dur: 6 });
+export const RECUT_AFTER = 4;
 // the tall stage (no title band): the quiz, whose boards and three people need the frame's full 216 rows
 const TALL = Object.freeze({ x: 0, y: V.title.y, w: VW, h: V.stage.y + V.stage.h - V.title.y });
 const NORMAL = Object.freeze({ x: 0, y: ST.y, w: VW, h: ST.h });
@@ -343,18 +347,30 @@ export class VerticalCompositor {
     const stage = this.vstage();
     if (!stage) return null;
     const slot = this.speakerOf(scene);
+    // (the captions' page as last drawn: it turns where the sentence pauses)
+    const said = this.caps?.active ? `${this.caps.text}|${this.caps.page}` : null;
+    const quiz = !!(scene.cast?.H && scene.cast?.A && scene.cast?.B);
     if (slot !== this.speaker) {
       this.speaker = slot;
       this.cutAt = t;
+      this.tight = false;
+    } else if (!quiz && said && said !== this.lastSaid && t - this.cutAt >= RECUT_AFTER) {
+      // a long turn: where the words pause (a new sentence, a comma: the captions turn their page there) the camera
+      // cuts in closer, or back out, as a studio's two cameras would (the owner, of COSMOS's shorts: one presenter held
+      // still in one frame for fifteen seconds loses the viewer)
+      this.tight = !this.tight;
+      this.cutAt = t;
     }
+    if (said) this.lastSaid = said;
     if (!this.proxy || Object.getPrototypeOf(this.proxy) !== scene) this.proxy = Object.create(scene);
     const p = this.proxy;
     p.shot = 'close';
     p.focus = slot;
-    p.framing = verticalFraming(scene.cast, slot);
+    p.framing = this.tight ? 'tall-tight' : verticalFraming(scene.cast, slot);
     p.shotSince = this.cutAt;
-    p.cameraMove = null;
-    p.cameraMoveSince = null;
+    // and every shot a slow push in from its cut: the picture is never quite still
+    p.cameraMove = quiz ? null : SINGLE_PUSH;
+    p.cameraMoveSince = quiz ? null : this.cutAt;
     // the studio wall at rest behind the single (wall.js 'rest', as behind a two-way's box): no plate, map label,
     // figure or wordmark for the tall crop to cut in half; the story's own picture, map and figure have their shots
     p.wall = REST_WALL;

@@ -83,10 +83,15 @@ guess at the words.
 - lasting under 10 s (−2).
 
 A moment never starts on such a sentence: its start moves to the first sentence that stands alone. "This is…",
-"Here's…" and "And finally:" introduce, so they may open a clip.
+"Here's…" and "And finally:" introduce, so they may open a clip. Nor does it end on a hand-over ("Over to you,
+Nova.", "Back to you."): a short sentence that only passes the voice on is left out of the clip's last segment
+(`text.js` `handoverOnly`), so the clip ends on the story's own last sentence.
 
 **Interest** is the kind's base, plus cues in the words (a number, a superlative, a first, a question), plus a board
-on screen, plus a length of 20–75 s, minus 1.5 for a moment that is not light.
+on screen, plus a length of 20–75 s, minus 1.5 for a moment that is not light, plus the programme's **brand fit**
+(`BRAND`): a COSMOS DESK moment about space (a planet, a rocket, a telescope) gains 1.4, one about science (a study,
+a species, a vaccine) 0.7, and anything else loses 0.4, so its shorts are the desk's own stories and not the storm or
+the pylons it also covered.
 
 **Total** = 0.55 × sense + 0.45 × interest.
 
@@ -94,6 +99,15 @@ on screen, plus a length of 20–75 s, minus 1.5 for a moment that is not light.
 PLAY ALONG"), the count of a story run ("4 STORIES / IN 55 SECONDS"), the figure of NUMBER OF THE DAY, otherwise the
 story's headline. The headline is always whole (`headlineHook`): 2x when it fits two lines of 16, its own colon part
 when that fits, else the whole headline in the body face. A running-order label (AND FINALLY) is never a hook.
+UNIT-8's exchange is titled by the story it answers, never "UNIT-8 HAS A THOUGHT" when it has one.
+
+- **Two balanced lines.** A 2x hook is broken where its two lines come out most even, never after a weak word ("OF",
+  "THE"): EL NIÑO / THEN AND NOW, not EL NIÑO THEN / AND NOW.
+- **The channel's own words** (`ownHook`). A hook that repeats a source's headline is replaced, in turn, by the
+  story's label, its kicker, or its **key terms** (`keyTerms`): the longest run of the headline's words that the
+  story's own words bear out, leaving out verbs and words in -ly, a name counting for more, cut from the front until
+  it fits two lines at 2x (RARE NATIVE TREES, BESPOKE MRNA VACCINE). Only when no run of two words is left does the
+  programme's name stand as the hook (COSMOS DESK).
 
 **Light or grave.**
 
