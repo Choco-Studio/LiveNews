@@ -1407,7 +1407,107 @@ function cosmosIntro() {
     ],
   };
 }
-const INTRO_THEMES = { cosmos: cosmosIntro };
+// TECH BYTES: the city that turns into a motherboard, then the dive to its processor (cues.js INTRO_CUES['tech-bytes']),
+// A dorian, 112 BPM (the titles' run, quicker). Over the city at night, on the first frame: a soft kick, a pluck chord,
+// the warm pad's Am9 and a low pulse on each beat; three glass notes up as its tallest tower lights cyan; on the wave the
+// data comes in (a pulse12 in sixteenths, E A B, the signature's head) with the saw bass in eighths and a light hat, and
+// climbs as the camera dives; a snare run into the stroke as the camera comes over the processor; the signature at
+// double speed on the techPluck (a glass octave above), its DAH on the stroke as the die boots, with a wide Am stab, a
+// double kick and a clap; the colour (G, the b7) over G/A while TECH types in, a soft key tick on each letter; the A on
+// Am6/9 as the title locks, ringing on into the clip. Nothing four-on-the-floor, no swooshes, glitches or beeps.
+function techIntro() {
+  const Q = INTRO_CUES['tech-bytes'];
+  const k = 69; // A4
+  const C = Q.cut;
+  const B = Q.boot;
+  const H = Q.lock;
+  const total = C + 2.5;
+  const A2 = k - 24;
+  const ch = {
+    am9: [k - 12, k - 9, k - 5, k - 2, k + 2], // A3 C4 E4 G4 B4
+    d9: [k - 12, k - 9, k - 5, k - 3, k], // A3 C4 E4 F#4 A4: the dive (the dorian IV)
+    ga: [k - 14, k - 10, k - 7, k - 2, k + 2], // G3 B3 D4 G4 B4: G/A under the colour
+    am69: [k - 12, k - 9, k - 5, k - 3, k + 2], // A3 C4 E4 F#4 B4
+  };
+  // the signature twice as fast, its DAH on the stroke (E A B in the three sixteenths before it); the colour from half a
+  // beat after it to the hit
+  const sig = motif(k, COLOURS.tech, B - 0.75, { scale: 0.5, colourBeats: (H - B - 0.5) * 2 });
+  // the data: three notes against four, climbing an octave of D9 through the dive, then sparkling over the boot
+  const cellAt = (b) => {
+    if (b < Q.dive) return [k - 5, k, k + 2]; // E4 A4 B4
+    if (b < B) {
+      const s = Math.min(2, Math.floor(((b - Q.dive) / (B - Q.dive)) * 3));
+      return [[k - 3, k, k + 3], [k, k + 3, k + 7], [k + 3, k + 7, k + 9]][s];
+    }
+    if (b < H) return [k + 7, k + 10, k + 14]; // E5 G5 B5: over the colour
+    return [k + 7, k + 12, k + 14]; // E5 A5 B5
+  };
+  const data = range(Q.morph, C, 0.25).map((b, i) => {
+    const onBeat = Math.abs(b - Math.round(b)) < 1e-6;
+    const v = b < B ? 0.2 + (0.18 * (b - Q.morph)) / (B - Q.morph) : b < H ? 0.3 : 0.24;
+    return [b, cellAt(b)[i % 3], 0.25, Math.min(0.42, v + (onBeat ? 0.06 : 0))];
+  });
+  // the saw bass: a low pulse on each beat over the city, eighths from the wave, on D through the dive, the boot's pickup
+  const D3 = k - 19;
+  const bass = [
+    ...range(0, Q.morph, 1).map((b) => [b, A2, 0.75, 0.5]),
+    ...range(Q.morph, Q.dive, 0.5).map((b, i) => [b, [A2, A2, A2 + 12, A2][i % 4], 0.5, i % 2 ? 0.45 : 0.7]),
+    ...range(Q.dive, B, 0.5).map((b, i, a) => [b, D3, 0.5, 0.45 + (0.35 * i) / Math.max(1, a.length - 1)]),
+    [B, A2, 0.5, 0.9],
+    ...range(B + 1, H, 0.5).map((b, i) => [b, [A2, A2 + 12][i % 2], 0.5, i % 2 ? 0.45 : 0.62]),
+  ];
+  // the hat: sixteenths on the run, eighths through the dive, sixteenths again after the boot
+  const hat = [
+    ...range(Q.morph, Q.dive, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.6 : i % 2 ? 0.3 : 0.44]),
+    ...range(Q.dive, B, 0.5).map((b) => [b, 'H', 0.4]),
+    ...range(B + 0.5, H, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.56 : i % 2 ? 0.26 : 0.4]),
+  ];
+  // the snare run into the stroke
+  const run = range(B - 1, B, 0.25).map((b, i) => [b, 'S', 0.12 + 0.05 * i]);
+  // a soft key tick as each letter of TECH types in (techintro.js: one a quarter beat from the title cue), up the
+  // colour's chord
+  const ticks = [k + 10, k + 14, k + 17, k + 19].map((m, i) => [Q.title + 0.25 * i, m, 0.25, 0.28 + 0.02 * i]);
+  return {
+    bpm: Q.bpm,
+    room: 0.18,
+    hall: 0.14,
+    echo: { amount: 1, beats: 0.75, feedback: 0.34 },
+    fadeOut: 1.2,
+    loudness: -1.6, // level with the voice, as the opens (themeFor)
+    tracks: [
+      { kind: 'lead', inst: LEAD.techPluck, notes: part([...sig, [H, k + 12, C - H + 1.5, 0.85]], total), gain: 1.15, echo: 0.45 },
+      { kind: 'lead', inst: LEAD.glass, notes: part(motif(k + 12, COLOURS.tech, B - 0.75, { scale: 0.5, colourBeats: (H - B - 0.5) * 2, vel: 0.42 }), total), gain: 0.55, pan: -0.25, echo: 0.4 },
+      { kind: 'harmony', inst: ENS.data, notes: part(data, total), gain: 1.3, pan: 0.3, echo: 0.6 },
+      // three glass notes up as the city's tallest tower lights cyan (B5 E6 F#6)
+      { kind: 'harmony', inst: LEAD.glass, notes: part(Q.blips.map((b, i) => [b, [k + 14, k + 19, k + 21][i], 0.4, 0.34 + 0.04 * i]), total), gain: 0.75, pan: 0.35, echo: 0.5 },
+      { kind: 'harmony', inst: ENS.data, notes: part(ticks, total), gain: 1.1, pan: -0.3, echo: 0.3 },
+      { kind: 'harmony', inst: 'warm', notes: part([
+        [0, ch.am9, Q.dive, 0.5], // the run (the pad speaks at once: an intro has no bar to swell in)
+        [Q.dive, ch.d9, B - Q.dive, 0.56], // the dive
+        [B, ch.am9, 0.5, 0.56],
+        [B + 0.5, ch.ga, H - B - 0.5, 0.58], // G/A under the colour
+        [H, ch.am69, total - H, 0.72],
+      ], total), gain: 0.75, pan: -0.2 },
+      { kind: 'harmony', inst: 'warm', notes: part([[H, [k + 7, k + 14], total - H, 0.42]], total), gain: 0.63, pan: 0.25 },
+      // the boot: a wide Am stab; the hit: a mallet chord
+      { kind: 'harmony', inst: ENS.stab, notes: part([[B, [k - 5, k, k + 7, k + 10], 0.5, 0.62]], total), gain: 1.2 },
+      { kind: 'harmony', inst: 'mallet', notes: part([[H, [k, k + 7, k + 14], 2, 0.5]], total), gain: 1.45, echo: 0.4, pan: 0.15 },
+      { kind: 'bass', inst: 'synthbass', notes: part([...bass, [H, A2, total - H, 0.85]], total), gain: 0.65 },
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 36, Q.dive, 0.6], [Q.dive, k - 31, B - Q.dive, 0.7], [B, k - 36, total - B, 0.82]], total), gain: 0.31 },
+      // the first frame's attack (no button on the cut: the clip's first words are there, and the hit rings under them)
+      { kind: 'harmony', inst: 'pluck', notes: part([[0, [k - 12, k - 5, k], 0.5, 0.8]], total), gain: 1.4 },
+      { drums: drums([[0, 'K', 0.6], [Q.morph, 'K', 0.56], [2, 'K', 0.46], [3, 'K', 0.3], [B, 'K', 0.68], [B + 0.25, 'K', 0.4], [B + 2, 'K', 0.42], [H, 'K', 0.62]], total), gain: 0.95 },
+      // the wave: a wide stab as it leaves the tower
+      { kind: 'harmony', inst: ENS.stab, notes: part([[Q.morph, [k - 12, k - 5, k + 2], 0.5, 0.5]], total), gain: 1 },
+      { drums: drums([[2, 'S', 0.2], ...run, [B + 1, 'S', 0.26]], total), gain: 2 },
+      { drums: drums([[B, 'P', 0.42], [H, 'P', 0.4]], total), gain: 2 },
+      { drums: drums(hat, total) },
+      // a low air swell as the intro dissolves into the programme
+      { drums: drums([[Q.push, 'A', 0.3], [C + 0.5, 'F', 0.01]], total), gain: 1.6 },
+    ],
+  };
+}
+const INTRO_THEMES = { cosmos: cosmosIntro, 'tech-bytes': techIntro };
 /** The theme of a programme's clip intro (null when it has none); meta: { programId, bpm, peakAt, hitAt, cutAt } (s). */
 export function introTheme(programId) {
   const build = INTRO_THEMES[programId];
@@ -1415,7 +1515,8 @@ export function introTheme(programId) {
   const tune = build();
   const Q = INTRO_CUES[programId];
   const s = (b) => (b * 60) / Q.bpm;
-  return { ...tune, meta: { programId, bpm: Q.bpm, peakAt: s(Q.sun), hitAt: s(Q.lock), cutAt: s(Q.cut) } };
+  // (the peak: COSMOS DESK's stroke as Saturn swells in, TECH BYTES's as the die boots)
+  return { ...tune, meta: { programId, bpm: Q.bpm, peakAt: s(Q.sun ?? Q.boot), hitAt: s(Q.lock), cutAt: s(Q.cut) } };
 }
 
 
