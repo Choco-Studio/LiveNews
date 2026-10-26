@@ -303,16 +303,34 @@ function layoutTerm(o, w, h, programId, { T = T1, bare = false } = {}) {
   const { pad, inner, top } = metrics(w, bare);
   const term = String(o.term.term).toUpperCase();
   const ts = textW(term, 3) <= inner ? 3 : 2;
-  const tl = balanceLines(term, inner, ts, 2);
+  // (the term whole, on up to three lines: "LARGE LANGUAGE..." lost its last word)
+  let tls = ts;
+  let tl = balanceLines(term, inner, ts, 3);
+  if (tl[tl.length - 1]?.endsWith('...')) {
+    tls = 1;
+    tl = balanceLines(term, inner, 1, 3);
+  }
   const plain = balanceLines(String(o.term.plain), inner, T.s, 6);
-  const out = [];
-  let y = top;
-  out.push({ y, h: tl.length * (7 * ts + 4) - 4, kind: 'term', lines: tl, ts });
-  y += tl.length * (7 * ts + 4) - 4 + 6;
-  out.push({ y, h: 1, kind: 'accentRule' });
-  y += 8;
-  out.push({ y, h: blockH(plain.length, T), kind: 'lines', lines: plain, T });
-  return finish(out, '', w, h, inner, { kicker: 'IN PLAIN ENGLISH' }, { bare, pad, T });
+  // (on the glass at 2x the board is the caption, the voice reading it: when its lines would not fit at the usual
+  // spacing they close up under the kicker and the rule, before the whole board drops to the body size)
+  const build = (y0, g1, g2) => {
+    const out = [];
+    let y = y0;
+    out.push({ y, h: tl.length * (7 * tls + 4) - 4, kind: 'term', lines: tl, ts: tls });
+    y += tl.length * (7 * tls + 4) - 4 + g1;
+    out.push({ y, h: 1, kind: 'accentRule' });
+    y += g2;
+    out.push({ y, h: blockH(plain.length, T), kind: 'lines', lines: plain, T });
+    return out;
+  };
+  const opt = { bare, pad, T };
+  let L = finish(build(top, 6, 8), '', w, h, inner, { kicker: 'IN PLAIN ENGLISH' }, opt);
+  if (L.dropped && bare && T.s === 2) {
+    // (the kicker goes up with the rows, so a tilde over the term never meets it: EL NIÑO)
+    const tight = finish(build(top - 5, 5, 6), '', w, h, inner, { kicker: 'IN PLAIN ENGLISH', kickY: KICK_Y - 6 }, opt);
+    if (!tight.dropped) L = tight;
+  }
+  return L;
 }
 
 function layoutQuote(o, w, h, programId, { T = T1, bare = false } = {}) {
@@ -510,8 +528,9 @@ export function drawVerticalBoard(ctx, dt0, card, { x, y, w, h, programId = '', 
       ctx.fillRect(PX, PY, PW, 1);
     }
     // the kicker: micro fog on the channel's panel; on the glass, the body face in the programme's accent
-    if (bare) drawText(ctx, L.kicker, tx, PY + KICK_Y, { color: paper ? P.darkGreen : acc === P.purple ? P.fog : acc });
-    else drawText(ctx, L.kicker, tx, PY + KICK_Y, paper ? S.microSlate : S.microFog);
+    const ky = PY + (L.kickY ?? KICK_Y);
+    if (bare) drawText(ctx, L.kicker, tx, ky, { color: paper ? P.darkGreen : acc === P.purple ? P.fog : acc });
+    else drawText(ctx, L.kicker, tx, ky, paper ? S.microSlate : S.microFog);
     const rule = paper ? P.darkGreen : acc;
     L.rows.forEach((r, i) => {
       const ry = PY + r.y;

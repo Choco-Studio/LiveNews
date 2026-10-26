@@ -185,6 +185,10 @@ the set in the set's frame (§2: `bare`, no panel of its own). Precedence is the
   face at its foot, so the rows are laid out without it in the height above (FOOT_H, 10 rows) and keep their large size:
   two figures at 3x with their labels at 2x, where the source line had pushed them down to 2x and 1x. A share's label
   is never cut with dots ("COVERED IN..." lost what it is covered in): too long for 2x, the board is set at 1x.
+- **IN PLAIN ENGLISH is the caption** (the voice reads it, so no caption is drawn): when its explanation would not fit
+  at 2x at the usual spacing, its rows close up under the kicker and the rule (the kicker rising with them, so a tilde
+  over the term never meets it: EL NIÑO) before the board drops to the body size. The term itself is whole on up to
+  three lines ("LARGE LANGUAGE..." lost its last word), else at 1x.
 - **As large as the stage lets it be** (`verticalBoardLayout(card, w, h, programId, bare)`): its words at 2x (`T2`) when
   every row and the source line fit the stage that way, else at the body size (`T1`), never shrunk past it and never
   cut. A lone figure goes to 4x when it fits, two or three to 3x; their labels a size under them. WHAT HAPPENS NEXT
