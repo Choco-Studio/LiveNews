@@ -212,11 +212,14 @@ leaves one, and never stops climbing until the whole world is in the frame:
 | 4.5-6 | The emblem and the logotype, a shine running across WORLD on the hit; from beat 5 the intro's pixels dissolve away along the diagonal | D add9 on the hit, ringing on into the clip; a low air swell under the dissolve |
 
 How it is drawn: the earth is a unit sphere seen through one lens (260 px) from a camera over a point of it, looking
-along a heading at a pitch from straight down (turned by a roll), each pixel's ray met with the sphere. The height is one
-smooth curve in log space, 1.4 km to the emblem's distance; the camera goes on along its heading in proportion to the
-height it gains, keeping the horizon 20 degrees over its look, then drifts to the emblem's face as its look turns
-straight down, its heading to north and its roll to level (each one smooth curve; the checks hold the climb and the turns
-to no jolt from frame to frame). The ground is the channel's land mask at the level each pixel's footprint wants,
+along a heading at a pitch from straight down (turned by a roll), each pixel's ray met with the sphere. Of the first cut
+the owner said "el cambio de velocidad es demasiado brusco": its climb had sped up to nearly twice its first pace and
+braked, and its turns all came at once after the sunrise. So the climb (the height's log, 1.4 km to the emblem's
+distance) keeps one pace: a fifth higher every frame from the first, coming up a little and held, then one long glide to
+rest over the last second and a half; the turns are spread over the whole way, each one gentle (the look coming down
+once the sun is up, the heading round to north, the roll to level), the look's tilt easing into nothing as the earth
+shrinks. The camera goes on along its heading in proportion to the height it gains, keeping the horizon 20 degrees over
+its look, then drifts to the emblem's face (the checks hold the climb and the turns to no jolt from frame to frame). The ground is the channel's land mask at the level each pixel's footprint wants,
 filtered so a coast is never a staircase, lit by the sun as the emblem's globe is (its ramps; a warm band where the sun
 is low); the sun is set in the camera's frame, just behind the earth's edge ahead until the stroke, then coming round to
 the emblem's light. London is drawn from its plan to a hundred kilometres round: the Thames rounded through its points,

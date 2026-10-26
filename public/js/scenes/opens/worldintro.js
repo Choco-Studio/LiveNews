@@ -69,8 +69,8 @@ const hash2 = (ix, iy, s) => {
 // ---------------------------------------------------------------------------------------------
 // The camera: over a point of the earth (its sub-point), at a height, looking along its heading at a pitch from straight
 // down, turned by a roll. It starts a kilometre and a half over the Thames by Tower Bridge, looking down the river past
-// Canary Wharf, and climbs away fast (its height one smooth curve in log space: each frame higher by a share of its
-// height, the share easing to nothing at rest), on along its heading as it climbs, keeping the horizon high in the frame;
+// Canary Wharf, and climbs away fast (its height's log at one pace, then one long glide to rest), on along its heading
+// as it climbs, keeping the horizon high in the frame;
 // over the earth's edge the sun rises; then its look turns down and round onto the planet and it comes to rest on the
 // emblem's camera: straight down on the emblem's face (24 N, 12 W: Europe and Africa, the north tipped toward us), north
 // up, the globe 56 px in radius at the emblem's place.
@@ -83,14 +83,27 @@ const START = [51.5058, -0.068]; // over the Thames by Tower Bridge
 const FACE = [24, -12];
 const U0 = Math.log(1.4 / KM);
 const U1 = Math.log(D_END - 1);
-const RATE0 = 2.4; // the climb on the first frame: its height's log, a beat (an eighth higher every frame)
 const HEAD0 = 96 * DEG; // down the river, east: the City, Canary Wharf, then Europe and the dawn
 const LIMB_EL = 20 * DEG; // the horizon kept this far over the look while the camera climbs
 const ROLL0 = -12 * DEG;
 const AHEAD = 0.55; // the way on over the ground for each unit of height climbed
 const DRIFT_FROM = Math.log(700 / KM); // above this the camera drifts toward the emblem's face
+// The climb's pace (the owner, of the first cut: "el cambio de velocidad es demasiado brusco"; it had sped up to nearly
+// twice its first pace and braked): its rate (the height's log, a beat) already going on the first frame, coming up a
+// little to a steady climb, held, then easing off in one long glide to rest: the shape's share of the way at each step.
+const STEPS = 400;
+const climbShape = (x) => (0.86 + 0.14 * smooth(0, 0.2, x)) * (1 - sstep5((x - 0.48) / 0.52));
+const CLIMB = (() => {
+  const g = new Float64Array(STEPS + 1);
+  for (let i = 1; i <= STEPS; i++) g[i] = g[i - 1] + climbShape((i - 0.5) / STEPS);
+  return g.map((v) => v / g[STEPS]);
+})();
 /** The camera's height's log at beat b. */
-const logHeight = (b) => quintic(U0, U1, RATE0 * Q.settle, 0, clamp(b / Q.settle, 0, 1));
+function logHeight(b) {
+  const x = clamp(b / Q.settle, 0, 1) * STEPS;
+  const i = Math.min(STEPS - 1, Math.floor(x));
+  return U0 + (U1 - U0) * (CLIMB[i] + (CLIMB[i + 1] - CLIMB[i]) * (x - i));
+}
 const NS = evec(...START);
 const NF = evec(...FACE);
 const T0 = (() => {
@@ -100,9 +113,10 @@ const T0 = (() => {
   const n = [-Math.sin(la) * Math.sin(lo), Math.cos(la), -Math.sin(la) * Math.cos(lo)];
   return [0, 1, 2].map((k) => n[k] * Math.cos(HEAD0) + e[k] * Math.sin(HEAD0));
 })();
+// the way: the camera's place and look at a point p of it (p runs 0 to Q.settle, the way's own beats)
 const PATH = {};
-function pathAt(b, o = PATH) {
-  const u = logHeight(b);
+function pathAt(p, o = PATH) {
+  const u = logHeight(p);
   const h = Math.exp(u);
   // on along the heading as it climbs, then drifting to the emblem's face
   const s = AHEAD * (h - Math.exp(U0));
@@ -119,15 +133,22 @@ function pathAt(b, o = PATH) {
   o.lat = Math.asin(clamp(ny, -1, 1)) / DEG;
   o.lon = Math.atan2(nx, nz) / DEG;
   o.u = u;
-  o.pitch = Math.max(0, Math.asin(1 / (1 + h)) - LIMB_EL) * (1 - sstep5((b - Q.sun - 0.1) / 1.8));
-  o.head = HEAD0 * (1 - sstep5((b - Q.sun) / 1.9));
-  o.roll = ROLL0 * (1 - sstep5((b - 0.4) / 2.8));
+  // (the turns spread over the whole way, each as gentle as it can be: the look comes down once the sun is up)
+  const over = Math.asin(1 / (1 + h)) - LIMB_EL; // (eased into nothing as the earth shrinks: never a kink)
+  o.pitch = 0.5 * (over + Math.sqrt(over * over + 36 * DEG * DEG)) * (1 - smooth(Q.sun + 0.05, Q.settle - 0.05, p));
+  o.head = HEAD0 * (1 - smooth(0.3, Q.settle - 0.05, p));
+  o.roll = ROLL0 * (1 - smooth(0, Q.settle - 0.05, p));
   return o;
 }
 
 const CAM = {};
 function cameraAt(b, c = CAM) {
-  const p = pathAt(b);
+  placeCamera(c, pathAt(clamp(b, 0, Q.settle)));
+  sunAt(b, c);
+  return c;
+}
+// the camera's frame at a point of the way: its place, its look (forward, right, up; and right and up before the roll)
+function placeCamera(c, p) {
   const la = p.lat * DEG;
   const lo = p.lon * DEG;
   const nx = Math.cos(la) * Math.sin(lo);
@@ -183,7 +204,6 @@ function cameraAt(b, c = CAM) {
   c.uy = -sy * sr + c.u0y * cr;
   c.uz = -sz * sr + c.u0z * cr;
   c.alpha = Math.asin(1 / D); // the earth's angular radius
-  sunAt(b, c);
   return c;
 }
 // a point of the world (earth units) on the frame: [x, y, depth]
