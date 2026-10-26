@@ -39,7 +39,8 @@ import { drawBugOnly, drawProgrammeTag, speechNow, graveNow, boardRepeats } from
 import { pictureCreditOf } from '../graphics/picture.js';
 import { prepareLocator, drawLocator } from '../graphics/locator.js';
 import { drawTopicBoard } from '../graphics/topicboard.js';
-import { VerticalSet, twinkle, drawBoardFrame, glassRect, glassScrims, glint, OVERLAP } from './vset.js';
+import { drawOrbit, orbitMarker, coordsOf } from './vorbit.js';
+import { VerticalSet, VSETS, twinkle, drawBoardFrame, hudBrackets, glassRect, glassScrims, glint, OVERLAP } from './vset.js';
 import { drawVerticalChannel, drawVerticalFilm, drawStoryLine, storyLines, windowOpen } from './vchannel.js';
 import { drawStinger, STINGER_DURATION } from '../scenes/cards.js';
 
@@ -47,11 +48,13 @@ const ST = V.stage;
 // the presenter's single made tall: the Stage's 216 rows from this row (its framings put the eyes about 70 rows down:
 // a third of the way down the picture), the set above and below it from the same camera
 export const SINGLE_TOP = Object.freeze({ normal: 58, tall: 40 });
-const REST_WALL = Object.freeze({ mode: 'rest' });
+const REST_WALL = Object.freeze({ mode: 'rest', screen: false });
 // a single's slow push in (v2 camera.js MOVES: a dolly, 5 % over six seconds from the cut), and how long one speaker's
 // shot runs before the words' next pause cuts it in closer (or back out)
 const SINGLE_PUSH = Object.freeze({ type: 'push', amount: 0.05, delay: 0, dur: 6 });
 export const RECUT_AFTER = 4;
+// the programmes whose places are seen from orbit (clip/vorbit.js), not on the flat map
+const ORBIT = new Set(['cosmos']);
 // the tall stage (no title band): the quiz, whose boards and three people need the frame's full 216 rows
 const TALL = Object.freeze({ x: 0, y: V.title.y, w: VW, h: V.stage.y + V.stage.h - V.title.y });
 const NORMAL = Object.freeze({ x: 0, y: ST.y, w: VW, h: ST.h });
@@ -316,16 +319,53 @@ export class VerticalCompositor {
   }
 
   /** Tinted glass over the stage (the board's ground: the set reads through it as shape and light) and its frame. */
-  glassPanel(t, box = this.box) {
+  glassPanel(t, box = this.box, opts = {}) {
     const r = glassRect(box);
     const set = this.set || this.vset.backdrop(this.programId);
     this.ctx.drawImage(set.glass, r.x, r.y, r.w, r.h, r.x, r.y, r.w, r.h);
-    drawBoardFrame(this.ctx, t, r, this.programId, THEME_ACCENT[this.theme] || P.red);
+    drawBoardFrame(this.ctx, t, r, this.programId, THEME_ACCENT[this.theme] || P.red, opts);
     return r;
   }
 
+  /**
+   * COSMOS's locator (clip/vorbit.js): the place from orbit in the programme's display, the kicker, the place's name and
+   * its coordinates over the globe. False when the globe cannot be drawn (the flat map then).
+   */
+  orbitBoard(t, scene, dt, card) {
+    if (!Number.isFinite(card.lat) || !Number.isFinite(card.lon) || typeof document === 'undefined') return false;
+    const ctx = this.ctx;
+    const acc = THEME_ACCENT[scene.program?.theme] || P.magenta;
+    const r = glassRect(this.box);
+    const tx = SAFE.x + 8;
+    const place = String(card.place || '').toUpperCase().trim();
+    let lines = place ? balanceLines(place, SAFE.w - 16, 2, 2) : [];
+    let scale = 2;
+    if (lines[lines.length - 1]?.endsWith('...')) {
+      scale = 1;
+      lines = balanceLines(place, SAFE.w - 16, 1, 2);
+    }
+    const lh = scale === 2 ? 18 : 11;
+    const nameY = r.y + 22;
+    const coordY = nameY + (lines.length ? lines.length * lh - (lh - 7 * scale) + 5 : 0);
+    const top = coordY + 12;
+    // (the story's source in the display's foot, as on its boards, under the globe)
+    const source = this.sourceOf(scene);
+    const foot = source ? 11 : 0;
+    const R = Math.max(30, Math.floor((r.y + r.h - 6 - foot - top) / 2));
+    // the globe first (it may not be ready: then nothing of the board is drawn and the flat map stands in)
+    const cy = top + R;
+    this.glassPanel(t, this.box, { orbit: false });
+    if (!drawOrbit(ctx, { cx: VW >> 1, cy, R, lat: card.lat, lon: card.lon, dt, t, accent: acc })) return false;
+    drawText(ctx, 'FROM ORBIT', tx, r.y + 10, { color: acc === P.purple ? P.fog : acc });
+    lines.forEach((ln, i) => drawText(ctx, ln, tx, nameY + i * lh, scale === 2 ? S.white2 : S.white));
+    drawText(ctx, coordsOf(card.lat, card.lon), tx, coordY, S.fog);
+    if (source) drawText(ctx, microFit(`SOURCE: ${source}`, SAFE.w - 16), tx, r.y + r.h - 12, S.microFog);
+    this.orbitAt = t;
+    return true;
+  }
+
   /** The accent rules above and below a picture window (rows y0..y1), the set's own frame lines. */
-  windowRules({ y0, y1 }) {
+  windowRules({ y0, y1, held = y1 }) {
     const ctx = this.ctx;
     const acc = THEME_ACCENT[this.theme] || P.red;
     ctx.fillStyle = P.black;
@@ -335,6 +375,9 @@ export class VerticalCompositor {
     ctx.fillRect(0, y0 - 2, VW, 2);
     ctx.fillRect(0, y1, VW, 2);
     glint(ctx, this.t || 0, 0, y0 - 2, VW, acc === P.purple ? P.fog : acc);
+    // COSMOS: the picture held in its display's brackets, as a telescope's viewfinder frames it
+    // (held: the brackets' foot, over the headline frame's tag)
+    if (VSETS[this.programId]?.frame === 'hud' && held - y0 > 40) hudBrackets(ctx, { x: (VW - 190) >> 1, y: y0 + 4, w: 190, h: held - y0 - 8 }, acc === P.purple ? P.fog : acc);
   }
 
   /**
@@ -543,6 +586,7 @@ export class VerticalCompositor {
    */
   map(t, scene, dt) {
     const card = scene.card || {};
+    if (ORBIT.has(scene.program?.id) && this.orbitBoard(t, scene, dt, card)) return;
     drawWorldMap(this.ctx, t, dt, { x: 0, y: this.box.y, w: VW, h: this.box.h, lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[scene.program?.theme], programId: scene.program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
     this.windowed = { y0: this.box.y, y1: this.box.y + this.box.h };
   }
@@ -644,6 +688,35 @@ export class VerticalCompositor {
     }
   }
 
+  /**
+   * The headline frame's place from orbit (COSMOS): the globe in the sky between the stage's top and the plate's tag
+   * (rows y0..py), the place's name on a black plate beside its marker. False when the globe cannot be drawn.
+   */
+  orbitOver(t, dt, loc, py, acc) {
+    if (typeof document === 'undefined') return false;
+    const ctx = this.ctx;
+    const y0 = this.box.y + 6, y1 = py - 14;
+    const R = Math.min(56, Math.floor((y1 - y0) / 2));
+    if (R < 24) return false;
+    const cx = VW >> 1, cy = y0 + Math.round((y1 - y0) / 2);
+    if (!drawOrbit(ctx, { cx, cy, R, lat: loc.lat, lon: loc.lon, dt, t, accent: acc })) return false;
+    const name = String(loc.place || '').toUpperCase().trim();
+    if (!name) return true;
+    const m = orbitMarker(loc.lat, loc.lon, dt);
+    const mx = Math.round(cx + m.x * R), my = Math.round(cy + m.y * R);
+    const text = microFit(name, SAFE.w - 24);
+    const w = measureText(text, 1, 'micro') + 8;
+    // beside the marker, on whichever side has the room inside the safe column
+    const right = mx + 12 + w <= SAFE.right;
+    const lx = right ? mx + 12 : Math.max(SAFE.x, mx - 12 - w);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(lx, my - 5, w, 10);
+    ctx.fillStyle = acc;
+    ctx.fillRect(right ? lx : lx + w - 1, my - 5, 1, 10);
+    drawText(ctx, text, lx + 4, my - 3, S.microWhite);
+    return true;
+  }
+
   /** The montage's headline frame (and STILL TO COME's) set again: the backdrop over the stage, the headline under it. */
   headlineFrame(t, scene, dt) {
     const ctx = this.ctx;
@@ -655,10 +728,25 @@ export class VerticalCompositor {
     const pic = scene.images?.get?.(item.storyId)?.card || null;
     const loc = item.location;
     const place = Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+    // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
+    const headline = String(item.headline || '').toUpperCase();
+    let scale = 2;
+    let lines = balanceLines(headline, SAFE.w - 8, 2, 4);
+    if (lines[lines.length - 1]?.endsWith('...')) {
+      scale = 1;
+      lines = balanceLines(headline, SAFE.w - 8, 1, 5);
+    }
+    const lh = scale === 2 ? 18 : 11;
+    const textH = lines.length * lh - (lh - 7 * scale);
+    // the plate rises from the safe area's foot, never less than 64 rows tall (the backdrop above it keeps the rest)
+    const plateH = Math.max(64, textH + 16 + (item.source ? 10 : 0));
+    const py = this.box.y + this.box.h - plateH;
     // (the backdrop fills the box above the plate; a photo is centred on the safe column)
     if (pic) {
       ctx.drawImage(pic, Math.round(SAFE.cx - pic.width / 2), this.box.y);
       this.shownPicture = item.storyId;
+    } else if (place && ORBIT.has(scene.program?.id) && this.orbitOver(t, dt, loc, py, acc)) {
+      // COSMOS: no picture, the place from orbit over its sky (clip/vorbit.js)
     } else if (place) {
       // no picture: the place's locator board set for the tall frame (else, while the map data loads, the map shot)
       const board = this.locatorFor(loc, this.box);
@@ -674,22 +762,9 @@ export class VerticalCompositor {
       // the field, so a result without a picture or a place never opens on an empty stage (publishing round 6)
       if (scene.program?.theme === 'sport' && item.kicker) this.sportTag(item.kicker, acc, dt);
     }
-    // the headline at 2x on a black plate at the stage's foot (up to four lines; at 1x when longer), the tag over it
-    const headline = String(item.headline || '').toUpperCase();
-    let scale = 2;
-    let lines = balanceLines(headline, SAFE.w - 8, 2, 4);
-    if (lines[lines.length - 1]?.endsWith('...')) {
-      scale = 1;
-      lines = balanceLines(headline, SAFE.w - 8, 1, 5);
-    }
-    const lh = scale === 2 ? 18 : 11;
-    const textH = lines.length * lh - (lh - 7 * scale);
-    // the plate rises from the safe area's foot, never less than 64 rows tall (the backdrop above it keeps the rest)
-    const plateH = Math.max(64, textH + 16 + (item.source ? 10 : 0));
-    const py = this.box.y + this.box.h - plateH;
     // (the plate whole from the shot's first frame: a clip opening on the montage opens on a composed frame; its lines
     // rise into it)
-    this.windowed = { y0: this.box.y, y1: py };
+    this.windowed = { y0: this.box.y, y1: py, held: py - 12 };
     ctx.fillStyle = P.black;
     ctx.fillRect(0, py, VW, plateH);
     for (let i = 0; i < lines.length; i++) {
@@ -742,6 +817,8 @@ export class VerticalCompositor {
    * black), while its strap is up. A recreation carries its own credit.
    */
   sourcePlate(t, scene) {
+    // (COSMOS's globe carries its source in its display's foot)
+    if (this.orbitAt === t && scene.shot === 'map') return;
     const cur = this.renderer?.graphics?.strap;
     if (scene.recreation || !cur?.cur || cur.outAt !== null || !cur.cur.headline) return;
     const source = this.sourceOf(scene);

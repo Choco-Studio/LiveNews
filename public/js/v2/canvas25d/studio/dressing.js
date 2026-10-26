@@ -28,7 +28,7 @@
 // (cam.soft) lights turn to bokeh. What moves (windows, beacons, pulses, stars, the cursor, the desk line's
 // sweep) is live.js's layer over the cached set: the dressing registers those pixels as it draws them.
 //
-//   drawDressing(fr, cam, style, soft)   on the wall, after the light and before the screen
+//   drawDressing(fr, cam, style, soft, bare)   on the wall, after the light and before the screen (bare: no screen)
 //   FLATS[id]                            the programme's pillars, instead of the network's black flats
 //   DESK_FRONTS[id]                      the desk front's panel colours, pattern and light (set.js rasterDesk)
 import { C } from '../pixbuf.js';
@@ -665,7 +665,7 @@ function moonPhases(fr, cam, soft) {
   }
 }
 
-function cosmos(fr, cam, style, soft) {
+function cosmos(fr, cam, style, soft, bare = false) {
   // the planetarium wall (space.js): the sky from orbit across the whole back of the set
   const k = kAt(cam, SET.wallZ);
   drawSpace(fr, cam, {
@@ -674,11 +674,14 @@ function cosmos(fr, cam, style, soft) {
   }, soft);
   // the planetarium's overlay: two constellations in thin purple lines with their names, over the heads
   for (const ch of SKY_CHARTS) constellation(fr, cam, ch, soft);
-  // the hero screen in its black mount, the Moon's phases over it, the soffit's magenta cove
+  // the hero screen in its black mount, the Moon's phases over it, the soffit's magenta cove (without the screen,
+  // bare, the sky runs on)
   const S = SET.screen, m = 5;
-  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
-  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
-  moonPhases(fr, cam, soft);
+  if (!bare) {
+    rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+    if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
+    moonPhases(fr, cam, soft);
+  }
   soffit(fr, cam, RAMPS.magenta, soft);
 }
 
@@ -1069,11 +1072,11 @@ export const FLATS = {
 export const FLOORS = { 'full-time': platformFront, 'pay-attention': quizFloor };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
-export function drawDressing(fr, cam, style, soft = false) {
+export function drawDressing(fr, cam, style, soft = false, bare = false) {
   if (!DRESSING.on) return;
   const f = DRESS[style?.id];
   if (!f) return;
-  f(fr, cam, style, soft);
+  f(fr, cam, style, soft, bare);
   liveArm(style.id); // what moves in it may move (live.js)
 }
 

@@ -124,6 +124,9 @@ export function boardKind(o = {}) {
 
 const LAYOUTS = new WeakMap();
 const KICK_Y = 10; // the kicker's caps from the panel's top
+// the programmes whose display carries the source in its foot (vset.js frame 'hud'), and the rows that foot takes
+const SRC_FOOT = new Set(['cosmos']);
+const FOOT_H = 10;
 const TOP = 24; // the first row from the panel's top
 const PAD = 12;
 const TOPB = 27; // bare: under a kicker in the body face
@@ -204,7 +207,7 @@ function layoutFigures(o, w, h, programId, { T = T1, bare = false } = {}) {
     const label = r.label ? balanceLines(r.label, inner, TL.s, 2) : [];
     const rh = (qual ? qh : 0) + 7 * scale + 5 + 1 + (label.length ? 6 + blockH(label.length, TL) : 0);
     out.push({ y, h: rh, kind: 'figure', qual, qh, fig, figW: textW(fig, scale), scale, label, T: TL });
-    y += rh + (bare ? 12 : 10);
+    y += rh + 10;
   }
   return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: ellipsis(boardTitle('numbers', { programId, kicker: o.label }) || 'BY THE NUMBERS', inner, 1), paper }, opt);
 }
@@ -370,7 +373,9 @@ function layoutShare(o, w, h, programId, { T = T1, bare = false } = {}) {
   const qh = bare ? 10 : 8;
   out.push({ y, h: (s.qualifier ? qh : 0) + 7 * vs, kind: 'value', value: ellipsis(value, inner, vs), vs, qh, qual: s.qualifier ? ellipsis(String(s.qualifier).toUpperCase(), inner, 1) : '' });
   y += (s.qualifier ? qh : 0) + 7 * vs + 6;
-  const label = balanceLines(String(s.label), inner, T.s, 3);
+  // (the label whole, never cut with dots: "COVERED IN..." loses what it is covered in; a label too long for the
+  // stage at 2x drops the 2x layout, and the board is set at the body size)
+  const label = balanceLines(String(s.label), inner, T.s, 6);
   out.push({ y, h: blockH(label.length, T), kind: 'lines', lines: label, T });
   return finish(out, srcFor(o.source, inner, bare), w, h, inner, { kicker: 'IN PROPORTION' }, { bare, pad, T });
 }
@@ -436,11 +441,17 @@ export function verticalBoardLayout(card, w, h, programId = '', bare = false) {
   const key = `${kind}|${w}|${h}|${programId}|${bare ? 1 : 0}`;
   if (per?.key === key) return per.L;
   let L = null;
+  // COSMOS's display carries the source in its foot, under the rows, as an instrument's caption (SRC_FOOT): the rows
+  // are laid out without it, in the height above it, so its figures and words keep their large size
+  const foot = bare && SRC_FOOT.has(programId) && card.source ? srcFor(card.source, w - 2 * PADB, true) : '';
+  const c = foot ? { ...card, source: '' } : card;
+  const hh = foot ? h - FOOT_H : h;
   if (bare) {
-    const big = BUILDERS[kind](card, w, h, programId, { T: T2, bare: true });
+    const big = BUILDERS[kind](c, w, hh, programId, { T: T2, bare: true });
     if (big && !big.dropped) L = { kind, ...big };
   }
-  L ||= { kind, ...BUILDERS[kind](card, w, h, programId, { T: T1, bare }) };
+  L ||= { kind, ...BUILDERS[kind](c, w, hh, programId, { T: T1, bare }) };
+  if (foot) L.foot = foot;
   LAYOUTS.set(card, { key, L });
   return L;
 }
@@ -470,7 +481,9 @@ export function drawVerticalBoard(ctx, dt0, card, { x, y, w, h, programId = '', 
   const acc = accentFor(programId, accent);
   const paper = !!L.paper;
   const PX = x + 8;
-  const PY = y + clamp(Math.round((h - L.PH) / 2), 4, Math.max(4, h - L.PH - 4));
+  // (the rows centred in the height above the foot's source line when the display carries one)
+  const hb = L.foot ? h - FOOT_H : h;
+  const PY = y + clamp(Math.round((hb - L.PH) / 2), 4, Math.max(4, hb - L.PH - 4));
   // (bare: the glass and its frame are already there, whole from the shot's first frame: nothing wipes in)
   const vis = bare ? PW : Math.round(PW * easeOutQuint(seg(dt, 0, 0.3)));
   if (vis <= 0) return true;
@@ -726,5 +739,7 @@ export function drawVerticalBoard(ctx, dt0, card, { x, y, w, h, programId = '', 
   } finally {
     ctx.restore();
   }
+  // (the foot's source outside the rows' clip, whole from the first frame, as the display's own caption)
+  if (L.foot) drawText(ctx, L.foot, tx, y + h - FOOT_H - 4, S.fog);
   return true;
 }

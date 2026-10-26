@@ -954,3 +954,40 @@ test('a running-order label is a caption page of its own: a clip that starts on 
   const plain = pagesOf('Now you can call anyone with WhatsApp, even without the app.', 200);
   assert.match(plain[0].lines[0].text, /^Now you/, 'a "now" inside the sentence is no label');
 });
+
+test('COSMOS round 2: its boards carry the source in the display\'s foot and keep their figures large; a label is never cut', async () => {
+  const { verticalBoardLayout } = await import('../public/js/clip/vboards.js');
+  // the stage's board as vertical.js lays it: the safe column's width, the stage's height less the glass's margins
+  const figs = { fact: 'Artemis III will carry four astronauts', numbers: [{ value: '4', label: 'astronauts' }, { value: '2027', label: 'target launch' }], source: 'NASA' };
+  const L = verticalBoardLayout(figs, 160, 168, 'cosmos', true);
+  assert.equal(L.foot, 'SOURCE: NASA', 'the source is the display\'s caption');
+  assert.equal(L.src, '', 'and not a row of the board');
+  assert.ok(L.rows.every((r) => r.scale === 3), 'two figures at 3x');
+  const other = verticalBoardLayout({ ...figs }, 160, 168, 'world-now', true);
+  assert.ok(!other.foot && other.src, 'another programme keeps its source line among the rows');
+  const share = verticalBoardLayout({ share: { value: 'TWO-THIRDS', fraction: 0.66, label: 'of the surface is covered in ice' }, source: 'NASA' }, 160, 168, 'cosmos', true);
+  const words = share.rows.filter((r) => r.kind === 'lines').flatMap((r) => r.lines).join(' ');
+  assert.equal(words, 'OF THE SURFACE IS COVERED IN ICE', 'the label whole, never cut with dots');
+});
+
+test('COSMOS round 2: the place from orbit turns in to the globe\'s middle and names its coordinates', async () => {
+  const { orbitMarker, coordsOf } = await import('../public/js/clip/vorbit.js');
+  const start = orbitMarker(78, 15, 0);
+  const end = orbitMarker(78, 15, 1.6);
+  assert.ok(Math.hypot(start.x, start.y) > 0.2, 'it starts away from the middle');
+  assert.ok(Math.hypot(end.x, end.y) < 1e-6 && end.front, 'and settles in the middle, facing us');
+  assert.equal(coordsOf(78, 15), '78°N 15°E');
+  assert.equal(coordsOf(-33.9, -151.2 + 360), '34°S 151°W');
+  assert.equal(coordsOf(51.5, -0.1), '52°N 0°W');
+});
+
+test('COSMOS round 2: its tall single and its boards stand before the sky, not its screen', async () => {
+  const { VSETS } = await import('../public/js/clip/vset.js');
+  assert.equal(VSETS.cosmos.screen, false);
+  assert.equal(VSETS.cosmos.frame, 'hud');
+  assert.equal(VSETS.cosmos.cam.soft, 1, 'the sky behind its boards out of focus');
+  assert.notEqual(VSETS['world-now'].screen, false, 'other programmes keep their screen');
+  const { styleFor } = await import('../public/js/v2/canvas25d/studio/styles.js');
+  assert.ok(styleFor('cosmos').skyWall, 'only a sky wall can lose its screen');
+  assert.ok(!styleFor('world-now').skyWall);
+});

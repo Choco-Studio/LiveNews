@@ -693,7 +693,10 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const style = resolveStyle(opts.style);
   const lod = opts.lod | 0;
   const soft = cam.soft > 0.5;
+  // (a sky wall asked to stand without its screen: the planetarium runs on where the screen was)
+  const bare = !!style.skyWall && opts.wall?.screen === false;
   CACHE.style = style;
+  CACHE.bare = bare;
   CACHE.t = t;
   const sSerial = serialOf(style);
   // the wall content first: its version says whether its pixels changed this frame
@@ -707,7 +710,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   // other sets ignore it
   const phase = style.id === 'world-now' ? skyPhase() : style.id === 'full-time' ? groundKey() : style.sky ?? 0;
   framePhase(style.id === 'full-time' ? phase >> 3 : phase);
-  fillKey(cam, sSerial, wall.version, lod, phase);
+  // (bare: the wall's pixels are never shown, so its version never patches them into the frame)
+  fillKey(cam, sSerial, bare ? -1 : wall.version, lod + (bare ? 16 : 0), phase);
   CACHE.frame = fr;
   // NEWS IN 60's rundown board moves on with the story, on a cut only
   if (opts.cut && style.id === 'news-60' && applyRundown()) CACHE.bgKey.fill(NaN);
@@ -750,8 +754,8 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   if (pOn) p0 = lap(PROF, 'light', p0);
   drawWallDetails(fr, cam, style, soft);
   liveReset(); // the dressing registers its live pixels as it draws (live.js)
-  drawDressing(fr, cam, style, soft); // the programme's own studio (dressing.js)
-  drawScreen(fr, r, b, style, soft, wall);
+  drawDressing(fr, cam, style, soft, bare); // the programme's own studio (dressing.js)
+  if (!bare) drawScreen(fr, r, b, style, soft, wall);
   if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
   drawFloor(fr, cam, style);
@@ -1243,7 +1247,9 @@ function rasterDesk(fr, cam, clipRows, led, style) {
       }
     }
   }
-  // logo plate: a flat red block centred on the front, logo at the nearest integer scale
+  // logo plate: a flat red block centred on the front, logo at the nearest integer scale (not on the vertical's own
+  // set, bare: its desk front is under the feeds' words, where a dimmed red block read as a dead button)
+  if (CACHE.bare) return;
   const pX0 = 192 + (-PLATE_HW - cam.x) * kc, pX1 = 192 + (PLATE_HW - cam.x) * kc;
   const pY0 = syOf(cam, kc, PLATE_Y0), pY1 = syOf(cam, kc, PLATE_Y1);
   const ix0 = Math.round(pX0), ix1 = Math.round(pX1), iy0 = Math.round(pY0), iy1 = Math.round(pY1);

@@ -3,7 +3,9 @@
 // running across it with its dark dust lanes, a nebula glowing in the far corner, a crescent Moon rising
 // beside the screen, and low down the Earth's limb, its thin blue atmosphere lit edge-on and the lights of its
 // night side. Over it, as a planetarium draws them, two constellations in thin purple lines with their names.
-// Out of focus (singles) the stars fade to a few dimmer points, the Milky Way and the limb to soft bands.
+// Out of focus (singles) it goes soft as a lens takes it, never empty: the faint stars drop out and the bright ones
+// stay as dim points, the Milky Way is a smooth glow (no dust lanes to read as holes), the limb a soft band, and the
+// night side's city lights open into small warm discs, as lights behind a presenter do.
 //
 //   drawSpace(fr, cam, box, soft)   box: the wall's screen rect to fill
 //   LIVE_DRAW.cosmos                a satellite crossing, a meteor now and then (live.js; the stars twinkle)
@@ -34,6 +36,10 @@ function noise(x, y) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 const fbm = (x, y) => 0.55 * noise(x, y) + 0.3 * noise(x * 2.1 + 5, y * 2.1 + 3) + 0.15 * noise(x * 4.3 + 11, y * 4.3 + 7);
+// a point light out of focus: its centre and the four beside it (a star), a 2 x 2 square (a city light), or a point
+const DISC = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
+const SQUARE = [[0, 0], [1, 0], [0, 1], [1, 1]];
+const POINT = [[0, 0]];
 
 // the sky on the wall (world units on the back wall)
 export const SKY = {
@@ -92,7 +98,7 @@ const onEarth = (X, Y) => {
 // used to be evaluated per pixel on every redraw of the set, 15-60 ms on a cut; the bake is done once, in slices
 // (warmSky), and a frame reads three numbers per pixel at most. The fields are smooth at a texel, so the picture
 // is the one the noise drew.
-const FIELD = { X0: -258, Y0: -136, w: 518, h: 194, rows: 0, band: null, neb: null, cloud: null };
+const FIELD = { X0: -258, Y0: -136, w: 518, h: 194, rows: 0, band: null, soft: null, neb: null, cloud: null };
 const BAND_L = Math.hypot(SKY.milky.X1 - SKY.milky.X0, SKY.milky.Y1 - SKY.milky.Y0);
 const BAND_UX = (SKY.milky.X1 - SKY.milky.X0) / BAND_L, BAND_UY = (SKY.milky.Y1 - SKY.milky.Y0) / BAND_L;
 /** Bake `n` more rows of the fields; true when they are all baked. */
@@ -100,6 +106,7 @@ function bakeRows(n) {
   const f = FIELD;
   if (!f.band) {
     f.band = new Float32Array(f.w * f.h);
+    f.soft = new Float32Array(f.w * f.h);
     f.neb = new Float32Array(f.w * f.h);
     f.cloud = new Float32Array(f.w * f.h);
   }
@@ -114,8 +121,11 @@ function bakeRows(n) {
       const band = 1 - Math.abs(across) / m.hw;
       if (band > -0.1 && along > -2 && along < BAND_L + 2) {
         const dust = fbm(along * 0.035, across * 0.09 + 2);
-        f.band[o] = band * (0.55 + 0.6 * fbm(along * 0.02 + 7, across * 0.05)) - (dust > 0.62 ? (dust - 0.62) * 3 : 0);
-      } else f.band[o] = -1;
+        const body = band * (0.55 + 0.6 * fbm(along * 0.02 + 7, across * 0.05));
+        f.band[o] = body - (dust > 0.62 ? (dust - 0.62) * 3 : 0);
+        // out of focus: the band's body alone, its lanes only a broad shade off its heart (the Great Rift, soft)
+        f.soft[o] = body - 0.16 * Math.exp(-(((across - 5) / 7) ** 2)) * fbm(along * 0.012 + 3, 1);
+      } else f.band[o] = f.soft[o] = -1;
       const nx = (X - nb.X) / nb.rx, ny = (Y - nb.Y) / nb.ry;
       const nd = nx * nx + ny * ny;
       f.neb[o] = nd < 1.7 ? (fbm(X * 0.05 + 1, Y * 0.07 + 4) * (1.6 - nd)) / 1.6 : 0;
@@ -135,7 +145,7 @@ export function skyWarmTasks() {
 function field(arr, X, Y) {
   const fx = X - FIELD.X0 - 0.5, fy = Y - FIELD.Y0 - 0.5;
   const i = Math.floor(fx), j = Math.floor(fy);
-  if (i < 0 || j < 0 || i >= FIELD.w - 1 || j >= FIELD.h - 1) return arr === FIELD.band ? -1 : 0;
+  if (i < 0 || j < 0 || i >= FIELD.w - 1 || j >= FIELD.h - 1) return arr === FIELD.band || arr === FIELD.soft ? -1 : 0;
   const u = fx - i, v = fy - j, o = j * FIELD.w + i;
   const a = arr[o], b = arr[o + 1], c = arr[o + FIELD.w], d = arr[o + FIELD.w + 1];
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
@@ -178,7 +188,12 @@ export function drawSpace(fr, cam, box, soft) {
       let c = C.black;
       // the Milky Way: a soft band (ink, its heart a sparse slate), cut by dark dust lanes
       const across = -(X - m.X0) * BAND_UY + (Y - m.Y0) * BAND_UX;
-      if (across < m.hw && across > -m.hw) {
+      if (soft && across < m.hw && across > -m.hw) {
+        // out of focus: a smooth glow, black into ink on the Bayer steps, its heart a few slate points
+        const v = field(FIELD.soft, X, Y);
+        if (v > 0.28) c = v > 0.62 || b < (v - 0.28) / 0.34 ? C.ink : C.black;
+        if (v > 0.74 && b < (v - 0.74) * 0.9) c = C.slate;
+      } else if (across < m.hw && across > -m.hw) {
         const v = field(FIELD.band, X, Y);
         if (v > 0.72 && b < (v - 0.72) * 2.4 && !soft) c = C.slate;
         else if (v > band0) c = v > 0.5 || b < (v - 0.38) / 0.12 ? C.ink : C.black;
@@ -194,11 +209,28 @@ export function drawSpace(fr, cam, box, soft) {
     }
   }
   const clip = (x, y) => x >= xa && x < xb && y >= ya && y < yb;
-  // the night side's city lights: fixed points on the land (a camera move carries them, never re-picks them)
+  // the night side's city lights: fixed points on the land (a camera move carries them, never re-picks them); out of
+  // focus they dim to rust, the brightest opened into a small soft square, as a lens draws a point light behind a
+  // presenter (a cross of five read as a sparkle, orange as embers)
   if (!soft) {
     for (const [X, Y, c] of CITY_LIGHTS) {
       const x = Math.round(sxOf(cam, k, X) - 0.5), y = Math.round(syOf(cam, k, Y) - 0.5);
       if (clip(x, y)) px[y * W + x] = c;
+    }
+  } else if (k >= 2) {
+    // (only as close as a single: from further back the discs crowd into a speckle)
+    for (const [X, Y, c] of CITY_LIGHTS) {
+      const x = Math.round(sxOf(cam, k, X) - 0.5), y = Math.round(syOf(cam, k, Y) - 0.5);
+      // (the faintest, rust, go: a dark warm disc on the night side reads as a stain)
+      if (c === C.rust) continue;
+      const disc = C.rust;
+      for (const [dx, dy] of c === C.yellow ? SQUARE : POINT) {
+        const xx = x + dx, yy = y + dy;
+        if (!clip(xx, yy)) continue;
+        const o = yy * W + xx, under = px[o];
+        // (never over the limb's own glow)
+        if (under === C.black || under === C.ink) px[o] = disc;
+      }
     }
   }
   // the stars (in front of the band and the nebula, behind the Moon and the Earth)
@@ -207,8 +239,10 @@ export function drawSpace(fr, cam, box, soft) {
     const x = Math.round(sxOf(cam, k, X) - 0.5), y = Math.round(syOf(cam, k, Y) - 0.5);
     if (!clip(x, y)) continue;
     if (soft) {
-      // out of focus the fainter stars drop out and the bright ones stay as dimmer points (never discs)
-      if (mag >= 2 && px[y * W + x] !== C.navy) px[y * W + x] = tint === 'orange' ? C.tanShade : mag === 3 ? C.fog : C.steel;
+      // out of focus the fainter stars drop out, the bright ones stay as dimmer points and the brightest open into a
+      // small soft cross (steel, its arms slate)
+      if (mag >= 2 && px[y * W + x] !== C.navy) px[y * W + x] = tint === 'orange' ? C.tanShade : C.steel;
+      if (mag === 3 && !tint) for (const [dx, dy] of DISC) if ((dx || dy) && clip(x + dx, y + dy) && px[(y + dy) * W + x + dx] === C.black) px[(y + dy) * W + x + dx] = C.ink;
       continue;
     }
     const core = tint === 'orange' ? C.tan : tint === 'blue' ? C.blue : [C.slate, C.steel, C.fog, C.silver][mag];

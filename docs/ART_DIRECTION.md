@@ -242,7 +242,10 @@ The network's architecture, shared by all five sets:
 **Out of focus** (singles, `cam.soft`):
 - the city is the same city, its lights a step dimmer and its fine edges gone (owner, 4 Oct: bokeh discs read as circles, not as a city);
 - the circuit as glowing lines;
-- the brightest stars as dimmer points and the Earth's limb as a soft band;
+- COSMOS's sky soft as a lens takes it, never empty: the faint stars gone, the bright ones dimmer points and the
+  brightest a small soft cross, the Milky Way a smooth glow (black into ink on the Bayer steps, a few slate points at
+  its heart, no dust lanes to read as holes), the Earth's limb a soft band, and as close as a single the night side's
+  lights dimmed to rust, the brightest a 2 × 2 square (a cross of five read as a sparkle, orange as embers);
 - the gallery's monitors as soft squares.
 
 **Rules**, checked by `test/v2-set.test.js`:

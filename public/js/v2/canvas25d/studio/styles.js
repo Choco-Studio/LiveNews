@@ -127,6 +127,9 @@ const DEFS = {
     practical: 'purple',
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'ink' },
     wallField: ['black', 'black'],
+    // the planetarium is the whole wall: a shot that asks for no screen (the vertical's tall single, wall.screen
+    // false) sees the sky run on behind the presenter, never the screen's edge cut by a tall frame
+    skyWall: true,
     wallMaxL: 40,
     wallPicL: 50, // a story picture on the wall: the darkest room keeps it a little quieter
     values: { headZone: [0, 35], wall: 40, faceOver: 20, tintMax: 0.12 },

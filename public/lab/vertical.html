@@ -34,6 +34,7 @@ import * as Q from '/js/scenes/cards-quiz.js';
 import { warmMapData } from '/js/scenes/worldmap.js';
 import { quizCases } from '/lab/quiz-cases.js';
 import { Stage } from '/js/v2/canvas25d/runtime/stage.js';
+import { pixelate } from '/js/pixelate.js';
 
 await warmMapData?.();
 const qs = new URLSearchParams(location.search);
@@ -93,7 +94,17 @@ function castOf(prog) {
   return ps.length > 1 ? { A: ps[0], B: ps[1] } : { A: ps[0] };
 }
 
-/** One frame: spec { programme, view ('single' | 'single-b' | 'board' | 'map' | 'montage' | 'quiz:<case>[:<moment>]' | 'end' | 'set' | 'glass'), t, dt, hook, rows, stream } */
+// a story picture for the 'full' view and the headline frame (loadPicture: a data URL, pixelated as the director does)
+let LAB_PIC = null;
+async function loadPicture(url) {
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+  const full = pixelate(img, 416, 234, { colors: 24 });
+  const card = mk(384, 216);
+  card.getContext('2d').drawImage(full, -16, -9);
+  LAB_PIC = { small: pixelate(img, 104, 62, { colors: 16 }), full, card, tile: null };
+  return true;
+}
+/** One frame: spec { programme, view ('single' | 'single-b' | 'board' | 'map' | 'montage' | 'full' | 'quiz:<case>[:<moment>]' | 'end' | 'set' | 'glass'), t, dt, hook, rows, stream, card (a board's card in place of the sample's), picture (true: the loaded picture is the story's) } */
 function frame(spec) {
   const prog = spec.programme || 'world-now';
   const pg = channel.programs?.[prog] || {};
@@ -121,16 +132,19 @@ function frame(spec) {
   const t = spec.t ?? 100 + dt;
   const scene = { program, cast, episode: { id: `lab-${prog}`, cast }, anchors: {}, actions: {}, images: new Map(), subtitles: true, subtitle: spec.caption ?? null, shotSince: t - dt, rundown: [{ storyId: 's1', headline: S.headline, source: S.source, location: S.lat != null ? { lat: S.lat, lon: S.lon, place: S.place } : null, kicker: S.tag }], storyId: 's1' };
   comp.strap.cur = S.headline ? { headline: S.headline, tag: S.tag, plate: S.source, since: t - dt } : null;
+  if (spec.picture && LAB_PIC) scene.images.set('s1', LAB_PIC);
   if (view === 'single' || view === 'single-b' || view === 'single-h') {
     scene.shot = 'close';
     scene.focus = view === 'single-b' ? 'B' : view === 'single-h' ? 'H' : cast.H ? 'H' : 'A';
     if (!cast[scene.focus]) scene.focus = 'A';
   } else if (view === 'board') {
     scene.shot = 'fact';
-    scene.card = S.card;
+    scene.card = spec.card || S.card;
   } else if (view === 'map') {
     scene.shot = 'map';
     scene.card = { lat: S.lat, lon: S.lon, place: S.place, scope: 'country' };
+  } else if (view === 'full') {
+    scene.shot = 'full';
   } else if (view === 'montage') {
     scene.shot = 'montage';
     scene.card = { index: 0 };
@@ -163,7 +177,7 @@ function parts(spec) {
   const live = [...vset.singles.values()].map((x) => x?.live).filter(Boolean).pop();
   return { aux: comp.aux.toDataURL(), below: live ? live.toDataURL() : null };
 }
-window.__vlab = { frame, parts, ready: true, vset, compFor };
+window.__vlab = { frame, parts, ready: true, vset, compFor, loadPicture };
 window.ready = true;
 window.tall = (...a) => frame(...a);
 

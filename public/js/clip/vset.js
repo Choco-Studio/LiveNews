@@ -38,6 +38,13 @@ export const OVERLAP = 8;
 function studio(id) {
   return { style: id, cam: { zoom: 1.822, hy: 140, x: 0, y: -60, z: 0 }, seam: 160, drop: 56, x0: 84, wall: 'rest', frame: 'bezel' };
 }
+// COSMOS's boards float on its planetarium as its own displays (frame 'hud', drawBoardFrame): the sky behind them is
+// the set's own, out of focus as behind a single (a board is read, the sky only felt), and without the screen and its
+// bezel, which would frame the display a second time
+function planetarium() {
+  const s = studio('cosmos');
+  return { ...s, cam: { ...s.cam, soft: 1 }, screen: false, frame: 'hud' };
+}
 function quizSet() {
   return { style: 'pay-attention', cam: { zoom: 1.622, hy: 103, x: 0, y: -60, z: 0 }, seam: 140, drop: 87, x0: 84, wall: 'rest', frame: 'marquee' };
 }
@@ -46,13 +53,14 @@ function quizSet() {
  * Each programme's tall camera on its set (the set's own camera grammar: no rotation; zoom, a pedestal through hy, a
  * truck through x) and its board's frame. `x0` is the first of the 216 columns taken from the 384-wide render.
  *   style      the studio set's style id (styles.js); WORLD WEATHER airs from its own weather centre: no studio set
- *   frame      the board's frame: 'bezel' (the set's screen bezel and the programme's accent) or 'marquee' (the quiz's
- *              lamp-lit frame)
+ *   frame      the board's frame: 'bezel' (the set's screen bezel and the programme's accent), 'marquee' (the quiz's
+ *              lamp-lit frame) or 'hud' (COSMOS's planetarium display: held at its corners, a scale along its top)
+ *   screen     false: the set's screen left out (a sky wall runs on behind the board)
  */
 export const VSETS = Object.freeze({
   'world-now': studio('world-now'),
   'tech-bytes': studio('tech-bytes'),
-  cosmos: studio('cosmos'),
+  cosmos: planetarium(),
   'money-minute': studio('money-minute'),
   'news-60': studio('news-60'),
   'seven-days': studio('seven-days'),
@@ -316,7 +324,7 @@ export class VerticalSet {
       try {
         const style = this.kit.styleFor(spec.style);
         const out = { px: new Uint32Array(VW * VH), w: VW, h: VH };
-        const wall = { mode: spec.wall || 'rest', solo: false };
+        const wall = { mode: spec.wall || 'rest', solo: false, screen: spec.screen !== false };
         const cam = { soft: 0, ...spec.cam };
         // above the seam the set's top (its header behind the hook's plate); below it the same camera `drop` rows
         // lower (the wall's foot behind the captions, the desk in the foot): the screen between them is taller by
@@ -327,8 +335,8 @@ export class VerticalSet {
         this.renderInto(out, cam, style, wall, spec.x0 ?? 84, 0, 0, seam);
         for (let i = 0; i * H < VH; i++) this.renderInto(out, { ...cam, hy: cam.hy + drop - H * i }, style, wall, spec.x0 ?? 84, H * i, seam, VH);
         // the tall screen's glass: the wall's own field from its top bezel to its foot (the emblem the two halves
-        // would each draw is left out: the board stands there)
-        if (spec.frame !== 'marquee' && this.kit.wallRect) this.screenField(out, this.kit.wallRect(cam), this.kit.wallRect({ ...cam, hy: cam.hy + drop }), spec.x0 ?? 84, style);
+        // would each draw is left out: the board stands there); without a screen the sky runs on behind the board
+        if (spec.frame !== 'marquee' && spec.screen !== false && this.kit.wallRect) this.screenField(out, this.kit.wallRect(cam), this.kit.wallRect({ ...cam, hy: cam.hy + drop }), spec.x0 ?? 84, style);
         this.kit.invalidateSet?.();
         px = out.px;
       } catch (err) {
@@ -353,7 +361,7 @@ export class VerticalSet {
     const cam = stage.base;
     const style = stage.style || stage.programId;
     const wall = stage.bgOpts?.wall || { mode: 'rest' };
-    const key = `${cam.x}|${cam.y}|${cam.z}|${cam.zoom}|${cam.hy}|${cam.soft}|${typeof style === 'string' ? style : style?.id}|${wall.mode}`;
+    const key = `${cam.x}|${cam.y}|${cam.z}|${cam.zoom}|${cam.hy}|${cam.soft}|${typeof style === 'string' ? style : style?.id}|${wall.mode}|${wall.screen !== false}`;
     let s = this.singles.get(key);
     if (s) return s;
     try {
@@ -429,7 +437,7 @@ export const MARQUEE = 6;
  * A board's frame round the glass `r`: the set's screen bezel with the programme's accent along the top, a shadow under
  * it; PAY ATTENTION's is its marquee, a purple band with a fog rim and a chase of gold lamps (the set's own).
  */
-export function drawBoardFrame(ctx, t, r, programId, accent = P.red) {
+export function drawBoardFrame(ctx, t, r, programId, accent = P.red, opts = {}) {
   ctx.fillStyle = P.black;
   ctx.fillRect(r.x + 1, r.y + r.h, r.w, 1);
   ctx.fillRect(r.x + r.w, r.y + 1, 1, r.h);
@@ -464,6 +472,7 @@ export function drawBoardFrame(ctx, t, r, programId, accent = P.red) {
     });
     return m;
   }
+  if (VSETS[programId]?.frame === 'hud') return hudFrame(ctx, t, r, accent === P.purple ? P.fog : accent, opts.orbit !== false);
   const [base, top] = BEZEL[programId] || BEZEL['world-now'];
   ctx.fillStyle = base;
   ctx.fillRect(r.x, r.y, 1, r.h);
@@ -476,6 +485,92 @@ export function drawBoardFrame(ctx, t, r, programId, accent = P.red) {
   ctx.fillRect(r.x, r.y, r.w, 2);
   glint(ctx, t, r.x, r.y, r.w, acc);
   return 3;
+}
+
+// COSMOS's display: its stars (fixed points in the glass, u/v in 0..1, a few of them twinkling) and its orbit
+const HUD_STARS = (() => {
+  const out = [];
+  let a = 4117;
+  const r = () => ((a = (Math.imul(a ^ (a >>> 15), 2246822519) + 0x9e3779b9) >>> 0) / 4294967296);
+  for (let i = 0; i < 34; i++) out.push([r(), r(), r() < 0.2 ? 2 : r() < 0.45 ? 1 : 0, i % 7 === 0]);
+  return out;
+})();
+const HUD_TICK = 6;
+/**
+ * COSMOS's planetarium display round the glass `r`: no bezel, the glass held at its four corners by brackets in the
+ * accent, dotted hairlines between them, a telescope's scale along the top (a tick every 6 px, every fourth longer),
+ * and in the glass a few faint stars and one slow orbit low on the right, ink on the black, under the board's type.
+ * Its movement: a light walking the scale (glint), a moon on its orbit, a star or two twinkling. (orbit false: no orbit,
+ * the display shows the Earth itself.)
+ */
+function hudFrame(ctx, t, r, acc, orbit = true) {
+  const { x, y, w, h } = r;
+  const T = Math.max(0, t);
+  // the glass's sky: ink and slate points, one in seven twinkling a step brighter for a beat
+  for (const [u, v, mag, tw] of HUD_STARS) {
+    const sx = x + 4 + Math.floor(u * (w - 8)), sy = y + 8 + Math.floor(v * (h - 14));
+    const on = tw && ((T + u * 7) % 4.2) < 0.5;
+    ctx.fillStyle = on ? P.steel : mag === 2 ? P.slate : P.ink;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+  // an orbit low on the right (a dotted ellipse, ink), its moon going round it in 14 s
+  const ox = x + Math.round(w * 0.74), oy = y + h - 22, rx = 38, ry = 9;
+  if (orbit) hudOrbit(ctx, T, x, y, w, h, ox, oy, rx, ry);
+  hudEdges(ctx, t, r, acc);
+  return 4;
+}
+function hudOrbit(ctx, T, x, y, w, h, ox, oy, rx, ry) {
+  ctx.fillStyle = P.ink;
+  for (let i = 0; i < 96; i += 2) {
+    const a = (i / 96) * Math.PI * 2;
+    const px = Math.round(ox + Math.cos(a) * rx), py = Math.round(oy + Math.sin(a) * ry);
+    if (px > x + 1 && px < x + w - 2 && py < y + h - 2) ctx.fillRect(px, py, 1, 1);
+  }
+  ctx.fillStyle = P.slate;
+  ctx.fillRect(ox - 2, oy - 2, 4, 4);
+  ctx.fillRect(ox - 3, oy - 1, 6, 2);
+  ctx.fillRect(ox - 1, oy - 3, 2, 6);
+  const ma = (T / 14) * Math.PI * 2;
+  const mx = Math.round(ox + Math.cos(ma) * rx), my = Math.round(oy + Math.sin(ma) * ry);
+  // (behind the planet on the far half of its orbit)
+  if (!(Math.sin(ma) < 0 && Math.abs(mx - ox) < 4)) {
+    ctx.fillStyle = P.steel;
+    ctx.fillRect(mx, my, 2, 2);
+  }
+}
+/**
+ * The display's corner brackets alone (2 px L's in the accent), as a viewfinder holds a picture: COSMOS's photo and
+ * map windows (vertical.js windowRules), whose picture is the display's whole face.
+ */
+export function hudBrackets(ctx, r, acc, L = 11) {
+  const { x, y, w, h } = r;
+  ctx.fillStyle = acc;
+  for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+    ctx.fillRect(dx > 0 ? cx : cx - L, dy > 0 ? cy : cy - 2, L, 2);
+    ctx.fillRect(dx > 0 ? cx : cx - 2, dy > 0 ? cy : cy - L, 2, L);
+  }
+}
+function hudEdges(ctx, t, r, acc) {
+  const { x, y, w, h } = r;
+  // the hairlines between the corners, dotted (slate)
+  const L = 11;
+  ctx.fillStyle = P.slate;
+  for (let i = x + L + 2; i < x + w - L - 2; i += 2) ctx.fillRect(i, y + h - 1, 1, 1);
+  for (let j = y + L + 2; j < y + h - L - 2; j += 2) {
+    ctx.fillRect(x, j, 1, 1);
+    ctx.fillRect(x + w - 1, j, 1, 1);
+  }
+  // the scale along the top: a hairline, a tick every 6 px under it, every fourth twice as long and fog
+  ctx.fillRect(x + L + 2, y, w - 2 * L - 4, 1);
+  for (let i = 0, sx = x + L + 2 + HUD_TICK; sx < x + w - L - 3; i++, sx += HUD_TICK) {
+    const major = (i + 1) % 4 === 0;
+    ctx.fillStyle = major ? P.fog : P.slate;
+    ctx.fillRect(sx, y + 1, 1, major ? 3 : 1);
+  }
+  // the brackets: 2 px L's in the accent at the four corners
+  hudBrackets(ctx, r, acc, L);
+  // a light walking the scale every 5.5 s
+  glint(ctx, t, x + L + 2, y - 1, w - 2 * L - 4, acc);
 }
 
 // a light catching the accent rule: one step up its own ramp

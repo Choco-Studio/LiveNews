@@ -81,12 +81,23 @@ WORLD WEATHER airs from its own weather centre, not the network's studio: its ta
 LED line at row 288, the glossy floor mirroring the wall). Without the studio's renderer (node tests) the backdrop is
 the programme's colours on a graded field.
 
+**COSMOS's planetarium** (round 2, `planetarium()`: `screen: false`, `frame: 'hud'`, the camera soft). Its whole wall is
+the sky (`styles.js` `skyWall`), so its tall set is drawn without the screen, its mount and the moon's phases: the
+Milky Way runs on diagonally behind the boards, out of focus as behind a single (a board is read, the sky only felt),
+the Earth's limb low down, the night side's lights left out from this far back (they crowded into a speckle under the
+captions). The desk's GLOBIT 24 plate is left out too (`CACHE.bare` in `set.js`): under the foot's glass it read as a
+dead button, and the bug carries the name.
+
 **Glass** (`vset.js` `GLASS`, `glassRect`): a board stands on the set seen through tinted glass, 190 × the stage less
 6 px (x 13–203, centred on the frame), every colour taken to the dark end of its hue (white and the greys to ink,
 the warm colours to maroon, the blues to navy, the greens to their darkest): the set reads through as shapes and its
 own colour, its lettering never does, and the board's type stands on nothing lighter than navy. Its frame is the set's
 screen bezel with the programme's accent along the top (`drawBoardFrame`); PAY ATTENTION's is its marquee: a purple
-band in a fog rim with a chase of gold lamps.
+band in a fog rim with a chase of gold lamps. COSMOS's is its planetarium's own display (`hudFrame`), never a box: the
+glass held at its four corners by 2 px brackets in magenta, dotted slate hairlines between them, a telescope's scale
+along the top (a tick every 6 px, every fourth longer, fog), and in the glass a few faint stars (one in seven twinkling)
+and one slow orbit low on the right, its moon going round in 14 s, ink on the black under the board's type. A light
+walks the scale every 5.5 s.
 
 **The safe area** (`PLATFORM_SAFE`): x 8–188, y 32–300. TikTok, Reels and Shorts all lay their buttons over the right
 edge (about 12 % of the width) and their caption and handle over the foot (about 20 % of the height), so every word a
@@ -142,6 +153,10 @@ A second instance of the v2 stage (`runtime/stage.js`) draws the speaker's own s
   rasteriser leaves a frame's first and last rows to the set, and a body crossing the join would otherwise show a
   line of wall.
 - It cuts when the voice changes hands, as a director would, and the speaker's name tag rises for 4.5 s after each cut.
+- **COSMOS's single stands before the sky** (round 2): its tall single asks for no screen (`REST_WALL.screen` false;
+  only a sky wall, `styles.js` `skyWall`, takes it), so the planetarium runs on behind the presenter. With the screen,
+  its edge ran up through the middle of the head (the seat and the screen's edge meet on the frame's middle column) and
+  its planet was drawn twice, cut at the seam with the set above the Stage's frame.
 - **It never holds still** (COSMOS round 1). One presenter reading for 20 s was a still picture on a phone, so:
   - each shot pushes in slowly from its cut (`SINGLE_PUSH`: the camera's push dolly, 5% over 6 s);
   - while one voice goes on, the single recuts between the wide single and a tighter one (camera.js `tall-tight`,
@@ -162,6 +177,10 @@ boxes, on the glass over the set.
 Each story board is laid out again for the stage's width as a single column centred in the stage, on the glass over
 the set in the set's frame (§2: `bare`, no panel of its own). Precedence is the horizontal card's own (`boardKind`).
 
+- **COSMOS's source in the display's foot** (`SRC_FOOT`, round 2): the source line is the display's caption, in the body
+  face at its foot, so the rows are laid out without it in the height above (FOOT_H, 10 rows) and keep their large size:
+  two figures at 3x with their labels at 2x, where the source line had pushed them down to 2x and 1x. A share's label
+  is never cut with dots ("COVERED IN..." lost what it is covered in): too long for 2x, the board is set at 1x.
 - **As large as the stage lets it be** (`verticalBoardLayout(card, w, h, programId, bare)`): its words at 2x (`T2`) when
   every row and the source line fit the stage that way, else at the body size (`T1`), never shrunk past it and never
   cut. A lone figure goes to 4x when it fits, two or three to 3x; their labels a size under them. WHAT HAPPENS NEXT
@@ -221,7 +240,18 @@ that ends 8 px right of the safe column, so the pin and the place's name land in
 air. The map's last column of sea is then repeated to the frame's edge (`seaStrip`): the strip under the buttons holds
 only sea. A picture's pan does the same. A map, a picture, a location shot or the montage's backdrop is a window set
 into the studio: the programme's accent rule along its top and its foot over a black shadow line, as the set frames its
-own screens (`windowRules`), with the glint passing along the top one.
+own screens (`windowRules`), with the glint passing along the top one. COSMOS's window is held in its display's
+brackets as well, as a telescope's viewfinder frames a picture (`hudBrackets`; over the montage, clear of its tag).
+
+**COSMOS sees its places from orbit** (`clip/vorbit.js`, round 2), never on the flat map: the map shot is its display
+(`orbitBoard`) with FROM ORBIT in magenta, the place's name at 2x and its coordinates (78°N 15°E) over the Earth, the
+story's source in the display's foot. The globe is drawn in the channel's palette: the place turns in to its middle over
+the shot's first 1.6 s from behind it, lit from the upper left so the day side shows its seas (blue, navy toward the
+limb, a cyan glint), land (green, the great deserts tan, ragged by noise), ice (white and silver past the polar circles
+and on the Arctic's sea) and a few soft cloud streaks; a crescent of night on the right shows the cities' lights
+(`cityLights`, never on the water); the air is a cyan rim on the lit limb, navy on the dark. The place is marked as an
+instrument marks a target: a pink core in four magenta ticks, a ring going out from it every 1.6 s. Once settled the
+globe is drawn once and kept. Before the map data has loaded the flat map stands in.
 
 ### 3.5 PAY ATTENTION's boards (`vquiz.js`)
 
@@ -323,7 +353,8 @@ reads.
 A story with no picture has a board of its own, prepared for the tall backdrop (216 × 228):
 - **With a place:** the locator board (`graphics/locator.js`, with its `anchor` and `frame` options). The place sits at
   the column's middle, a third of the way down, and its name stays inside the column above the tallest headline
-  plate.
+  plate. COSMOS shows the place from orbit instead (§3.4, `orbitOver`): the globe in its sky between the stage's top
+  and the plate's tag, the place's name in micro type on a black plate beside its marker.
 - **Without a place:** the topic board (`graphics/topicboard.js`, with its `frame` option): the story's own figure,
   quote, actor or topic, as the pictures desk's round 8 draws it. It is right-aligned to x 184, between rows 30 and 112
   of the backdrop, above the tallest headline plate. A description too wide for the column is left out, never cut.
