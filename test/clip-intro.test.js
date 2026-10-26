@@ -162,7 +162,7 @@ test('COSMOS DESK\'s light: the Sun behind Saturn the whole way in (a crescent, 
   assert.ok(most < (2 * total) / frames, `the most in a frame ${((most * 180) / Math.PI).toFixed(1)}°, the average ${((total / frames) * 180 / Math.PI).toFixed(1)}°`);
 });
 
-test('TECH BYTES\'s theme is heard from the first frame, brings the data in with the wave, climbs through the dive, lands the signature\'s DAH as the die boots, resolves on the lock-up, and leaves the cut to the clip', () => {
+test('TECH BYTES\'s theme is heard from the first frame, climbs as the drone pulls up, lands the signature\'s DAH as the die boots, resolves on the lock-up, and leaves the cut to the clip', () => {
   const Q = cues.INTRO_CUES['tech-bytes'];
   const t = themes.introTheme('tech-bytes');
   const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -172,7 +172,7 @@ test('TECH BYTES\'s theme is heard from the first frame, brings the data in with
   const song = tune.parseTune(t);
   assert.equal(song.bpm, Q.bpm);
   const events = song.tracks.flatMap((tr) => tr.events);
-  assert.ok(events.filter((e) => e.at === 0).length >= 4, 'a kick, a pluck chord, the pad and the bass on the first frame');
+  assert.ok(events.filter((e) => e.at === 0).length >= 4, 'the data, the pad, a pluck chord and a kick on the first frame');
   // the lead: the signature (low 5, 1, 2, high 5), its DAH on the boot, then the colour (the b7), then the tonic on the hit
   const lead = song.tracks[0].events;
   const tonic = lead[1].midis[0];
@@ -181,33 +181,46 @@ test('TECH BYTES\'s theme is heard from the first frame, brings the data in with
   assert.equal(lead[4].midis[0] - tonic, themes.COLOURS.tech);
   assert.equal(lead[5].at, Q.lock);
   assert.equal(lead[5].midis[0] - tonic, 12);
-  // the data comes in with the wave and climbs in level into the boot
+  // the data runs from the first frame and climbs in level into the boot
   const data = song.tracks[2].events.filter((e) => e.at < Q.boot);
-  assert.equal(data[0].at, Q.morph);
-  assert.ok(data.length >= 8 && data.at(-1).vel > data[0].vel, 'the data climbs');
+  assert.equal(data[0].at, 0);
+  assert.ok(data.length >= 12 && data.at(-1).vel > data[0].vel, 'the data climbs');
   assert.ok(!events.some((e) => Math.abs(e.at - Q.cut) < 1e-6), 'no button on the cut');
 });
 
-test('TECH BYTES\'s picture draws every instant without throwing; one glide in to overhead the processor at the emblem\'s scale, the logotype in the safe column and clear of every trace', () => {
+test('TECH BYTES\'s picture draws every instant without throwing; a drone run up the avenue and one swoop up to overhead the processor at the emblem\'s scale, the logotype in the safe column and clear of every trace', () => {
   const ctx = fakeCanvas().getContext('2d');
   const secs = intro.introSeconds('tech-bytes');
   assert.ok(secs > 3 && secs <= 4, `${secs} s`);
   for (let t = 0; t <= secs + 0.5; t += 3 / 30) assert.doesNotThrow(() => intro.drawIntro(ctx, t, { programId: 'tech-bytes' }), `at ${t.toFixed(3)} s`);
   const Q = cues.INTRO_CUES['tech-bytes'];
   const FR = 1 / 30 / (60 / Q.bpm);
-  // moving from the first frame; the camera only ever closes in, and each frame's change of distance is close to the
-  // last's (a glide down to rest, never a brake: the owner's "demasiado brusca" on COSMOS's first tries)
-  const d = (b) => tech.techIntroCamera(b).d;
-  assert.ok(Math.log(d(0) / d(FR)) > 0.012, 'already closing in on the first frame');
+  // flying fast from the first frame (the owner: "como haría un dron a velocidad rápida"); always on up the avenue, and
+  // once it swoops up over the plaza only climbing ("llega hasta el procesador y allí sube"); never a jolt: from frame to
+  // frame its acceleration changes a little (one smooth curve, no brake, no kink) and so does the turn of its look
+  const at = (b) => tech.techIntroCamera(b);
+  const speed0 = Math.hypot(at(FR).x - at(0).x, at(FR).y - at(0).y, at(FR).z - at(0).z);
+  assert.ok(speed0 > 15, `${speed0.toFixed(1)} units on the first frame`);
   let prev = null;
-  let jolt = 0;
+  let prevTurn = null;
+  let acc = 0;
+  let jerk = 0;
+  let turn = 0;
   for (let b = FR; b <= Q.cut; b += FR) {
-    const g = Math.log(d(b - FR) / d(b));
-    assert.ok(g >= -1e-9, `never backs off (beat ${b.toFixed(2)})`);
-    if (prev !== null) jolt = Math.max(jolt, Math.abs(g - prev));
-    prev = g;
+    const [a, m, c] = [at(b - FR), at(b), at(b + FR)];
+    assert.ok(c.y >= m.y - 1e-9, `always on up the avenue (beat ${b.toFixed(2)})`);
+    if (b >= Q.pull) assert.ok(c.z >= m.z - 1e-9, `only climbing once it swoops up (beat ${b.toFixed(2)})`);
+    const ac = [c.x - 2 * m.x + a.x, c.y - 2 * m.y + a.y, c.z - 2 * m.z + a.z];
+    acc = Math.max(acc, Math.hypot(...ac));
+    if (prev) jerk = Math.max(jerk, Math.hypot(ac[0] - prev[0], ac[1] - prev[1], ac[2] - prev[2]));
+    prev = ac;
+    const tr = c.pitch - 2 * m.pitch + a.pitch;
+    if (prevTurn !== null) turn = Math.max(turn, Math.abs(tr - prevTurn));
+    prevTurn = tr;
   }
-  assert.ok(jolt < 0.01, `the most a frame's change of distance differs from the last's: ${jolt.toFixed(4)}`);
+  assert.ok(acc < 3.5, `the most its speed changes in a frame: ${acc.toFixed(2)} units`);
+  assert.ok(jerk < 1.2, `the most a frame's change of speed differs from the last's: ${jerk.toFixed(2)} units`);
+  assert.ok(turn < 0.05, `the most a frame's turn of the look differs from the last's: ${turn.toFixed(3)} rad`);
   // overhead by the boot, at rest at the emblem's scale (a unit of the package a pixel) by the title
   const boot = tech.techIntroCamera(Q.boot);
   assert.ok(boot.pitch < 0.02 && Math.abs(boot.yaw) < 0.06, `overhead on the stroke (pitch ${boot.pitch}, yaw ${boot.yaw})`);

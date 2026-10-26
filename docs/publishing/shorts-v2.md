@@ -160,34 +160,36 @@ graph.
 `INTRO_CUES['tech-bytes']`): seven beats at 112 BPM, 3.75 s (113 frames). The first cut flew over a motherboard lit
 like a city ("va muy bien, pero necesita algo para parecer mucho más impresionante, por ejemplo la transición de una
 ciudad a una placa madre"); the second ran a wave across a city seen from low down ("la idea es que la ciudad se vea
-como una placa base desde arriba… las típicas transiciones, pero bien hecha"). So it is the classic match: a city seen
-from straight above that turns, where it stands, into the motherboard it looks like:
+como una placa base desde arriba… las típicas transiciones, pero bien hecha"); the third turned a city seen from
+straight above into a motherboard where it stood ("no, sigue sin gustarme"). Then the owner gave the shot: "haz como
+que se avanza por las calles de la ciudad, como haría un dron a velocidad rápida, todo con luces azules, y llega hasta
+el procesador y allí sube para dar la vista desde arriba". So it is one unbroken drone shot:
 
 | Beats | The picture | The theme (A dorian) |
 |---|---|---|
-| 0-1 | A drone's shot down on a city at night, turning as it comes down: its streets a grid of orange lamps with cars' lights along them (headlights, red tail lights), its roofs dark with their plant, a light or two, helipads on the biggest and red beacons blinking on the tallest, its towers' lit windows leaning out toward the frame's edges (the lens's perspective); at its heart, in a park, its tallest tower, whose helipad lights cyan | On the first frame a soft kick, a pluck chord, the warm pad's Am9 and a low pulse on each beat; three glass notes up as the helipad lights |
-| 1-2.3 | The city turns into a motherboard where it stands, from its heart outward: each tower comes down to the part on its ground and its roof dissolves, pixel by pixel through the screen's matrix, into the part's top (a chip with its pins, a memory stick with its gold fingers, a capacitor's can, a resistor, a heatsink: chosen by the lot's shape), its windows going out; the streets turn to buses of traces, the cars' lights to signals, the park to the ground round the processor, the central tower to the processor itself and its boulevards to its traces | With the turn a wide stab and a kick, and the data comes in (a pulse12 in sixteenths, E A B), the saw bass in eighths and a light hat |
-| 2-3.5 | The camera comes down on the processor, turning to square with it, slowing a little every frame (a glide); the processor's traces light as their signals run in from the edges of the frame | The data climbs an octave of D9; a snare run into the stroke |
-| 3.5 | Overhead (the stroke): every signal reaches the pins together, the die's cyan outline has drawn round, and the byte boots a cell at a time: the emblem | The signature at double speed on the techPluck, its DAH here, a wide Am stab, a double kick and a clap |
-| 4-5.5 | TECH types in under the processor, a letter a quarter beat, each printed down in two frames, a cyan cursor running ahead and blinking after the last; BYTES between two cyan rules; the lower traces drop through vias above the logotype (no trace runs through it or boxes it in) | The colour (G, the b7) over G/A; a key tick on each letter |
-| 5.5-7 | The emblem and the logotype, a scan running down the letters on the hit, pulses still running in along the traces; from beat 6 the intro's pixels dissolve away along the diagonal | The A on Am6/9, ringing on into the clip; a low air swell under the dissolve |
+| 0-2.25 | A drone flying fast and low (about twenty units a frame, 24 over the street) up the avenue that leads to the processor, between the towers of a city of blue light: their windows lit blue and cyan (panes near to, points further off), their edges trimmed in cyan, the avenue's lanes glowing, streaks of light racing along them (some overtaking the drone toward the processor, some coming the other way), cross streets flashing past; the drone sways and banks a little as a drone flown by hand does. At the avenue's end the canyon opens: low blocks either side, the avenue ending on the bus across the plaza's foot, and at the city's heart the processor in a pool of its own blue light, its traces waiting faint blue | On the first frame a pluck chord, the warm pad's Am9 and a low A; the data (a pulse12 in sixteenths, E A B) and the saw bass in eighths from the start, the hat in sixteenths; a glass blip on each of the first three beats |
+| 2.25-3.5 | Over the plaza the drone swoops up: on at its speed, climbing, its look leaving the street and locking on the processor, turning down with it as it rises, slowing to a stop straight over it; the processor's light comes up round it, the towers fall away to the frame's top and the processor's traces light as their signals run in | The pad to D9 (the dorian IV), the bass on D, the data climbing an octave, the hat in eighths, a snare run into the stroke |
+| 3.5 | Overhead (the stroke): every signal reaches the pins together, the die's cyan outline has drawn round, and the byte boots a cell at a time: the emblem | The signature at double speed on the techPluck, its DAH here, a wide Am stab |
+| 4-5.5 | TECH types in under the processor, a letter a quarter beat, each printed down in two frames, a cyan cursor running ahead and blinking after the last; BYTES between two cyan rules; the lower traces drop through vias above the logotype (no trace runs through it or boxes it in); under it the plaza's foot: the bus across and the avenue the drone came up | The colour (G, the b7) over G/A; a key tick on each letter |
+| 5.5-7 | The emblem and the logotype, a scan running down the letters on the hit, pulses still running in along the traces; from beat 6 the intro's pixels dissolve away along the diagonal | The A on Am6/9 with a mallet chord, ringing on into the clip; a low air swell under the dissolve |
 
-How it is drawn: the board is a plane seen through one lens from a camera on a logarithmic track (2,200 units from the
-processor to 185 above it: overhead a unit of the package is a pixel), looking down 13 degrees off straight at the start
-and turned 72 degrees about the board's upright, both easing to square with the processor; the distance's rate is one
-swell over the way in (gentle over the city, fastest as it comes down on the processor), so it never brakes. The city
-and the board are one plan: avenues every 160 units (each a bus of traces, its lanes), the blocks between them parted
-into lots, each lot a tower (taller toward the heart) and the part its shape makes it; each pixel of a street or trace,
-and each lot, is the city's or the board's by how far the turn has got (it leaves the heart on beat 1 at 2,400 units a
-beat; a place turns over three quarters of a beat). The traces are lines of light, the city's warm lamps and cars and
-red tail lights and the board's copper glint and cyan, each spread over the pixels it crosses by the share of them it
-covers (a far street is a faint haze, never a shimmer of whole pixels; a car's or a signal's light keeps a share however
-thin its line, as a lamp does); the warm and the cyan get a lens's glow, and all go to the palette on their ramps through
-the screen's Bayer matrix. The lots are boxes lit from the upper left, drawn far to near; a tower's windows are a grid
-of floors and bays, never closer than two pixels on the frame. The frame's brightness falls smoothly from the city's to
-the board's, never a jump. The processor is the emblem's own chip (`tech.js`: the epoxy package and its bevel, the pin-1
-dimple, the recessed die and its grid, four pins a side, the byte 0xB5) drawn from its true shapes at any size and
-angle, so overhead it is crisp to the pixel.
+How it is drawn: the city lies on a plane, the processor at its middle, seen through one lens (180 px) from the drone.
+Its path is one smooth curve: the run at a steady speed with its sway, then the swoop, a quintic in each of along and
+up that leaves the run at its speed and acceleration and comes to rest 185 units over the processor (there a unit of
+the package is a pixel, the processor at the emblem's place); its look is the run's (8 degrees down) blended into a lock
+on the processor over the swoop's first half, so the processor slides to the frame's middle and stays there as the
+look turns straight down. The checks hold it to fast from the first frame, always on up the avenue, only climbing once
+it swoops, and no jolt (a frame's change of speed, and of the look's turn, close to the last's). The streets are buses
+of traces on a grid every 160 units, lines of light each spread over the pixels it crosses by the share of them it
+covers (a far lane is a faint haze, never a shimmer of whole pixels), the cyan given a lens's glow, brought to the
+palette on its ramps through the screen's Bayer matrix; the sky glows navy over the skyline. The towers are boxes drawn
+far to near on lots in the blocks (taller toward the heart, low either side of the avenue's last stretch, none on the
+plaza), black with their windows a grid of floors and bays and their edges cyan (blue, then navy, further off), a
+beacon blinking on the tallest. The processor is the emblem's own chip (`tech.js`: the epoxy package and its bevel,
+the pin-1 dimple, the recessed die and its grid, four pins a side, the byte 0xB5) drawn from its true shapes at any size
+and angle, so overhead it is crisp to the pixel; its light is a glow on the ground round the package, rising as the
+drone nears, strongest on the boot, a faint halo under the emblem. The frame's brightness never jumps (a few points of
+luma from frame to frame at most).
 
 The logotype: TECH at four times the channel's face, its blocks filled from white through cyan and blue to navy, a
 white edge along its tops, a black outline and a navy glow; BYTES at twice the size, spaced, between two cyan rules. The

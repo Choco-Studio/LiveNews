@@ -139,17 +139,16 @@ export const INTRO_CUES = Object.freeze({
     // drifting back (the clip's graph: render.js introParts)
     cut: 6, // the intro's last frame, on the next downbeat
   }),
-  // TECH BYTES (the owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito"; then "la idea es que la
-  // ciudad se vea como una placa base desde arriba… las típicas transiciones, pero bien hecha"): a drone's shot down on
-  // a city at night, turning as it comes down; the city turns, in place, into a motherboard (each tower into the part
-  // on its ground, the streets into traces, the cars into signals), its central tower into the processor; overhead, every
-  // signal reaches the processor's pins and its die boots the byte; TECH types in under it, BYTES between two rules; the
-  // intro's pixels dissolve away into the programme
+  // TECH BYTES (the owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito"; then, after three cuts of a
+  // city turning into a motherboard, "haz como que se avanza por las calles de la ciudad, como haría un dron a velocidad
+  // rápida, todo con luces azules, y llega hasta el procesador y allí sube para dar la vista desde arriba"): a drone
+  // flying fast and low down the avenue of a city of blue light to the plaza at its heart, where it pulls up over the
+  // processor and turns its look down; overhead, every signal reaches the processor's pins and its die boots the byte;
+  // TECH types in under it, BYTES between two rules; the intro's pixels dissolve away into the programme
   'tech-bytes': Object.freeze({
     bpm: 112,
-    blips: Object.freeze([0.5, 0.67, 0.83]), // three glass notes up as the central tower's helipad lights cyan...
-    morph: 1, // ...and the city turns into the board, from its heart outward: the data in
-    dive: 2, // the camera comes down on the processor, turning; a snare run...
+    blips: Object.freeze([0, 1, 2]), // a glass blip on each beat of the run, as the streaks race past
+    pull: 2.25, // out of the avenue over the plaza, the drone pulls up and turns its look down; a snare run...
     boot: 3.5, // ...into the stroke: overhead, every signal reaches the processor's pins and the die boots the byte
     title: 4, // TECH types in under it, a letter a quarter beat, the cursor running ahead; BYTES after it
     lock: 5.5, // the emblem and the title whole (the theme's hit); a scan runs across the letters

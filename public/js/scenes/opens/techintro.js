@@ -1,22 +1,19 @@
 // TECH BYTES' intro for the vertical clips (docs/publishing/shorts-v2.md §6; its cue sheet: cues.js INTRO_CUES). The
 // owner, 26 Oct: "hagamos primero Tech Bytes, han tenido mucho más éxito"; as for COSMOS DESK's: spectacular, a music
-// that holds the eye, four seconds at most, the letters worked for, no boxes of text, no flash; then "necesita algo para
-// parecer mucho más impresionante, por ejemplo la transición de una ciudad a una placa madre", and "la idea es que la
-// ciudad se vea como una placa base desde arriba… las típicas transiciones, pero bien hecha". Seven beats at 112 BPM
-// (3.75 s), one unbroken shot on the clips' 216 x 384 frame, moving from its first frame:
+// that holds the eye, four seconds at most, the letters worked for, no boxes of text, no flash; then, after three cuts
+// of a city turning into a motherboard: "haz como que se avanza por las calles de la ciudad, como haría un dron a
+// velocidad rápida, todo con luces azules, y llega hasta el procesador y allí sube para dar la vista desde arriba".
+// Seven beats at 112 BPM (3.75 s), one unbroken shot on the clips' 216 x 384 frame, moving from its first frame:
 //
-//   CITY    beats 0-1     a drone's shot down on a city at night, turning as it comes down: its streets a grid of
-//                         orange lamps and cars' lights, its roofs dark (their plant, a light or two, helipads, red
-//                         beacons), its towers' lit windows leaning out toward the frame's edges; at its heart, in a park,
-//                         its tallest tower, whose helipad lights cyan
-//   TURN    1-2.3         the city turns into a motherboard where it stands, from its heart outward: each tower comes
-//                         down to the part on its ground and its roof dissolves, pixel by pixel, into the part's top (a
-//                         chip and its pins, a memory stick and its gold fingers, a capacitor's can, a resistor, a
-//                         heatsink), the streets into buses of traces, the cars' lights into signals, the park into the
-//                         ground round the processor, the central tower into the processor itself, its boulevards into
-//                         its traces
-//   DIVE    2-3.5         the camera comes down on the processor, turning to square with it; its traces light as their
-//                         signals run in from the edges of the frame
+//   RUN     beats 0-2.25  a drone flying fast and low down the avenue that leads to the processor, between the towers of
+//                         a city of blue light: their windows lit blue and cyan, their edges trimmed in cyan, the street's
+//                         lanes glowing, streaks of light racing along them (some overtaking the drone toward the
+//                         processor, some coming the other way); the drone swaying and banking a little as it goes; at
+//                         the avenue's end the canyon opens onto the plaza at the city's heart, the processor waiting in
+//                         a pool of its own blue light
+//   PULL    2.25-3.5      over the plaza the drone swoops up: on at its speed, climbing, its look locked on the
+//                         processor and turning down with it, slowing to a stop straight over it; the processor's own
+//                         traces light as their signals run in
 //   BOOT    3.5           overhead (the stroke): every signal reaches its pins together and the die boots the byte, a
 //                         cell at a time: the emblem
 //   TITLE   4-5.5         TECH types in under it, a letter a quarter beat, the cursor running ahead of it; BYTES
@@ -24,20 +21,18 @@
 //   LOCK    5.5-7         the emblem and the title, signals still running in along its traces; the cut on the seventh
 //                         beat
 //
-// How it is drawn: the board is a plane seen through one lens from a camera on a logarithmic track (2,200 units from
-// the processor to 185 above it: overhead, a unit of the board is a pixel of the frame and the processor stands at the
-// emblem's place). The city and the board are one plan: blocks between avenues, each block's ground parted into lots,
-// each lot a tower and the part it becomes; every pixel of a street or trace, and every lot, is the city's or the board's
-// by how far the turn has got. The traces are lines of light (the city's warm lamps and cars, its red tail lights, the
-// board's copper glint and its cyan), each spread over the pixels it crosses by the share of them it covers (a far
-// street is a faint haze, never a shimmer of whole pixels), the warm and the cyan given a lens's glow, all brought to the
-// channel's palette on their ramps through the screen's Bayer matrix. The lots are boxes lit from the upper left, drawn
-// far to near, a tower's windows a grid of floors and bays (never closer than two pixels on the frame); the processor is
-// the emblem's own chip (tech.js: the epoxy package, its bevel and pins, the die and its byte) drawn from its true shapes
-// at any size and angle.
+// How it is drawn: the city lies on a plane, the processor at its middle, seen through one lens from a camera on the
+// drone's path (overhead at the end, 185 units over the processor: a unit of the ground is a pixel of the frame and the
+// processor stands at the emblem's place). Its streets are buses of traces on a grid, lines of light (the copper's glint
+// and the cyan) each spread over the pixels it crosses by the share of them it covers (a far lane is a faint haze, never
+// a shimmer of whole pixels), the cyan given a lens's glow, brought to the channel's palette on its ramps through the
+// screen's Bayer matrix. The towers are boxes drawn far to near, their windows a grid of floors and bays (panes near to,
+// points further off, never closer than two pixels on the frame), their edges lines of cyan; the processor is the
+// emblem's own chip (tech.js: the epoxy package, its bevel and pins, the die and its byte) drawn from its true shapes at
+// any size and angle, its light a glow on the ground round it (strongest on the boot, faint under the emblem).
 import { P } from '../../palette.js';
 import { textPixels, drawText, measureText } from '../../font.js';
-import { u32, clamp, lerp, seg, easeOutQuint, easeInOut, easeInOutSine } from '../../gfx/index.js';
+import { u32, clamp, seg, easeOutQuint, easeInOut } from '../../gfx/index.js';
 import { mulberry32 } from '../../util.js';
 import { Layer, ditherAt } from './seq.js';
 import { INTRO_CUES } from './cues.js';
@@ -52,78 +47,95 @@ const DEG = Math.PI / 180;
 const C = Object.fromEntries(Object.entries(P).map(([k, v]) => [k, u32(v)]));
 
 // ---------------------------------------------------------------------------------------------
-// The camera. The processor at the origin on the board (z = 0, y to the frame's top at the end); the camera looks at it
-// from `d` away, pitched back from straight down by `pitch` and turned about the board's upright by `yaw`; the
-// processor stays at the emblem's place on the frame the whole way.
+// The drone. The processor at the origin of the ground (z = 0, y to the frame's top at the end). The drone flies north
+// up the avenue on x = 0, low between the towers, then over the plaza it pulls up and turns its look down to the
+// processor: a position, a heading (yaw), a look pitched back from straight down (pitch) and a bank (roll).
 
-const REST = { x: 108, y: 150 }; // the processor's place on the frame: the emblem's (as Saturn's in COSMOS DESK's)
+const REST = { x: 108, y: 150 }; // the lens's middle on the frame: the processor's place at the end (the emblem's)
 const F = 180; // px: the lens
 const CH = 5; // the package's height: overhead its top face is a unit a pixel
 const D_END = F + CH;
-// the camera's distance: closing in gently over the city on the first frame, gathering speed through the dive and then
-// losing it a little every frame down to overhead (a glide, never a brake): its rate a single swell,
-// (0.015 + u^2.5)(1 - u)^2 over the way in, summed
-const D0 = 2200;
-const LAND = 4.2; // beats: at rest overhead
-const SWELL = (() => {
-  const n = 600;
-  const a = new Float64Array(n + 1);
-  let acc = 0;
-  for (let i = 0; i <= n; i++) {
-    a[i] = acc;
-    const u = (i + 0.5) / n;
-    acc += ((0.015 + u ** 2.5) * (1 - u) ** 2) / n;
-  }
-  return a.map((v) => v / acc);
-})();
-const swell = (b) => {
-  const f = clamp(b / LAND, 0, 1) * (SWELL.length - 1);
-  const i = Math.min(SWELL.length - 2, Math.floor(f));
-  return SWELL[i] + (SWELL[i + 1] - SWELL[i]) * (f - i);
-};
-const LN_D0 = Math.log(D0);
-const LN_DROP = Math.log(D_END) - LN_D0;
-// (before the first frame, on at the first frame's rate: the frame before it streaks as the first does)
-const LN_D = (b) => LN_D0 + LN_DROP * (b >= 0 ? swell(b) : (b / FRAME) * swell(FRAME));
-const PITCH0 = 13 * DEG; // a drone's shot, looking down (a little ahead), its towers leaning out toward the frame's edges
-const PITCH = (b) => PITCH0 * (1 - easeInOutSine(seg(b, 0.6, Q.boot - 0.6)));
-const YAW0 = -72 * DEG; // turning as it comes down
-const YAW = (b) => YAW0 * (1 - easeInOutSine(seg(b, 0, Q.boot + 0.3)));
-const NEAR = 6;
-
-// The turn: the city becomes the board from its heart outward, quickly (the city in the frame turns within half a beat
-// or so), each place over MORPH_LEN beats once it has begun (0 the city, 1 the board)
-const MORPH_V = 2400;
-const MORPH_LEN = 0.75;
-const morphAt = (r, b) => clamp((b - Q.morph - r / MORPH_V) / MORPH_LEN, 0, 1);
+const RUN = { y0: -1040, y1: -260, z: 24 }; // the avenue: from, to (where the drone swoops up), the drone's height
+const V_RUN = (RUN.y1 - RUN.y0) / Q.pull; // units a beat (about twenty a frame)
+const LOOK = 82 * DEG; // the look along the avenue: a little down from level
+const NEAR = 2;
 const sstep = (a, e, x) => {
   const v = clamp((x - a) / (e - a), 0, 1);
   return v * v * (3 - 2 * v);
 };
+const sstep5 = (x) => {
+  const v = clamp(x, 0, 1);
+  return v * v * v * (v * (6 * v - 15) + 10);
+};
+// a quintic from p0 to p1 over t in 0..1, leaving at v0 with acceleration a0 and arriving at rest (both per unit of t)
+const quintic = (p0, p1, v0, a0, t) => {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const t4 = t3 * t;
+  const t5 = t4 * t;
+  const h0 = 1 - 10 * t3 + 15 * t4 - 6 * t5;
+  const h1 = t - 6 * t3 + 8 * t4 - 3 * t5;
+  const h2 = 0.5 * t2 - 1.5 * t3 + 1.5 * t4 - 0.5 * t5;
+  return h0 * p0 + h1 * v0 + h2 * a0 + (1 - h0) * p1;
+};
+const PULL_LEN = Q.boot - Q.pull;
+const BOB = { a: 2.5, w: 3.1 }; // the drone's rise and fall as it runs
+const PATH = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 };
+function pathAt(b, o = PATH) {
+  // the sway of a drone flown by hand: a little side to side, banking into it, a little up and down
+  const sway = 1 - sstep(Q.pull - 0.25, Q.pull + 0.6, b);
+  o.x = 6 * Math.sin(b * 2.3) * sway;
+  o.roll = -0.09 * Math.cos(b * 2.3) * sway;
+  o.yaw = -0.035 * Math.cos(b * 2.3 + 0.4) * sway;
+  if (b <= Q.pull) {
+    o.y = RUN.y0 + V_RUN * b;
+    o.z = RUN.z + BOB.a * Math.sin(b * BOB.w);
+    o.pitch = LOOK;
+    return o;
+  }
+  // the swoop: on from the avenue at its speed, the drone climbs out over the plaza, slowing to a stop overhead (each a
+  // single smooth curve leaving the run at its speed and its acceleration, never a brake); its look leaves the street
+  // and locks on the processor, turning down with it till it is straight under
+  const t = Math.min(1, (b - Q.pull) / PULL_LEN);
+  const L = PULL_LEN;
+  const bp = Q.pull * BOB.w;
+  o.y = quintic(RUN.y1, 0, V_RUN * L, 0, t);
+  o.z = quintic(RUN.z + BOB.a * Math.sin(bp), D_END, BOB.a * BOB.w * Math.cos(bp) * L, -BOB.a * BOB.w * BOB.w * Math.sin(bp) * L * L, t);
+  const lock = Math.atan2(-o.y, o.z - CH);
+  const w = sstep5(t / 0.55);
+  o.pitch = LOOK + (lock - LOOK) * w;
+  return o;
+}
 
 const CAM = {};
 function cameraAt(b, c = CAM) {
-  const d = Math.exp(LN_D(b));
-  const th = PITCH(b);
-  const ps = YAW(b);
-  const st = Math.sin(th);
-  const ct = Math.cos(th);
-  const sp = Math.sin(ps);
-  const cp = Math.cos(ps);
-  c.d = d;
-  c.px = d * st * sp;
-  c.py = -d * st * cp;
-  c.pz = d * ct;
+  const p = pathAt(b);
+  const st = Math.sin(p.pitch);
+  const ct = Math.cos(p.pitch);
+  const sp = Math.sin(p.yaw);
+  const cp = Math.cos(p.yaw);
+  c.px = p.x;
+  c.py = p.y;
+  c.pz = p.z;
   c.fx = -st * sp;
   c.fy = st * cp;
   c.fz = -ct;
-  c.rx = cp;
-  c.ry = sp;
-  c.ux = -ct * sp;
-  c.uy = ct * cp;
-  c.uz = st;
-  // the horizon's row (above the frame once the camera looks down far enough)
-  c.hy = st > 1e-4 ? REST.y - (F * ct) / st : -1e9;
+  // right and up, then banked about the look
+  const rx = cp;
+  const ry = sp;
+  const rz = 0;
+  const ux = -ct * sp;
+  const uy = ct * cp;
+  const uz = st;
+  const cr = Math.cos(p.roll);
+  const sr = Math.sin(p.roll);
+  c.rx = rx * cr + ux * sr;
+  c.ry = ry * cr + uy * sr;
+  c.rz = rz * cr + uz * sr;
+  c.ux = -rx * sr + ux * cr;
+  c.uy = -ry * sr + uy * cr;
+  c.uz = -rz * sr + uz * cr;
+  c.d = Math.hypot(p.x, p.y, p.z);
   return c;
 }
 // a world point in the camera's frame: [right, up, depth]
@@ -131,7 +143,7 @@ function toCam(c, x, y, z, out) {
   const vx = x - c.px;
   const vy = y - c.py;
   const vz = z - c.pz;
-  out[0] = vx * c.rx + vy * c.ry;
+  out[0] = vx * c.rx + vy * c.ry + vz * c.rz;
   out[1] = vx * c.ux + vy * c.uy + vz * c.uz;
   out[2] = vx * c.fx + vy * c.fy + vz * c.fz;
   return out;
@@ -140,21 +152,25 @@ const sxOf = (cc) => REST.x + (F * cc[0]) / cc[2];
 const syOf = (cc) => REST.y - (F * cc[1]) / cc[2];
 
 // ---------------------------------------------------------------------------------------------
-// The board: traces (polylines on the board, each with its width and its signals) and parts (boxes), in three rings:
-// the processor's own traces (the emblem's, a unit wide), the buses round it, and the board's far reaches. The frame the
-// camera comes to rest over holds the processor and its own traces alone.
+// The city: avenues on a grid every 160 units (each a bus of traces: its lanes), the two through the middle crossing at
+// the processor; the blocks between them parted into lots, a tower on each (taller toward the heart); round the
+// processor, a plaza holding it and its own traces alone. The avenue the drone comes up ends on the bus across the
+// plaza's foot (both in the frame at rest, under the logotype), and the blocks either side of its last stretch are low
+// (seen from above at the end, parts on a board; seen from the street, the canyon opening onto the plaza).
 
 const B = 38; // the package's half side
 const PIN = 8;
 const PINW = 4;
 const OFFS = [-25, -8, 8, 25];
-// the frame at rest, with a margin: nothing but the processor's own traces in it
-const CLEAR = { x0: -140, x1: 140, y0: -262, y1: 176 };
+const CLEAR = { x0: -140, x1: 140, y0: -140, y1: 176 };
+const LOW = { x0: -140, x1: 140, y0: -300, y1: -245 }; // the low blocks either side of the avenue's end (under the frame at rest)
 const clearOf = (x0, y0, x1, y1) => x1 < CLEAR.x0 || x0 > CLEAR.x1 || y1 < CLEAR.y0 || y0 > CLEAR.y1;
+const GRID = 160;
+const STREET = 27; // a block's margin from its avenue's middle: the street between the towers is twice this
 
-let BOARD = null;
-function board() {
-  if (BOARD) return BOARD;
+let CITY = null;
+function city() {
+  if (CITY) return CITY;
   const rnd = mulberry32(1040);
   const traces = [];
   // a trace from its far end (s = 0) to its end toward the processor (s = len)
@@ -172,8 +188,8 @@ function board() {
     traces.push(tr);
     return tr;
   };
-  // the processor's own: from each pin out to the frame's edges and on across the board (tech.js traces, stood on end);
-  // the bottom's turn out under the package and drop through vias to the board's other side, clear of the logotype
+  // the processor's own: from each pin out to the frame's edges and on (tech.js traces, stood on end); the bottom's
+  // turn out under the package and drop through vias, clear of the logotype
   const t = B + PIN;
   const vias = [];
   OFFS.forEach((o, j) => {
@@ -182,7 +198,6 @@ function board() {
     const lag = (j % 2 ? 0.04 : 0) + (Math.abs(o) > 10 ? 0.02 : 0);
     const top = [[o + 2 * sp, 1500], [o + 2 * sp, 700 + Math.abs(sp)], [o + sp, 700], [o + sp, t + 10 + Math.abs(sp)], [o, t + 10], [o, t]];
     const outer = Math.abs(o) > 10;
-    // under the package: down, a 45-degree turn out, and into a via (the outer pins' a little further out and lower)
     const vx = o + s * (outer ? 8 : 5);
     const vy = -t - 4 - Math.abs(vx - o) - (outer ? 4 : 3);
     const bottom = [[vx, vy], [vx, -t - 4 - (vx - o) * s], [o, -t - 4], [o, -t]];
@@ -192,123 +207,70 @@ function board() {
     const right = left.map(([x, y]) => [-x, y]);
     [top, bottom, left, right].forEach((pts, k) => addTrace(pts, 1, 0, [{ arrive: Q.boot - 0.06 + lag + k * 0.012 }]));
   });
-  // a bus: `k` traces side by side along a route that ends toward the processor, each with its signals; an avenue's lit
-  // a little along its length (`base`), a street's dark but for its signals
-  const bus = (main, k, gap, w, ring, speed, base) => {
+  // an avenue: `k` lanes side by side, each with its streaks of light, half of them racing toward the processor and
+  // half coming the other way; lit a little along its length
+  const avenue = (main, k, through) => {
     for (let i = 0; i < k; i++) {
       const sig = [];
       const ns = 1 + Math.floor(rnd() * 3);
-      for (let q = 0; q < ns; q++) sig.push({ phase: rnd(), speed: speed * (0.75 + 0.5 * rnd()) });
-      addTrace(offsetLine(main, (i - (k - 1) / 2) * gap), w, ring, sig, base * (0.5 + rnd()));
+      const dir = i % 2 ? -1 : 1;
+      for (let q = 0; q < ns; q++) sig.push({ phase: rnd(), speed: (through ? 760 : 520) * (0.75 + 0.5 * rnd()) * dir });
+      addTrace(offsetLine(main, (i - (k - 1) / 2) * 3.6), 1.5, 1, sig, 1.1 * (0.5 + rnd()));
     }
   };
-  // the lots: each a tower of the city and the part of the board it turns into, on the same ground. The tower: taller
-  // toward the city's heart, its windows a grid of floors and bays (`fl` units a floor), some lit; a dark roof with its
-  // plant and a light or two, a helipad on the biggest, a red beacon on the tallest. The part, by the lot's shape: a chip
-  // (square, pins round it or along its long sides), a memory stick (long and narrow, gold fingers), a capacitor (small:
-  // a can), a resistor (small and long: a dark body, metal ends), a heatsink (the biggest)
-  const lots = [];
-  const lot = (x0, y0, x1, y1, h, fl) => {
-    if (!clearOf(x0, y0, x1, y1)) return;
-    const w = x1 - x0;
-    const d = y1 - y0;
-    const s = Math.min(w, d);
-    const long = Math.max(w, d) / s;
-    let kind;
-    let hb;
-    if (s > 110 && rnd() < 0.25) [kind, hb] = ['sink', 14];
-    else if (long > 2.4) [kind, hb] = ['stick', 10];
-    else if (s < 24) [kind, hb] = long > 1.5 ? ['resistor', 3] : ['cap', 12];
-    else [kind, hb] = ['chip', s > 60 ? 7 : 4];
-    const leds = [];
-    if (kind !== 'cap' && kind !== 'resistor' && rnd() < 0.45) {
-      const n = 1 + Math.floor(rnd() * 3);
-      for (let q = 0; q < n; q++) leds.push([x0 + w * (0.15 + 0.7 * rnd()), y0 + d * (0.15 + 0.7 * rnd()), rnd() < 0.72 ? C.cyan : rnd() < 0.6 ? C.white : C.orange, rnd()]);
-    }
-    // the roof's plant: a box or two, and its lights
-    const plant = [];
-    const np = s > 30 ? 1 + Math.floor(rnd() * 3) : 0;
-    for (let q = 0; q < np; q++) {
-      const pw = s * (0.12 + rnd() * 0.18);
-      const px = x0 + w * (0.15 + 0.6 * rnd());
-      const py = y0 + d * (0.15 + 0.6 * rnd());
-      plant.push([px, py, px + pw, py + pw * (0.6 + rnd() * 0.8), 2 + rnd() * 4]);
-    }
-    const roofLights = [];
-    for (let q = 0; q < (s > 20 ? 1 + Math.floor(rnd() * 3) : 0); q++) roofLights.push([x0 + w * (0.1 + 0.8 * rnd()), y0 + d * (0.1 + 0.8 * rnd()), rnd() < 0.7 ? C.cream : rnd() < 0.5 ? C.white : C.yellow]);
-    lots.push({
-      x0, y0, x1, y1, h, fl, seed: Math.floor(rnd() * 1e9),
-      beacon: rnd() < 0.4 && h > fl * 16, helipad: s > 70 && h > fl * 12 && rnd() < 0.5,
-      kind, hb, leds, plant, roofLights, pins: kind === 'chip' ? (long < 1.3 && s > 40 ? 4 : 2) : 0,
-      r: Math.hypot((x0 + x1) / 2, (y0 + y1) / 2),
-    });
-  };
-  const block = (x0, y0, x1, y1, cell) => {
-    const r = Math.hypot((x0 + x1) / 2, (y0 + y1) / 2);
-    const downtown = 1 + 0.9 * Math.exp(-r / 900);
-    const nx = 1 + Math.floor(rnd() * 3);
-    const ny = 1 + Math.floor(rnd() * 3);
-    const fl = cell * 0.05;
-    for (let i = 0; i < nx; i++) {
-      for (let j = 0; j < ny; j++) {
-        // now and then two lots as one
-        if (i < nx - 1 && rnd() < 0.2) {
-          const lx0 = x0 + ((x1 - x0) * i) / nx;
-          const lx1 = x0 + ((x1 - x0) * (i + 2)) / nx;
-          const ly0 = y0 + ((y1 - y0) * j) / ny;
-          const ly1 = y0 + ((y1 - y0) * (j + 1)) / ny;
-          const sb = Math.min(lx1 - lx0, ly1 - ly0) * 0.08;
-          lot(lx0 + sb, ly0 + sb, lx1 - sb, ly1 - sb, cell * (0.18 + 0.6 * rnd() ** 1.8) * downtown, fl);
-          i++;
-          continue;
-        }
-        const lx0 = x0 + ((x1 - x0) * i) / nx;
-        const lx1 = x0 + ((x1 - x0) * (i + 1)) / nx;
-        const ly0 = y0 + ((y1 - y0) * j) / ny;
-        const ly1 = y0 + ((y1 - y0) * (j + 1)) / ny;
-        const sb = Math.min(lx1 - lx0, ly1 - ly0) * 0.1;
-        lot(lx0 + sb, ly0 + sb, lx1 - sb, ly1 - sb, cell * (0.12 + 0.55 * rnd() ** 1.9) * downtown, fl);
-      }
-    }
-  };
-  // the city on a grid: avenues every `cell` units (each a bus of traces: its lanes), the blocks between them; nothing in
-  // the frame at rest but the heart and its own streets
-  const cell = 160;
   const outer = 2720;
-  const n = Math.floor(outer / cell);
-  const lines = [];
-  for (let a2 = -n; a2 < n; a2++) lines.push((a2 + 0.5) * cell);
+  const n = Math.floor(outer / GRID);
   for (const along of [0, 1]) {
-    for (const c of lines) {
+    for (let a = -n; a <= n; a++) {
+      const c = a * GRID;
       for (const side of [-1, 1]) {
-        let near = 0;
-        const far = outer * side;
-        // (round the frame at rest: a line along x is cut where it crosses it, x0 to x1; a line along y, y0 to y1)
+        // (round the plaza: a line along x is cut where it crosses it, x0 to x1; a line along y, y0 to y1)
+        // (the bus across the plaza's foot runs through; the drone's avenue ends on it)
         const [lo, hi] = along ? [CLEAR.x0, CLEAR.x1] : [CLEAR.y0, CLEAR.y1];
-        if (c > lo - 30 && c < hi + 30) near = along ? (side > 0 ? CLEAR.y1 : CLEAR.y0) + side * 30 : (side > 0 ? CLEAR.x1 : CLEAR.x0) + side * 30;
-        else near = side * cell * 0.5;
-        if (Math.abs(far - near) < cell) continue;
+        let near = c > lo - 30 && c < hi + 30 ? (along ? (side > 0 ? CLEAR.y1 : CLEAR.y0) + side * 30 : (side > 0 ? CLEAR.x1 : CLEAR.x0) + side * 30) : side * 4;
+        if (!along && a === -1) near = side * 4;
+        if (along && a === 0 && side < 0) near = -GRID + 14;
+        const far = outer * side;
+        if (Math.abs(far - near) < GRID) continue;
         const pts = [[far, c], [near, c]];
-        bus(pts.map(([u, v]) => (along ? [v, u] : [u, v])), 3 + Math.floor(rnd() * 5), 3.6, 1.5, 1, 420, 1.2);
+        avenue(pts.map(([u, v]) => (along ? [v, u] : [u, v])), a === 0 ? 9 : 3 + Math.floor(rnd() * 5), a === 0);
       }
     }
   }
-  for (let i = -n; i < n - 1; i++) {
-    for (let jj = -n; jj < n - 1; jj++) {
-      const x0 = (i + 0.5) * cell;
-      const y0 = (jj + 0.5) * cell;
-      const m = cell * 0.17;
-      block(x0 + m, y0 + m, x0 + cell - m, y0 + cell - m, cell);
+  // the towers: each block's ground parted into lots, a tower on each, taller toward the heart; its windows a grid of
+  // floors and bays (`fl` units a floor), some lit; a beacon on the tallest roofs
+  const towers = [];
+  const tower = (x0, y0, x1, y1, h) => {
+    if (!clearOf(x0, y0, x1, y1)) return;
+    towers.push({ x0, y0, x1, y1, h, fl: 7, seed: Math.floor(rnd() * 1e9), beacon: rnd() < 0.4 && h > 160, r: Math.hypot((x0 + x1) / 2, (y0 + y1) / 2) });
+  };
+  for (let i = -n; i < n; i++) {
+    for (let jj = -n; jj < n; jj++) {
+      const x0 = i * GRID + STREET;
+      const y0 = jj * GRID + STREET;
+      const x1 = (i + 1) * GRID - STREET;
+      const y1 = (jj + 1) * GRID - STREET;
+      const r = Math.hypot((x0 + x1) / 2, (y0 + y1) / 2);
+      const downtown = 1 + 1.2 * Math.exp(-r / 1100);
+      const nx = 1 + Math.floor(rnd() * 2.4);
+      const ny = 1 + Math.floor(rnd() * 2.4);
+      for (let p = 0; p < nx; p++) {
+        for (let q = 0; q < ny; q++) {
+          const lx0 = x0 + ((x1 - x0) * p) / nx;
+          const lx1 = x0 + ((x1 - x0) * (p + 1)) / nx;
+          const ly0 = y0 + ((y1 - y0) * q) / ny;
+          const ly1 = y0 + ((y1 - y0) * (q + 1)) / ny;
+          const sb = Math.min(lx1 - lx0, ly1 - ly0) * 0.08;
+          const inLow = lx1 > LOW.x0 && lx0 < LOW.x1 && ly1 <= CLEAR.y0 && ly0 >= LOW.y0;
+          const low = inLow && ly1 <= LOW.y1;
+          if (inLow && !low) continue; // (between them and the plaza: open ground)
+          tower(lx0 + sb, ly0 + sb, lx1 - sb, ly1 - sb, low ? 6 + 14 * rnd() : GRID * (0.35 + 0.95 * rnd() ** 1.4) * downtown);
+        }
+      }
     }
   }
-  // the heart: the city's tallest tower, standing where the processor lies, a helipad on its roof
-  const heart = { x0: -B, y0: -B, x1: B, y1: B, h: 260, fl: 8, seed: 777, beacon: true, helipad: true, heart: true, kind: 'cpu', hb: CH, leds: [], plant: [], roofLights: [], pins: 0, r: 0 };
-  lots.push(heart);
-  traces.forEach((tr, i) => {
-    tr.lane = i % 2; // in the city: headlights (0) or tail lights (1)
-  });
-  BOARD = { traces, vias, lots };
-  return BOARD;
+  CITY = { traces, vias, towers };
+  return CITY;
 }
 
 // a polyline moved sideways by `off` (its corners mitred: the traces of a bus stay parallel round the jog)
@@ -337,16 +299,13 @@ function offsetLine(pts, off) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The light: the copper's glint and the signals' cyan, each line spread over the pixels it crosses by the share of
-// them it covers
+// The light: the copper's glint and the cyan, each line spread over the pixels it crosses by the share of them it covers
 
 const COPPER = new Float32Array(NPX);
 const GLOW = new Float32Array(NPX);
-const WARM = new Float32Array(NPX); // the city's light: its street lamps, its headlights, its windows' glow
-const RED = new Float32Array(NPX); // its tail lights
 const COPPER_K = 0.9; // a unit-wide trace's glint, seen a unit a pixel
 const LIT = 4.4; // a lit trace's light (the cyan rung)
-const HEAD = 16; // a signal's head
+const HEAD = 16; // a streak's head
 const TRAIL = 5; // its trail's brightest
 
 function splat(buf, x, y, v) {
@@ -369,19 +328,9 @@ function splat(buf, x, y, v) {
 
 const A = [0, 0, 0];
 const Bc = [0, 0, 0];
-// how a stretch's light falls: the copper (the board's alone), an avenue's own light (the city's street lamps, the
-// board's cyan), a signal (a car's lights in the city, the board's cyan), or the board's cyan alone
-const COPPERY = 0;
-const STREET = 1;
-const SIGNAL = 2;
-const CYANLY = 3;
-const LAMPS = 4; // the city's street lamps alone (the processor's own traces: boulevards out of the central tower)
-let BEAT_NOW = 0;
-let LANE = 0;
-let WIDEN = 1; // how much wider a trace is as the city's street (the processor's own: its boulevards)
-// a stretch of a trace on the board, from (x0, y0) to (x1, y1), its light va to vb along it (per unit of width seen at
-// a pixel), `w` units wide; each pixel's share split between the city's light and the board's by the wave where it lies
-function boardLine(c, mode, x0, y0, x1, y1, va, vb, w, minCov = 0) {
+// a stretch of a trace on the ground, from (x0, y0) to (x1, y1), its light va to vb along it (per unit of width seen at
+// a pixel), `w` units wide, into `buf`
+function groundLine(c, buf, x0, y0, x1, y1, va, vb, w, minCov = 0) {
   toCam(c, x0, y0, 0, A);
   toCam(c, x1, y1, 0, Bc);
   if (A[2] < NEAR && Bc[2] < NEAR) return;
@@ -400,47 +349,25 @@ function boardLine(c, mode, x0, y0, x1, y1, va, vb, w, minCov = 0) {
   const v1 = va + (vb - va) * tb;
   const wa = (w * F) / za;
   const wb = (w * F) / zb;
-  // the ends on the board (for the wave)
-  const wxa = x0 + (x1 - x0) * ta;
-  const wya = y0 + (y1 - y0) * ta;
-  const wxb = x0 + (x1 - x0) * tb;
-  const wyb = y0 + (y1 - y0) * tb;
   const len = Math.hypot(bx - ax, by - ay);
-  const n = Math.max(1, Math.ceil(len / 0.7));
+  const n = Math.max(1, Math.min(2000, Math.ceil(len / 0.7)));
   const step = len / n;
   const nx = len > 0 ? -(by - ay) / len : 0;
   const ny = len > 0 ? (bx - ax) / len : 0;
   for (let i = 0; i <= n; i++) {
     const f = i / n;
+    const wp = wa + (wb - wa) * f;
     let v = (v0 + (v1 - v0) * f) * Math.max(step, 0.35) * (i === 0 || i === n ? 0.5 : 1);
     const x = ax + (bx - ax) * f;
     const y = ay + (by - ay) * f;
-    // where this pixel lies on the board (the screen's fraction made true to the perspective), and so the turn's state
-    let mo = 1;
-    if (mode !== CYANLY) {
-      const t = f / zb / ((1 - f) / za + f / zb);
-      mo = morphAt(Math.hypot(wxa + (wxb - wxa) * t, wya + (wyb - wya) * t), BEAT_NOW);
+    if (wp <= 1.25) {
+      splat(buf, x, y, v * Math.max(minCov, Math.min(1, wp)));
+      continue;
     }
-    if (mode === LAMPS && mo >= 1) continue;
-    const wp = (wa + (wb - wa) * f) * (mo + (1 - mo) * WIDEN);
-    let cov = 1;
-    if (wp <= 1.25) cov = Math.max(minCov, Math.min(1, wp));
-    v *= cov;
-    const m = wp <= 1.25 ? 1 : Math.min(5, Math.round(wp));
+    const m = Math.min(5, Math.round(wp));
     for (let q = 0; q < m; q++) {
       const o = q - (m - 1) / 2;
-      const px = x + nx * o;
-      const py = y + ny * o;
-      if (mode === COPPERY) {
-        if (mo > 0) splat(COPPER, px, py, v * mo);
-      } else if (mode === CYANLY) {
-        splat(GLOW, px, py, v);
-      } else if (mode === LAMPS) {
-        splat(WARM, px, py, v * (1 - mo));
-      } else {
-        if (mo > 0) splat(GLOW, px, py, v * mo);
-        if (mo < 1) splat(mode === SIGNAL && LANE ? RED : WARM, px, py, v * (1 - mo) * (mode === STREET ? 0.8 : 1));
-      }
+      splat(buf, x + nx * o, y + ny * o, v);
     }
   }
 }
@@ -458,7 +385,7 @@ function along(tr, s, out) {
 // the stretch of a trace from s0 to s1, its light va to vb
 const PA = [0, 0];
 const PB = [0, 0];
-function stretch(c, mode, tr, s0, s1, va, vb, minCov = 0) {
+function stretch(c, buf, tr, s0, s1, va, vb, minCov = 0) {
   s0 = Math.max(0, s0);
   s1 = Math.min(tr.len, s1);
   if (s1 <= s0) return;
@@ -472,52 +399,52 @@ function stretch(c, mode, tr, s0, s1, va, vb, minCov = 0) {
     along(tr, to, PB);
     const fa = (from - s0) / (s1 - s0);
     const fb = (to - s0) / (s1 - s0);
-    boardLine(c, mode, PA[0], PA[1], PB[0], PB[1], va + (vb - va) * fa, va + (vb - va) * fb, tr.w, minCov);
+    groundLine(c, buf, PA[0], PA[1], PB[0], PB[1], va + (vb - va) * fa, va + (vb - va) * fb, tr.w, minCov);
     from = to;
   }
 }
 
-const TAIL = [0, 150, 520]; // each ring's trail, in units (the processor's own run in whole)
-function lightBoard(c, b) {
-  const { traces } = board();
+const TAIL = 260; // a streak's trail, in units
+const RING_WAIT = 0.9; // the processor's own traces before their signal comes: as faint as a lane
+function lightCity(c, b) {
+  const { traces } = city();
   COPPER.fill(0);
   GLOW.fill(0);
-  WARM.fill(0);
-  RED.fill(0);
-  BEAT_NOW = b;
   for (const tr of traces) {
-    LANE = tr.lane;
-    WIDEN = tr.ring === 0 ? 8 : 1;
-    // the copper, the whole trace (the board's: where the wave has passed)
-    stretch(c, COPPERY, tr, 0, tr.len, COPPER_K, COPPER_K);
+    stretch(c, COPPER, tr, 0, tr.len, COPPER_K, COPPER_K);
     if (tr.ring === 0) {
-      // in the city, a boulevard out of the central tower, its lamps lit
-      stretch(c, LAMPS, tr, 0, tr.len, 1.3, 1.3, 0.25);
       // the processor's own: one signal runs in from its far end and reaches the pin on the stroke, the trace lit behind
       // it; then small pulses keep running in
       const { arrive } = tr.sig[0];
       const run = Math.max(0.3, tr.len / 520); // 520 units a beat: in sight for the last third of a beat or so
       const p = (b - (arrive - run)) / run;
+      const head = tr.len * clamp(p, 0, 1);
+      if (head < tr.len) stretch(c, GLOW, tr, head, tr.len, RING_WAIT, RING_WAIT, 0.25); // waiting: a faint blue
       if (p <= 0) continue;
-      const head = tr.len * Math.min(1, p);
-      stretch(c, SIGNAL, tr, 0, head, LIT * 0.55, LIT);
-      if (p < 1) stretch(c, SIGNAL, tr, head - 40, head, LIT, HEAD);
+      stretch(c, GLOW, tr, 0, head, LIT * 0.55, LIT);
+      if (p < 1) stretch(c, GLOW, tr, head - 40, head, LIT, HEAD);
       else {
         // after the boot: pulses keep running in, one every three quarters of a beat, each trace at its own time
         const q = ((b - arrive) / 0.75 + tr.xs[0] * 0.0137) % 1;
         const s = tr.len * q;
-        stretch(c, CYANLY, tr, s - 50, s, LIT, LIT * 2.4);
+        stretch(c, GLOW, tr, s - 50, s, LIT, LIT * 2.4);
       }
       continue;
     }
-    if (tr.base > 0) stretch(c, STREET, tr, 0, tr.len, tr.base, tr.base, 0.25);
+    // an avenue's lane: lit a little along its length, its streaks racing along it (toward the processor or away)
+    stretch(c, GLOW, tr, 0, tr.len, tr.base, tr.base, 0.25);
     for (const sg of tr.sig) {
-      // a signal running in, again and again (its period the trace's length and its trail)
-      const tail = TAIL[tr.ring];
-      const period = tr.len + tail;
+      const period = tr.len + TAIL;
       const s = ((sg.phase * period + b * sg.speed) % period + period) % period;
-      stretch(c, SIGNAL, tr, s - tail, s, 0, TRAIL, 0.5);
-      if (s <= tr.len) stretch(c, SIGNAL, tr, s - Math.min(12, tail * 0.05), s, TRAIL, HEAD, 0.7);
+      if (sg.speed > 0) {
+        stretch(c, GLOW, tr, s - TAIL, s, 0, TRAIL, 0.5);
+        if (s <= tr.len) stretch(c, GLOW, tr, s - 12, s, TRAIL, HEAD, 0.7);
+      } else {
+        // coming the other way: its head at the near end of its trail
+        const h = tr.len - s;
+        stretch(c, GLOW, tr, h, h + TAIL, TRAIL, 0, 0.5);
+        if (h >= 0) stretch(c, GLOW, tr, h, h + 12, HEAD, TRAIL, 0.7);
+      }
     }
   }
 }
@@ -562,45 +489,43 @@ function bloom(buf = GLOW) {
   }
 }
 
-// the palette's ramps, dark to light: the signals' cyan, the copper's, the city's warm light and its tail lights
+// the palette's ramps, dark to light: the cyan and the copper; the sky's glow over the city
 const CYAN = [C.black, C.ink, C.navy, C.blue, C.cyan, C.white];
 const COPPER_RAMP = [C.black, C.ink, C.slate, C.steel];
-const WARM_RAMP = [C.black, C.maroon, C.brown, C.rust, C.orange, C.yellow, C.cream, C.white];
-const RED_RAMP = [C.black, C.maroon, C.darkRed, C.red, C.pink];
-const GMAX = Math.log1p(7.4); // a lit trace (LIT) on the cyan rung
-const WMAX = Math.log1p(9);
-const CMAX = 1.35; // a unit-wide trace's glint on the slate rung
 const SKY = [C.black, C.ink, C.navy];
-const CITY_SKY = [C.black, C.maroon, C.brown]; // the glow a city throws on the haze over it
+const GMAX = Math.log1p(7.4); // a lit trace (LIT) on the cyan rung
+const CMAX = 1.35; // a unit-wide trace's glint on the slate rung
+const POOL_R = 22; // the processor's light on the ground: how far it reaches past the package
+// its strength at beat b: coming up as the drone nears, fullest on the boot, settling under the emblem
+const poolAt = (b) => 2.6 * sstep(0, Q.boot, b) * (1 - 0.75 * sstep(Q.boot, Q.boot + 1, b));
 function develop(d, c, b) {
-  const hy = c.hy;
-  // the far reaches turn last: the horizon's haze stays the city's until the wave has gone that far
-  const far = morphAt(4000, b);
+  // where the horizon is: a pixel's ray rises (the sky) or falls (the ground), the sky glowing navy over the city
+  const k = Math.hypot(c.rz, c.uz) || 1;
+  const pool = poolAt(b);
   for (let y = 0; y < VH; y++) {
-    // the sky over the horizon (black to a glow at it) and, under it, the far reaches a haze
-    const above = hy - (y + 0.5);
-    const sky = above > 0 ? Math.exp(-above / 11) * 1.35 : -1;
-    const haze = above <= 0 ? Math.exp(above / 8) * 0.6 : 0;
-    const skyRamp = far < 0.5 ? CITY_SKY : SKY;
     for (let x = 0; x < VW; x++) {
       const i = y * VW + x;
       const t = ditherAt(x, y) / 16;
-      if (sky >= 0) {
-        d[i] = skyRamp[Math.min(2, Math.floor(sky + t))];
+      const up = (c.fz * F + (x + 0.5 - REST.x) * c.rz - (y + 0.5 - REST.y) * c.uz) / k; // px above the horizon
+      if (up > 0) {
+        d[i] = SKY[Math.min(2, Math.floor(Math.exp(-up / 30) * 2.2 + t))];
         continue;
       }
-      const gi = (Math.log1p(GLOW[i] + haze * far) / GMAX) * 4; // cyan: 4 is the cyan rung
-      const wi = (Math.log1p(WARM[i] + haze * (1 - far)) / WMAX) * 6; // warm: 5 is yellow
-      const ri = (Math.log1p(RED[i]) / WMAX) * 4;
+      let g = GLOW[i] + Math.exp(up / 6) * 0.9;
+      if (pool > 0) {
+        // the processor's light on the ground round it (where this pixel's ray meets the ground)
+        const dx = c.fx * F + (x + 0.5 - REST.x) * c.rx - (y + 0.5 - REST.y) * c.ux;
+        const dy = c.fy * F + (x + 0.5 - REST.x) * c.ry - (y + 0.5 - REST.y) * c.uy;
+        const dz = c.fz * F + (x + 0.5 - REST.x) * c.rz - (y + 0.5 - REST.y) * c.uz;
+        const s = -c.pz / dz;
+        const gx = Math.abs(c.px + s * dx) - B;
+        const gy = Math.abs(c.py + s * dy) - B;
+        const out = Math.hypot(Math.max(0, gx), Math.max(0, gy)) + Math.min(0, Math.max(gx, gy));
+        g += pool * Math.exp(-Math.max(0, out) / POOL_R);
+      }
+      const gi = (Math.log1p(g) / GMAX) * 4;
       const ci = (COPPER[i] / CMAX) * 2;
-      // the brightest of the four, on its own ramp
-      const gf = gi / 4;
-      const wf = wi / 5;
-      const rf = ri / 3.3;
-      const cf = ci / 2.6;
-      if (gf >= wf && gf >= rf && gf >= cf) d[i] = CYAN[Math.min(5, Math.floor(gi + t))];
-      else if (wf >= rf && wf >= cf) d[i] = WARM_RAMP[Math.min(7, Math.floor(wi + t))];
-      else if (rf >= cf) d[i] = RED_RAMP[Math.min(4, Math.floor(ri + t))];
+      if (gi / 4 >= ci / 2.6) d[i] = CYAN[Math.min(5, Math.floor(gi + t))];
       else d[i] = COPPER_RAMP[Math.min(3, Math.floor(ci + t))];
     }
   }
@@ -646,9 +571,7 @@ function face(d, c, wx, wy, wz, n, col, cover = 1) {
   fillPoly(d, PX, PY, m, col, cover);
   return true;
 }
-// (cover under 1: only the pixels whose place in the screen's Bayer matrix is under it, a dissolve in whole pixels;
-// ON_DARK: only where the frame is still black)
-let ON_DARK = false;
+// (cover under 1: only the pixels whose place in the screen's Bayer matrix is under it)
 function fillPoly(d, xs, ys, n, col, cover = 1) {
   let ymin = Infinity;
   let ymax = -Infinity;
@@ -676,9 +599,7 @@ function fillPoly(d, xs, ys, n, col, cover = 1) {
     const a = Math.max(0, Math.ceil(xl - 0.5));
     const e = Math.min(VW - 1, Math.floor(xr - 0.5));
     const row = y * VW;
-    if (ON_DARK) {
-      for (let x = a; x <= e; x++) if (d[row + x] === C.black && ditherAt(x, y) < cover * 16) d[row + x] = col;
-    } else if (cover >= 1) for (let x = a; x <= e; x++) d[row + x] = col;
+    if (cover >= 1) for (let x = a; x <= e; x++) d[row + x] = col;
     else for (let x = a; x <= e; x++) if (ditherAt(x, y) < cover * 16) d[row + x] = col;
   }
 }
@@ -703,20 +624,116 @@ function sideAt(d, c, xa, ya, xb, yb, z0, z1, col, cover = 1) {
   return face(d, c, WX, WY, WZ, 4, col, cover);
 }
 
-// a part's status lights: steady, or blinking at its own rate (at height h)
-const LP = [0, 0, 0];
-function lights(d, c, t, h, b) {
-  for (const [lx, ly, col, ph] of t.leds) {
-    if (ph > 0.6 && ((b * (1 + ph * 2) + ph * 7) % 1) > 0.55) continue;
-    toCam(c, lx, ly, h, LP);
-    if (LP[2] < NEAR) continue;
-    const x = Math.round(sxOf(LP) - 0.5);
-    const y = Math.round(syOf(LP) - 0.5);
-    if (x < 1 || y < 1 || x >= VW - 1 || y >= VH - 1) continue;
-    d[y * VW + x] = col;
-    if (LP[2] < 900) {
-      const halo = col === C.cyan ? C.blue : col === C.orange ? C.rust : C.fog;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (d[(y + dy) * VW + x + dx] !== col) d[(y + dy) * VW + x + dx] = halo;
+// a line in the world, cut at the near plane, drawn a pixel at a time
+const LA = [0, 0, 0];
+const LB = [0, 0, 0];
+function line3(d, c, x0, y0, z0, x1, y1, z1, col) {
+  toCam(c, x0, y0, z0, LA);
+  toCam(c, x1, y1, z1, LB);
+  if (LA[2] < NEAR && LB[2] < NEAR) return;
+  if (LA[2] < NEAR || LB[2] < NEAR) {
+    const tt = (NEAR - LA[2]) / (LB[2] - LA[2]);
+    const P = LA[2] < NEAR ? LA : LB;
+    P[0] = LA[0] + (LB[0] - LA[0]) * tt;
+    P[1] = LA[1] + (LB[1] - LA[1]) * tt;
+    P[2] = NEAR;
+  }
+  const ax = sxOf(LA);
+  const ay = syOf(LA);
+  const bx = sxOf(LB);
+  const by = syOf(LB);
+  const n = Math.min(1200, Math.ceil(Math.max(Math.abs(bx - ax), Math.abs(by - ay))));
+  for (let i = 0; i <= n; i++) {
+    const f = n ? i / n : 0;
+    const x = Math.floor(ax + (bx - ax) * f);
+    const y = Math.floor(ay + (by - ay) * f);
+    if (x >= 0 && y >= 0 && x < VW && y < VH) d[y * VW + x] = col;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// A tower: its sides toward the camera dark, their windows lit blue and cyan here and there (panes near to, points
+// further off); its roof dark; its edges trimmed in cyan (blue further off); a cyan beacon blinking on the tallest
+
+const WIN = [C.blue, C.blue, C.cyan, C.navy, C.blue, C.fog, C.cyan, C.white];
+const WP = [0, 0, 0];
+const hash = (a, b2, c2, d2) => {
+  let h = (a ^ (b2 * 374761393) ^ (c2 * 668265263) ^ (d2 * 2147483647)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+const FX = new Float64Array(4);
+const FY = new Float64Array(4);
+const FZ = new Float64Array(4);
+function drawTower(d, c, t, b, size, dist) {
+  const { x0, y0, x1, y1, h } = t;
+  const trim = dist < 700 ? C.cyan : dist < 1600 ? C.blue : C.navy;
+  const sides = [];
+  if (c.py < y0) sides.push([x0, y0, x1, y0, 0]);
+  if (c.py > y1) sides.push([x1, y1, x0, y1, 1]);
+  if (c.px < x0) sides.push([x0, y1, x0, y0, 2]);
+  if (c.px > x1) sides.push([x1, y0, x1, y1, 3]);
+  for (const [xa, ya, xb, yb, fi] of sides) {
+    if (!sideAt(d, c, xa, ya, xb, yb, 0, h, C.black)) continue;
+    if (size >= 3) {
+      // its windows: floors of `fl` units, bays as wide
+      const w = Math.hypot(xb - xa, yb - ya);
+      const floors = Math.floor(h / t.fl);
+      const bays = Math.max(1, Math.floor(w / t.fl));
+      for (let f = 1; f < floors; f++) {
+        const z = f * t.fl;
+        for (let q = 0; q < bays; q++) {
+          const hv = hash(t.seed, fi, f, q);
+          if (hv >= 0.42) continue;
+          const u = (q + 0.5) / bays;
+          toCam(c, xa + (xb - xa) * u, ya + (yb - ya) * u, z, WP);
+          if (WP[2] < NEAR) continue;
+          const px = (F * t.fl) / WP[2];
+          if (px < 2 && hash(t.seed, f, q, 7) > px / 2) continue; // far off, fewer of them (never a solid wash)
+          const col = WIN[Math.floor(hv * 97) % WIN.length];
+          if (px >= 4) {
+            // a pane: half the bay's width, half the floor's height
+            const u0 = (q + 0.25) / bays;
+            const u1 = (q + 0.75) / bays;
+            FX[0] = xa + (xb - xa) * u0; FY[0] = ya + (yb - ya) * u0; FZ[0] = z - t.fl * 0.25;
+            FX[1] = xa + (xb - xa) * u1; FY[1] = ya + (yb - ya) * u1; FZ[1] = z - t.fl * 0.25;
+            FX[2] = FX[1]; FY[2] = FY[1]; FZ[2] = z + t.fl * 0.25;
+            FX[3] = FX[0]; FY[3] = FY[0]; FZ[3] = z + t.fl * 0.25;
+            face(d, c, FX, FY, FZ, 4, col);
+            continue;
+          }
+          const sx = Math.round(sxOf(WP) - 0.5);
+          const sy = Math.round(syOf(WP) - 0.5);
+          if (sx >= 0 && sy >= 0 && sx < VW && sy < VH) d[sy * VW + sx] = col;
+        }
+      }
+    }
+    // its edges: the side's two uprights and its top
+    if (size >= 2) {
+      line3(d, c, xa, ya, 0, xa, ya, h, trim);
+      line3(d, c, xb, yb, 0, xb, yb, h, trim);
+      line3(d, c, xa, ya, h, xb, yb, h, trim);
+    }
+  }
+  // the roof (seen from above it: dark, its edges trimmed)
+  if (c.pz > h) {
+    rectAt(d, c, x0, y0, x1, y1, h, C.black);
+    if (size >= 2) {
+      line3(d, c, x0, y0, h, x1, y0, h, trim);
+      line3(d, c, x1, y0, h, x1, y1, h, trim);
+      line3(d, c, x1, y1, h, x0, y1, h, trim);
+      line3(d, c, x0, y1, h, x0, y0, h, trim);
+    }
+  }
+  if (t.beacon && Math.floor(b * 1.6 + (t.seed % 7)) % 2 === 0) {
+    toCam(c, (x0 + x1) / 2, (y0 + y1) / 2, h + 2, WP);
+    if (WP[2] > NEAR) {
+      const sx = Math.round(sxOf(WP) - 0.5);
+      const sy = Math.round(syOf(WP) - 0.5);
+      if (sx > 0 && sy > 0 && sx < VW - 1 && sy < VH - 1) {
+        d[sy * VW + sx] = C.white;
+        if (WP[2] < 900) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) d[(sy + dy) * VW + sx + dx] = C.cyan;
+      }
     }
   }
 }
@@ -835,260 +852,21 @@ function ringAt(d, c, x, y, r, col, z = 0, cover = 1) {
 }
 function drawVias(d, c, b) {
   const lit = b >= Q.boot - 0.25;
-  for (const [x, y] of board().vias) {
+  for (const [x, y] of city().vias) {
     ringAt(d, c, x, y, 2.7, lit ? C.cyan : C.slate);
     ringAt(d, c, x, y, 1.2, C.black);
   }
 }
 
-// ---------------------------------------------------------------------------------------------
-// A lot: the city's tower and the board's part on the same ground. As the turn reaches it the tower comes down to the
-// part's height, its windows go out, and its roof dissolves, pixel by pixel through the screen's matrix, into the part's
-// top: the same rectangle, the city's materials turned to the board's
-
-const WIN = [C.cream, C.cream, C.yellow, C.cream, C.yellow, C.white, C.orange, C.cream];
-const WP = [0, 0, 0];
-const hash = (a, b2, c2, d2) => {
-  let h = (a ^ (b2 * 374761393) ^ (c2 * 668265263) ^ (d2 * 2147483647)) >>> 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-};
-function plot(d, c, x, y, z, col) {
-  toCam(c, x, y, z, WP);
-  if (WP[2] < NEAR) return -1;
-  const sx = Math.round(sxOf(WP) - 0.5);
-  const sy = Math.round(syOf(WP) - 0.5);
-  if (sx < 0 || sy < 0 || sx >= VW || sy >= VH) return -1;
-  d[sy * VW + sx] = col;
-  return WP[2];
-}
-// its facades toward the camera (black), their windows lit here and there: floors of `fl` units, bays as wide, never
-// closer than two pixels on the frame (far off, every second or third of them)
-function facades(d, c, t, h, lit, size) {
-  const { x0, y0, x1, y1 } = t;
-  const sides = [];
-  if (c.py < y0) sides.push([x0, y0, x1, y0, 0]);
-  if (c.py > y1) sides.push([x1, y1, x0, y1, 1]);
-  if (c.px < x0) sides.push([x0, y1, x0, y0, 2]);
-  if (c.px > x1) sides.push([x1, y0, x1, y1, 3]);
-  for (const [xa, ya, xb, yb, fi] of sides) {
-    if (!sideAt(d, c, xa, ya, xb, yb, 0, h, C.black)) continue;
-    if (lit <= 0.01 || size < 3 || h < t.fl * 1.5) continue;
-    const w = Math.hypot(xb - xa, yb - ya);
-    toCam(c, (xa + xb) / 2, (ya + yb) / 2, h / 2, WP);
-    if (WP[2] < NEAR) continue;
-    const px = (F * t.fl) / WP[2];
-    const stepN = px >= 2 ? 1 : Math.ceil(2 / Math.max(0.2, px));
-    const floors = Math.floor(t.h / t.fl);
-    const bays = Math.max(1, Math.floor(w / t.fl));
-    for (let f = 1; f < floors; f += stepN) {
-      const z = f * t.fl;
-      if (z > h - t.fl * 0.5) break;
-      for (let q = 0; q < bays; q += stepN) {
-        const hv = hash(t.seed, fi, f, q);
-        if (hv >= lit) continue;
-        const u = (q + 0.5) / bays;
-        plot(d, c, xa + (xb - xa) * u, ya + (yb - ya) * u, z, WIN[Math.floor(hv * 97) % WIN.length]);
-      }
-    }
-  }
-}
-// the city's roof: dark, its parapet's shadow round it, its plant, a light or two, a helipad on the biggest (the heart's
-// lighting cyan in the beat before the turn), a red beacon blinking on the tallest
-function roof(d, c, t, h, b, size, cover) {
-  const { x0, y0, x1, y1 } = t;
-  rectAt(d, c, x0, y0, x1, y1, h, C.ink, cover);
-  if (size < 5) return;
-  const e = Math.max(0.8, Math.min(x1 - x0, y1 - y0) * 0.05);
-  rectAt(d, c, x0, y0, x1, y0 + e, h, C.black, cover);
-  rectAt(d, c, x1 - e, y0, x1, y1, h, C.black, cover);
-  if (size > 12) {
-    rectAt(d, c, x0, y1 - e, x1, y1, h, C.slate, cover);
-    rectAt(d, c, x0, y0, x0 + e, y1, h, C.slate, cover);
-  }
-  for (const [px0, py0, px1, py1, ph] of t.plant) {
-    rectAt(d, c, px0, py0, px1, py1, h + ph, C.slate, cover);
-    if (size > 16) rectAt(d, c, px0, py0, px1, py0 + (py1 - py0) * 0.3, h + ph, C.black, cover);
-  }
-  if (cover > 0.5) for (const [lx, ly, col] of t.roofLights) plot(d, c, lx, ly, h + 0.5, col);
-  if (t.helipad) {
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    const r = Math.min(x1 - x0, y1 - y0) * 0.3;
-    const booting = t.heart && b > Q.morph - 0.5;
-    const ring = booting ? C.cyan : C.fog;
-    const mark = booting ? C.white : C.silver;
-    if (size > 14) {
-      ringAt(d, c, cx, cy, r, ring, h + 0.2, cover);
-      ringAt(d, c, cx, cy, r * 0.82, C.ink, h + 0.3, cover);
-      // the H
-      const hw = r * 0.38;
-      const hs = r * 0.12;
-      rectAt(d, c, cx - hw, cy - hw, cx - hw + hs * 1.6, cy + hw, h + 0.4, mark, cover);
-      rectAt(d, c, cx + hw - hs * 1.6, cy - hw, cx + hw, cy + hw, h + 0.4, mark, cover);
-      rectAt(d, c, cx - hw, cy - hs, cx + hw, cy + hs, h + 0.4, mark, cover);
-    } else if (cover > 0.5) plot(d, c, cx, cy, h + 0.4, mark);
-  }
-  if (t.beacon && cover > 0.5 && Math.floor(b * 1.5 + t.seed) % 2 === 0) {
-    const z = plot(d, c, (x0 + x1) / 2 + (x1 - x0) * 0.35, (y0 + y1) / 2 + (y1 - y0) * 0.35, h + 1, C.red);
-    if (z > 0 && z < 1200) {
-      toCam(c, (x0 + x1) / 2 + (x1 - x0) * 0.35, (y0 + y1) / 2 + (y1 - y0) * 0.35, h + 1, WP);
-      const sx = Math.round(sxOf(WP) - 0.5);
-      const sy = Math.round(syOf(WP) - 0.5);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const xx = sx + dx;
-        const yy = sy + dy;
-        if (xx >= 0 && yy >= 0 && xx < VW && yy < VH) d[yy * VW + xx] = C.darkRed;
-      }
-    }
-  }
-}
-// the board's part, its top at height h: what the lot's shape makes it
-function part(d, c, t, h, b, size) {
-  const { x0, y0, x1, y1, kind } = t;
-  const w = x1 - x0;
-  const dd = y1 - y0;
-  const s = Math.min(w, dd);
-  if (kind === 'cap') {
-    // a can: a dark base, its silver top with the vent's cross
-    rectAt(d, c, x0, y0, x1, y1, h * 0.25, C.black);
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    ringAt(d, c, cx, cy, s * 0.48, size > 8 ? C.steel : C.slate, h);
-    if (size > 8) {
-      ringAt(d, c, cx, cy, s * 0.36, C.fog, h);
-      rectAt(d, c, cx - s * 0.3, cy - s * 0.04, cx + s * 0.3, cy + s * 0.04, h + 0.1, C.slate);
-      rectAt(d, c, cx - s * 0.04, cy - s * 0.3, cx + s * 0.04, cy + s * 0.3, h + 0.1, C.slate);
-    }
-    return;
-  }
-  if (kind === 'resistor') {
-    const along = w >= dd;
-    rectAt(d, c, x0, y0, x1, y1, h, C.black);
-    const k = 0.2;
-    if (along) {
-      rectAt(d, c, x0, y0, x0 + w * k, y1, h, C.silver);
-      rectAt(d, c, x1 - w * k, y0, x1, y1, h, C.steel);
-    } else {
-      rectAt(d, c, x0, y1 - dd * k, x1, y1, h, C.silver);
-      rectAt(d, c, x0, y0, x1, y0 + dd * k, h, C.steel);
-    }
-    return;
-  }
-  // the body
-  rectAt(d, c, x0, y0, x1, y1, h, kind === 'sink' ? C.ink : C.black);
-  if (size < 6) return;
-  const e = Math.max(0.8, s * 0.04);
-  rectAt(d, c, x0, y1 - e, x1, y1, h, size > 14 ? C.steel : C.slate);
-  rectAt(d, c, x0, y0, x0 + e, y1, h, size > 14 ? C.steel : C.slate);
-  if (kind === 'chip') {
-    // its pins round it (or along its long sides), a dimple at pin 1, a marking line
-    if (size > 9) {
-      const pitch = Math.max(3.2, s * 0.13);
-      const pl = Math.max(2, s * 0.08);
-      const pw = pitch * 0.45;
-      const sidesOf = t.pins === 4 ? [0, 1, 2, 3] : w >= dd ? [0, 1] : [2, 3];
-      for (const side of sidesOf) {
-        const len = side < 2 ? w : dd;
-        const nP = Math.max(2, Math.floor((len * 0.8) / pitch));
-        for (let q = 0; q < nP; q++) {
-          const u = (q + 0.5) / nP - 0.5;
-          if (side === 0) rectAt(d, c, (x0 + x1) / 2 + u * len * 0.8 - pw / 2, y1, (x0 + x1) / 2 + u * len * 0.8 + pw / 2, y1 + pl, 0.8, C.silver);
-          else if (side === 1) rectAt(d, c, (x0 + x1) / 2 + u * len * 0.8 - pw / 2, y0 - pl, (x0 + x1) / 2 + u * len * 0.8 + pw / 2, y0, 0.8, C.steel);
-          else if (side === 2) rectAt(d, c, x0 - pl, (y0 + y1) / 2 + u * len * 0.8 - pw / 2, x0, (y0 + y1) / 2 + u * len * 0.8 + pw / 2, 0.8, C.silver);
-          else rectAt(d, c, x1, (y0 + y1) / 2 + u * len * 0.8 - pw / 2, x1 + pl, (y0 + y1) / 2 + u * len * 0.8 + pw / 2, 0.8, C.steel);
-        }
-      }
-    }
-    if (size > 12) {
-      const dp = s * 0.1;
-      rectAt(d, c, x0 + s * 0.12, y1 - s * 0.12 - dp, x0 + s * 0.12 + dp, y1 - s * 0.12, h + 0.1, C.slate);
-      rectAt(d, c, x0 + w * 0.3, (y0 + y1) / 2 - s * 0.03, x1 - w * 0.3, (y0 + y1) / 2 + s * 0.03, h + 0.1, C.ink);
-    }
-  } else if (kind === 'stick') {
-    // a memory stick: its gold fingers along one long edge, its chips in a row
-    const along = w >= dd;
-    const nC = 4;
-    for (let q = 0; q < nC; q++) {
-      const u0 = 0.06 + (q / nC) * 0.88;
-      const u1 = u0 + 0.88 / nC - 0.05;
-      if (along) rectAt(d, c, x0 + w * u0, y0 + dd * 0.35, x0 + w * u1, y1 - dd * 0.15, h + 0.2, C.ink);
-      else rectAt(d, c, x0 + w * 0.15, y0 + dd * u0, x1 - w * 0.35, y0 + dd * u1, h + 0.2, C.ink);
-    }
-    if (along) rectAt(d, c, x0 + w * 0.04, y0, x1 - w * 0.04, y0 + dd * 0.2, h + 0.1, C.tan);
-    else rectAt(d, c, x1 - w * 0.2, y0 + dd * 0.04, x1, y1 - dd * 0.04, h + 0.1, C.tan);
-  } else if (kind === 'sink') {
-    const nF = 7;
-    for (let q = 1; q < nF; q++) {
-      const yy = y0 + (dd * q) / nF;
-      rectAt(d, c, x0 + e, yy - dd * 0.025, x1 - e, yy + dd * 0.025, h, C.black);
-    }
-  }
-}
-function drawLot(d, c, t, b, size) {
-  const e = morphAt(t.r, b);
-  const flat = sstep(0, 0.85, e);
-  const fade = sstep(0.15, 0.85, e);
-  const h = t.h + (t.hb - t.h) * flat;
-  const lit = (t.heart ? 0.7 : 0.34) * (1 - sstep(0, 0.45, e));
-  if (t.heart) {
-    drawChip(d, c, b);
-    if (fade >= 0.999) return;
-  }
-  facades(d, c, t, h, lit, size);
-  if (!t.heart) part(d, c, t, h, b, size);
-  if (fade < 0.999) roof(d, c, t, h, b, size, 1 - fade);
-  if (!t.heart && fade > 0.8 && t.leds.length) lights(d, c, t, h, b);
-}
-
-// the park round the central tower (the city's; the ground round the processor on the board): a dark green lawn under
-// its trees, wherever the ground is dark (its boulevards' lamps show through), gone pixel by pixel with the turn
-let TREES = null;
-function park(d, c, b) {
-  const cover = 1 - sstep(0.15, 0.85, morphAt(120, b));
-  if (cover <= 0.01) return;
-  WX[0] = CLEAR.x0; WY[0] = CLEAR.y0;
-  WX[1] = CLEAR.x1; WY[1] = CLEAR.y0;
-  WX[2] = CLEAR.x1; WY[2] = CLEAR.y1;
-  WX[3] = CLEAR.x0; WY[3] = CLEAR.y1;
-  WZ.fill(0);
-  ON_DARK = true;
-  face(d, c, WX, WY, WZ, 4, C.deepGreen, cover * 0.75);
-  ON_DARK = false;
-  if (!TREES) {
-    const rnd = mulberry32(99);
-    TREES = [];
-    for (let i = 0; i < 260; i++) {
-      const x = CLEAR.x0 + (CLEAR.x1 - CLEAR.x0) * rnd();
-      const y = CLEAR.y0 + (CLEAR.y1 - CLEAR.y0) * rnd();
-      if (Math.abs(x) < B + 18 && Math.abs(y) < B + 18) continue;
-      TREES.push([x, y, rnd() < 0.6 ? C.darkGreen : C.midGreen]);
-    }
-  }
-  for (const [x, y, col] of TREES) {
-    toCam(c, x, y, 4, WP);
-    if (WP[2] < NEAR) continue;
-    const sx = Math.round(sxOf(WP) - 0.5);
-    const sy = Math.round(syOf(WP) - 0.5);
-    if (sx < 0 || sy < 0 || sx >= VW || sy >= VH) continue;
-    if (ditherAt(sx, sy) >= cover * 16) continue;
-    const i = sy * VW + sx;
-    if (d[i] === C.black || d[i] === C.deepGreen) d[i] = col;
-  }
-}
-
-// the lots, far to near
+// the towers and the processor, far to near
 const ORDER = [];
 const MID = [0, 0, 0];
 function drawSolids(d, c, b) {
-  const { lots } = board();
-  park(d, c, b);
+  const { towers } = city();
   ORDER.length = 0;
-  for (const t of lots) {
-    const e = morphAt(t.r, b);
-    const h = t.h + (t.hb - t.h) * sstep(0, 0.85, e);
-    toCam(c, (t.x0 + t.x1) / 2, (t.y0 + t.y1) / 2, h / 2, MID);
-    const r = Math.max(t.x1 - t.x0, t.y1 - t.y0, h);
+  for (const t of towers) {
+    toCam(c, (t.x0 + t.x1) / 2, (t.y0 + t.y1) / 2, t.h / 2, MID);
+    const r = Math.max(t.x1 - t.x0, t.y1 - t.y0, t.h);
     if (MID[2] < -r) continue;
     if (MID[2] > NEAR) {
       const sx = sxOf(MID);
@@ -1096,10 +874,16 @@ function drawSolids(d, c, b) {
       const sr = (F * r) / MID[2];
       if (sx + sr < 0 || sx - sr > VW || sy + sr < 0 || sy - sr > VH) continue;
     }
-    ORDER.push([MID[2], t, MID[2] > NEAR ? (F * Math.max(t.x1 - t.x0, t.y1 - t.y0)) / MID[2] : 99]);
+    const dist = Math.max(NEAR, MID[2]);
+    ORDER.push([MID[2], t, (F * Math.max(t.x1 - t.x0, t.y1 - t.y0)) / dist, dist]);
   }
+  toCam(c, 0, 0, 0, MID);
+  ORDER.push([MID[2], null, 0, 0]);
   ORDER.sort((u, v) => v[0] - u[0]);
-  for (const [, t, size] of ORDER) drawLot(d, c, t, b, size);
+  for (const [, t, size, dist] of ORDER) {
+    if (t) drawTower(d, c, t, b, size, dist);
+    else drawChip(d, c, b);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1232,9 +1016,8 @@ export function drawTechIntro(ctx, t) {
   const L = LAYER;
   L.begin(C.black);
   const c = cameraAt(b);
-  lightBoard(c, b);
+  lightCity(c, b);
   bloom(GLOW);
-  bloom(WARM);
   develop(L.d, c, b);
   drawVias(L.d, c, b);
   drawSolids(L.d, c, b);
@@ -1247,18 +1030,21 @@ export const TECH_INTRO = Object.freeze({
   id: 'tech-bytes',
   cues: Q,
   draw: drawTechIntro,
-  warm: () => [board(), letters()],
+  warm: () => [city(), letters()],
 });
-/** The camera at beat b (for checks): { d, pitch, yaw } (units, radians). */
-export const techIntroCamera = (b) => ({ d: Math.exp(LN_D(b)), pitch: PITCH(b), yaw: YAW(b) });
-/** The processor's top-face scale on the frame at beat b, in pixels a unit (1 overhead at rest). */
-export const techIntroScale = (b) => F / (Math.exp(LN_D(b)) - CH);
+/** The drone at beat b (for checks): { x, y, z, pitch, yaw, roll, d } (units, radians; d its distance from the processor). */
+export const techIntroCamera = (b) => {
+  const p = pathAt(b, {});
+  return { ...p, d: Math.hypot(p.x, p.y, p.z) };
+};
+/** The processor's top-face scale on the frame at beat b once overhead, in pixels a unit (1 at rest). */
+export const techIntroScale = (b) => F / (pathAt(b, {}).z - CH);
 /** The logotype's box at rest (for checks): { x0, x1, y0, y1 } of TECH and BYTES together. */
 export function techIntroTitle() {
   const ls = letters();
   return { x0: ls[0].x - 1, x1: ls.at(-1).x + ls.at(-1).w * SC, y0: TOP - 1, y1: BYTES_Y + 14 };
 }
-/** The processor's traces on the frame at rest: where each crosses the logotype's rows (for checks). */
+/** The processor's own traces (for checks). */
 export function techIntroTraces() {
-  return board().traces.filter((tr) => tr.ring === 0);
+  return city().traces.filter((tr) => tr.ring === 0);
 }
